@@ -128,7 +128,7 @@ export async function handler(event) {
         customer_email: customerEmail,
         customer_first: customerFirst,
         customer_last: customerLast,
-        amount: totalAmount,
+        total: totalAmount,
         raw_cart: validatedItems,
         status: 'pending_payment',
         created_at: new Date().toISOString()
