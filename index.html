@@ -2209,119 +2209,101 @@ async function proceedToPayFastCheckout(customerInfo) {
   let checkoutBtn;
   let originalText;
   
- try {
-  // choose the right button
-  if (checkoutIntent.source === 'mini-cart') {
-    checkoutBtn = document.getElementById('checkoutBtn');
-  } else {
-    checkoutBtn = document.getElementById('cartCheckout');
-  }
+  try {
+    if (checkoutIntent.source === 'mini-cart') {
+      checkoutBtn = document.getElementById('checkoutBtn');
+    } else {
+      checkoutBtn = document.getElementById('cartCheckout');
+    }
+    
+    // Store original text
+    originalText = checkoutBtn.textContent;
+    
+    // Show loading state
+    checkoutBtn.disabled = true;
+    checkoutBtn.textContent = 'Processing...';
 
-  // save text so we can restore on error
-  originalText = checkoutBtn.textContent;
+    // Prepare cart items
+    const cartItems = state.cart.map(item => ({
+      product_id: item.id,
+      quantity: item.qty
+    }));
 
-  // show loading state
-  checkoutBtn.disabled = true;
-  checkoutBtn.textContent = 'Processing...';
+// Call Netlify function
+const response = await fetch('/.netlify/functions/initiate-payfast', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cartItems,
+    customerEmail: customerInfo.email,
+    customerFirst: customerInfo.first_name || '',
+    customerLast: customerInfo.last_name || ''
+  })
+});
 
-  // prepare cart items (same structure your function expects)
-  const cartItems = state.cart.map(item => ({
-    product_id: item.id,
-    quantity: item.qty
-  }));
+// Parse as text first
+const text = await response.text();
+const ct = response.headers.get('content-type') || '';
 
-  // build customerName string from whatever you have
-  const customerName = [customerInfo.first_name, customerInfo.last_name].filter(Boolean).join(' ').trim();
-
-  // open a popup now (must be user gesture)
-  const popup = window.open('', '_blank');
-
-  // send request to your Netlify function
-  const response = await fetch('/.netlify/functions/initiate-payfast', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cartItems,
-      customerEmail: customerInfo.email,
-      customerName // server expects customerName
-    })
-  });
-
-  // if server returned HTML directly (server-generated form), load it into popup
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('text/html')) {
-    const html = await response.text();
-    popup.document.open();
-    popup.document.write(html);
-    popup.document.close();
-    // we don't need to create a local form — server already did it
-    return;
-  }
-
-  // otherwise, assume JSON (params + signature) — build the exact form in popup and auto-submit
-  if (!response.ok) {
-    const text = await response.text();
-    console.error('Server response (non-OK):', text);
-    throw new Error(`Server error: ${response.status}`);
-  }
-
-  const data = await response.json();
-  if (!data.success) {
-    throw new Error(data.error || 'Payment failed');
-  }
-
-  // create an HTML string with a form that posts to PayFast and auto-submits
-  const pfUrl = data.payfast_url;
-  const params = data.params || {};
-  const signature = data.signature;
-
-  function escHtml(s) {
-    return String(s === null || s === undefined ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  let inputs = '';
-  // include all params server gave (merchant_id, merchant_key, m_payment_id, amount, etc.)
-  Object.entries(params).forEach(([k, v]) => {
-    inputs += `<input type="hidden" name="${escHtml(k)}" value="${escHtml(v)}"/>`;
-  });
-
-  // add signature explicitly (if server provided)
-  inputs += `<input type="hidden" name="signature" value="${escHtml(signature)}"/>`;
-
-  const formHtml = `<!doctype html>
-<html><head><meta charset="utf-8"><title>PayFast redirect</title></head>
-<body>
-  <form id="pf" action="${escHtml(pfUrl)}" method="post">
-    ${inputs}
-    <noscript>
-      <p>Redirecting to PayFast — click the button if you are not redirected.</p>
-      <button type="submit">Pay</button>
-    </noscript>
-  </form>
-  <script>document.getElementById('pf').submit();</script>
-</body></html>`;
-
-  // write the form HTML into the previously opened popup and submit
-  popup.document.open();
-  popup.document.write(formHtml);
-  popup.document.close();
-
-} catch (error) {
-  console.error('Checkout error:', error);
-  alert('Checkout failed: ' + (error.message || 'Unknown error'));
-
-  // Reset button state
-  if (checkoutBtn && originalText) {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = originalText;
+let data;
+if (ct.includes('text/html')) {
+  // The server returned the auto-submitting HTML form
+  // Replace current page with it
+  document.open();
+  document.write(text);
+  document.close();
+  return; // stop here
+} else {
+  // Otherwise parse JSON
+  try {
+    data = JSON.parse(text);
+  } catch (err) {
+    console.error('Invalid JSON response from initiate-payfast:', text);
+    throw new Error('Payment server error');
   }
 }
 
+// If JSON returned success = false, throw
+if (!data.success) {
+  throw new Error(data.error || 'Payment failed');
+}
+
+// Otherwise, fallback — build form in-page (your original approach)
+const form = document.createElement('form');
+form.method = 'POST';
+form.action = data.payfast_url;
+
+// Add parameters
+Object.entries(data.params).forEach(([key, value]) => {
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = key;
+  input.value = value;
+  form.appendChild(input);
+});
+
+// Add signature
+const sigInput = document.createElement('input');
+sigInput.type = 'hidden';
+sigInput.name = 'signature';
+sigInput.value = data.signature;
+form.appendChild(sigInput);
+
+document.body.appendChild(form);
+form.submit();
+
+
+  } catch (error) {
+    console.error('Checkout error:', error);
+    alert('Checkout failed: ' + error.message);
+    
+    // Reset button state
+    if (checkoutBtn && originalText) {
+      checkoutBtn.disabled = false;
+      checkoutBtn.textContent = originalText;
+    }
+  }
+}
 
 // Updated checkout handler to use PayFast
 async function processCheckoutAfterAuth() {
