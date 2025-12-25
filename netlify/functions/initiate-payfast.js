@@ -66,6 +66,11 @@ module.exports.handler = async function (event) {
     PASSPHRASE_LENGTH: PAYFAST_PASSPHRASE?.length || 0
   });
 
+  // If in production mode but using sandbox credentials, warn
+  if (PAYFAST_SANDBOX === 'false' && PAYFAST_MERCHANT_ID === '10000100') {
+    console.error('WARNING: Using sandbox credentials in production mode!');
+  }
+
   const headers = { 'Content-Type': 'text/html' };
 
   // Allow preflight
@@ -213,19 +218,21 @@ module.exports.handler = async function (event) {
       amount: amountString,
       item_name: `Umzila Order #${m_payment_id}`,
       item_description: `${validatedItems.length} item(s) from Umzila`,
-      email_address: customerEmail,
-      email_confirmation: '1',
-      confirmation_address: customerEmail
+      email_address: customerEmail
     };
 
-    // Optional fields but good to include
+    // Optional but recommended
     if (customerName) {
       const nameParts = customerName.split(' ');
       pfParams.name_first = nameParts[0] || '';
       pfParams.name_last = nameParts.slice(1).join(' ') || '';
-    } else {
-      pfParams.name_first = '';
-      pfParams.name_last = '';
+    }
+
+    // For sandbox testing, you can add these
+    if (PAYFAST_SANDBOX === 'true') {
+      // Sandbox-specific parameters
+      pfParams.email_confirmation = '1';
+      pfParams.confirmation_address = customerEmail;
     }
 
     // ===== CALCULATE SIGNATURE =====
@@ -248,6 +255,47 @@ module.exports.handler = async function (event) {
     console.log('Generated Signature:', signature);
     console.log('Passphrase used:', PAYFAST_PASSPHRASE ? `"${PAYFAST_PASSPHRASE}" (${PAYFAST_PASSPHRASE.length} chars)` : 'None');
     console.log('=========================\n');
+
+    // ===== VERIFY CREDENTIALS =====
+    // Check if using sandbox credentials in production
+    if (PAYFAST_SANDBOX === 'false' && PAYFAST_MERCHANT_ID === '10000100') {
+      const errorHtml = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Configuration Error</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+    .error { background: #f8d7da; color: #721c24; padding: 20px; border-radius: 5px; margin: 20px auto; max-width: 600px; }
+    .warning { background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; margin: 20px auto; max-width: 600px; }
+  </style>
+</head>
+<body>
+  <h1>Configuration Error</h1>
+  <div class="error">
+    <h2>⚠️ You are using Sandbox credentials in Production mode!</h2>
+    <p>Your PAYFAST_SANDBOX is set to 'false' (production) but you're using sandbox credentials.</p>
+    <p><strong>Fix:</strong> Set PAYFAST_SANDBOX to 'true' in your Netlify environment variables.</p>
+  </div>
+  <div class="warning">
+    <h3>Environment Variables Checklist:</h3>
+    <ul style="text-align: left; display: inline-block;">
+      <li>PAYFAST_SANDBOX=true (for testing)</li>
+      <li>PAYFAST_MERCHANT_ID=10000100 (sandbox ID)</li>
+      <li>PAYFAST_MERCHANT_KEY=46f0cd694581a (sandbox key)</li>
+      <li>PAYFAST_PASSPHRASE= (leave empty for sandbox)</li>
+      <li>SITE_BASE_URL=https://your-site.netlify.app</li>
+    </ul>
+  </div>
+</body>
+</html>`;
+      
+      return {
+        statusCode: 500,
+        headers: { 'Content-Type': 'text/html' },
+        body: errorHtml
+      };
+    }
 
     // ===== BUILD HTML FORM =====
     let inputsHtml = '';
@@ -301,27 +349,14 @@ module.exports.handler = async function (event) {
       0% { transform: rotate(0deg); } 
       100% { transform: rotate(360deg); } 
     }
-    .debug-info {
-      display: none;
-      background: #f8f9fa;
-      padding: 15px;
+    .test-card {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
       border-radius: 5px;
+      padding: 15px;
       margin-top: 20px;
       text-align: left;
-      font-family: monospace;
-      font-size: 12px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
-    .show-debug {
-      background: #6c757d;
-      color: white;
-      border: none;
-      padding: 8px 15px;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 15px;
-      font-size: 12px;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -333,22 +368,19 @@ module.exports.handler = async function (event) {
       <p>You are being securely redirected to PayFast to complete your payment.</p>
       <p style="color: #666; font-size: 14px;">Please do not close this window.</p>
       
-      <button class="show-debug" onclick="document.getElementById('debugInfo').style.display='block'">
-        Show Debug Info
-      </button>
-      
-      <div id="debugInfo" class="debug-info">
-        <strong>Payment Details:</strong><br>
-        Order ID: ${m_payment_id}<br>
-        Amount: R${amountString}<br>
-        Customer: ${customerEmail}<br>
-        Signature: ${signature.substring(0, 10)}...<br>
-        <br>
-        <strong>If you see this, auto-submit failed:</strong><br>
-        <button onclick="document.getElementById('pfForm').submit()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-          Click here to proceed to PayFast
-        </button>
+      ${PAYFAST_SANDBOX === 'true' ? `
+      <div class="test-card">
+        <strong>🔄 SANDBOX TEST MODE</strong><br>
+        <strong>Test Card:</strong> 4242 4242 4242 4242<br>
+        <strong>Expiry:</strong> Any future date<br>
+        <strong>CVV:</strong> Any 3 digits<br>
+        <strong>Amount:</strong> R${amountString}
       </div>
+      ` : ''}
+      
+      <p style="font-size: 12px; color: #999; margin-top: 20px;">
+        If you are not redirected in 5 seconds, please enable JavaScript or check your browser settings.
+      </p>
     </div>
     
     <form id="pfForm" action="${escapeHtml(PAYFAST_URL)}" method="post" style="display: none;">
@@ -368,24 +400,27 @@ module.exports.handler = async function (event) {
   </div>
   
   <script>
-    // Show that we're processing
     console.log('Submitting to PayFast...');
     console.log('Order ID: ${m_payment_id}');
+    console.log('Amount: R${amountString}');
+    console.log('Mode: ${PAYFAST_SANDBOX === 'true' ? 'SANDBOX' : 'PRODUCTION'}');
     
-    // Auto-submit after 1 second to show loading state
+    // Auto-submit after 1.5 seconds
     setTimeout(function() {
-      console.log('Auto-submitting form...');
+      console.log('Auto-submitting form to: ${PAYFAST_URL}');
       document.getElementById('pfForm').submit();
-    }, 1000);
+    }, 1500);
     
-    // If still on page after 5 seconds, show debug info
-    setTimeout(function() {
-      var debugInfo = document.getElementById('debugInfo');
-      if (document.body.contains(document.getElementById('pfForm'))) {
-        debugInfo.style.display = 'block';
-        debugInfo.innerHTML += '<br><br><strong>Note:</strong> Form submission seems to have failed. Please try the manual button above.';
-      }
-    }, 5000);
+    // Manual submit button fallback
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var form = document.getElementById('pfForm');
+        if (form && form.parentNode) {
+          var noscript = form.querySelector('noscript');
+          if (noscript) noscript.style.display = 'block';
+        }
+      }, 5000);
+    });
   </script>
 </body>
 </html>`;
@@ -398,15 +433,13 @@ module.exports.handler = async function (event) {
 
   } catch (err) {
     console.error('Payment function error:', err);
-    console.error('Error stack:', err.stack);
     
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         error: 'Internal server error',
-        message: err?.message,
-        details: process.env.NODE_ENV === 'development' ? err?.stack : undefined
+        message: err?.message
       })
     };
   }
