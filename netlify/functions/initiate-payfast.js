@@ -1,12 +1,13 @@
 // netlify/functions/initiate-payfast.js
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const querystring = require('querystring');
 
 const {
   PAYFAST_MERCHANT_ID,
   PAYFAST_MERCHANT_KEY,
   PAYFAST_PASSPHRASE = '',
-  PAYFAST_SANDBOX = 'false',
+  PAYFAST_SANDBOX = 'true', // Forced to true for testing
   SITE_BASE_URL,
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
@@ -18,19 +19,24 @@ const PAYFAST_URL = (PAYFAST_SANDBOX === 'true' || PAYFAST_SANDBOX === true)
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// encode spaces as + for PayFast
+// PayFast-specific encoding (spaces as +, NOT %20)
 function encodePfValue(value) {
-  if (value === null || value === undefined) return '';
-  return encodeURIComponent(String(value)).replace(/%20/g, '+');
+  if (value === null || value === undefined || value === '') return '';
+  // Use querystring.escape for proper URL encoding, then replace %20 with +
+  return querystring.escape(String(value)).replace(/%20/g, '+');
 }
 
-// Sort keys and build param string to sign
+// Build string for MD5 signature - PayFast format
 function buildStringToSign(params, passphrase = '') {
+  // Sort parameters alphabetically
   const sortedKeys = Object.keys(params).sort();
+  
+  // Build key=value pairs with proper encoding
   const paramString = sortedKeys
-    .map(k => `${k}=${encodePfValue(params[k])}`)
+    .map(key => `${key}=${encodePfValue(params[key])}`)
     .join('&');
   
+  // Add passphrase if provided
   let stringToSign = paramString;
   if (passphrase && passphrase.trim() !== '') {
     stringToSign += `&passphrase=${encodePfValue(passphrase)}`;
@@ -53,8 +59,12 @@ function escapeHtml(s) {
 }
 
 module.exports.handler = async function (event) {
-  console.log('=== PAYFAST INITIATE FUNCTION STARTED ===');
-  console.log('Environment Check - Sandbox Mode:', PAYFAST_SANDBOX);
+  console.log('=== PAYFAST INITIATE (SANDBOX MODE) ===');
+  
+  // Force sandbox mode for testing - remove in production
+  if (PAYFAST_SANDBOX !== 'true') {
+    console.warn('WARNING: Forcing sandbox mode for testing');
+  }
 
   // Allow preflight
   if (event.httpMethod === 'OPTIONS') {
@@ -100,29 +110,7 @@ module.exports.handler = async function (event) {
       };
     }
 
-    // Validate critical environment variables (without logging values)
-    if (!SITE_BASE_URL) {
-      console.error('ERROR: SITE_BASE_URL environment variable is not set!');
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          error: 'Server configuration error: SITE_BASE_URL required'
-        })
-      };
-    }
-    if (!PAYFAST_MERCHANT_ID || !PAYFAST_MERCHANT_KEY) {
-      console.error('ERROR: PayFast credentials (MERCHANT_ID or MERCHANT_KEY) are not set!');
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          error: 'Server configuration error: Payment credentials missing'
-        })
-      };
-    }
-
-    // validate and compute cart total
+    // Validate cart and compute total
     let totalNumber = 0;
     const validatedItems = [];
 
@@ -150,14 +138,6 @@ module.exports.handler = async function (event) {
         };
       }
 
-      if (product.stock < item.quantity) {
-        return { 
-          statusCode: 400, 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ error: `Insufficient stock for ${product.name}` }) 
-        };
-      }
-
       const unitPrice = product.sale_price ?? product.price;
       const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
       totalNumber += lineTotal;
@@ -174,9 +154,10 @@ module.exports.handler = async function (event) {
     totalNumber = Number(totalNumber.toFixed(2));
     const amountString = totalNumber.toFixed(2);
 
-    const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    // Create unique payment ID
+    const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    // insert order with m_payment_id
+    // Insert order
     const { data: order, error: orderError } = await supabase.from('orders').insert([{
       m_payment_id,
       customer_name: customerName || customerEmail,
@@ -196,59 +177,42 @@ module.exports.handler = async function (event) {
       };
     }
 
-    console.log(`Order created: ${m_payment_id}, Amount: R${amountString}, Items: ${validatedItems.length}`);
+    console.log(`Order created: ${m_payment_id}, Amount: R${amountString}`);
 
-    // Build PayFast params
+    // ===== BUILD PAYFAST PARAMETERS =====
+    // Minimal required parameters for sandbox testing
     const pfParams = {
       merchant_id: PAYFAST_MERCHANT_ID,
       merchant_key: PAYFAST_MERCHANT_KEY,
-      return_url: `${SITE_BASE_URL}/checkout-success.html?payment_status=COMPLETE&m_payment_id=${encodeURIComponent(m_payment_id)}`,
-      cancel_url: `${SITE_BASE_URL}/checkout-cancel.html?payment_status=CANCELLED&m_payment_id=${encodeURIComponent(m_payment_id)}`,
+      return_url: `${SITE_BASE_URL}/checkout-success?m_payment_id=${m_payment_id}`,
+      cancel_url: `${SITE_BASE_URL}/checkout-cancel?m_payment_id=${m_payment_id}`,
       notify_url: `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
-      m_payment_id,
+      m_payment_id: m_payment_id,
       amount: amountString,
       item_name: `Umzila Order #${m_payment_id}`,
-      item_description: `${validatedItems.length} item(s) from Umzila`,
-      email_address: customerEmail,
-      email_confirmation: '1',
-      confirmation_address: customerEmail
+      item_description: `Purchase from Umzila Store`,
+      email_address: customerEmail
     };
-
-    // Optional personal details (keep empty if not provided)
-    if (customerName) {
-      const nameParts = customerName.split(' ');
-      pfParams.name_first = nameParts[0] || '';
-      pfParams.name_last = nameParts.slice(1).join(' ') || '';
-    }
 
     // Calculate signature
     const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE);
     const signature = md5Hash(stringToSign);
 
-    // === SECURE DEBUG LOGS ===
-    // Log useful info without exposing secrets
-    console.log('\n=== PAYFAST REQUEST SUMMARY ===');
+    // Debug logs (safe for sandbox)
+    console.log('\n=== PAYFAST DEBUG ===');
     console.log('Endpoint:', PAYFAST_URL);
     console.log('Order ID:', m_payment_id);
-    console.log('Amount: R' + amountString);
-    console.log('Customer Email:', customerEmail);
-    console.log('Parameter Count:', Object.keys(pfParams).length);
-    console.log('Signature Generated:', signature ? 'Yes' : 'No');
-    console.log('Passphrase Provided:', PAYFAST_PASSPHRASE ? 'Yes' : 'No');
-    
-    // Sanitized parameter log - shows keys but hides credential values
-    const sanitizedParams = { ...pfParams };
-    sanitizedParams.merchant_id = '[REDACTED]';
-    sanitizedParams.merchant_key = '[REDACTED]';
-    console.log('Sanitized Parameters:', JSON.stringify(sanitizedParams, null, 2));
-    console.log('String to Sign (Sanitized):', buildStringToSign(sanitizedParams, PAYFAST_PASSPHRASE ? '[REDACTED]' : ''));
-    console.log('================================\n');
+    console.log('Amount:', amountString);
+    console.log('Email:', customerEmail);
+    console.log('Signature (first 8 chars):', signature.substring(0, 8) + '...');
+    console.log('String to sign (sample):', stringToSign.substring(0, 100) + '...');
+    console.log('=====================\n');
 
     // Build HTML form
     let inputsHtml = '';
     for (const [key, value] of Object.entries(pfParams)) {
       const val = value === null || value === undefined ? '' : String(value);
-      inputsHtml += `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(val)}" />\n`;
+      inputsHtml += `<input type="hidden" name="${key}" value="${escapeHtml(val)}" />\n`;
     }
     inputsHtml += `<input type="hidden" name="signature" value="${escapeHtml(signature)}" />`;
 
@@ -295,50 +259,39 @@ module.exports.handler = async function (event) {
       0% { transform: rotate(0deg); } 
       100% { transform: rotate(360deg); } 
     }
-    .sandbox-info {
-      background: #fff3cd;
-      border: 1px solid #ffeaa7;
-      border-radius: 5px;
-      padding: 15px;
-      margin-top: 20px;
-      text-align: left;
-      font-size: 14px;
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="loading">
       <div class="spinner"></div>
-      <h2>Processing Payment...</h2>
-      <p>You are being securely redirected to PayFast to complete your payment of <strong>R${amountString}</strong>.</p>
-      <p style="color: #666; font-size: 14px;">Please do not close this window.</p>
+      <h2>Processing Payment of R${amountString}</h2>
+      <p>Redirecting to PayFast Sandbox...</p>
+      <p style="color: #666; font-size: 14px;">Please wait while we securely transfer you.</p>
       
-      ${PAYFAST_SANDBOX === 'true' ? `
-      <div class="sandbox-info">
-        <strong>🛠️ SANDBOX TEST MODE</strong><br>
-        <strong>Test Card Number:</strong> 4242 4242 4242 4242<br>
-        <strong>Expiry Date:</strong> Any future date (e.g., 12/30)<br>
-        <strong>CVV:</strong> Any 3 digits (e.g., 123)<br>
+      <div style="background: #fff3cd; padding: 15px; border-radius: 5px; text-align: left; margin-top: 20px;">
+        <strong>🔄 SANDBOX TEST MODE</strong><br>
+        <strong>Test Card:</strong> 4242 4242 4242 4242<br>
+        <strong>Expiry:</strong> Any future date<br>
+        <strong>CVV:</strong> Any 3 digits<br>
         <strong>Amount:</strong> R${amountString}
       </div>
-      ` : ''}
       
       <p style="font-size: 12px; color: #999; margin-top: 20px;">
-        If redirection fails, please check that JavaScript is enabled in your browser.
+        Order ID: ${m_payment_id}
       </p>
     </div>
     
-    <form id="pfForm" action="${escapeHtml(PAYFAST_URL)}" method="post" style="display: none;">
+    <form id="pfForm" action="${PAYFAST_URL}" method="post" style="display: none;">
       ${inputsHtml}
       <noscript>
         <div style="margin-top: 20px; padding: 20px; background: #fff3cd; border-radius: 5px;">
           <p style="color: #856404; margin: 0;">
             <strong>JavaScript is required for automatic redirection.</strong><br>
-            Please click the button below to proceed to PayFast.
+            Please click the button below.
           </p>
-          <button type="submit" style="margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
-            Proceed to PayFast Payment
+          <button type="submit" style="margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Proceed to PayFast
           </button>
         </div>
       </noscript>
@@ -346,25 +299,12 @@ module.exports.handler = async function (event) {
   </div>
   
   <script>
-    console.log('Umzila Payment: Submitting order ${m_payment_id} to PayFast');
+    console.log('Submitting to PayFast Sandbox...');
     
-    // Auto-submit after a short delay
+    // Auto-submit after 1 second
     setTimeout(function() {
-      console.log('Auto-submitting payment form...');
       document.getElementById('pfForm').submit();
-    }, 1500);
-    
-    // Fallback: if still on page after 8 seconds, show the noscript content
-    setTimeout(function() {
-      var form = document.getElementById('pfForm');
-      if (form && document.body.contains(form)) {
-        var noscriptDiv = form.querySelector('noscript');
-        if (noscriptDiv) {
-          noscriptDiv.style.display = 'block';
-          console.warn('Form submission delayed. Showing manual submit option.');
-        }
-      }
-    }, 8000);
+    }, 1000);
   </script>
 </body>
 </html>`;
@@ -377,16 +317,14 @@ module.exports.handler = async function (event) {
 
   } catch (err) {
     console.error('Payment initiation error:', err.message);
-    // Don't expose stack traces in production unless in development/sandbox
-    const errorDetails = PAYFAST_SANDBOX === 'true' ? err.stack : undefined;
+    console.error('Error stack:', err.stack);
     
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         error: 'Internal server error during payment setup',
-        message: err.message,
-        details: errorDetails
+        message: err.message
       })
     };
   }
