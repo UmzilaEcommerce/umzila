@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
-import fetch from 'node-fetch';
+// netlify/functions/payfast-itn.js
+const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
 const {
   PAYFAST_MERCHANT_ID,
@@ -28,32 +28,35 @@ function generatePfSignature(params, passphrase = '') {
   const paramString = sortedKeys
     .map(key => `${key}=${encodePfValue(params[key])}`)
     .join('&');
-  
-  const stringToSign = passphrase 
+
+  const stringToSign = passphrase
     ? `${paramString}&passphrase=${encodePfValue(passphrase)}`
     : paramString;
-  
+
   return crypto.createHash('md5').update(stringToSign).digest('hex');
 }
 
-export async function handler(event) {
-  // PayFast sends data as form-urlencoded
-  const params = new URLSearchParams(event.body);
-  const data = Object.fromEntries(params.entries());
-
+module.exports.handler = async function (event) {
   try {
-    // 1. Verify signature
+    const params = new URLSearchParams(event.body || '');
+    const data = Object.fromEntries(params.entries());
+
+    // Verify signature
     const receivedSignature = data.signature;
     delete data.signature;
-    
     const calculatedSignature = generatePfSignature(data, PAYFAST_PASSPHRASE);
-    
+
     if (receivedSignature !== calculatedSignature) {
       console.error('Signature mismatch:', { receivedSignature, calculatedSignature });
       return { statusCode: 400, body: 'Invalid signature' };
     }
 
-    // 2. Server-to-server validation with PayFast
+    // Server-to-server validation with PayFast
+    if (typeof fetch !== 'function') {
+      console.error('fetch is not available in runtime');
+      return { statusCode: 500, body: 'Server error' };
+    }
+
     const validateResponse = await fetch(PAYFAST_VALIDATE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -65,13 +68,13 @@ export async function handler(event) {
     });
 
     const validateText = await validateResponse.text();
-    
+
     if (!validateText.includes('VALID')) {
       console.error('PayFast validation failed:', validateText);
       return { statusCode: 400, body: 'PayFast validation failed' };
     }
 
-    // 3. Find the order
+    // Find order by m_payment_id
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('*')
@@ -79,24 +82,23 @@ export async function handler(event) {
       .single();
 
     if (orderError || !order) {
-      console.error('Order not found:', data.m_payment_id);
+      console.error('Order not found by m_payment_id:', data.m_payment_id, orderError);
       return { statusCode: 404, body: 'Order not found' };
     }
 
-    // 4. Check if already processed
-    if (order.status === 'paid') {
+    // If already processed
+    if (order.order_status === 'paid' || order.status === 'paid') {
       return { statusCode: 200, body: 'OK (already processed)' };
     }
 
-    // 5. Verify payment status
     const paymentStatus = data.payment_status;
-    
+
     if (paymentStatus === 'COMPLETE') {
-      // Update order status
+      // Update order_status -> paid
       const { error: updateError } = await supabase
         .from('orders')
         .update({
-          status: 'paid',
+          order_status: 'paid',
           pf_payment_id: data.pf_payment_id,
           pf_response: data,
           paid_at: new Date().toISOString(),
@@ -109,23 +111,24 @@ export async function handler(event) {
         return { statusCode: 500, body: 'Failed to update order' };
       }
 
-      // Reserve stock (call the PostgreSQL function)
-      const { error: stockError } = await supabase.rpc('reserve_stock', {
-        order_items: order.raw_cart
-      });
-
-      if (stockError) {
-        console.error('Stock reservation error:', stockError);
-        // Log error but don't fail - we can handle stock manually
+      // Reserve stock via RPC (if exists) using items column
+      try {
+        const { error: stockError } = await supabase.rpc('reserve_stock', {
+          order_items: order.items
+        });
+        if (stockError) {
+          console.error('Stock reservation error:', stockError);
+        }
+      } catch (e) {
+        console.warn('reserve_stock RPC not present or error:', e);
       }
 
       console.log(`Order ${data.m_payment_id} marked as paid`);
     } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
-      // Mark as failed
       await supabase
         .from('orders')
         .update({
-          status: 'failed',
+          order_status: 'failed',
           pf_response: data,
           updated_at: new Date().toISOString()
         })
@@ -133,9 +136,8 @@ export async function handler(event) {
     }
 
     return { statusCode: 200, body: 'OK' };
-
   } catch (error) {
     console.error('ITN processing error:', error);
     return { statusCode: 500, body: 'Server error' };
   }
-}
+};
