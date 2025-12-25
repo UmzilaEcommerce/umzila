@@ -1,12 +1,11 @@
-// netlify/functions/initiate-payfast.js
-const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 const {
   PAYFAST_MERCHANT_ID,
   PAYFAST_MERCHANT_KEY,
   PAYFAST_PASSPHRASE = '',
-  PAYFAST_SANDBOX = 'true',
+  PAYFAST_SANDBOX = 'false', // use false for production
   SITE_BASE_URL,
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
@@ -16,9 +15,7 @@ const PAYFAST_URL = PAYFAST_SANDBOX === 'true'
   ? 'https://sandbox.payfast.co.za/eng/process'
   : 'https://www.payfast.co.za/eng/process';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false }
-});
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 function encodePfValue(value) {
   return encodeURIComponent(String(value)).replace(/%20/g, '+');
@@ -29,115 +26,65 @@ function generatePfSignature(params, passphrase = '') {
   const paramString = sortedKeys
     .map(key => `${key}=${encodePfValue(params[key])}`)
     .join('&');
-
-  const stringToSign = passphrase
-    ? `${paramString}&passphrase=${encodePfValue(passphrase)}`
-    : paramString;
-
-  return crypto.createHash('md5').update(stringToSign).digest('hex');
+  
+  return crypto.createHash('md5').update(paramString + (passphrase ? `&passphrase=${encodePfValue(passphrase)}` : '')).digest('hex');
 }
 
-module.exports.handler = async function (event) {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-  };
+export async function handler(event) {
+  const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
 
   try {
-    const body = JSON.parse(event.body || '{}');
-    const { cartItems, customerEmail, customerFirst = '', customerLast = '' } = body;
+    const { cartItems, customerEmail, customerName = '' } = JSON.parse(event.body);
 
-    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cart is empty' }) };
-    }
-    if (!customerEmail) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Customer email is required' }) };
-    }
+    if (!cartItems?.length) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Cart empty' }) };
+    if (!customerEmail) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email required' }) };
 
-    // 1) Validate items & compute total
+    // Calculate total
     let totalAmount = 0;
     const validatedItems = [];
 
     for (const item of cartItems) {
-      const { data: product, error } = await supabase
-        .from('products')
-        .select('id, price, stock, name, sale_price')
-        .eq('id', item.product_id)
-        .single();
-
-      if (error || !product) {
-        return { statusCode: 400, headers, body: JSON.stringify({ error: `Product ${item.product_id} not found` }) };
-      }
-
-      if (product.stock < item.quantity) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({ error: `Insufficient stock for ${product.name}. Available: ${product.stock}` })
-        };
-      }
+      const { data: product } = await supabase.from('products').select('id, price, sale_price, stock, name').eq('id', item.product_id).single();
+      if (!product) return { statusCode: 400, headers, body: JSON.stringify({ error: `Product ${item.product_id} not found` }) };
+      if (product.stock < item.quantity) return { statusCode: 400, headers, body: JSON.stringify({ error: `Insufficient stock for ${product.name}` }) };
 
       const price = product.sale_price || product.price;
-      const itemTotal = price * item.quantity;
-      totalAmount += itemTotal;
+      totalAmount += price * item.quantity;
 
-      validatedItems.push({
-        product_id: product.id,
-        name: product.name,
-        unit_price: price,
-        quantity: item.quantity,
-        total: itemTotal
-      });
+      validatedItems.push({ product_id: product.id, name: product.name, unit_price: price, quantity: item.quantity, total: price * item.quantity });
     }
 
     totalAmount = Math.round(totalAmount * 100) / 100;
+    const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    // 2) Generate m_payment_id (PayFast reference)
-    const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // 3) Insert order using your schema (including m_payment_id)
-    const customer_name = [customerFirst, customerLast].filter(Boolean).join(' ').trim() || null;
-
-    const insertPayload = {
-      m_payment_id,
+    // Create order
+    const { data: order, error: orderError } = await supabase.from('orders').insert([{
       customer_email: customerEmail,
-      customer_name,
-      items: validatedItems,
+      customer_name: customerName,
       total: totalAmount,
+      items: validatedItems,
       order_status: 'pending_payment',
+      m_payment_id,
       created_at: new Date().toISOString()
-    };
+    }]).select().single();
 
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert([insertPayload])
-      .select()
-      .single();
+    if (orderError) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to create order' }) };
 
-    if (orderError || !order) {
-      console.error('Order creation error:', orderError);
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to create order' }) };
-    }
-
-    // 4) Prepare PayFast params
+    // PayFast params
     const pfParams = {
       merchant_id: PAYFAST_MERCHANT_ID,
       merchant_key: PAYFAST_MERCHANT_KEY,
       return_url: `${SITE_BASE_URL}/checkout-success.html?payment_status=COMPLETE&m_payment_id=${m_payment_id}`,
       cancel_url: `${SITE_BASE_URL}/checkout-cancel.html?payment_status=CANCELLED&m_payment_id=${m_payment_id}`,
       notify_url: `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
-      name_first: customerFirst,
-      name_last: customerLast,
+      name_first: '',
+      name_last: '',
       email_address: customerEmail,
-      m_payment_id: m_payment_id,
+      m_payment_id,
       amount: totalAmount.toFixed(2),
-      item_name: `Umzila Order #${order.id || m_payment_id}`,
+      item_name: `Umzila Order #${m_payment_id}`,
       item_description: `${validatedItems.length} item(s) from Umzila`,
       email_confirmation: '1',
       confirmation_address: customerEmail
@@ -145,28 +92,10 @@ module.exports.handler = async function (event) {
 
     const signature = generatePfSignature(pfParams, PAYFAST_PASSPHRASE);
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        order_id: order.id,
-        m_payment_id,
-        payfast_url: PAYFAST_URL,
-        params: pfParams,
-        signature,
-        amount: totalAmount
-      })
-    };
-  } catch (error) {
-    console.error('Server error:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        error: 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? (error && error.message) : undefined
-      })
-    };
+    return { statusCode: 200, headers, body: JSON.stringify({ success: true, order_id: order.id, m_payment_id, payfast_url: PAYFAST_URL, params: pfParams, signature, amount: totalAmount }) };
+
+  } catch (err) {
+    console.error('Payment function error:', err);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Internal server error' }) };
   }
-};
+}
