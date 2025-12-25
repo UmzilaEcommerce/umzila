@@ -47,8 +47,36 @@
     .confirm-body { display:flex; gap:12px; align-items:center; justify-content:center; padding-top:12px; }
   </style>
 
-  <!-- Supabase UMD (single include) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Supabase initialization via Netlify function -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+
+  <script>
+  (async function initSupabaseClient(){
+    try {
+      const res = await fetch('/.netlify/functions/get-client-config');
+      if (!res.ok) {
+        console.error('Failed to load Supabase config', res.status, await res.text());
+        return;
+      }
+      const cfg = await res.json();
+
+      if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
+        console.error('Missing Supabase config from server');
+        return;
+      }
+
+      // Initialize Supabase client
+      const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+      window.supabase = supabaseClient; // make it accessible globally
+
+      // Optional: notify other scripts that Supabase is ready
+      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
+      console.log('Supabase client initialized');
+    } catch (err) {
+      console.error('Error initializing Supabase client', err);
+    }
+  })();
+  </script>
 </head>
 <body>
   <header>
