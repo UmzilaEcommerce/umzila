@@ -20,21 +20,27 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // encode spaces as + for PayFast
 function encodePfValue(value) {
-  return encodeURIComponent(value === null || value === undefined ? '' : String(value)).replace(/%20/g, '+');
+  if (value === null || value === undefined) return '';
+  return encodeURIComponent(String(value)).replace(/%20/g, '+');
 }
 
-// Sort keys and build param string to sign - FIXED: DO NOT FILTER OUT EMPTY VALUES
+// Sort keys and build param string to sign
 function buildStringToSign(params, passphrase = '') {
-  // PayFast requires ALL parameters in the signature, even empty ones
+  // Sort keys alphabetically
   const sortedKeys = Object.keys(params).sort();
+  
+  // Build param string
   const paramString = sortedKeys
     .map(k => `${k}=${encodePfValue(params[k])}`)
     .join('&');
   
+  // Add passphrase if provided
+  let stringToSign = paramString;
   if (passphrase && passphrase.trim() !== '') {
-    return `${paramString}&passphrase=${encodePfValue(passphrase)}`;
+    stringToSign += `&passphrase=${encodePfValue(passphrase)}`;
   }
-  return paramString;
+  
+  return stringToSign;
 }
 
 function md5Hash(s) {
@@ -51,9 +57,18 @@ function escapeHtml(s) {
 }
 
 module.exports.handler = async function (event) {
+  console.log('=== PAYFAST INITIATE FUNCTION STARTED ===');
+  console.log('Environment:', {
+    PAYFAST_SANDBOX,
+    SITE_BASE_URL: SITE_BASE_URL ? 'SET' : 'NOT SET',
+    MERCHANT_ID_SET: !!PAYFAST_MERCHANT_ID,
+    MERCHANT_KEY_SET: !!PAYFAST_MERCHANT_KEY,
+    PASSPHRASE_LENGTH: PAYFAST_PASSPHRASE?.length || 0
+  });
+
   const headers = { 'Content-Type': 'text/html' };
 
-  // Allow preflight (if you POST via fetch) — but we serve HTML for window navigation
+  // Allow preflight
   if (event.httpMethod === 'OPTIONS') {
     return { 
       statusCode: 200, 
@@ -66,9 +81,20 @@ module.exports.handler = async function (event) {
   }
 
   try {
-    const body = event.body && event.headers && event.headers['content-type'] && event.headers['content-type'].includes('application/json')
-      ? JSON.parse(event.body)
-      : JSON.parse(event.body || '{}');
+    // Parse request body
+    let body = {};
+    try {
+      if (event.body) {
+        body = JSON.parse(event.body);
+      }
+    } catch (e) {
+      console.error('Error parsing body:', e);
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid JSON in request body' })
+      };
+    }
 
     const { cartItems, customerEmail, customerName = '' } = body;
 
@@ -87,17 +113,20 @@ module.exports.handler = async function (event) {
       };
     }
 
-    // Check for SITE_BASE_URL - critical for PayFast URLs
+    // Check for SITE_BASE_URL
     if (!SITE_BASE_URL) {
       console.error('ERROR: SITE_BASE_URL environment variable is not set!');
       return {
         statusCode: 500,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Server configuration error: SITE_BASE_URL not set' })
+        body: JSON.stringify({ 
+          error: 'Server configuration error',
+          details: 'SITE_BASE_URL environment variable is required'
+        })
       };
     }
 
-    // validate and compute
+    // Validate and compute cart total
     let totalNumber = 0;
     const validatedItems = [];
 
@@ -145,15 +174,16 @@ module.exports.handler = async function (event) {
       });
     }
 
-    totalNumber = Number(totalNumber.toFixed(2)); // numeric stored
-    const amountString = totalNumber.toFixed(2);   // string to send to PayFast
+    totalNumber = Number(totalNumber.toFixed(2));
+    const amountString = totalNumber.toFixed(2);
 
     const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    // insert order with m_payment_id
+    // Insert order
     const { data: order, error: orderError } = await supabase.from('orders').insert([{
       m_payment_id,
       customer_name: customerName || customerEmail,
+      customer_email: customerEmail,
       total: totalNumber,
       items: validatedItems,
       order_status: 'pending_payment',
@@ -169,15 +199,17 @@ module.exports.handler = async function (event) {
       };
     }
 
-    // Build PayFast params exactly as we will POST them
-    // Note: PayFast requires ALL parameters in the signature, even empty ones
+    console.log('Order created:', m_payment_id, 'Total:', amountString);
+
+    // ===== BUILD PAYFAST PARAMETERS =====
+    // According to PayFast documentation, these are required fields
     const pfParams = {
       merchant_id: PAYFAST_MERCHANT_ID,
       merchant_key: PAYFAST_MERCHANT_KEY,
       return_url: `${SITE_BASE_URL}/checkout-success.html?payment_status=COMPLETE&m_payment_id=${encodeURIComponent(m_payment_id)}`,
       cancel_url: `${SITE_BASE_URL}/checkout-cancel.html?payment_status=CANCELLED&m_payment_id=${encodeURIComponent(m_payment_id)}`,
       notify_url: `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
-      m_payment_id,
+      m_payment_id: m_payment_id,
       amount: amountString,
       item_name: `Umzila Order #${m_payment_id}`,
       item_description: `${validatedItems.length} item(s) from Umzila`,
@@ -186,119 +218,178 @@ module.exports.handler = async function (event) {
       confirmation_address: customerEmail
     };
 
-    // Add optional fields (empty but required for signature consistency)
-    pfParams.name_first = customerName.split(' ')[0] || '';
-    pfParams.name_last = customerName.split(' ').slice(1).join(' ') || '';
-    pfParams.cell_number = ''; // Optional
-    pfParams.signature = ''; // Will be calculated and added separately
+    // Optional fields but good to include
+    if (customerName) {
+      const nameParts = customerName.split(' ');
+      pfParams.name_first = nameParts[0] || '';
+      pfParams.name_last = nameParts.slice(1).join(' ') || '';
+    } else {
+      pfParams.name_first = '';
+      pfParams.name_last = '';
+    }
 
-    // Build string to sign and calculate signature
+    // ===== CALCULATE SIGNATURE =====
     const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE);
     const signature = md5Hash(stringToSign);
 
-    // Debug logs (temporary - remove in production)
-    console.log('PAYFAST: All params:', JSON.stringify(pfParams, null, 2));
-    console.log('PAYFAST: stringToSign:', stringToSign);
-    console.log('PAYFAST: signature:', signature);
-    console.log('PAYFAST: passphrase used:', PAYFAST_PASSPHRASE ? 'YES (length: ' + PAYFAST_PASSPHRASE.length + ')' : 'NO');
-    console.log('PAYFAST: posting to URL:', PAYFAST_URL);
-    console.log('PAYFAST: SITE_BASE_URL:', SITE_BASE_URL);
+    // ===== DEBUG LOGS =====
+    console.log('\n=== PAYFAST DEBUG INFO ===');
+    console.log('PayFast URL:', PAYFAST_URL);
+    console.log('Sandbox Mode:', PAYFAST_SANDBOX);
+    console.log('SITE_BASE_URL:', SITE_BASE_URL);
+    console.log('\nParameters to be sent:');
+    Object.entries(pfParams).forEach(([key, value]) => {
+      console.log(`  ${key}: ${value}`);
+    });
+    console.log('\nString to sign (before MD5):');
+    console.log('-------------------------');
+    console.log(stringToSign);
+    console.log('-------------------------');
+    console.log('Generated Signature:', signature);
+    console.log('Passphrase used:', PAYFAST_PASSPHRASE ? `"${PAYFAST_PASSPHRASE}" (${PAYFAST_PASSPHRASE.length} chars)` : 'None');
+    console.log('=========================\n');
 
-    // Build HTML form that will auto-submit to PayFast (this ensures exact same params are posted)
+    // ===== BUILD HTML FORM =====
     let inputsHtml = '';
-    for (const [k, v] of Object.entries(pfParams)) {
-      // Skip signature field - we'll add it separately
-      if (k === 'signature') continue;
-      
-      const val = v === null || v === undefined ? '' : String(v);
-      inputsHtml += `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(val)}"/>`;
+    for (const [key, value] of Object.entries(pfParams)) {
+      const val = value === null || value === undefined ? '' : String(value);
+      inputsHtml += `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(val)}" />\n`;
     }
-    // add signature hidden input
-    inputsHtml += `<input type="hidden" name="signature" value="${escapeHtml(signature)}"/>`;
+    // Add signature separately
+    inputsHtml += `<input type="hidden" name="signature" value="${escapeHtml(signature)}" />`;
 
     const html = `<!doctype html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>Redirecting to PayFast...</title>
-    <style>
-      body { 
-        font-family: Arial, sans-serif; 
-        background: #f7f7f9; 
-        display: flex; 
-        justify-content: center; 
-        align-items: center; 
-        min-height: 100vh; 
-        margin: 0; 
-        padding: 20px; 
-      }
-      .container { 
-        background: white; 
-        padding: 30px; 
-        border-radius: 10px; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
-        max-width: 500px; 
-        text-align: center; 
-      }
-      .loading { 
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        gap: 15px; 
-      }
-      .spinner { 
-        width: 40px; 
-        height: 40px; 
-        border: 4px solid #f3f3f3; 
-        border-top: 4px solid #3498db; 
-        border-radius: 50%; 
-        animation: spin 1s linear infinite; 
-      }
-      @keyframes spin { 
-        0% { transform: rotate(0deg); } 
-        100% { transform: rotate(360deg); } 
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="loading">
-        <div class="spinner"></div>
-        <h2>Redirecting to PayFast...</h2>
-        <p>Please wait while we securely transfer you to PayFast for payment.</p>
-        <p style="color: #666; font-size: 14px;">If you are not redirected automatically, click the button below.</p>
-      </div>
-      <form id="pf" action="${escapeHtml(PAYFAST_URL)}" method="post" style="display: none;">
-        ${inputsHtml}
-        <noscript>
-          <div style="margin-top: 20px;">
-            <p style="color: #e74c3c;">JavaScript is required for automatic redirection.</p>
-            <button type="submit" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
-              Proceed to PayFast
-            </button>
-          </div>
-        </noscript>
-      </form>
-    </div>
-    <script>
-      // Auto-submit after a brief delay to show the loading message
-      setTimeout(function() {
-        document.getElementById('pf').submit();
-      }, 1500);
+<head>
+  <meta charset="utf-8">
+  <title>Redirecting to PayFast...</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #f7f7f9; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+      margin: 0; 
+      padding: 20px; 
+      text-align: center;
+    }
+    .container { 
+      background: white; 
+      padding: 40px; 
+      border-radius: 10px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); 
+      max-width: 500px; 
+      width: 100%;
+    }
+    .loading { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 20px; 
+    }
+    .spinner { 
+      width: 50px; 
+      height: 50px; 
+      border: 5px solid #f3f3f3; 
+      border-top: 5px solid #3498db; 
+      border-radius: 50%; 
+      animation: spin 1s linear infinite; 
+    }
+    @keyframes spin { 
+      0% { transform: rotate(0deg); } 
+      100% { transform: rotate(360deg); } 
+    }
+    .debug-info {
+      display: none;
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      text-align: left;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .show-debug {
+      background: #6c757d;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 15px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="loading">
+      <div class="spinner"></div>
+      <h2>Processing Payment...</h2>
+      <p>You are being securely redirected to PayFast to complete your payment.</p>
+      <p style="color: #666; font-size: 14px;">Please do not close this window.</p>
       
-      // Fallback: if form hasn't submitted after 5 seconds, show the button
-      setTimeout(function() {
-        var form = document.getElementById('pf');
-        var noscript = form.querySelector('noscript');
-        if (form.parentNode.contains(form)) {
-          noscript.style.display = 'block';
-        }
-      }, 5000);
-    </script>
-  </body>
+      <button class="show-debug" onclick="document.getElementById('debugInfo').style.display='block'">
+        Show Debug Info
+      </button>
+      
+      <div id="debugInfo" class="debug-info">
+        <strong>Payment Details:</strong><br>
+        Order ID: ${m_payment_id}<br>
+        Amount: R${amountString}<br>
+        Customer: ${customerEmail}<br>
+        Signature: ${signature.substring(0, 10)}...<br>
+        <br>
+        <strong>If you see this, auto-submit failed:</strong><br>
+        <button onclick="document.getElementById('pfForm').submit()" style="padding: 10px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer;">
+          Click here to proceed to PayFast
+        </button>
+      </div>
+    </div>
+    
+    <form id="pfForm" action="${escapeHtml(PAYFAST_URL)}" method="post" style="display: none;">
+      ${inputsHtml}
+      <noscript>
+        <div style="margin-top: 20px; padding: 20px; background: #fff3cd; border-radius: 5px;">
+          <p style="color: #856404; margin: 0;">
+            <strong>JavaScript is disabled.</strong><br>
+            Please click the button below to proceed to PayFast.
+          </p>
+          <button type="submit" style="margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Proceed to PayFast
+          </button>
+        </div>
+      </noscript>
+    </form>
+  </div>
+  
+  <script>
+    // Show that we're processing
+    console.log('Submitting to PayFast...');
+    console.log('Order ID: ${m_payment_id}');
+    
+    // Auto-submit after 1 second to show loading state
+    setTimeout(function() {
+      console.log('Auto-submitting form...');
+      document.getElementById('pfForm').submit();
+    }, 1000);
+    
+    // If still on page after 5 seconds, show debug info
+    setTimeout(function() {
+      var debugInfo = document.getElementById('debugInfo');
+      if (document.body.contains(document.getElementById('pfForm'))) {
+        debugInfo.style.display = 'block';
+        debugInfo.innerHTML += '<br><br><strong>Note:</strong> Form submission seems to have failed. Please try the manual button above.';
+      }
+    }, 5000);
+  </script>
+</body>
 </html>`;
 
-    // Return HTML — the browser will load and immediately POST to PayFast
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'text/html' },
@@ -307,13 +398,15 @@ module.exports.handler = async function (event) {
 
   } catch (err) {
     console.error('Payment function error:', err);
+    console.error('Error stack:', err.stack);
+    
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        error: 'Internal server error', 
-        details: err?.message,
-        stack: process.env.NODE_ENV === 'development' ? err?.stack : undefined 
+        error: 'Internal server error',
+        message: err?.message,
+        details: process.env.NODE_ENV === 'development' ? err?.stack : undefined
       })
     };
   }
