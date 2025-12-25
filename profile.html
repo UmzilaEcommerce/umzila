@@ -185,17 +185,20 @@
   </div>
 
   <script>
-  (function(){
-    // ---------- CONFIG ----------
-    const FALLBACK_SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
-    const FALLBACK_SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
-
-    const SUPABASE_URL = window.SUPABASE_URL || FALLBACK_SUPABASE_URL;
-    const SUPABASE_ANON = window.SUPABASE_ANON || FALLBACK_SUPABASE_ANON;
-
-    // prefer a single global client (avoid duplicate declarations)
-    window.supabaseClient = window.supabaseClient || (window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null);
-    const supabase = window.supabaseClient;
+  (async function(){
+    // Wait for supabase to be initialized
+    if (!window.supabase) {
+      await new Promise(resolve => {
+        if (window.supabase) {
+          resolve();
+        } else {
+          document.addEventListener('supabase-ready', () => resolve());
+        }
+      });
+    }
+    
+    // initialize supabase client
+    const supabase = window.supabase;
 
     if(!supabase){
       console.error('Supabase client not initialized. Check script include and keys.');
