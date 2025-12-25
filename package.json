@@ -1,0 +1,24 @@
+{
+  "name": "streetsale---copy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/UmzilaEcommerce/umzila.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/UmzilaEcommerce/umzila/issues"
+  },
+  "homepage": "https://github.com/UmzilaEcommerce/umzila#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0"
+  }
+}
