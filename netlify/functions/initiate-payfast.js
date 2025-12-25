@@ -124,13 +124,11 @@ export async function handler(event) {
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert([{
-        m_payment_id,
         customer_email: customerEmail,
-        customer_first: customerFirst, 
-        customer_last: customerLast,
+        customer_name: [customerFirst, customerLast].filter(Boolean).join(' ')
         total: totalAmount,
-        raw_cart: validatedItems,
-        status: 'pending_payment',
+        items: validatedItems,
+        order_status: 'pending_payment',
         created_at: new Date().toISOString()
       }])
       .select()
