@@ -915,7 +915,36 @@
       display: none;
     }
   </style>
+  <!-- Supabase initialization via Netlify function -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+
+  <script>
+    (async function initSupabaseClient(){
+      try {
+        const res = await fetch('/.netlify/functions/get-client-config');
+        if (!res.ok) {
+          console.error('Failed to load Supabase config', res.status, await res.text());
+          return;
+        }
+        const cfg = await res.json();
+
+        if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
+          console.error('Missing Supabase config from server');
+          return;
+        }
+
+        // Initialize Supabase client
+        const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+        window.supabase = supabaseClient; // make it accessible globally
+
+        // Optional: notify other scripts that Supabase is ready
+        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
+        console.log('Supabase client initialized');
+      } catch (err) {
+        console.error('Error initializing Supabase client', err);
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -1952,14 +1981,21 @@
     /********************
      * Supabase initialization
      ********************/
-    const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
-    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
     let supabaseClient = null;
-    try {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-    } catch(e){
-      console.warn('Supabase client not available', e);
-    }
+    
+    // Listen for the supabase-ready event
+    document.addEventListener('supabase-ready', function(e) {
+      supabaseClient = e.detail.supabase;
+      console.log('Supabase client received via event');
+      
+      // Now that Supabase is ready, load products and check auth state
+      if (typeof loadProducts === 'function') {
+        loadProducts();
+      }
+      if (typeof checkInitialAuthState === 'function') {
+        checkInitialAuthState();
+      }
+    });
 
     /********************
      * State & basic helpers
@@ -4554,13 +4590,19 @@ function initCheckoutAuth() {
       // Check initial auth state
       checkInitialAuthState();
       
-      // Load products from Supabase
-      loadSupabaseProducts().catch(e => {
-        console.error('Failed to load Supabase products:', e);
-        // Fallback to local products if Supabase fails
+      // Load products from Supabase if client is ready
+      if (supabaseClient) {
+        loadSupabaseProducts().catch(e => {
+          console.error('Failed to load Supabase products:', e);
+          // Fallback to local products if Supabase fails
+          state.products = fallbackProducts;
+          applyFilters();
+        });
+      } else {
+        // Fallback to local products if Supabase isn't ready yet
         state.products = fallbackProducts;
         applyFilters();
-      });
+      }
       
       // Initialize mobile functionality
       initMobileSearch();
