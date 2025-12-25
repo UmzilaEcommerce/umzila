@@ -126,7 +126,7 @@ export async function handler(event) {
       .insert([{
         m_payment_id,
         customer_email: customerEmail,
-        customer_first: customerFirst,
+        customer_first: customerFirst, 
         customer_last: customerLast,
         total: totalAmount,
         raw_cart: validatedItems,
