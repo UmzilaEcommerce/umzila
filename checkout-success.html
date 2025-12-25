@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Successful - Umzila</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f7f7f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .success-card {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 6px 18px rgba(11,13,20,0.08);
+    }
+    .success-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      color: #28a745;
+    }
+    h1 {
+      color: #0a2f66;
+      margin-bottom: 10px;
+    }
+    p {
+      color: #6b6b74;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .order-details {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: left;
+    }
+    .btn {
+      display: inline-block;
+      background: #0a2f66;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      margin-top: 10px;
+      border: none;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: #08315f;
+    }
+  </style>
+</head>
+<body>
+  <div class="success-card">
+    <div class="success-icon">✅</div>
+    <h1>Payment Successful!</h1>
+    <p>Thank you for your order. Your payment has been processed successfully.</p>
+    
+    <div class="order-details">
+      <div><strong>Order ID:</strong> <span id="orderId">Loading...</span></div>
+      <div><strong>Status:</strong> <span style="color: #28a745;">Paid</span></div>
+      <div><strong>You will receive:</strong> Order confirmation email shortly</div>
+    </div>
+    
+    <p>We're processing your order and will notify you when it ships.</p>
+    
+    <a href="index.html" class="btn">Continue Shopping</a>
+    <a href="profile.html" class="btn" style="background: #6c757d; margin-left: 10px;">View Orders</a>
+  </div>
+
+  <script>
+    // Get order ID from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('m_payment_id');
+    if (orderId) {
+      document.getElementById('orderId').textContent = orderId;
+      localStorage.removeItem('ss_cart'); // Clear cart
+    }
+  </script>
+</body>
+</html>

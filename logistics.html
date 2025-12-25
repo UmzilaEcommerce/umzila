@@ -1,0 +1,1911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Logistics Dashboard — Shop Control (Updated)</title>
+<style>
+  :root{
+    --primary:#0073e6; --bg:#f3f4f6; --card:#ffffff; --text:#111827; --muted:#6b7280;
+    --pending:#fef3c7; --pack:#dbebff; --fulfilled:#efe3ff; --delivered:#bbf7d0; --returned:#fecaca;
+    font-family:Inter, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
+  header{height:64px;background:#fff;display:flex;align-items:center;padding:0 20px;box-shadow:0 1px 0 rgba(0,0,0,0.04);position:fixed;left:0;right:0;top:0;z-index:20}
+  .app{display:grid;grid-template-columns:220px 1fr;gap:0;padding-top:64px;min-height:100vh;transition:all .22s ease}
+  .sidebar{padding:20px 12px;background:transparent}
+  .panel{background:var(--card);margin:16px;border-radius:12px;padding:12px;box-shadow:0 6px 16px rgba(2,6,23,0.06)}
+  .content{padding:20px 28px 28px;overflow:auto}
+  .card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.03)}
+  .controls{display:flex;gap:8px;align-items:center}
+  .order-card{background:#fff;padding:12px;border-radius:10px;margin-bottom:12px;box-shadow:0 6px 18px rgba(2,6,23,0.03)}
+  .badge{padding:6px 8px;border-radius:8px;font-weight:700;white-space:nowrap}
+  .badge.pending{background:var(--pending);color:#92400e}
+  .badge.packaging{background:var(--pack);color:#003b78}
+  .badge.fulfilled{background:var(--fulfilled);color:#4c1d95}
+  .badge.delivered{background:var(--delivered);color:#064e3b}
+  .badge.returned{background:var(--returned);color:#7f1d1d}
+
+  .toasts{position:fixed;top:16px;right:16px;z-index:300}
+  .toast{background:#111827;color:#fff;padding:8px 12px;border-radius:8px;margin-top:8px;display:flex;gap:8px;align-items:center}
+  .toast button{background:transparent;border:0;color:#fff;font-weight:700;cursor:pointer}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.35);display:none;align-items:center;justify-content:center;z-index:290}
+  .modal{background:#fff;padding:16px;border-radius:12px;max-width:920px;width:95%;box-shadow:0 12px 40px rgba(2,6,23,0.2);max-height:90vh;overflow:auto;position:relative}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600;background:#fff}
+  .btn-primary{background:var(--primary);color:#fff;border-radius:10px}
+  .btn-ghost{background:#fff;border:1px solid #e6eef9}
+  .muted{color:var(--muted);font-size:13px}
+
+  .searchWrap{position:relative;display:flex;align-items:center;gap:8px}
+  #searchOrders{width:520px;padding:8px;border-radius:8px;border:1px solid #e6eef9}
+  .clearX{background:transparent;border:0;cursor:pointer;font-size:14px;padding:6px;border-radius:6px;display:none}
+  .clearX.visible{display:inline-flex}
+
+  .suggestions{position:absolute;top:42px;left:0;right:0;background:#fff;border-radius:8px;box-shadow:0 10px 30px rgba(2,6,23,0.08);z-index:40;max-height:220px;overflow:auto;border:1px solid #eef4ff}
+  .suggest-item{padding:8px 10px;border-bottom:1px solid #f6f8ff;cursor:pointer;display:flex;justify-content:space-between}
+  .suggest-item:hover{background:#f8fbff}
+  .panel-section{display:none}
+  .panel-section.active{Display:block}
+
+  input[type="text"], input[type="number"], select, textarea{font-family:inherit}
+  table{border-collapse:collapse;width:100%}
+  th, td{padding:6px;text-align:left}
+
+  /* New: big status buttons */
+  .status-grid{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+  .status-btn{flex:1;min-width:150px;padding:14px 18px;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer;border:0}
+  .status-btn.pending{background:var(--pending);color:#92400e}
+  .status-btn.packaging{background:var(--pack);color:#003b78}
+  .status-btn.fulfilled{background:var(--fulfilled);color:#4c1d95}
+  .status-btn.delivered{background:var(--delivered);color:#064e3b}
+  .status-btn.returned{background:var(--returned);color:#7f1d1d}
+
+  /* small confirm overlay inside modal (centred card) */
+  .confirm-overlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;padding:18px;border-radius:12px;box-shadow:0 12px 40px rgba(2,6,23,0.25);z-index:500;min-width:300px}
+  .confirm-overlay .muted{margin-top:8px}
+
+  @media (max-width:800px){
+    #searchOrders{width:220px}
+    .app{grid-template-columns:76px 1fr}
+    .status-grid{flex-direction:column}
+  }
+</style>
+
+<!-- Supabase UMD client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <header>
+    <div style="display:flex;align-items:center;gap:12px;width:100%">
+      <div style="font-weight:700;color:var(--primary)">Logistics Dashboard</div>
+
+      <div style="flex:1;display:flex;justify-content:center">
+        <div class="searchWrap" style="width:520px;">
+          <input id="searchOrders" placeholder="Search order ID or customer..." autocomplete="off" />
+          <button id="clearSearch" class="clearX" aria-label="Clear search">✕</button>
+          <div id="suggestions" class="suggestions" style="display:none"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="newOrderHeader" class="btn btn-primary">+ New Order</button>
+        <div class="controls">
+          <button class="btn header-filter" data-filter="ALL" data-target="overview">All Orders</button>
+          <button class="btn header-filter" data-filter="Pending" data-target="orders">Pending</button>
+          <button class="btn header-filter" data-filter="Packaging" data-target="orders">Packaging</button>
+          <button class="btn header-filter" data-filter="Fulfilled" data-target="past">Fulfilled</button>
+          <button class="btn header-filter" data-filter="Delivered" data-target="past">Delivered</button>
+          <button class="btn header-filter" data-filter="Returned" data-target="past">Returned</button>
+        </div>
+
+        <!-- NEW: profile name (same as admin.html) -->
+        <div id="profileName" class="btn btn-ghost" style="border-radius:999px">Profile</div>
+
+        <button id="logout" class="btn btn-ghost">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div style="font-weight:700;color:var(--primary);margin:8px 12px">Logistics</div>
+      <nav style="display:flex;flex-direction:column;gap:6px;padding:8px 12px">
+        <button class="btn nav-btn" data-panel="overview">Overview</button>
+        <button class="btn nav-btn" data-panel="orders">Orders</button>
+        <button class="btn nav-btn" data-panel="past">Past Orders</button>
+        <button class="btn nav-btn" data-panel="settings">Settings</button>
+        <button class="btn nav-btn" data-panel="analytics">Analytics</button>
+        <button id="lsout2" class="btn">Logout</button>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section id="panel-overview" class="panel-section active panel">
+        <div style="display:flex;gap:12px;margin-bottom:12px">
+          <div class="card" style="flex:1;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="muted">Pending</div>
+              <div id="statPending" style="font-weight:700">0</div>
+            </div>
+            <button id="newOrderOverview" class="btn btn-primary">Create Order</button>
+          </div>
+
+          <div class="card" style="width:180px">
+            <div class="muted">Packaging</div><div id="statPackaging" style="font-weight:700">0</div>
+          </div>
+
+          <div class="card" style="width:180px">
+            <div class="muted">Fulfilled</div><div id="statFulfilled" style="font-weight:700">0</div>
+          </div>
+
+          <div class="card" style="width:180px">
+            <div class="muted">Delivered</div><div id="statDelivered" style="font-weight:700">0</div>
+          </div>
+
+          <div class="card" style="width:180px">
+            <div class="muted">Returned</div><div id="statReturned" style="font-weight:700">0</div>
+          </div>
+        </div>
+
+        <div class="panel card">
+          <h3>Recent Orders</h3>
+          <div class="muted">Quick glance of the most recent entries</div>
+          <div id="overviewRecent" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <section id="panel-orders" class="panel-section panel">
+        <div class="panel card" style="margin-bottom:12px">
+          <h3>Orders Queue <span id="ordersFilterLabel" class="muted"></span></h3>
+          <div id="ordersList" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <section id="panel-past" class="panel-section panel">
+        <div class="panel card">
+          <h3>Past Orders <span id="pastFilterLabel" class="muted"></span></h3>
+          <div id="pastList" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <section id="panel-settings" class="panel-section panel">
+        <div class="panel card">
+          <h3>Settings</h3>
+          <div class="muted">Password reset placeholders (replace with your real flows)</div>
+          <div style="margin-top:12px">
+            <input placeholder="New password (placeholder)" disabled style="padding:8px;border-radius:8px;border:1px solid #e6eef9;width:320px" />
+            <button disabled class="btn btn-ghost" style="margin-left:8px">Send Reset</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ANALYTICS SECTION — FIXED: Removed inline display:none, uses panel-section class -->
+      <section id="panel-analytics" class="panel-section panel">
+        <div class="panel card">
+          <h3>Analytics</h3>
+          <div class="muted">Revenue, orders and top selling products — choose a date range.</div>
+
+          <div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap">
+            <label>Start: <input type="date" id="analytics-start" /></label>
+            <label>End:   <input type="date" id="analytics-end" /></label>
+
+            <label>Granularity:
+              <select id="analytics-granularity" style="padding:6px;border-radius:6px;border:1px solid #e6eef9">
+                <option value="day">Day</option>
+                <option value="week">Week</option>
+                <option value="month" selected>Month</option>
+                <option value="year">Year</option>
+              </select>
+            </label>
+
+            <button id="analytics-refresh" class="btn btn-primary">Refresh</button>
+          </div>
+
+          <div id="analytics-overview" style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="card">
+              <div class="muted">Revenue</div>
+              <div id="metric-revenue" style="font-weight:800;font-size:20px;margin-top:6px">R0.00</div>
+            </div>
+            <div class="card">
+              <div class="muted">Orders</div>
+              <div id="metric-orders" style="font-weight:800;font-size:20px;margin-top:6px">0</div>
+            </div>
+          </div>
+
+          <div id="revenue-timeseries" style="margin-top:12px"></div>
+
+          <div id="analytics-top-products" style="margin-top:12px">
+            <h4 style="margin:8px 0">Top 10 Most-Ordered Products</h4>
+            <div class="card" style="padding:8px;overflow:auto">
+              <table id="top-products-table" style="min-width:700px">
+                <thead><tr><th>#</th><th>Product</th><th>Orders</th><th>Quantity</th><th>Revenue</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- modal used for both create and details & confirmations -->
+  <div id="modal" class="modal-backdrop">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div id="modalBody"></div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px">
+        <button id="modalCancel" class="btn btn-ghost">Cancel</button>
+        <button id="modalConfirm" class="btn btn-primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ------------------ CONFIG: replace with your project values ------------- */
+const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
+/* ------------------------------------------------------------------------- */
+
+let supabaseClient = null;
+try {
+  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+} catch (e) {
+  console.warn('Supabase init failed:', e);
+  supabaseClient = null;
+}
+
+/* ---------- Authentication helpers (copied from admin.html for parity) ---------- */
+async function getSupabaseUser() {
+  if(!supabaseClient) return null;
+  try {
+    const { data } = await supabaseClient.auth.getUser();
+    return data?.user ?? null;
+  } catch (e) {
+    console.warn('supabase getUser failed', e);
+    return null;
+  }
+}
+
+async function ensureAdminAccessOrRedirect(){
+  const curRaw = localStorage.getItem('scp_current_user');
+  let cur = {};
+  try { cur = JSON.parse(curRaw || '{}'); } catch(e){ cur = {}; }
+  const curRole = (cur.role || '').toString().trim().toLowerCase();
+  const localIsAdmin = (curRole === 'admin' || curRole === 'administrator');
+  if(localIsAdmin){
+    const nameElm = document.getElementById('profileName');
+    if(nameElm){
+      nameElm.textContent = cur.email ? `${(cur.email||'').split('@')[0]}` : 'Admin';
+    }
+    return;
+  }
+
+  if(supabaseClient){
+    try {
+      const user = await getSupabaseUser();
+      if(user){
+        const { data: adminRow, error: adminErr } = await supabaseClient
+          .from('admins')
+          .select('role')
+          .eq('user_id', user.id)
+          .limit(1)
+          .maybeSingle();
+
+        if(!adminErr && adminRow && adminRow.role){
+          const finalRole = adminRow.role;
+          const curSave = { email: user.email || '', role: finalRole, user_id: user.id };
+          try { localStorage.setItem('scp_current_user', JSON.stringify(curSave)); } catch(_) {}
+          const nameElm = document.getElementById('profileName');
+          if(nameElm) nameElm.textContent = user.email ? `${(user.email||'').split('@')[0]}` : finalRole;
+          const rlow = (finalRole||'').toString().trim().toLowerCase();
+          if(rlow === 'admin' || rlow === 'administrator') return;
+          console.warn('Authenticated but role not admin:', finalRole);
+        } else {
+          console.warn('No admins row found for user or query error', adminErr, adminRow);
+        }
+      }
+    } catch (e){
+      console.warn('Supabase admin check failed', e);
+    }
+  }
+
+  console.warn('Access denied to logistics.html — scp_current_user/local role not admin and no valid supabase admin session found.');
+  setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+  throw new Error('not-authorized');
+}
+/* ---------- end auth helpers ---------- */
+
+
+/* ------------------ In-memory orders cache (no localStorage) ------------- */
+let ORDERS_CACHE = []; // holds UI-shaped orders fetched from Supabase
+let productsVariantCache = []; // flattened cache of product + variant rows for picker
+
+function getOrders(){ return ORDERS_CACHE; }
+function setOrders(arr){ ORDERS_CACHE = arr || []; }
+
+/* ------------------ Mapping / fetch helpers ------------------------------- */
+
+function mapRowToUIOrder(r){
+  const items = r.items || r.order_items || [];
+  return {
+    id: r.order_number || r.id || (`ORD-${Math.floor(Math.random()*900000)+1000}`),
+    customer: r.customer_name || r.customer || r.customer_full_name || '',
+    email: r.customer_email || r.email || '',
+    address: r.delivery_address || r.pickup_address || r.address || '',
+    date: (r.created_at ? (new Date(r.created_at)).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric', hour:'2-digit', minute:'2-digit'}) : (r.date || '')),
+    status: r.order_status || r.status || 'Pending',
+    items: Array.isArray(items) ? items : [],
+    total: Number(r.total || r.amount || 0),
+    discount: Number(r.discount || 0),
+    category: r.package_type || r.category || '',
+    customer_phone: r.customer_phone || '',
+    notes: r.notes || '',
+    profile_id: r.profile_id || null,
+    user_id: r.user_id || null,
+    created_at: r.created_at || null
+  };
+}
+
+async function fetchOrdersFromSupabase(){
+  if(!supabaseClient) return [];
+  try {
+    const { data, error } = await supabaseClient
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(1000);
+    if(error){ console.warn('Supabase fetch orders error:', error); return []; }
+    if(!data) return [];
+    const mapped = data.map(mapRowToUIOrder);
+    return mapped;
+  } catch (e){
+    console.warn('Unexpected fetchOrdersFromSupabase error:', e);
+    return [];
+  }
+}
+
+/* FIXED: Ensure a profile exists for email or phone with all address fields */
+async function ensureProfile({ email, phone, full_name, address, city, province, postal_code, label, details }) {
+  if(!supabaseClient) return { profile_id: null, user_id: null, profile: null };
+
+  email = (email||'').toLowerCase().trim();
+  phone = (phone||'').trim();
+  full_name = (full_name||'').trim();
+  address = (address||'').trim();
+  city = (city||'').trim();
+  province = (province||'').trim();
+  postal_code = (postal_code||'').trim();
+  label = (label||'').trim();
+  details = (details||'').trim();
+
+  try {
+    // First, try to find an existing profile by email or phone
+    let existingProfile = null;
+    
+    if (email || phone) {
+      let query = supabaseClient.from('profiles').select('*');
+      
+      if (email && phone) {
+        query = query.or(`email.eq.${email},phone.eq.${phone}`);
+      } else if (email) {
+        query = query.eq('email', email);
+      } else if (phone) {
+        query = query.eq('phone', phone);
+      }
+      
+      const { data: existing, error: errFind } = await query.limit(1);
+      
+      if(errFind){ 
+        console.warn('profiles find error', errFind); 
+      } else if(existing && existing.length){
+        existingProfile = existing[0];
+      }
+    }
+
+    if (existingProfile) {
+      // Return existing profile
+      return { 
+        profile_id: existingProfile.id || null, 
+        user_id: existingProfile.user_id || null,
+        profile: existingProfile,
+        customer: `${existingProfile.first_name || ''} ${existingProfile.last_name || ''}`.trim() || full_name
+      };
+    }
+
+    // No existing profile found, create a new one
+    const [first_name, ...rest] = (full_name || '').split(/\s+/).filter(Boolean);
+    const last_name = rest.join(' ') || null;
+
+    const payload = {
+      first_name: first_name || null,
+      last_name: last_name || null,
+      phone: phone || null,
+      address: address || null,
+      city: city || null,
+      province: province || null,
+      postal_code: postal_code || null,
+      label: label || null,
+      email: email || null,
+      details: details || null,
+      // user_id should be NULL for customer profiles (not linked to a user account)
+    };
+
+    const { data: insertData, error: insertErr } = await supabaseClient
+      .from('profiles')
+      .insert([payload])
+      .select('*')
+      .limit(1);
+
+    if(insertErr){
+      console.warn('profiles insert error', insertErr);
+      
+      // If there's a unique constraint violation on user_id, it means there's already a profile with user_id = NULL
+      // Try to find it by email or phone again (maybe it was created concurrently)
+      if(insertErr.code === '23505' && insertErr.message.includes('profiles_user_id_unique')) {
+        // Try one more time to find by email or phone
+        const { data: retryData } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .or(`email.eq.${email},phone.eq.${phone}`)
+          .limit(1);
+        
+        if(retryData && retryData.length) {
+          const p = retryData[0];
+          return { 
+            profile_id: p.id || null, 
+            user_id: p.user_id || null,
+            profile: p,
+            customer: `${p.first_name || ''} ${p.last_name || ''}`.trim() || full_name
+          };
+        }
+      }
+      
+      return { profile_id: null, user_id: null, profile: null, customer: full_name };
+    }
+    
+    if(insertData && insertData.length) {
+      const p = insertData[0];
+      return { 
+        profile_id: p.id || null, 
+        user_id: p.user_id || null,
+        profile: p,
+        customer: `${p.first_name || ''} ${p.last_name || ''}`.trim() || full_name
+      };
+    }
+    
+    return { profile_id: null, user_id: null, profile: null, customer: full_name };
+  } catch (e){
+    console.warn('ensureProfile unexpected error', e);
+    return { profile_id: null, user_id: null, profile: null, customer: full_name };
+  }
+}
+
+/* FIXED: Upsert order to Supabase - properly handles updates */
+async function syncOrderToSupabase(order){
+  if(!supabaseClient) return null;
+  try {
+    const payload = {
+      order_number: order.id,
+      customer_name: order.customer,
+      customer_email: order.email || null,
+      customer_phone: order.customer_phone || null,
+      delivery_address: order.address || null,
+      order_status: order.status || null,
+      total: order.total || 0,
+      discount: order.discount || 0,
+      package_type: order.category || null,
+      items: order.items || [],
+      notes: order.notes || null,
+      profile_id: order.profile_id || null,
+      user_id: order.user_id || null,
+      created_at: order.created_at || new Date().toISOString()
+    };
+
+    // Check if order exists by order_number
+    const { data: existingOrder, error: checkError } = await supabaseClient
+      .from('orders')
+      .select('id')
+      .eq('order_number', order.id)
+      .maybeSingle();
+
+    let result;
+    if(existingOrder && !checkError) {
+      // Update existing order
+      result = await supabaseClient
+        .from('orders')
+        .update(payload)
+        .eq('order_number', order.id)
+        .select('*');
+    } else {
+      // Insert new order
+      result = await supabaseClient
+        .from('orders')
+        .insert([payload])
+        .select('*');
+    }
+
+    if(result.error){ 
+      console.warn('syncOrderToSupabase error for', order.id, result.error); 
+      return null; 
+    }
+
+    // Refresh local cache
+    const fresh = await fetchOrdersFromSupabase();
+    setOrders(fresh);
+    return result.data?.[0] ?? null;
+  } catch (e){
+    console.warn('Unexpected syncOrderToSupabase error for', order.id, e);
+    return null;
+  }
+}
+
+async function deleteOrderFromSupabase(order){
+  if(!supabaseClient) return null;
+  try {
+    const { error } = await supabaseClient
+      .from('orders')
+      .delete()
+      .eq('order_number', order.id);
+    if(error){ console.warn('deleteOrderFromSupabase error', error); return null; }
+    // refresh cache
+    const fresh = await fetchOrdersFromSupabase();
+    setOrders(fresh);
+    return true;
+  } catch (e){
+    console.warn('Unexpected deleteOrderFromSupabase error', e);
+    return null;
+  }
+}
+
+/* Fetch products + variants for picker */
+async function fetchProductsAndVariantsForPicker(){
+  if(!supabaseClient) return [];
+  try {
+    // Fetch products with basic info
+    const { data: products, error: productsError } = await supabaseClient
+      .from('products')
+      .select('id, name, sku, price, category_id, stock')
+      .order('name', { ascending: true })
+      .limit(2000);
+    
+    if(productsError){ 
+      console.warn('fetchProducts error', productsError); 
+      return []; 
+    }
+    
+    if(!products || products.length === 0) {
+      productsVariantCache = [];
+      return [];
+    }
+    
+    // Fetch variants separately
+    const { data: variants, error: variantsError } = await supabaseClient
+      .from('product_variants')
+      .select('id, product_id, sku, size, stock, price_override')
+      .in('product_id', products.map(p => p.id));
+    
+    if(variantsError){ 
+      console.warn('fetchVariants error', variantsError); 
+    }
+    
+    const out = [];
+    products.forEach(p => {
+      const productVariants = variants ? variants.filter(v => v.product_id === p.id) : [];
+      
+      if(productVariants.length > 0){
+        productVariants.forEach(v => {
+          // Only include variants with stock > 0
+          if (Number(v.stock || 0) > 0) {
+            out.push({
+              product_id: p.id,
+              product_name: p.name,
+              product_sku: p.sku || '',
+              price: Number(v.price_override || p.price || 0),
+              category_id: p.category_id || null,
+              variant_id: v.id,
+              variant_sku: v.sku || '',
+              size: v.size || '',
+              stock: Number(v.stock || 0),
+              price_override: v.price_override ? Number(v.price_override) : null
+            });
+          }
+        });
+      } else {
+        // Product without variants
+        const productStock = Number(p.stock || 0);
+        if (productStock > 0) {
+          out.push({
+            product_id: p.id,
+            product_name: p.name,
+            product_sku: p.sku || '',
+            price: Number(p.price || 0),
+            category_id: p.category_id || null,
+            variant_id: null,
+            variant_sku: '',
+            size: '',
+            stock: productStock,
+            price_override: null
+          });
+        }
+      }
+    });
+    
+    productsVariantCache = out;
+    return out;
+  } catch (e){
+    console.warn('fetchProductsAndVariantsForPicker failed', e);
+    productsVariantCache = [];
+    return [];
+  }
+}
+
+
+/* ---------------- UI code ----------------------------- */
+document.addEventListener('DOMContentLoaded', () => {
+  const modalWrap = document.getElementById('modal');
+  const modalBody = document.getElementById('modalBody');
+  const modalConfirm = document.getElementById('modalConfirm');
+  const modalCancel = document.getElementById('modalCancel');
+  const toasts = document.getElementById('toasts');
+
+  const searchInput = document.getElementById('searchOrders');
+  const clearBtn = document.getElementById('clearSearch');
+  const suggestions = document.getElementById('suggestions');
+
+  const ordersListEl = document.getElementById('ordersList');
+  const pastListEl = document.getElementById('pastList');
+  const overviewRecentEl = document.getElementById('overviewRecent');
+
+  const statPending = document.getElementById('statPending');
+  const statPackaging = document.getElementById('statPackaging');
+  const statFulfilled = document.getElementById('statFulfilled');
+  const statDelivered = document.getElementById('statDelivered');
+  const statReturned = document.getElementById('statReturned');
+
+  const newOrderHeader = document.getElementById('newOrderHeader');
+  const newOrderOverview = document.getElementById('newOrderOverview');
+
+  const profileNameEl = document.getElementById('profileName');
+
+  // Undo buffer for delete
+  let lastDeleted = null;
+  let lastDeletedTimer = null;
+
+  // Save pre-search state
+  let preSearchState = null;
+
+  function showToast(msg, opts = {}) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    if (opts.undo && typeof opts.undo === 'function') {
+      const btn = document.createElement('button');
+      btn.textContent = 'UNDO';
+      btn.addEventListener('click', () => {
+        opts.undo();
+        t.remove();
+        if (lastDeletedTimer) { clearTimeout(lastDeletedTimer); lastDeletedTimer = null; lastDeleted = null; }
+      });
+      t.appendChild(btn);
+    }
+    toasts.appendChild(t);
+    const life = opts.undo ? 6000 : 2200;
+    setTimeout(() => { t.remove(); }, life);
+  }
+
+  function formatCurrency(v){ return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(v); }
+  function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function statusBadge(st){ return `<span class="badge ${st.toLowerCase()}">${escapeHtml(st)}</span>`; }
+
+  // Overview recent clickable
+  function renderOverviewRecent(){
+    const arr = getOrders().slice(0,6).reverse();
+    overviewRecentEl.innerHTML = arr.map(o=>`<div class="order-card" data-id="${escapeHtml(o.id)}" style="cursor:pointer"><div style="display:flex;justify-content:space-between"><div><strong>${escapeHtml(o.id)}</strong> — ${escapeHtml(o.customer)}</div><div>${statusBadge(o.status)}</div></div><div class="muted">${escapeHtml(o.date)}</div></div>`).join('') || '<div class="muted">No recent orders</div>';
+    overviewRecentEl.querySelectorAll('.order-card').forEach(el=>{
+      el.addEventListener('click', ()=> openDetailsModal(el.getAttribute('data-id')));
+    });
+  }
+
+  function loadCountsAndOverview(){
+    const arr = getOrders();
+    statPending.textContent = arr.filter(o=>o.status==='Pending').length;
+    statPackaging.textContent = arr.filter(o=>o.status==='Packaging').length;
+    statFulfilled.textContent = arr.filter(o=>o.status==='Fulfilled').length;
+    statDelivered.textContent = arr.filter(o=>o.status==='Delivered').length;
+    statReturned.textContent = arr.filter(o=>o.status==='Returned').length;
+    renderOverviewRecent();
+  }
+
+  // Render Orders
+  function renderOrders(filter = 'AUTO'){
+    const arr = getOrders();
+    const q = (searchInput.value||'').trim().toLowerCase();
+    let list;
+    if(filter === 'AUTO' || filter === 'ALL') {
+      list = arr.filter(o => ['Pending','Packaging'].includes(o.status));
+    } else {
+      list = arr.filter(o => o.status === filter);
+    }
+    list = list.filter(o => {
+      if(!q) return true;
+      return o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q);
+    });
+
+    ordersListEl.innerHTML = list.map(o=>`
+      <div class="order-card" data-id="${escapeHtml(o.id)}">
+        <div style="display:flex;justify-content:space-between">
+          <div><strong>${escapeHtml(o.id)}</strong> — ${escapeHtml(o.customer)}<div class="muted">${o.items.length} items • ${escapeHtml(o.category||'')}</div></div>
+          <div>${statusBadge(o.status)}</div>
+        </div>
+        <div style="margin-top:8px">
+          <button class="btn viewBtn" data-id="${escapeHtml(o.id)}">View Details</button>
+        </div>
+      </div>`).join('') || '<div class="muted">No orders found</div>';
+
+    ordersListEl.querySelectorAll('.viewBtn').forEach(b=>{
+      b.addEventListener('click', ()=> openDetailsModal(b.getAttribute('data-id')));
+    });
+  }
+
+  // Render Past Orders
+  function renderPastOrders(filter = 'ALL'){
+    const arrAll = getOrders().filter(o => ['Fulfilled','Delivered','Returned'].includes(o.status));
+    const q = (searchInput.value||'').trim().toLowerCase();
+    let arr = arrAll;
+    if(filter && filter !== 'ALL') arr = arrAll.filter(o => o.status === filter);
+    arr = arr.filter(o => {
+      if(!q) return true;
+      return o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q);
+    });
+
+    pastListEl.innerHTML = arr.map(o=>`
+      <div class="order-card" data-id="${escapeHtml(o.id)}">
+        <div style="display:flex;justify-content:space-between">
+          <div><strong>${escapeHtml(o.id)}</strong> — ${escapeHtml(o.customer)}</div>
+          <div>${statusBadge(o.status)}</div>
+        </div>
+        <div class="muted">${escapeHtml(o.date)} • ${formatCurrency(o.total)}</div>
+        <div style="margin-top:8px"><button class="btn viewBtn" data-id="${escapeHtml(o.id)}">View Details</button></div>
+      </div>`).join('') || '<div class="muted">No past orders found</div>';
+
+    pastListEl.querySelectorAll('.viewBtn').forEach(b=>{
+      b.addEventListener('click', ()=> openDetailsModal(b.getAttribute('data-id')));
+    });
+  }
+
+  // Modal helpers
+  function openModalHtml(html){
+    modalBody.innerHTML = html;
+    modalConfirm.style.display = 'inline-flex';
+    modalCancel.style.display = 'inline-flex';
+    modalConfirm.disabled = false;
+    modalWrap.style.display = 'flex';
+  }
+  function closeModal(){ modalWrap.style.display = 'none'; modalBody.innerHTML = ''; modalConfirm.onclick = defaultConfirmHandler; modalCancel.onclick = null; modalConfirm.disabled = false; removeConfirmOverlay(); }
+  modalCancel.addEventListener('click', ()=> closeModal());
+  modalWrap.addEventListener('click', (e)=> { if(e.target === modalWrap) closeModal(); });
+
+  function defaultConfirmHandler(){
+    const primary = modalBody.querySelector('[data-primary-action]');
+    if(primary){
+      primary.click();
+      return;
+    }
+    closeModal();
+  }
+  modalConfirm.onclick = defaultConfirmHandler;
+
+  function removeConfirmOverlay(){ const ov = modalBody.querySelector('.confirm-overlay'); if(ov) ov.remove(); modalConfirm.style.display='inline-flex'; modalCancel.style.display='inline-flex'; }
+  function showInlineConfirm(message, onConfirm, onCancel){
+    removeConfirmOverlay();
+    modalConfirm.style.display = 'none';
+    modalCancel.style.display = 'none';
+    const ov = document.createElement('div');
+    ov.className = 'confirm-overlay';
+    ov.innerHTML = `<div><strong>Confirm</strong></div><div style="margin-top:8px">${escapeHtml(message)}</div>
+      <div class="muted">This action requires confirmation.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+        <button class="btn btn-ghost cancel-inline">Cancel</button>
+        <button class="btn btn-primary confirm-inline">Confirm</button>
+      </div>`;
+    modalBody.appendChild(ov);
+    ov.querySelector('.confirm-inline').addEventListener('click', ()=>{ onConfirm && onConfirm(); removeConfirmOverlay(); });
+    ov.querySelector('.cancel-inline').addEventListener('click', ()=>{ if(typeof onCancel === 'function') onCancel(); removeConfirmOverlay(); });
+  }
+
+  function showTypedConfirm(message, expectedValue, onConfirm, onCancelRestore){
+    const prevHtml = modalBody.innerHTML;
+    modalBody.innerHTML = `<h3>Confirm action</h3><p class="muted">${escapeHtml(message)}</p>
+      <input id="typed_confirm" placeholder="Type to confirm" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9;margin-top:8px" />
+      <div class="muted" style="margin-top:8px">Type <strong>${escapeHtml(expectedValue)}</strong> exactly to enable Confirm.</div>`;
+    modalConfirm.disabled = true;
+    const input = modalBody.querySelector('#typed_confirm');
+    function check(){ modalConfirm.disabled = input.value !== expectedValue; }
+    input.addEventListener('input', check);
+    const origConfirm = modalConfirm.onclick;
+    modalConfirm.onclick = ()=> {
+      onConfirm && onConfirm();
+      modalConfirm.onclick = origConfirm || defaultConfirmHandler;
+      modalConfirm.disabled = false;
+    };
+    modalCancel.onclick = ()=> {
+      modalConfirm.disabled = false;
+      modalConfirm.onclick = origConfirm || defaultConfirmHandler;
+      if(typeof onCancelRestore === 'function') onCancelRestore();
+      else modalBody.innerHTML = prevHtml;
+    };
+  }
+
+  async function confirmAndUpdateStatus(orderId, newStatus, restoreCallback){
+    showInlineConfirm(`Mark ${orderId} as ${newStatus}?`, async ()=>{
+      const arr = getOrders();
+      const idx = arr.findIndex(x=>x.id === orderId);
+      if(idx !== -1){
+        arr[idx].status = newStatus;
+        // persist to Supabase
+        const updated = await syncOrderToSupabase({
+          ...arr[idx],
+          status: newStatus
+        });
+        if(!updated) showToast('Warning: failed to sync status to Supabase');
+        showToast(`Order ${orderId} marked ${newStatus}`);
+        loadCountsAndOverview();
+        if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+        if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+      }
+      if(typeof restoreCallback === 'function') restoreCallback();
+    }, ()=>{ if(typeof restoreCallback === 'function') restoreCallback(); });
+  }
+
+  function openDeleteConfirm(orderId, restoreViewCallback){
+    const html = `<h3>Delete Order ${escapeHtml(orderId)}</h3>
+      <p class="muted">This will permanently remove the order unless you undo immediately. To confirm, type the order ID exactly below.</p>
+      <input id="del_confirm_input" placeholder="Type order ID to confirm delete" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9;margin-top:8px" />
+      <div class="muted" style="margin-top:8px">Once you type the exact ID, press Confirm to delete.</div>`;
+    openModalHtml(html);
+    modalConfirm.disabled = true;
+    const input = modalBody.querySelector('#del_confirm_input');
+    function check(){ modalConfirm.disabled = input.value !== orderId; }
+    input.addEventListener('input', check);
+    modalConfirm.onclick = async ()=> {
+      const arr = getOrders();
+      const idx = arr.findIndex(x=>x.id === orderId);
+      if(idx === -1){ showToast('Order not found'); closeModal(); return; }
+      const removed = arr.splice(idx,1)[0];
+      // attempt to delete on supabase
+      const ok = await deleteOrderFromSupabase(removed);
+      if(!ok){
+        showToast('Delete failed on Supabase — kept locally');
+        const fresh = await fetchOrdersFromSupabase();
+        setOrders(fresh);
+      } else {
+        showToast(`Deleted ${orderId}`, { undo: true, undo: async ()=> {
+          const inserted = await syncOrderToSupabase(removed);
+          if(inserted){
+            const fresh2 = await fetchOrdersFromSupabase();
+            setOrders(fresh2);
+            loadCountsAndOverview();
+            showToast('Delete undone');
+          } else {
+            showToast('Undo failed');
+          }
+        }});
+      }
+      lastDeleted = { order: removed, index: idx };
+      if(lastDeletedTimer) clearTimeout(lastDeletedTimer);
+      lastDeletedTimer = setTimeout(()=> { lastDeleted = null; lastDeletedTimer = null; }, 6000);
+      closeModal();
+      loadCountsAndOverview();
+      if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+      if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+    };
+    modalCancel.onclick = ()=> {
+      modalConfirm.disabled = false;
+      if(typeof restoreViewCallback === 'function') restoreViewCallback();
+      else closeModal();
+    };
+  }
+
+  // Details modal
+  function openDetailsModal(orderId){
+    const arr = getOrders();
+    const o = arr.find(x=>x.id === orderId);
+    if(!o) return showToast('Order not found');
+
+    function renderForm(){
+      const itemsHtml = o.items.map(it => {
+        const productPart = it.product_id ? ` (product ${it.product_id}${it.variant_id ? ` / variant ${it.variant_id}` : ''})` : '';
+        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f6f8ff"><div>${escapeHtml(it.item)}${it.size?` • ${escapeHtml(it.size)}`:''}${productPart} × ${it.quantity}</div><div>${formatCurrency(it.price * it.quantity)}</div></div>`;
+      }).join('');
+      
+      // Calculate subtotal and show discount
+      const subtotal = o.items.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+      const discount = o.discount || 0;
+      const total = subtotal - discount;
+      
+      const html = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <h3 style="margin:0">${escapeHtml(o.id)}</h3>
+            <div class="muted" style="margin-top:6px">${escapeHtml(o.date)}</div>
+            <div style="margin-top:8px"><strong>${escapeHtml(o.customer)}</strong> • ${escapeHtml(o.email)} • ${escapeHtml(o.customer_phone || '')} • ${escapeHtml(o.address)}</div>
+          </div>
+
+          <div style="text-align:right">
+            ${statusBadge(o.status)}
+            <div class="muted" style="margin-top:8px">Category: ${escapeHtml(o.category||'—')}</div>
+            <div style="margin-top:12px;font-weight:800;font-size:18px">${formatCurrency(total)}</div>
+            ${discount > 0 ? `<div class="muted" style="margin-top:4px">Discount: -${formatCurrency(discount)}</div>` : ''}
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="muted">Items</div>
+          <div style="margin-top:8px;border-radius:8px;padding:8px;background:#fbfcff">${itemsHtml || '<div class="muted">No items</div>'}</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div class="muted">Notes</div>
+          <div style="margin-top:8px;padding:8px;border-radius:8px;background:#fff;border:1px solid #f1f5f9">${escapeHtml(o.notes || '') || '<span class="muted">No notes</span>'}</div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between">
+          <div class="muted">Change status quickly</div>
+          <div style="margin-left:auto">
+            <button id="openEditBtn" class="btn btn-ghost">Edit</button>
+          </div>
+        </div>
+
+        <div class="status-grid" style="margin-top:12px">
+          <button class="status-btn pending" data-status="Pending">Pending</button>
+          <button class="status-btn packaging" data-status="Packaging">Packaging</button>
+          <button class="status-btn fulfilled" data-status="Fulfilled">Fulfilled</button>
+          <button class="status-btn delivered" data-status="Delivered">Delivered</button>
+          <button class="status-btn returned" data-status="Returned">Returned</button>
+        </div>
+
+        <div class="muted" style="margin-top:12px">Note: status changes require confirmation.</div>
+      `;
+      openModalHtml(html);
+
+      modalBody.querySelector('#openEditBtn').addEventListener('click', ()=> openEditModal(o.id));
+
+      modalBody.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=> {
+          const newStatus = btn.getAttribute('data-status');
+          if(newStatus === o.status) { showToast(`Order already ${newStatus}`); return; }
+          confirmAndUpdateStatus(o.id, newStatus, renderForm);
+        });
+      });
+    }
+
+    renderForm();
+  }
+
+  // Edit modal (updated with new categories)
+  function openEditModal(orderId){
+    const arr = getOrders();
+    const o = arr.find(x=>x.id === orderId);
+    if(!o) { showToast('Order not found'); return; }
+
+    function renderEdit(){
+      const itemsHtml = o.items.map((it, i) => `
+        <div class="item-row" data-index="${i}" style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <input class="detail_item_name" value="${escapeHtml(it.item)}" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input class="detail_item_qty" type="number" value="${it.quantity}" style="width:80px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input class="detail_item_size" value="${escapeHtml(it.size||'')}" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input class="detail_item_price" type="number" step="0.01" value="${it.price}" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <button class="btn btn-ghost detail_remove" style="width:80px">Remove</button>
+        </div>`).join('');
+
+      const html = `
+        <h3>Edit ${escapeHtml(o.id)}</h3>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;gap:8px">
+            <input id="detail_customer" value="${escapeHtml(o.customer)}" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+            <input id="detail_email" value="${escapeHtml(o.email)}" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          </div>
+          <input id="detail_phone" value="${escapeHtml(o.customer_phone||'')}" placeholder="Customer phone" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input id="detail_address" value="${escapeHtml(o.address)}" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <textarea id="detail_notes" placeholder="Notes" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">${escapeHtml(o.notes||'')}</textarea>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="detail_category" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">
+              <option value="">Select Category</option>
+              <option${o.category==='Accessories'?' selected':''}>Accessories</option>
+              <option${o.category==='Bundles'?' selected':''}>Bundles</option>
+              <option${o.category==='Caps'?' selected':''}>Caps</option>
+              <option${o.category==='T-Shirts'?' selected':''}>T-Shirts</option>
+              <option${o.category==='Bottoms'?' selected':''}>Bottoms</option>
+              <option${o.category==='All'?' selected':''}>All</option>
+              <option${o.category==='Hoodies'?' selected':''}>Hoodies</option>
+              <option${o.category==='Mystery Boxes'?' selected':''}>Mystery Boxes</option>
+              <option${o.category==='Tops'?' selected':''}>Tops</option>
+            </select>
+
+            <select id="detail_status" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">
+              <option${o.status==='Pending'?' selected':''}>Pending</option>
+              <option${o.status==='Packaging'?' selected':''}>Packaging</option>
+              <option${o.status==='Fulfilled'?' selected':''}>Fulfilled</option>
+              <option${o.status==='Delivered'?' selected':''}>Delivered</option>
+              <option${o.status==='Returned'?' selected':''}>Returned</option>
+            </select>
+
+            <div class="muted" style="margin-left:auto">
+              <div>Subtotal: <strong id="detail_subtotal">${formatCurrency(o.items.reduce((s,i)=>s + (i.price * i.quantity), 0))}</strong></div>
+              <div>Discount: <input id="detail_discount" type="number" step="0.01" value="${o.discount || 0}" style="width:100px;padding:4px;border-radius:4px;border:1px solid #e6eef9" /></div>
+              <div>Total: <strong id="detail_total">${formatCurrency(o.total)}</strong></div>
+            </div>
+          </div>
+
+          <div id="detail_items">
+            ${itemsHtml}
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <button id="detail_add_item" class="btn btn-ghost">+ Add item</button>
+          </div>
+
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button id="detail_save" class="btn btn-primary">Save Changes</button>
+            <button id="detail_cancel_edit" class="btn btn-ghost">Cancel</button>
+            <button id="detail_delete" class="btn" style="margin-left:auto;background:#fff;border:1px solid #fcc; color:#7f1d1d">Delete Order</button>
+          </div>
+        </div>
+      `;
+      openModalHtml(html);
+
+      // hide footer Confirm for edit modal
+      modalConfirm.style.display = 'none';
+      modalCancel.style.display = 'inline-flex';
+
+      modalBody.querySelectorAll('.detail_remove').forEach(btn=>{
+        btn.addEventListener('click', (e)=>{
+          btn.parentElement.remove();
+          computeDetailTotal();
+        });
+      });
+
+      modalBody.querySelector('#detail_add_item').addEventListener('click', ()=> {
+        const parent = modalBody.querySelector('#detail_items');
+        const row = document.createElement('div');
+        row.className = 'item-row';
+        row.style.display = 'flex'; row.style.gap = '8px'; row.style.marginTop='8px'; row.style.alignItems='center';
+        row.innerHTML = `<input class="detail_item_name" placeholder="Item name" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+                         <input class="detail_item_qty" type="number" value="1" style="width:80px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+                         <input class="detail_item_size" placeholder="Size" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+                         <input class="detail_item_price" type="number" step="0.01" value="0" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+                         <button class="btn btn-ghost detail_remove" style="width:80px">Remove</button>`;
+        parent.appendChild(row);
+        row.querySelector('.detail_remove').addEventListener('click', ()=> { row.remove(); computeDetailTotal(); });
+        row.querySelectorAll('.detail_item_price, .detail_item_qty').forEach(i=> i.addEventListener('input', computeDetailTotal));
+      });
+
+      modalBody.querySelector('#detail_save').addEventListener('click', async ()=>{
+        const customer = modalBody.querySelector('#detail_customer').value.trim();
+        const email = modalBody.querySelector('#detail_email').value.trim();
+        const phone = modalBody.querySelector('#detail_phone').value.trim();
+        const address = modalBody.querySelector('#detail_address').value.trim();
+        const notes = modalBody.querySelector('#detail_notes').value.trim();
+        const category = modalBody.querySelector('#detail_category').value;
+        const status = modalBody.querySelector('#detail_status').value;
+        const discount = parseFloat(modalBody.querySelector('#detail_discount').value) || 0;
+        const parent = modalBody.querySelector('#detail_items');
+
+        const names = Array.from(parent.querySelectorAll('.detail_item_name')).map(n=>n.value.trim());
+        const qtys = Array.from(parent.querySelectorAll('.detail_item_qty')).map(n=>Number(n.value||0));
+        const sizes = Array.from(parent.querySelectorAll('.detail_item_size')).map(n=>n.value.trim());
+        const prices = Array.from(parent.querySelectorAll('.detail_item_price')).map(n=>Number(n.value||0));
+
+        const items = [];
+        for(let i=0;i<names.length;i++){
+          if(!names[i]) { alert('Every item must have a name'); return; }
+          if(isNaN(prices[i]) || prices[i] < 0){ alert('Every item must have a valid price'); return; }
+          items.push({ item:names[i], quantity: qtys[i]||1, size: sizes[i]||'', price: prices[i]||0 });
+        }
+        if(!customer || !email || !address || !category || items.length === 0){ alert('Please fill all fields and add at least one item'); return; }
+
+        showTypedConfirm('Type SAVE to confirm applying these edits to the order. This cannot be undone.', 'SAVE', async ()=>{
+          const arr2 = getOrders();
+          const idx = arr2.findIndex(x=>x.id === o.id);
+          if(idx === -1){ showToast('Order not found'); closeModal(); return; }
+
+          const prof = await ensureProfile({ email, phone, full_name: customer, address });
+          const subtotal = items.reduce((s,it)=> s + (it.price * it.quantity), 0);
+          const total = subtotal - discount;
+          
+          arr2[idx].customer = customer;
+          arr2[idx].email = email;
+          arr2[idx].customer_phone = phone;
+          arr2[idx].address = address;
+          arr2[idx].notes = notes;
+          arr2[idx].category = category;
+          arr2[idx].status = status;
+          arr2[idx].items = items;
+          arr2[idx].discount = discount;
+          arr2[idx].total = total;
+          if(prof.profile_id) arr2[idx].profile_id = prof.profile_id;
+          if(prof.user_id) arr2[idx].user_id = prof.user_id;
+
+          // sync to Supabase
+          const updatedRow = await syncOrderToSupabase({
+            ...arr2[idx],
+            customer_phone: phone,
+            notes,
+            discount,
+            total
+          });
+
+          if(!updatedRow) showToast('Warning: failed to sync update to Supabase');
+          saveLocalCacheAndRefresh();
+          showToast('Order saved');
+          openDetailsModal(o.id);
+        }, ()=> {
+          renderEdit();
+        });
+      });
+
+      modalBody.querySelector('#detail_cancel_edit').addEventListener('click', ()=>{ openDetailsModal(o.id); });
+
+      modalBody.querySelector('#detail_delete').addEventListener('click', ()=>{ openDeleteConfirm(o.id, renderEdit); });
+
+      function computeDetailTotal(){
+        const parent = modalBody.querySelector('#detail_items');
+        let subtotal = 0;
+        parent.querySelectorAll('.detail_item_name').forEach((_, i)=>{
+          const qty = Number(parent.querySelectorAll('.detail_item_qty')[i].value || 0);
+          const price = Number(parent.querySelectorAll('.detail_item_price')[i].value || 0);
+          subtotal += qty * price;
+        });
+        const discount = parseFloat(modalBody.querySelector('#detail_discount').value) || 0;
+        const total = subtotal - discount;
+        modalBody.querySelector('#detail_subtotal').textContent = formatCurrency(subtotal);
+        modalBody.querySelector('#detail_total').textContent = formatCurrency(total);
+      }
+      
+      modalBody.querySelectorAll('.detail_item_price, .detail_item_qty').forEach(i=> i.addEventListener('input', computeDetailTotal));
+      modalBody.querySelector('#detail_discount').addEventListener('input', computeDetailTotal);
+      computeDetailTotal();
+    }
+
+    renderEdit();
+  }
+
+  // Panel & header filter behavior
+  const navBtns = document.querySelectorAll('.nav-btn');
+  let activePanel = 'orders';
+  let currentHeaderFilter = 'ALL';
+
+  function showPanel(panel){
+    activePanel = panel;
+    document.querySelectorAll('.panel-section').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById('panel-' + panel);
+    if(el) el.classList.add('active');
+    if(panel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+    if(panel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+    if(panel === 'overview') loadCountsAndOverview();
+    
+    if(panel === 'analytics') {
+      setTimeout(() => {
+        if(typeof initAnalyticsPanelOnce === 'function') {
+          initAnalyticsPanelOnce();
+        }
+      }, 100);
+    }
+  }
+  navBtns.forEach(b=> b.addEventListener('click', ()=> showPanel(b.getAttribute('data-panel'))));
+
+  newOrderHeader.addEventListener('click', ()=> openCreateModal());
+  newOrderOverview.addEventListener('click', ()=> openCreateModal());
+
+  // Create modal - UPDATED with all address fields and new categories
+  function openCreateModal(prefill = {}) {
+    const html = `
+      <h3>Create Order</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <div style="display:flex;gap:8px">
+          <input id="co_customer" placeholder="Customer name" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input id="co_email" placeholder="Email" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="co_phone" placeholder="Customer phone" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="co_address" placeholder="Street address" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="co_city" placeholder="City" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <input id="co_province" placeholder="Province" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="co_postal" placeholder="Postal code" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <div style="flex:1;display:flex;gap:8px">
+            <select id="co_label" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9">
+              <option value="">Label</option>
+              <option value="Home">Home</option>
+              <option value="Work">Work</option>
+              <option value="Other">Other</option>
+            </select>
+            <input id="co_label_other" placeholder="Specify other" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9;display:none" />
+          </div>
+        </div>
+        <input id="co_details" placeholder="Delivery details (optional)" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        <textarea id="co_notes" placeholder="Order notes (optional)" style="padding:8px;border-radius:8px;border:1px solid #e6eef9"></textarea>
+        <div style="display:flex;gap:8px">
+          <select id="co_category" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">
+            <option value="">Category</option>
+            <option>Accessories</option>
+            <option>Bundles</option>
+            <option>Caps</option>
+            <option>T-Shirts</option>
+            <option>Bottoms</option>
+            <option>All</option>
+            <option>Hoodies</option>
+            <option>Mystery Boxes</option>
+            <option>Tops</option>
+          </select>
+          <select id="co_status" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">
+            <option>Pending</option><option>Packaging</option><option>Fulfilled</option><option>Delivered</option><option>Returned</option>
+          </select>
+          <input id="co_orderId" placeholder="Optional Order ID" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        </div>
+
+        <div id="co_items">
+          <!-- initial item row is a product picker row -->
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="co_add_item" class="btn btn-ghost">+ Add item</button>
+          <div class="muted">Subtotal: <strong id="co_subtotal">R0.00</strong></div>
+        </div>
+
+        <!-- Discount field -->
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label class="muted" style="white-space:nowrap">Discount:</label>
+            <input id="co_discount" type="number" step="0.01" value="0" min="0" placeholder="Discount amount" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          </div>
+          <div class="muted">Total: <strong id="co_total">R0.00</strong></div>
+        </div>
+      </div>
+    `;
+    openModalHtml(html);
+
+    // show/hide footer confirm
+    modalConfirm.style.display = 'inline-flex';
+    modalCancel.style.display = 'inline-flex';
+
+    if(prefill.customer) modalBody.querySelector('#co_customer').value = prefill.customer || '';
+    if(prefill.email) modalBody.querySelector('#co_email').value = prefill.email || '';
+    if(prefill.address) modalBody.querySelector('#co_address').value = prefill.address || '';
+    if(prefill.category) modalBody.querySelector('#co_category').value = prefill.category || '';
+    if(prefill.status) modalBody.querySelector('#co_status').value = prefill.status || 'Pending';
+
+    // Handle label dropdown
+    const labelSelect = modalBody.querySelector('#co_label');
+    const labelOtherInput = modalBody.querySelector('#co_label_other');
+    
+    labelSelect.addEventListener('change', function() {
+      if(this.value === 'Other') {
+        labelOtherInput.style.display = 'block';
+      } else {
+        labelOtherInput.style.display = 'none';
+        labelOtherInput.value = '';
+      }
+    });
+
+    // ensure productVariant cache available
+    fetchProductsAndVariantsForPicker().then(()=> {
+      // add initial row
+      addCreateItemRow();
+    });
+
+    modalBody.querySelector('#co_add_item').addEventListener('click', (e)=> {
+      e.preventDefault();
+      addCreateItemRow();
+    });
+
+    modalBody.addEventListener('input', (e)=> {
+      if(e.target && (e.target.classList.contains('co_item_price') || e.target.classList.contains('co_item_qty') || e.target.id === 'co_discount')) computeCreateTotal();
+    });
+
+    function addCreateItemRow() {
+      const parent = modalBody.querySelector('#co_items');
+      const row = document.createElement('div');
+      row.style.display='flex'; row.style.gap='8px'; row.style.marginTop='6px'; row.style.alignItems='center';
+
+      row.innerHTML = `
+        <div style="flex:1;position:relative">
+          <input placeholder="Search product name or SKU..." class="co_item_search" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+          <div class="product-suggestions" style="position:absolute;left:0;right:0;top:40px;background:#fff;border:1px solid #eef4ff;border-radius:8px;z-index:500;display:none;max-height:200px;overflow:auto"></div>
+        </div>
+        <input placeholder="Qty" class="co_item_qty" type="number" value="1" min="1" style="width:80px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        <input placeholder="Size" class="co_item_size" readonly style="width:100px;padding:8px;border-radius:8px;border:1px solid #e6eef9;background:#f9fafb" />
+        <input placeholder="Price" class="co_item_price" type="number" step="0.01" value="0" style="width:120px;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+        <button class="btn btn-ghost co_remove" style="width:80px">Remove</button>
+        <input type="hidden" class="co_product_id" />
+        <input type="hidden" class="co_variant_id" />
+      `;
+      parent.appendChild(row);
+
+      const searchInputRow = row.querySelector('.co_item_search');
+      const suggWrap = row.querySelector('.product-suggestions');
+      const qtyInput = row.querySelector('.co_item_qty');
+      const sizeInput = row.querySelector('.co_item_size');
+      const priceInput = row.querySelector('.co_item_price');
+      const removeBtn = row.querySelector('.co_remove');
+      const prodIdHidden = row.querySelector('.co_product_id');
+      const varIdHidden = row.querySelector('.co_variant_id');
+
+      function showProductSuggestions(q){
+        const ql = (q||'').toLowerCase();
+        const matches = productsVariantCache.filter(pv => {
+          return pv.stock > 0 && (
+            (pv.product_name && pv.product_name.toLowerCase().includes(ql))
+            || (pv.product_sku && pv.product_sku.toLowerCase().includes(ql))
+            || (pv.variant_sku && pv.variant_sku.toLowerCase().includes(ql))
+          );
+        }).slice(0,12);
+        suggWrap.innerHTML = '';
+        if(!matches.length){ suggWrap.style.display='none'; return; }
+        matches.forEach(m => {
+          const el = document.createElement('div');
+          el.className = 'suggest-item';
+          el.innerHTML = `<div><strong>${escapeHtml(m.product_name)}</strong> <div class="muted">${escapeHtml(m.variant_sku || m.product_sku || '')} ${m.size?`• ${escapeHtml(m.size)}`:''} (Stock: ${m.stock})</div></div><div class="muted">${formatCurrency(m.price)}</div>`;
+          el.addEventListener('click', ()=> {
+            prodIdHidden.value = m.product_id;
+            varIdHidden.value = m.variant_id || '';
+            searchInputRow.value = `${m.product_name}${m.size ? ` • ${m.size}` : ''} — ${m.variant_sku || m.product_sku || ''}`;
+            sizeInput.value = m.size || '';
+            priceInput.value = m.price || 0;
+            qtyInput.max = m.stock;
+            qtyInput.value = Math.min(1, m.stock);
+            suggWrap.style.display = 'none';
+            computeCreateTotal();
+          });
+          suggWrap.appendChild(el);
+        });
+        suggWrap.style.display = 'block';
+      }
+
+      searchInputRow.addEventListener('input', (e) => {
+        const v = (e.target.value||'').trim();
+        if(!v){ suggWrap.style.display = 'none'; return; }
+        showProductSuggestions(v);
+      });
+
+      document.addEventListener('click', (ev)=> {
+        if(!row.contains(ev.target)) { suggWrap.style.display='none'; }
+      });
+
+      qtyInput.addEventListener('input', computeCreateTotal);
+      priceInput.addEventListener('input', computeCreateTotal);
+      removeBtn.addEventListener('click', ()=> { row.remove(); computeCreateTotal(); });
+    }
+
+    function computeCreateTotal(){
+      const parent = modalBody.querySelector('#co_items');
+      let subtotal = 0;
+      parent.querySelectorAll('.co_item_search').forEach((_, i)=>{
+        const qty = Number(parent.querySelectorAll('.co_item_qty')[i].value || 0);
+        const price = Number(parent.querySelectorAll('.co_item_price')[i].value || 0);
+        subtotal += qty * price;
+      });
+      const discount = parseFloat(modalBody.querySelector('#co_discount').value) || 0;
+      const total = Math.max(0, subtotal - discount);
+      modalBody.querySelector('#co_subtotal').textContent = formatCurrency(subtotal);
+      modalBody.querySelector('#co_total').textContent = formatCurrency(total);
+    }
+
+modalConfirm.onclick = async ()=>{
+  const user = await getSupabaseUser();
+  if(!user){ showToast('Must be signed in as admin to create order'); return; }
+
+  // Get all form elements
+  const customerInput = modalBody.querySelector('#co_customer');
+  const emailInput = modalBody.querySelector('#co_email');
+  const phoneInput = modalBody.querySelector('#co_phone');
+  const addressInput = modalBody.querySelector('#co_address');
+  const cityInput = modalBody.querySelector('#co_city');
+  const provinceInput = modalBody.querySelector('#co_province');
+  const postalInput = modalBody.querySelector('#co_postal');
+  const labelSelect = modalBody.querySelector('#co_label');
+  const labelOtherInput = modalBody.querySelector('#co_label_other');
+  const detailsInput = modalBody.querySelector('#co_details');
+  const notesInput = modalBody.querySelector('#co_notes');
+  const categorySelect = modalBody.querySelector('#co_category');
+  const statusSelect = modalBody.querySelector('#co_status');
+  const discountInput = modalBody.querySelector('#co_discount');
+  const idFieldInput = modalBody.querySelector('#co_orderId');
+  const parent = modalBody.querySelector('#co_items');
+
+  // Get values safely
+  const customer = customerInput ? customerInput.value.trim() : '';
+  const email = emailInput ? emailInput.value.trim() : '';
+  const phone = phoneInput ? phoneInput.value.trim() : '';
+  const address = addressInput ? addressInput.value.trim() : '';
+  const city = cityInput ? cityInput.value.trim() : '';
+  const province = provinceInput ? provinceInput.value.trim() : '';
+  const postal_code = postalInput ? postalInput.value.trim() : '';
+  const label = labelSelect ? (labelSelect.value === 'Other' ? (labelOtherInput ? labelOtherInput.value.trim() : '') : labelSelect.value) : '';
+  const details = detailsInput ? detailsInput.value.trim() : '';
+  const notes = notesInput ? notesInput.value.trim() : '';
+  const category = categorySelect ? categorySelect.value : '';
+  const status = statusSelect ? statusSelect.value : 'Pending';
+  const discount = discountInput ? (parseFloat(discountInput.value) || 0) : 0;
+  const idField = idFieldInput ? idFieldInput.value.trim() : '';
+  
+  if(!customer || !email || !address || !category){ 
+    alert('Please fill customer, email, address and category'); 
+    return; 
+  }
+
+  const rows = Array.from(parent.children);
+
+  const items = [];
+  for(const row of rows){
+    const prodId = row.querySelector('.co_product_id')?.value;
+    const varId = row.querySelector('.co_variant_id')?.value;
+    const nameDisplay = row.querySelector('.co_item_search')?.value.trim() || '';
+    const qty = Number(row.querySelector('.co_item_qty')?.value || 0);
+    const size = row.querySelector('.co_item_size')?.value || '';
+    const price = Number(row.querySelector('.co_item_price')?.value || 0);
+
+    if(!nameDisplay){ alert('Every item must have a selected product'); return; }
+    if(isNaN(price) || price < 0){ alert('Every item must have a valid price'); return; }
+    if(qty <= 0){ alert('Quantity must be greater than 0'); return; }
+    
+    if(prodId && varId) {
+      const product = productsVariantCache.find(pv => pv.product_id === prodId && pv.variant_id === varId);
+      if(product && qty > product.stock) {
+        alert(`Insufficient stock for ${nameDisplay}. Available: ${product.stock}, Requested: ${qty}`);
+        return;
+      }
+    } else if(prodId) {
+      const product = productsVariantCache.find(pv => pv.product_id === prodId && !pv.variant_id);
+      if(product && qty > product.stock) {
+        alert(`Insufficient stock for ${nameDisplay}. Available: ${product.stock}, Requested: ${qty}`);
+        return;
+      }
+    }
+    
+    const it = {
+      item: nameDisplay,
+      quantity: qty || 1,
+      size: size || '',
+      price: price || 0
+    };
+    if(prodId) it.product_id = prodId;
+    if(varId) it.variant_id = varId;
+    items.push(it);
+  }
+  
+  if(items.length === 0){ alert('Add at least one item'); return; }
+
+  showTypedConfirm('Type CREATE to confirm creating this order. All fields will be saved.', 'CREATE', async ()=>{
+    const subtotal = items.reduce((s,it)=> s + (it.price * it.quantity), 0);
+    const total = Math.max(0, subtotal - discount);
+    const id = idField || ('ORD-'+(Math.floor(Math.random()*900000)+1000));
+    const created_at = new Date().toISOString();
+    
+    // Ensure profile exists with all address fields
+    const prof = await ensureProfile({ 
+      email, 
+      phone, 
+      full_name: customer, 
+      address, 
+      city, 
+      province, 
+      postal_code, 
+      label,
+      details
+    });
+
+    const order = { 
+      id, 
+      customer: prof.customer || customer,
+      email, 
+      address: `${address}${city ? ', ' + city : ''}${province ? ', ' + province : ''}${postal_code ? ', ' + postal_code : ''}`,
+      date: new Date(created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric', hour:'2-digit', minute:'2-digit'}),
+      status, 
+      items, 
+      subtotal,
+      discount,
+      total, 
+      category, 
+      customer_phone: phone, 
+      notes,
+      created_at,
+      profile_id: prof.profile_id,
+      user_id: prof.user_id,
+      // Store individual address components separately for orders table
+      city: city,
+      province: province,
+      postal_code: postal_code,
+      label: label
+    };
+
+    // Upsert to Supabase
+    const row = await syncOrderToSupabase(order);
+    if(!row){
+      showToast('Warning: order created locally but failed to save to Supabase');
+    } else {
+      showToast('Order created: ' + id);
+    }
+
+    closeModal();
+    loadCountsAndOverview();
+    if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+    if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+  }, ()=> {
+    openCreateModal({customer, email, address, category, status});
+  });
+};
+  }
+
+  // header filters
+  document.querySelectorAll('.header-filter').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.header-filter').forEach(x=> x.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.getAttribute('data-filter');
+      const target = btn.getAttribute('data-target');
+      currentHeaderFilter = filter;
+      if(target === 'overview'){
+        showPanel('overview');
+      } else if(target === 'orders'){
+        showPanel('orders');
+        document.getElementById('ordersFilterLabel').textContent = ` — ${filter} orders`;
+        renderOrders(filter);
+      } else if(target === 'past'){
+        showPanel('past');
+        document.getElementById('pastFilterLabel').textContent = ` — ${filter} orders`;
+        renderPastOrders(filter);
+      }
+    });
+  });
+
+  // search + suggestions + Enter behaviour
+  function buildSuggestions(q){
+    if(!q) return [];
+    q = q.toLowerCase();
+    const arr = getOrders();
+    const byId = arr.filter(o => o.id.toLowerCase().includes(q));
+    const byName = arr.filter(o => o.customer.toLowerCase().includes(q) && !byId.includes(o));
+    return [...byId.slice(0,6), ...byName.slice(0,6)].slice(0,8);
+  }
+  function showSuggestions(q){
+    const list = buildSuggestions(q);
+    suggestions.innerHTML = '';
+    if(!list.length){ suggestions.style.display='none'; return; }
+    list.forEach(o=>{
+      const d = document.createElement('div'); d.className='suggest-item';
+      d.innerHTML = `<div><strong>${escapeHtml(o.id)}</strong> — <span class="muted">${escapeHtml(o.customer)}</span></div><div class="muted">${escapeHtml(o.status)}</div>`;
+      d.addEventListener('click', ()=> {
+        if(!preSearchState) preSearchState = { panel: activePanel, headerFilter: currentHeaderFilter, ordersFilterLabel: document.getElementById('ordersFilterLabel').textContent, pastFilterLabel: document.getElementById('pastFilterLabel').textContent };
+        searchInput.value = o.id;
+        suggestions.style.display = 'none';
+        showPanel('orders');
+        currentHeaderFilter = 'ALL';
+        document.getElementById('ordersFilterLabel').textContent = ` — results for "${searchInput.value}"`;
+        renderOrders('ALL');
+      });
+      suggestions.appendChild(d);
+    });
+    suggestions.style.display = 'block';
+  }
+
+  searchInput.addEventListener('input', (e)=>{
+    const v = (e.target.value||'').trim();
+
+    if(!v){
+      clearBtn.classList.remove('visible');
+      suggestions.style.display = 'none';
+      if(preSearchState){
+        currentHeaderFilter = preSearchState.headerFilter || 'ALL';
+        if(preSearchState.ordersFilterLabel !== undefined) document.getElementById('ordersFilterLabel').textContent = preSearchState.ordersFilterLabel;
+        if(preSearchState.pastFilterLabel !== undefined) document.getElementById('pastFilterLabel').textContent = preSearchState.pastFilterLabel;
+        showPanel(preSearchState.panel || 'orders');
+        if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+        if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+        preSearchState = null;
+      }
+      return;
+    }
+
+    clearBtn.classList.add('visible');
+    if(v && !preSearchState) preSearchState = { panel: activePanel, headerFilter: currentHeaderFilter, ordersFilterLabel: document.getElementById('ordersFilterLabel').textContent, pastFilterLabel: document.getElementById('pastFilterLabel').textContent };
+    if(v.length >= 1) showSuggestions(v); else suggestions.style.display = 'none';
+  });
+
+  searchInput.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      if(!preSearchState) preSearchState = { panel: activePanel, headerFilter: currentHeaderFilter, ordersFilterLabel: document.getElementById('ordersFilterLabel').textContent, pastFilterLabel: document.getElementById('pastFilterLabel').textContent };
+      suggestions.style.display = 'none';
+      showPanel('orders');
+      currentHeaderFilter = 'ALL';
+      document.getElementById('ordersFilterLabel').textContent = ` — results for "${searchInput.value}"`;
+      renderOrders('ALL');
+    } else if(e.key === 'Escape'){
+      suggestions.style.display = 'none';
+    }
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    searchInput.value = '';
+    clearBtn.classList.remove('visible');
+    suggestions.style.display = 'none';
+    if(preSearchState){
+      currentHeaderFilter = preSearchState.headerFilter || 'ALL';
+      if(preSearchState.ordersFilterLabel !== undefined) document.getElementById('ordersFilterLabel').textContent = preSearchState.ordersFilterLabel;
+      if(preSearchState.pastFilterLabel !== undefined) document.getElementById('pastFilterLabel').textContent = preSearchState.pastFilterLabel;
+      showPanel(preSearchState.panel || 'orders');
+      if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+      if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+      preSearchState = null;
+      return;
+    }
+    if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+    if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+  });
+
+  // Sidebar nav wiring
+  document.querySelectorAll('.nav-btn').forEach(b=> b.addEventListener('click', ()=> showPanel(b.getAttribute('data-panel'))));
+
+  // logout -> same behavior as admin
+  async function performLogoutAndRedirect(){
+    try {
+      if(supabaseClient && supabaseClient.auth){
+        await supabaseClient.auth.signOut().catch(()=>{});
+      }
+    } catch(e){}
+    localStorage.removeItem('scp_current_user');
+    showToast('Logged out');
+    window.location.href = 'login admin.html';
+  }
+  document.getElementById('logout').addEventListener('click', performLogoutAndRedirect);
+  document.getElementById('lsout2').addEventListener('click', performLogoutAndRedirect);
+
+  function saveLocalCacheAndRefresh(){
+    loadCountsAndOverview();
+    if(activePanel === 'orders') renderOrders(currentHeaderFilter || 'AUTO');
+    if(activePanel === 'past') renderPastOrders(currentHeaderFilter || 'ALL');
+  }
+
+  // initial preload and render
+  (async function init(){
+    try {
+      await ensureAdminAccessOrRedirect();
+    } catch(e){
+      return;
+    }
+
+    // show profile name
+    const curRaw = localStorage.getItem('scp_current_user');
+    if(curRaw){
+      try { const cur = JSON.parse(curRaw || '{}'); profileNameEl.textContent = cur.email ? `${(cur.email||'').split('@')[0]}` : (cur.role || 'Admin'); } catch(e){}
+    }
+
+    // prefetch product/variant cache
+    await fetchProductsAndVariantsForPicker();
+
+    // load orders
+    const fromDb = await fetchOrdersFromSupabase();
+    setOrders(fromDb || []);
+    loadCountsAndOverview();
+    currentHeaderFilter = 'ALL';
+    showPanel('orders');
+    renderOrders('AUTO');
+  })();
+
+});
+</script>
+
+<!-- FIXED ANALYTICS SCRIPT -->
+<script>
+(function(){
+  function fmtCur(v){ return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(Number(v||0)); }
+  function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function toDateKey(d, gran) {
+    const dt = new Date(d);
+    if(isNaN(dt)) return null;
+    if(gran === 'week') {
+      const onejan = new Date(dt.getFullYear(),0,1);
+      const week = Math.ceil((((dt - onejan) / 86400000) + onejan.getDay()+1)/7);
+      return `${dt.getFullYear()}-W${String(week).padStart(2,'0')}`;
+    }
+    if(gran === 'month') return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    if(gran === 'year') return `${dt.getFullYear()}`;
+    return dt.toISOString().slice(0,10);
+  }
+
+  async function fetchOrdersRange(startISO, endISO) {
+    if(typeof supabaseClient === 'undefined' || !supabaseClient) {
+      console.warn('Analytics: supabaseClient unavailable');
+      return [];
+    }
+    try {
+      let q = supabaseClient
+        .from('orders')
+        .select('id, order_number, items, total, created_at, order_status')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if(startISO) q = q.gte('created_at', startISO);
+      if(endISO) q = q.lte('created_at', endISO);
+      const { data, error } = await q;
+      if(error){ console.warn('Analytics fetchOrdersRange error', error); return []; }
+      return data || [];
+    } catch (e) {
+      console.warn('Analytics exception', e);
+      return [];
+    }
+  }
+
+  async function computeOverviewAndTimeseries(startISO, endISO, gran) {
+    const orders = await fetchOrdersRange(startISO, endISO);
+    const filtered = orders.filter(o => (o.order_status||'') !== 'Returned');
+    let totalRevenue = 0;
+    let totalOrders = 0;
+    const series = {};
+
+    filtered.forEach(o => {
+      const created = o.created_at;
+      if(!created) return;
+      const key = toDateKey(created, gran);
+      if(!key) return;
+      if(!series[key]) series[key] = { period_label: key, orders_count: 0, revenue: 0 };
+      series[key].orders_count += 1;
+      series[key].revenue += Number(o.total || 0);
+      totalOrders += 1;
+      totalRevenue += Number(o.total || 0);
+    });
+
+    const seriesArr = Object.values(series).sort((a,b)=> a.period_label < b.period_label ? -1 : 1);
+    return { totalRevenue, totalOrders, series: seriesArr };
+  }
+
+  async function computeTopProducts(startISO, endISO, limit = 10) {
+    const orders = await fetchOrdersRange(startISO, endISO);
+    const productMap = new Map();
+
+    orders.forEach(o => {
+      if((o.order_status||'') === 'Returned') return;
+      const orderId = o.id || o.order_number || null;
+      const items = o.items || [];
+      (Array.isArray(items) ? items : []).forEach(it => {
+        const pid = it.product_id || it.productId || it.product || null;
+        const name = it.item || it.name || 'Unknown';
+        const qty = Number(it.quantity || it.qty || 0);
+        const price = Number(it.price || 0);
+        const key = pid ? `pid:${pid}` : `name:${name}`;
+        if(!productMap.has(key)){
+          productMap.set(key, { product_id: pid, title: name, orders_set: new Set(), quantity_sold: 0, revenue: 0 });
+        }
+        const rec = productMap.get(key);
+        rec.quantity_sold += qty;
+        rec.revenue += qty * price;
+        if(orderId) rec.orders_set.add(orderId);
+      });
+    });
+
+    const arr = Array.from(productMap.values()).map(r=>({
+      product_id: r.product_id,
+      title: r.title,
+      orders_count: r.orders_set.size,
+      quantity_sold: r.quantity_sold,
+      revenue: r.revenue
+    }));
+
+    arr.sort((a,b) => {
+      if(b.orders_count !== a.orders_count) return b.orders_count - a.orders_count;
+      if(b.quantity_sold !== a.quantity_sold) return b.quantity_sold - a.quantity_sold;
+      return b.revenue - a.revenue;
+    });
+
+    return arr.slice(0, limit);
+  }
+
+  async function renderAnalytics() {
+    try {
+      const startVal = document.getElementById('analytics-start')?.value;
+      const endVal = document.getElementById('analytics-end')?.value;
+      const gran = document.getElementById('analytics-granularity')?.value || 'month';
+
+      const startISO = startVal ? (new Date(startVal + 'T00:00:00Z')).toISOString() : null;
+      const endISO = endVal ? (new Date(endVal + 'T23:59:59Z')).toISOString() : null;
+
+      const overview = await computeOverviewAndTimeseries(startISO, endISO, gran);
+      const revEl = document.getElementById('metric-revenue');
+      const ordEl = document.getElementById('metric-orders');
+      if(revEl) revEl.textContent = fmtCur(overview.totalRevenue);
+      if(ordEl) ordEl.textContent = overview.totalOrders;
+
+      const tsEl = document.getElementById('revenue-timeseries');
+      if(tsEl){
+        if(overview.series.length === 0){
+          tsEl.innerHTML = '<div class="muted" style="margin-top:8px">No data for this date range.</div>';
+        } else {
+          tsEl.innerHTML = '<table style="width:100%;margin-top:8px"><thead><tr><th>Period</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>'
+            + overview.series.map(s => `<tr><td>${esc(s.period_label)}</td><td>${s.orders_count}</td><td>${fmtCur(s.revenue)}</td></tr>`).join('')
+            + '</tbody></table>';
+        }
+      }
+
+      const top = await computeTopProducts(startISO, endISO, 10);
+      const tbody = document.querySelector('#top-products-table tbody');
+      if(tbody){
+        if(top.length === 0){
+          tbody.innerHTML = `<tr><td colspan="5" class="muted">No product sales data for this range.</td></tr>`;
+        } else {
+          tbody.innerHTML = top.map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.title)}</td><td>${p.orders_count}</td><td>${p.quantity_sold}</td><td>${fmtCur(p.revenue)}</td></tr>`).join('');
+        }
+      }
+    } catch (e){
+      console.warn('renderAnalytics failed', e);
+      const panel = document.getElementById('panel-analytics');
+      if(panel) panel.querySelector('#revenue-timeseries').innerHTML = '<div class="muted">Failed to load analytics — check console.</div>';
+    }
+  }
+
+  function initAnalyticsPanelOnce(){
+    try {
+      const panel = document.getElementById('panel-analytics');
+      if(!panel) return;
+      
+      if(panel.dataset.analyticsInit) return;
+      panel.dataset.analyticsInit = '1';
+
+      const end = new Date();
+      const start = new Date(); 
+      start.setMonth(end.getMonth()-1);
+      
+      const startInput = document.getElementById('analytics-start');
+      const endInput = document.getElementById('analytics-end');
+      if(startInput && endInput){
+        startInput.value = start.toISOString().slice(0,10);
+        endInput.value = end.toISOString().slice(0,10);
+      }
+
+      const refreshBtn = document.getElementById('analytics-refresh');
+      if(refreshBtn) refreshBtn.addEventListener('click', renderAnalytics);
+
+      if(startInput) startInput.addEventListener('change', renderAnalytics);
+      if(endInput) endInput.addEventListener('change', renderAnalytics);
+      
+      const gran = document.getElementById('analytics-granularity');
+      if(gran) gran.addEventListener('change', renderAnalytics);
+
+      renderAnalytics();
+    } catch(e){
+      console.warn('initAnalyticsPanelOnce error', e);
+    }
+  }
+
+  window.initAnalyticsPanelOnce = initAnalyticsPanelOnce;
+  
+  document.addEventListener('DOMContentLoaded', () => {
+    const analyticsNav = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('data-panel') === 'analytics');
+    if(analyticsNav){
+      const originalOnClick = analyticsNav.onclick;
+      analyticsNav.addEventListener('click', function() {
+        if(originalOnClick) originalOnClick.call(this);
+        setTimeout(() => {
+          if(typeof initAnalyticsPanelOnce === 'function') {
+            initAnalyticsPanelOnce();
+          }
+        }, 100);
+      });
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

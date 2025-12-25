@@ -1,0 +1,1291 @@
+<!-- admin.html (Supabase-enabled drop-in) -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Admin Dashboard — Shop Control</title>
+<style>
+  :root{
+    --primary:#0073e6; --secondary:#ff9900; --bg:#f3f4f6; --card:#ffffff; --text:#111827; --muted:#6b7280;
+    font-family:Inter, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
+  /* layout */
+  .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh;transition:all .3s ease}
+  .app.collapsed{grid-template-columns:80px 1fr}
+  header{height:64px;background:#fff;display:flex;align-items:center;padding:0 20px;box-shadow:0 1px 0 rgba(0,0,0,0.04);position:fixed;left:0;right:0;top:0;z-index:10}
+  aside{padding-top:80px;background:transparent}
+  main{padding:88px 28px 28px;overflow:auto;height:100vh}
+  .sidebar-panel{background:var(--card);margin:16px;border-radius:12px;padding:12px;box-shadow:0 6px 16px rgba(2,6,23,0.06)}
+  .brand{font-weight:700;color:var(--primary)}
+  .menu{list-style:none;padding:0;margin:12px 0}
+  .menu li{padding:10px;border-radius:8px;cursor:pointer;color:#374151;margin-bottom:6px}
+  .menu li:hover{background:#f1f9ff;color:var(--primary)}
+  .search-box{display:flex;justify-content:center;flex:1}
+  .search-box input{width:560px;max-width:76%;padding:8px;border-radius:10px;border:1px solid #e6eef9}
+  .right-actions{display:flex;align-items:center;gap:8px}
+  .profile-pill{padding:8px 12px;border-radius:999px;border:1px solid #eef2ff;background:#fff;display:flex;gap:10px;align-items:center}
+
+  /* dashboard cards */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+  .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
+  .card h3{margin:0;font-size:14px;color:#374151}
+  .card p{margin:8px 0 0;font-weight:700;font-size:20px}
+
+  /* product form & table */
+  .panel-form{display:flex;gap:18px;margin-bottom:18px}
+  .form{background:var(--card);padding:16px;border-radius:12px;flex:1;box-shadow:0 6px 16px rgba(2,6,23,0.03)}
+  .thumb{width:110px;height:110px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;border:1px dashed #e2e8f0}
+  .form input[type='text'], .form input[type='number'], .form select, .form textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9;margin-top:6px}
+  .form label{display:block;font-size:13px;color:var(--muted);margin-top:8px}
+  .form .row{display:flex;gap:12px}
+  .small-btn{background:var(--primary);color:#fff;padding:8px 10px;border-radius:8px;border:0;cursor:pointer}
+
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
+  th,td{padding:10px;text-align:left;border-bottom:1px solid #eef2ff}
+  th{background:#f8fafc}
+  tr:hover td{background:#f1fbff}
+  .actions button{margin-right:6px;padding:6px 8px;border-radius:6px;border:0;cursor:pointer}
+
+  .tag-sale{background:var(--secondary);color:#fff;padding:4px 8px;border-radius:6px;font-size:12px}
+
+  /* modal & toasts */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.35);display:none;align-items:center;justify-content:center;z-index:60}
+  .modal{background:#fff;padding:18px;border-radius:12px;max-width:520px;width:95%;box-shadow:0 12px 40px rgba(2,6,23,0.2)}
+  .toasts{position:fixed;top:16px;right:16px;z-index:70}
+  .toast{background:#111827;color:#fff;padding:8px 12px;border-radius:8px;margin-top:8px;opacity:0;transform:translateY(-6px);animation:toastIn .22s forwards}
+  @keyframes toastIn{to{opacity:1;transform:none}}
+
+  /* responsiveness for desktop sizes */
+  @media (max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} .search-box input{max-width:60%} }
+  @media (max-width:760px){ .grid{grid-template-columns:repeat(1,1fr)} .search-box input{max-width:80%} }
+</style>
+
+<!-- Supabase UMD (needed for sync) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <header>
+    <div style="display:flex;align-items:center;gap:12px;width:100%">
+      <button id="toggleSidebar" aria-label="Toggle sidebar" style="border:0;background:transparent;cursor:pointer;font-size:18px">☰</button>
+      <div class="brand" style="font-weight:700;color:var(--primary)">Admin Dashboard</div>
+
+      <div class="search-box"><input id="searchProducts" placeholder="Search products by name..." aria-label="Search products" /></div>
+
+      <div class="right-actions">
+        <div id="profileName" class="profile-pill">Admin</div>
+        <button id="logoutBtn" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="app" class="app" role="application">
+    <aside>
+      <div class="sidebar-panel" role="navigation" aria-label="Sidebar">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div class="brand">Shop Control</div>
+            <div style="font-size:12px;color:var(--muted)">Inventory & orders</div>
+          </div>
+        </div>
+        <ul class="menu" aria-hidden="false">
+          <li data-section="dashboard">Dashboard</li>
+          <li data-section="manage">Manage Products</li>
+          <li data-section="analytics">Analytics</li>
+          <li data-section="settings">Settings</li>
+          <li id="lsLogout">Logout</li>
+        </ul>
+      </div>
+    </aside>
+
+    <main>
+      <!-- Dashboard -->
+      <section id="section-dashboard">
+        <div class="grid">
+          <div class="card"><h3>Total Products</h3><p id="statTotal">0</p></div>
+          <div class="card"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
+          <div class="card"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
+          <div class="card"><h3>Pending Orders</h3><p id="statPending">0</p></div>
+        </div>
+
+        <div class="card" style="padding:18px;margin-bottom:18px">
+          <h3>Sales Overview</h3>
+          <div style="height:180px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Sales Chart Placeholder</div>
+        </div>
+      </section>
+
+      <!-- Manage Products -->
+      <section id="section-manage" style="display:none">
+        <div class="panel-form">
+          <div class="form" aria-labelledby="addProductTitle">
+            <h3 id="addProductTitle">Add New Product</h3>
+            <div style="display:flex;gap:12px;margin-top:8px">
+              <div class="thumb" id="imgPreview">Preview</div>
+              <div style="flex:1">
+                <label>Upload Image</label>
+                <input id="prodImage" type="file" accept="image/*" />
+
+                <label>Product Name</label>
+                <input id="prodName" type="text" placeholder="Oversized Streetwear Hoodie" />
+
+                <label>Category</label>
+                <select id="prodCategory">
+                  <option value="">Loading categories...</option>
+                </select>
+
+                <!-- new: Badge select (None / Sale / New / Hot) -->
+                <label>Badge</label>
+                <select id="prodBadge">
+                  <option value="">None</option>
+                  <option value="Sale">Sale</option>
+                  <option value="New">New</option>
+                  <option value="Hot">Hot</option>
+                </select>
+
+                <div class="row">
+                  <div style="flex:1">
+                    <label>Price (R)</label>
+                    <input id="prodPrice" type="number" step="0.01" placeholder="249.99" />
+                  </div>
+                  <div style="width:120px">
+                    <label>Quantity</label>
+                    <input id="prodQty" type="number" value="1" />
+                  </div>
+                </div>
+
+                <label>Sizes</label>
+                <div style="display:flex;gap:8px;margin-top:6px">
+                  <label><input type="checkbox" value="S" class="sizeCb" /> S</label>
+                  <label><input type="checkbox" value="M" class="sizeCb" /> M</label>
+                  <label><input type="checkbox" value="L" class="sizeCb" /> L</label>
+                  <label><input type="checkbox" value="XL" class="sizeCb" /> XL</label>
+                </div>
+
+                <!-- new: per-size quantity inputs will render here when sizes selected -->
+                <div id="sizeQtys" style="margin-top:8px"></div>
+
+                <label style="margin-top:8px"><input id="onSale" type="checkbox" /> On Sale?</label>
+
+                <div id="salePriceRow" style="display:none">
+                  <label>Sale Price (R)</label>
+                  <input id="prodSalePrice" type="number" step="0.01" />
+                </div>
+
+                <label>Description</label>
+                <textarea id="prodDesc" rows="3" placeholder="Comfortable oversized hoodie with vintage wash."></textarea>
+
+                <label>Tags (comma separated)</label>
+                <input id="prodTags" placeholder="streetwear, vintage, oversized" />
+
+                <button id="addProductBtn" class="small-btn" style="margin-top:10px">Add Product</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3>Product List</h3>
+          <div style="overflow:auto;margin-top:8px">
+            <table id="productsTable" aria-live="polite">
+              <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Sale/Badge</th><th>Quantity</th><th>Sizes</th><th>Actions</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Analytics -->
+      <section id="section-analytics" style="display:none">
+        <div style="display:flex;gap:16px;margin-bottom:12px">
+          <div class="card" style="flex:1"><h3>Total Monthly Sales</h3><p id="analytics_total_month">R0.00</p></div>
+          <div class="card" style="flex:1"><h3>Top Category</h3><p id="analytics_top_category">—</p></div>
+        </div>
+
+        <!-- new analytics controls -->
+        <div class="card" style="padding:12px;margin-bottom:12px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <label>From</label><input id="analytics_from" type="date" />
+            <label>To</label><input id="analytics_to" type="date" />
+            <button id="range_day" class="small-btn">Day</button>
+            <button id="range_week" class="small-btn">Week</button>
+            <button id="range_month" class="small-btn">Month</button>
+            <button id="range_year" class="small-btn">Year</button>
+            <button id="analytics_run" class="small-btn" style="margin-left:auto">Run</button>
+          </div>
+          <div style="margin-top:8px" id="analytics_summary"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card" style="min-height:240px">
+            <h4>Top Products</h4>
+            <div id="topProductsList" style="margin-top:8px">No data</div>
+          </div>
+          <div class="card" style="min-height:240px">
+            <h4>Sales Chart Placeholder</h4>
+            <div style="height:200px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Chart</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="section-settings" style="display:none">
+        <div style="display:flex;gap:18px">
+          <div class="card" style="flex:1">
+            <h3>Change Password</h3>
+            <label>Current Password</label><input type="password" id="curPass" />
+            <label>New Password</label><input type="password" id="newPass" />
+            <label>Confirm New</label><input type="password" id="confirmPass" />
+            <button class="small-btn" style="margin-top:8px" onclick="alert('Dummy only — no-op')">Change (dummy)</button>
+          </div>
+
+          <div class="card" style="width:300px">
+            <h3>Inventory</h3>
+            <button id="exportInv" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Export Inventory (JSON)</button>
+            <div style="margin-top:12px">
+              <h4>Users</h4>
+              <button id="addDummyUser" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Add Dummy User</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- modal / confirm -->
+  <div id="modalWrap" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div id="modalContent"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button id="modalCancel">Cancel</button>
+        <button id="modalConfirm" style="background:var(--primary);color:#fff;border:0;padding:8px 10px;border-radius:8px">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Admin page JS — now uses Supabase as single source of truth for products.
+   Products: fetched from Supabase, displayed directly; create/update/delete performed
+   against Supabase. Images uploaded to 'product-images' bucket (public).
+*/
+
+/* ---------- Supabase init & helper sync functions (kept + extended) ---------- */
+const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
+let supabaseClient = null;
+try {
+  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+} catch (e) {
+  console.warn('Supabase init failed', e);
+  supabaseClient = null;
+}
+
+// Small helper: check if current browser has an authenticated Supabase user
+async function getSupabaseUser() {
+  if(!supabaseClient) return null;
+  try {
+    const { data } = await supabaseClient.auth.getUser();
+    return data?.user ?? null;
+  } catch (e) {
+    console.warn('supabase getUser failed', e);
+    return null;
+  }
+}
+
+/**
+ * Try to upload a dataURL image to the 'product-images' bucket and
+ * return a public URL. Non-blocking: on any failure, return null so
+ * caller can still insert a product_images row with the original URL/data.
+ */
+async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
+  if(!supabaseClient || !dataUrl || !dataUrl.startsWith('data:')) return null;
+  try {
+    // convert dataURL to blob
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    // create file path
+    const ext = (blob.type && blob.type.split('/')[1]) || 'png';
+    const key = `${Date.now()}-${Math.random().toString(36).slice(2,9)}-${filenameHint}.${ext}`;
+    const bucket = 'product-images'; // your bucket name
+    const uploadResult = await supabaseClient.storage.from(bucket).upload(key, blob, { upsert: false });
+    if(uploadResult.error){
+      console.warn('upload failed:', uploadResult.error);
+      return null;
+    }
+    // get public URL
+    const { data: urlData } = supabaseClient.storage.from(bucket).getPublicUrl(key);
+    return urlData?.publicUrl ?? null;
+  } catch (e) {
+    console.warn('upload to bucket failed', e);
+    return null;
+  }
+}
+
+/* ---------- End Supabase helpers ---------- */
+
+/* ---------- App logic (products now live-only from Supabase) ---------- */
+(async function(){
+  // Helpers
+  const fmt = v => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(v);
+  const ORDERS_KEY = 'scp_orders_v1';
+  const app = document.getElementById('app');
+  const toasts = document.getElementById('toasts');
+  function showToast(msg){
+    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; toasts.appendChild(t);
+    setTimeout(()=>{ t.remove(); }, 2200);
+  }
+
+  /* ---------- NEW: robust auth check BEFORE continuing (tightened) ---------- */
+
+  // returns true only if supabase session exists AND user appears in admins table with admin role
+  async function isAdminAuthenticated(){
+    if(!supabaseClient) return false;
+    try {
+      const user = await getSupabaseUser();
+      if(!user) return false;
+      const { data: adminRow, error: adminErr } = await supabaseClient
+        .from('admins')
+        .select('role')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      if(adminErr) { console.warn('admin check error', adminErr); return false; }
+      const role = (adminRow && adminRow.role) ? adminRow.role.toString().toLowerCase() : '';
+      return (role === 'admin' || role === 'administrator');
+    } catch(e){
+      console.warn('isAdminAuthenticated failed', e);
+      return false;
+    }
+  }
+
+  async function ensureAdminAccessOrRedirect(){
+    const curRaw = localStorage.getItem('scp_current_user');
+    let cur = {};
+    try { cur = JSON.parse(curRaw || '{}'); } catch(e){ cur = {}; }
+    const curRole = (cur.role || '').toString().trim().toLowerCase();
+    const localIsAdmin = (curRole === 'admin' || curRole === 'administrator');
+
+    // If local flag present, require an actual supabase session; otherwise remove the stale flag and redirect
+    if(localIsAdmin){
+      const supUser = await getSupabaseUser();
+      if(!supUser){
+        // stale local flag — clear and require login
+        localStorage.removeItem('scp_current_user');
+        console.warn('Local admin flag present but supabase session missing — redirect to login');
+        setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+        throw new Error('not-authorized');
+      }
+      // verify that supUser is truly an admin in DB
+      const isAdmin = await isAdminAuthenticated();
+      if(isAdmin){
+        const nameElm = document.getElementById('profileName');
+        if(nameElm) nameElm.textContent = supUser.email ? `${(supUser.email||'').split('@')[0]}` : 'Admin';
+        return;
+      }
+      // not admin according to DB -> fall through to check below
+    }
+
+    // fallback: try to detect authenticated admin via supabase session
+    if(supabaseClient){
+      try {
+        const user = await getSupabaseUser();
+        if(user){
+          const { data: adminRow, error: adminErr } = await supabaseClient
+            .from('admins')
+            .select('role')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle();
+
+          if(!adminErr && adminRow && adminRow.role){
+            const finalRole = adminRow.role;
+            const curSave = { email: user.email || '', role: finalRole, user_id: user.id };
+            try { localStorage.setItem('scp_current_user', JSON.stringify(curSave)); } catch(_) {}
+            const nameElm = document.getElementById('profileName');
+            if(nameElm) nameElm.textContent = user.email ? `${(user.email||'').split('@')[0]}` : finalRole;
+            const rlow = (finalRole||'').toString().trim().toLowerCase();
+            if(rlow === 'admin' || rlow === 'administrator') return;
+            console.warn('Authenticated but role not admin:', finalRole);
+          } else {
+            console.warn('No admins row found for user or query error', adminErr, adminRow);
+          }
+        }
+      } catch (e){
+        console.warn('Supabase admin check failed', e);
+      }
+    }
+
+    console.warn('Access denied to admin.html — scp_current_user/local role not admin and no valid supabase admin session found.');
+    setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+    throw new Error('not-authorized');
+  }
+
+  try { await ensureAdminAccessOrRedirect(); } catch(e){ return; }
+  /* ---------- END auth guard ---------- */
+
+  // in-memory product cache (single source for UI)
+  let productsCache = [];
+  let categoriesCache = [];
+
+  // fetch categories from supabase and populate the category select
+  async function fetchCategories(){
+    if(!supabaseClient) return [];
+    try {
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .select('id, name')
+        .order('name', { ascending: true });
+      if(error){ console.warn('fetch categories error', error); return []; }
+      categoriesCache = data || [];
+      const sel = document.getElementById('prodCategory');
+      sel.innerHTML = '';
+      const noneOpt = document.createElement('option'); noneOpt.value = ''; noneOpt.textContent = 'Select category';
+      sel.appendChild(noneOpt);
+      categoriesCache.forEach(c => {
+        const o = document.createElement('option');
+        o.value = c.id; // value is category id
+        o.textContent = c.name;
+        sel.appendChild(o);
+      });
+      return categoriesCache;
+    } catch(e){
+      console.warn('fetchCategories failed', e);
+      return [];
+    }
+  }
+
+  // Update pending orders count from supabase (Pending or Packaging)
+  async function updatePendingCount(){
+    const el = document.getElementById('statPending');
+    if(!supabaseClient){ 
+      // fallback to localStorage as before
+      const pendingOrders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').filter(o => o.status === 'Pending').length;
+      if(el) el.textContent = pendingOrders;
+      return;
+    }
+    try {
+      // use .select with count
+      const { count, error } = await supabaseClient
+        .from('orders')
+        .select('id', { count: 'exact', head: false })
+        .in('order_status', ['Pending', 'Packaging']);
+      // Some Supabase versions return count as `count` or in the meta; this handles common behavior
+      if(error){ console.warn('updatePendingCount select error', error); }
+      // If count is available as number use it; else attempt a cheap fetch to count length
+      if(typeof count === 'number'){
+        if(el) el.textContent = count;
+      } else {
+        // fallback: fetch rows and measure
+        const { data, error: dErr } = await supabaseClient.from('orders').select('id').in('order_status', ['Pending', 'Packaging']).limit(1000);
+        if(!dErr && data) { if(el) el.textContent = data.length; return; }
+        // final fallback
+        if(el) el.textContent = '0';
+      }
+    } catch(e){
+      console.warn('updatePendingCount failed', e);
+      // fallback to localStorage
+      const pendingOrders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').filter(o => o.status === 'Pending').length;
+      if(el) el.textContent = pendingOrders;
+    }
+  }
+
+  // fetch products from supabase (single source of truth)
+    // fetch products from supabase (single source of truth)
+  async function fetchProducts(){
+    if(!supabaseClient) { productsCache = []; loadProducts(); return; }
+    try {
+      // Use the specific relationship name as suggested by the error
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select(`
+          id, 
+          name, 
+          description, 
+          price, 
+          currency, 
+          sku, 
+          badge, 
+          featured, 
+          visible, 
+          category_id, 
+          stock, 
+          metadata, 
+          popularity,
+          product_images!fk_product_images_product(url),
+          product_variants!product_variants_product_id_fkey(id, sku, size, stock)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      
+      if(error){ 
+        console.warn('fetchProducts error', error); 
+        productsCache = []; 
+        loadProducts(); 
+        return; 
+      }
+      
+      console.log('Products data received:', data); // Debug
+      
+      productsCache = (data || []).map(r => {
+        const variants = (r.product_variants || []);
+        // build sizes array with variant stock
+        const sizes = variants.map(v => ({ size: v.size, stock: v.stock || 0 }));
+        const image = (r.product_images && r.product_images[0] && r.product_images[0].url) || '';
+        const tags = (r.metadata && r.metadata.tags) || [];
+        const sale = (r.metadata && r.metadata.sale) || false;
+        const salePrice = (r.metadata && r.metadata.salePrice) || 0;
+        
+        // Get category name from categoriesCache using category_id
+        const categoryName = categoriesCache.find(c => c.id === r.category_id)?.name || '';
+        
+        // compute total quantity: if variants exist, sum variant stocks else use r.stock
+        const totalQty = sizes.length ? sizes.reduce((s, v) => s + (Number(v.stock || 0)), 0) : (r.stock || 0);
+        
+        return {
+          id: r.id,               // supabase product id (primary)
+          name: r.name,
+          sku: r.sku || '',
+          category_id: r.category_id || null,
+          category: categoryName,
+          price: Number(r.price) || 0,
+          quantity: totalQty,
+          sizes: sizes,
+          sale: !!sale,
+          salePrice: salePrice,
+          description: r.description || '',
+          tags: tags,
+          image: image,
+          badge: r.badge || '',
+          popularity: Number(r.popularity || 0),
+          raw: r
+        };
+      });
+      
+      console.log('Processed products cache:', productsCache); // Debug
+      
+      // Update pending orders stat (async)
+      await updatePendingCount();
+      loadProducts(); // render UI from cache
+    } catch(e){
+      console.warn('fetchProducts failed', e);
+      productsCache = [];
+      await updatePendingCount();
+      loadProducts();
+    }
+  }
+
+
+  // render products table from productsCache
+  function loadProducts(){
+    const tbody = document.querySelector('#productsTable tbody');
+    tbody.innerHTML = '';
+    document.getElementById('statTotal').textContent = productsCache.length;
+    document.getElementById('statSale').textContent = productsCache.filter(p=>p.sale).length;
+    document.getElementById('statLow').textContent = productsCache.filter(p=>p.quantity < 5).length;
+    // statPending updated in fetchProducts via updatePendingCount()
+    productsCache.forEach(p => {
+      const tr = document.createElement('tr');
+      const imgCell = document.createElement('td');
+      if(p.image){ imgCell.innerHTML = `<img src="${p.image}" style="width:60px;height:60px;object-fit:cover;border-radius:6px"/>`; }
+      else imgCell.innerHTML = `<div style="width:60px;height:60px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8">No Image</div>`;
+      const sizes = (p.sizes||[]).map(s=>s.size + (s.stock !== undefined ? ` (${s.stock})` : '')).join(', ');
+      const saleCol = p.sale ? `<span class="tag-sale">On Sale</span> <span style="text-decoration:line-through;color:#9ca3af;margin-left:6px">${fmt(p.salePrice)}</span>` : '';
+      const badgeCol = p.badge ? `<div style="margin-top:6px">${escapeHtml(p.badge)}</div>` : '';
+      tr.innerHTML = `<td></td><td>${escapeHtml(p.name)}<div style="font-size:12px;color:#6b7280;margin-top:6px">SKU: ${escapeHtml(p.sku || '')}</div></td><td>${escapeHtml(p.category||'')}</td><td>${fmt(p.price)}</td><td>${saleCol}${badgeCol}</td><td>${p.quantity}</td><td>${sizes}</td><td class="actions"></td>`;
+      tr.children[0].replaceWith(imgCell);
+      const actionsTd = tr.querySelector('.actions');
+
+      // action buttons
+      const editBtn = document.createElement('button'); editBtn.textContent = '✏️ Edit'; editBtn.onclick = ()=> openEditModal(p.id);
+      const delBtn = document.createElement('button'); delBtn.textContent = '🗑️ Delete'; delBtn.onclick = ()=> confirmModal('Delete product', `Delete ${p.name}?`, ()=> deleteProduct(p.id));
+      const changeImg = document.createElement('button'); changeImg.textContent = '📷 Change Image'; changeImg.onclick = ()=> changeImage(p.id);
+      const toggleSale = document.createElement('button'); toggleSale.textContent = '💰 Toggle Sale'; toggleSale.onclick = ()=> toggleProductSale(p.id);
+
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleSale);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Renders per-size quantity inputs based on checked sizes
+  function renderSizeQtyInputs(){
+    const container = document.getElementById('sizeQtys');
+    container.innerHTML = '';
+    const checked = Array.from(document.querySelectorAll('.sizeCb:checked')).map(ch => ch.value);
+    if(checked.length === 0) return;
+    const wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.gap = '8px';
+    wrap.style.flexWrap = 'wrap';
+    checked.forEach(s => {
+      const el = document.createElement('div');
+      el.style.display = 'flex';
+      el.style.flexDirection = 'column';
+      el.style.width = '110px';
+      el.innerHTML = `<label style="font-size:12px;color:var(--muted)">${escapeHtml(s)} qty</label><input class="size_qty_input" data-size="${escapeHtml(s)}" type="number" value="0" style="padding:6px;border-radius:6px;border:1px solid #e6eef9" />`;
+      wrap.appendChild(el);
+    });
+    container.appendChild(wrap);
+  }
+
+  // Create a new product in supabase (uploads image to bucket, inserts product, image & variants)
+  async function createProductFromForm(){
+    // guard: must be signed in as admin
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+
+    const name = document.getElementById('prodName').value.trim();
+    if(!name){ showToast('Product name required'); return; }
+    const categoryId = (document.getElementById('prodCategory').value || '') || null;
+    const price = parseFloat(document.getElementById('prodPrice').value || 0);
+    const qty = parseInt(document.getElementById('prodQty').value || 0);
+    const sizesChecked = Array.from(document.querySelectorAll('.sizeCb:checked')).map(n=>n.value);
+    // collect per-size quantities (if present)
+    const sizeQtyInputs = Array.from(document.querySelectorAll('.size_qty_input'));
+    const sizeEntries = sizeQtyInputs.length ? sizeQtyInputs.map(i => ({ size: i.dataset.size, qty: parseInt(i.value || 0) || 0 })) : (sizesChecked.length ? sizesChecked.map(s => ({ size: s, qty: 0 })) : []);
+    const sale = document.getElementById('onSale').checked;
+    const salePrice = sale ? parseFloat(document.getElementById('prodSalePrice').value || 0) : 0;
+    const desc = document.getElementById('prodDesc').value.trim();
+    const tags = document.getElementById('prodTags').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const badge = document.getElementById('prodBadge').value || null;
+    const file = document.getElementById('prodImage').files && document.getElementById('prodImage').files[0];
+
+    // generate random SKU (SKU-xxxxx)
+    const sku = 'SKU-' + (Math.floor(Math.random()*900000) + 100000);
+
+    // prepare metadata
+    const metadata = { tags, sizes: sizeEntries.map(se => se.size), sale: !!sale, salePrice: salePrice };
+
+    // compute total to add (sum of size qty if provided, else use qty)
+    let totalToAdd = 0;
+    if(sizeEntries.length) totalToAdd = sizeEntries.reduce((s,it)=> s + (Number(it.qty || 0)), 0);
+    else totalToAdd = qty;
+
+    // build slug to detect existing product (restock flow)
+    const slug = (name || '').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'');
+
+    // helper to handle restock vs insert
+    async function restockExisting(productRowId, imageUrlIfAny){
+      try {
+        // fetch existing product row for its metadata/stock
+        const { data: existing, error: exErr } = await supabaseClient.from('products').select('id, stock, metadata').eq('id', productRowId).maybeSingle();
+        if(exErr){ console.warn('fetch existing product error', exErr); return; }
+        const prevStock = Number(existing.stock || 0);
+        const newStock = prevStock + totalToAdd;
+        // update product stock and metadata.last_restocked & restock_count
+        const prevMeta = existing.metadata || {};
+        const newMeta = Object.assign({}, prevMeta, { last_restocked: new Date().toISOString(), restock_count: (prevMeta.restock_count||0) + 1, ...metadata });
+        const { error: upErr } = await supabaseClient.from('products').update({ stock: newStock, metadata: newMeta }).eq('id', productRowId);
+        if(upErr){ console.warn('update existing product stock error', upErr); }
+        // handle image insert if imageUrlIfAny
+        if(imageUrlIfAny){
+          const { error: imgErr } = await supabaseClient.from('product_images').insert([{ product_id: productRowId, url: imageUrlIfAny, alt_text: name }]);
+          if(imgErr) console.warn('insert image row during restock error', imgErr);
+        }
+        // update/insert variants per-size
+        if(sizeEntries.length){
+          for(const se of sizeEntries){
+            const { data: existingVar, error: vErr } = await supabaseClient.from('product_variants').select('id, stock').eq('product_id', productRowId).eq('size', se.size).maybeSingle();
+            if(vErr){ console.warn('variant fetch error', vErr); continue; }
+            if(existingVar && existingVar.id){
+              const newVarStock = (Number(existingVar.stock || 0) + Number(se.qty || 0));
+              const { error: vUpErr } = await supabaseClient.from('product_variants').update({ stock: newVarStock }).eq('id', existingVar.id);
+              if(vUpErr) console.warn('variant update error', vUpErr);
+            } else {
+              const vSku = `${sku}-${se.size}`;
+              const { error: vInsErr } = await supabaseClient.from('product_variants').insert([{ product_id: productRowId, sku: vSku, size: se.size, stock: se.qty || 0 }]);
+              if(vInsErr) console.warn('variant insert error', vInsErr);
+            }
+          }
+        } else {
+          // no variants provided -> stock already updated above
+        }
+        return true;
+      } catch(e){
+        console.warn('restockExisting failed', e);
+        return false;
+      }
+    }
+
+    // upload image if present, then either insert or restock
+    let publicImageUrl = null;
+    if(file){
+      const reader = new FileReader();
+      reader.onload = async ()=> {
+        const dataUrl = reader.result;
+        publicImageUrl = await tryUploadImageToBucket(dataUrl, (name || 'prod').toLowerCase().replace(/\s+/g,'-'));
+        // check existing by slug
+        try {
+          const { data: found, error: fErr } = await supabaseClient.from('products').select('id').eq('slug', slug).maybeSingle();
+          if(fErr){ console.warn('product existence check error', fErr); }
+          if(found && found.id){
+            // restock flow
+            await restockExisting(found.id, publicImageUrl);
+            await fetchProducts();
+            showToast('Product restocked');
+            clearForm();
+            return;
+          } else {
+            // insert new product with variants
+            await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible: true, category_id: categoryId, stock: totalToAdd, description: desc, metadata, imageUrl: publicImageUrl, sizes: sizeEntries.length ? sizeEntries : [] });
+            await fetchProducts();
+            showToast('Product added');
+            clearForm();
+            return;
+          }
+        } catch(e){
+          console.warn('createProductFromForm flow error after upload', e);
+          showToast('Create failed');
+        }
+      };
+      reader.readAsDataURL(file);
+    } else {
+      // no image file: proceed without image
+      try {
+        const { data: found, error: fErr } = await supabaseClient.from('products').select('id').eq('slug', slug).maybeSingle();
+        if(fErr){ console.warn('product existence check error', fErr); }
+        if(found && found.id){
+          await restockExisting(found.id, null);
+          await fetchProducts();
+          showToast('Product restocked');
+          clearForm();
+          return;
+        } else {
+          await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible: true, category_id: categoryId, stock: totalToAdd, description: desc, metadata, imageUrl: null, sizes: sizeEntries.length ? sizeEntries : [] });
+          await fetchProducts();
+          showToast('Product added');
+          clearForm();
+          return;
+        }
+      } catch(e){
+        console.warn('createProductFromForm no-image error', e);
+        showToast('Create failed');
+      }
+    }
+  }
+
+  // Insert product and related rows to supabase
+  async function insertProductToSupabase({ name, sku, price, currency='ZAR', badge=null, featured=false, visible=true, category_id=null, stock=0, description='', metadata={}, imageUrl=null, sizes=[] }){
+    // guard: admin required
+    if(!(await isAdminAuthenticated())) { 
+      showToast('Must be signed in as admin to create product'); 
+      localStorage.removeItem('scp_current_user'); 
+      setTimeout(()=>{ location.href='login admin.html'; }, 300); 
+      return null; 
+    }
+
+    if(!supabaseClient) return null;
+    try {
+      // Get category name for the category field
+      const categoryName = categoriesCache.find(c => c.id === category_id)?.name || '';
+      
+      // insert product
+      const slug = (name || '').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'').slice(0,200);
+      const { data: insertData, error: insertErr } = await supabaseClient
+        .from('products')
+        .insert([{
+          name, 
+          slug,
+          description, 
+          price, 
+          currency, 
+          sku, 
+          badge, 
+          featured, 
+          visible, 
+          category_id, 
+          category: categoryName, // Set both category_id and category
+          stock, 
+          metadata
+        }])
+        .select('id')
+        .single();
+        
+      if(insertErr){ 
+        console.warn('insert product error', insertErr); 
+        return null; 
+      }
+      
+      const newId = insertData.id;
+
+      // insert image row (if imageUrl)
+      if(imageUrl){
+        const { error: imgErr } = await supabaseClient
+          .from('product_images')
+          .insert([{ product_id: newId, url: imageUrl, alt_text: name }]);
+        if(imgErr) console.warn('insert image row error', imgErr);
+      }
+
+      // insert variants from sizes (if any)
+      if(Array.isArray(sizes) && sizes.length){
+        const toInsert = sizes.map(s => {
+          if(typeof s === 'string') return { product_id: newId, sku: `${sku}-${s}`, size: s, stock: 0 };
+          return { product_id: newId, sku: `${sku}-${s.size}`, size: s.size, stock: Number(s.qty || 0) };
+        });
+        const { error: varErr } = await supabaseClient.from('product_variants').insert(toInsert);
+        if(varErr) console.warn('insert variants error', varErr);
+      }
+      
+      return newId;
+    } catch(e){
+      console.warn('insertProductToSupabase failed', e);
+      return null;
+    }
+  }
+
+  // delete product (now also deletes variants & images first)
+  async function deleteProduct(productId){
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+    // guard
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to delete product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+
+    try {
+      // delete product_images
+      const { error: imgErr } = await supabaseClient.from('product_images').delete().eq('product_id', productId);
+      if(imgErr) console.warn('delete product_images error', imgErr);
+      // delete variants
+      const { error: varErr } = await supabaseClient.from('product_variants').delete().eq('product_id', productId);
+      if(varErr) console.warn('delete product_variants error', varErr);
+      // delete product
+      const { error } = await supabaseClient.from('products').delete().eq('id', productId);
+      if(error){ console.warn('delete product error', error); showToast('Delete failed'); return; }
+      // refresh cache/UI
+      await fetchProducts();
+      showToast('Product deleted');
+    } catch(e){
+      console.warn('deleteProduct failed', e);
+      showToast('Delete failed');
+    }
+  }
+
+  // open edit modal for product
+  function openEditModal(productId){
+    const p = productsCache.find(x => x.id === productId);
+    if(!p) return showToast('Product not found');
+    // build modal content
+    const html = `
+      <h3>Edit product</h3>
+      <label>Name</label><input id="edit_name" value="${escapeHtml(p.name)}" />
+      <label>Price (R)</label><input id="edit_price" type="number" value="${p.price}" />
+      <label>Quantity</label><input id="edit_qty" type="number" value="${p.quantity}" />
+      <label>Badge</label>
+      <select id="edit_badge">
+        <option value="">None</option>
+        <option value="Sale"${p.badge==='Sale'?' selected':''}>Sale</option>
+        <option value="New"${p.badge==='New'?' selected':''}>New</option>
+        <option value="Hot"${p.badge==='Hot'?' selected':''}>Hot</option>
+      </select>
+      <label>Sale?</label><input id="edit_sale" type="checkbox"${p.sale ? ' checked' : ''} />
+      <div id="edit_sale_price_row"${p.sale ? '' : ' style="display:none"'}><label>Sale Price (R)</label><input id="edit_sale_price" type="number" value="${p.salePrice||0}" /></div>
+      <div style="margin-top:8px"><button id="edit_save_btn" class="small-btn">Save</button> <button id="edit_cancel_btn" style="margin-left:8px">Cancel</button></div>
+    `;
+    const modalContent = document.getElementById('modalContent');
+    modalContent.innerHTML = html;
+    document.getElementById('modalWrap').style.display = 'flex';
+    const editSale = document.getElementById('edit_sale');
+    editSale.addEventListener('change', ()=> {
+      document.getElementById('edit_sale_price_row').style.display = editSale.checked ? 'block' : 'none';
+    });
+    document.getElementById('edit_cancel_btn').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
+    document.getElementById('edit_save_btn').addEventListener('click', async ()=> {
+      // guard: admin required
+      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+
+      const name = document.getElementById('edit_name').value.trim();
+      const price = parseFloat(document.getElementById('edit_price').value || 0);
+      const qty = parseInt(document.getElementById('edit_qty').value || 0);
+      const badge = document.getElementById('edit_badge').value || null;
+      const sale = document.getElementById('edit_sale').checked;
+      const salePrice = sale ? parseFloat(document.getElementById('edit_sale_price').value || 0) : 0;
+      // update product row
+      try {
+        const { error } = await supabaseClient.from('products').update({
+          name, price, stock: qty, badge, metadata: { ...(p.raw && p.raw.metadata ? p.raw.metadata : {}), sale: sale, salePrice }
+        }).eq('id', p.id);
+        if(error){ console.warn('update product error', error); showToast('Update failed'); return; }
+        // refresh and close
+        await fetchProducts();
+        document.getElementById('modalWrap').style.display = 'none';
+        showToast('Product updated');
+      } catch(e){
+        console.warn('edit save failed', e);
+        showToast('Update failed');
+      }
+    });
+  }
+
+  // change image for a product
+  function changeImage(productId){
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+    input.onchange = async (e)=>{
+      const f = e.target.files && e.target.files[0]; if(!f) return;
+      // guard: admin required
+      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to change image'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+
+      const reader = new FileReader(); reader.onload = async ()=>{
+        const dataUrl = reader.result;
+        const publicUrl = await tryUploadImageToBucket(dataUrl, String(productId));
+        if(!publicUrl){ showToast('Upload failed'); return; }
+        // insert product_images row
+        const { error } = await supabaseClient.from('product_images').insert([{ product_id: productId, url: publicUrl, alt_text: 'product image' }]);
+        if(error){ console.warn('insert product_images error', error); showToast('Failed to save image'); return; }
+        await fetchProducts();
+        showToast('Image updated');
+      };
+      reader.readAsDataURL(f);
+    };
+    input.click();
+  }
+
+  // toggle sale for product (updates metadata.sale and salePrice if needed)
+  async function toggleProductSale(productId){
+    // guard
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to toggle sale'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+
+    const p = productsCache.find(x => x.id === productId); if(!p) return;
+    const newSale = !p.sale;
+    const newSalePrice = newSale ? +(p.price * 0.85).toFixed(2) : 0;
+    try {
+      const { error } = await supabaseClient.from('products').update({
+        metadata: { ...(p.raw && p.raw.metadata ? p.raw.metadata : {}), sale: newSale, salePrice: newSalePrice }
+      }).eq('id', productId);
+      if(error){ console.warn('toggle sale error', error); showToast('Toggle failed'); return; }
+      await fetchProducts();
+      showToast('Sale toggled');
+    } catch(e){ console.warn('toggle sale failed', e); showToast('Toggle failed'); }
+  }
+
+  // confirm modal helper
+  const modalWrap = document.getElementById('modalWrap');
+  const modalContent = document.getElementById('modalContent');
+  const modalConfirm = document.getElementById('modalConfirm');
+  const modalCancel = document.getElementById('modalCancel');
+  function confirmModal(title, text, cb){
+    modalContent.innerHTML = `<h3>${escapeHtml(title)}</h3><p style="margin-top:8px">${escapeHtml(text)}</p>`;
+    modalWrap.style.display = 'flex';
+    modalConfirm.onclick = ()=>{ modalWrap.style.display='none'; cb && cb(); };
+    modalCancel.onclick = ()=>{ modalWrap.style.display='none'; };
+  }
+
+  // clear form
+  function clearForm(){
+    document.getElementById('prodName').value=''; document.getElementById('prodPrice').value=''; document.getElementById('prodQty').value='1';
+    document.getElementById('prodDesc').value=''; document.getElementById('prodTags').value=''; document.getElementById('prodImage').value='';
+    imgPreview.style.backgroundImage=''; imgPreview.textContent='Preview'; document.querySelectorAll('.sizeCb').forEach(c=>c.checked=false);
+    onSale.checked=false; salePriceRow.style.display='none'; document.getElementById('prodBadge').value = '';
+    document.getElementById('prodCategory').value = '';
+    document.getElementById('sizeQtys').innerHTML = '';
+  }
+
+  // image preview on file select (unchanged)
+  const prodImage = document.getElementById('prodImage');
+  const imgPreview = document.getElementById('imgPreview');
+  prodImage.addEventListener('change', (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f){ imgPreview.style.backgroundImage=''; imgPreview.textContent='Preview'; return; }
+    const reader = new FileReader();
+    reader.onload = ()=>{ imgPreview.style.backgroundImage = `url('${reader.result}')`; imgPreview.style.backgroundSize='cover'; imgPreview.textContent=''; };
+    reader.readAsDataURL(f);
+  });
+
+  // On sale toggle
+  const onSale = document.getElementById('onSale');
+  const salePriceRow = document.getElementById('salePriceRow');
+  onSale.addEventListener('change', ()=> salePriceRow.style.display = onSale.checked ? 'block' : 'none');
+
+  // size checkbox listener -> render quantity inputs
+  document.querySelectorAll('.sizeCb').forEach(cb => cb.addEventListener('change', renderSizeQtyInputs));
+
+  // Add product button event -> create via supabase (guarded)
+  document.getElementById('addProductBtn').addEventListener('click', async ()=>{
+    // simple guard: must have supabase and admin in session
+    if(!(await isAdminAuthenticated())){ showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+    await createProductFromForm();
+  });
+
+  // change sidebar/nav behavior (unchanged)
+  document.getElementById('toggleSidebar').addEventListener('click', ()=>app.classList.toggle('collapsed'));
+  const menuItems = document.querySelectorAll('.menu li');
+  const sections = {
+    dashboard: document.getElementById('section-dashboard'),
+    manage: document.getElementById('section-manage'),
+    analytics: document.getElementById('section-analytics'),
+    settings: document.getElementById('section-settings')
+  };
+  menuItems.forEach(it => {
+    it.addEventListener('click', ()=> {
+      const s = it.dataset.section || it.id;
+      if(s === 'Logout' || it.id === 'lsLogout'){
+        if(supabaseClient && supabaseClient.auth){
+          supabaseClient.auth.signOut().catch(e=>console.warn('supabase signOut failed', e));
+        }
+        localStorage.removeItem('scp_current_user'); location.href = 'login admin.html'; return;
+      }
+      Object.values(sections).forEach(sec => sec.style.display = 'none');
+      if(sections[s]) sections[s].style.display = 'block';
+    });
+  });
+  // Logout (top-right)
+  document.getElementById('logoutBtn').addEventListener('click', ()=>{ 
+    if(supabaseClient && supabaseClient.auth){
+      supabaseClient.auth.signOut().catch(e=>console.warn('supabase signOut failed', e));
+    }
+    localStorage.removeItem('scp_current_user'); location.href='login admin.html';
+  });
+
+  // Search filter for products (client-side on current cache)
+  document.getElementById('searchProducts').addEventListener('input', (e)=>{
+    const q = (e.target.value || '').toLowerCase();
+    document.querySelectorAll('#productsTable tbody tr').forEach(tr=>{
+      const name = tr.children[1].textContent.toLowerCase();
+      tr.style.display = name.includes(q) ? '' : 'none';
+    });
+  });
+
+  // Export inventory (uses current productsCache)
+  document.getElementById('exportInv').addEventListener('click', ()=>{
+    const data = JSON.stringify(productsCache, null, 2);
+    const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'inventory.json'; a.click(); URL.revokeObjectURL(url);
+    showToast('Inventory exported');
+  });
+
+  // Dummy user button (unchanged)
+  document.getElementById('addDummyUser').addEventListener('click', ()=> showToast('Dummy user added (no-op)'));
+
+  // small helper functions
+  function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  /* ------------------ Analytics functions ------------------ */
+  // parse orders.items safely (handles array or JSON string)
+  function parseOrderItems(items) {
+    if(!items) return [];
+    if (Array.isArray(items)) return items;
+    try { return JSON.parse(items); } catch(e) { return []; }
+  }
+
+  // fetch orders in date range and compute totals and top products
+  async function fetchOrdersInRange(fromIso, toIso) {
+    if(!supabaseClient) return { orders: [], total: 0, top: [] };
+    try {
+      const { data, error } = await supabaseClient
+        .from('orders')
+        .select('id, created_at, total, items, order_number, customer_name, order_status')
+        .gte('created_at', fromIso)
+        .lte('created_at', toIso)
+        .order('created_at', { ascending: true });
+      if(error){ console.warn('fetchOrdersInRange error', error); return { orders: [], total: 0, top: [] }; }
+      const orders = data || [];
+      // exclude returned orders from revenue & aggregation
+      const validOrders = orders.filter(o => {
+        const st = (o.order_status || o.status || '').toString().trim().toLowerCase();
+        return st !== 'returned';
+      });
+      // compute total revenue only from valid orders
+      const total = validOrders.reduce((s,o) => s + (Number(o.total || 0)), 0);
+      // aggregate top products by name or product_id
+      const agg = {};
+      for(const o of validOrders){
+        const items = parseOrderItems(o.items);
+        for(const it of items){
+          // handle various shapes: { product_id, quantity, item } or { item, quantity }
+          const qty = Number(it.quantity || it.qty || 0);
+          const name = it.product_name || it.item || it.name || (it.product_id ? `product-${it.product_id}` : 'Unknown');
+          const pid = it.product_id || null;
+          const key = pid ? `id:${pid}` : `name:${name}`;
+          if(!agg[key]) agg[key] = { name, pid, qty: 0, revenue: 0, occurrences: 0 };
+          agg[key].qty += qty;
+          agg[key].revenue += (Number(it.price || 0) * qty) || 0;
+          agg[key].occurrences += 1;
+        }
+      }
+      const top = Object.values(agg).sort((a,b)=> b.qty - a.qty).slice(0, 50); // top 50 for expand
+      return { orders, total, top };
+    } catch(e){
+      console.warn('fetchOrdersInRange failed', e);
+      return { orders: [], total: 0, top: [] };
+    }
+  }
+
+  // popularity updater: compute new popularity and apply guarded updates (called from analytics)
+  async function updatePopularityFromTop(topArr){
+    if(!Array.isArray(topArr) || topArr.length === 0) return;
+    if(!(await isAdminAuthenticated())){ console.warn('Not admin: skipping popularity updates'); return; }
+
+    // Tunables (feel free to adjust)
+    const alpha = 0.35; // smoothing toward recent score
+    const revenueFactor = 0.02; // convert revenue to "popularity points"
+    const hotThreshold = 60; // popularity threshold for Hot badge
+    const maxPopularity = 1000;
+
+    const updates = [];
+    for(const t of topArr){
+      if(!t.pid) continue;
+      try {
+        const { data: prod, error: prodErr } = await supabaseClient.from('products').select('id,popularity,badge').eq('id', t.pid).maybeSingle();
+        if(prodErr || !prod) { if(prodErr) console.warn('fetch product for popularity error', prodErr); continue; }
+        const oldPop = Number(prod.popularity || 0);
+        const recentScore = Number(t.revenue || 0) * revenueFactor;
+        let newPop = (alpha * recentScore) + ((1 - alpha) * oldPop);
+        newPop = Math.max(0, Math.min(maxPopularity, newPop));
+        let newBadge = prod.badge;
+        if(newPop >= hotThreshold && prod.badge !== 'Hot') newBadge = 'Hot';
+        // only update if noticeable change
+        if(Math.abs(newPop - oldPop) > 0.5 || newBadge !== prod.badge) {
+          updates.push({ id: prod.id, popularity: newPop, badge: newBadge });
+        }
+      } catch(e){
+        console.warn('popularity loop error', e);
+      }
+    }
+
+    // apply updates sequentially (keeps it simple; could batch)
+    for(const u of updates){
+      try {
+        const { error: upErr } = await supabaseClient.from('products').update({ popularity: u.popularity, badge: u.badge }).eq('id', u.id);
+        if(upErr) console.warn('popularity update error', upErr);
+      } catch(e){
+        console.warn('apply popularity update failed', e);
+      }
+    }
+
+    if(updates.length) {
+      // refresh local cache/UI
+      await fetchProducts();
+      showToast(`Popularity updated for ${updates.length} product(s)`);
+    }
+  }
+
+  // render analytics summary and top products list
+  async function runAnalytics(fromDate, toDate){
+    const fromIso = new Date(fromDate).toISOString();
+    // to date inclusive: set to end of day
+    const toObj = new Date(toDate);
+    toObj.setHours(23,59,59,999);
+    const toIso = toObj.toISOString();
+    const res = await fetchOrdersInRange(fromIso, toIso);
+    document.getElementById('analytics_summary').innerHTML = `<div class="muted">Orders: ${res.orders.length} • Revenue: <strong>${fmt(res.total)}</strong></div>`;
+    // top products list
+    const listEl = document.getElementById('topProductsList');
+    if(!res.top.length){ listEl.innerHTML = '<div class="muted">No products sold in this range</div>'; document.getElementById('analytics_total_month').textContent = fmt(res.total); document.getElementById('analytics_top_category').textContent = '—'; return; }
+    const html = res.top.slice(0,10).map((t, idx) => `<div style="display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #f3f4f6"><div><strong>${idx+1}. ${escapeHtml(t.name)}</strong><div class="muted">${t.qty} sold</div></div><div style="text-align:right"><div>${fmt(t.revenue)}</div><button data-key="${encodeURIComponent(JSON.stringify(t))}" class="viewTopProduct">View</button></div></div>`).join('');
+    listEl.innerHTML = html;
+    document.querySelectorAll('.viewTopProduct').forEach(b => b.addEventListener('click', (e) => {
+      const t = JSON.parse(decodeURIComponent(b.getAttribute('data-key')));
+      openTopProductModal(t, fromIso, toIso);
+    }));
+    document.getElementById('analytics_total_month').textContent = fmt(res.total);
+    // simple best category calculation by mapping product->category if possible (best-effort)
+    const categoryAgg = {};
+    for(const t of res.top){
+      // prefer mapping by product id if available
+      let cat = 'Uncategorized';
+      if(t.pid){
+        const productMatchById = productsCache.find(pc => String(pc.id) === String(t.pid));
+        if(productMatchById) cat = productMatchById.category || 'Uncategorized';
+      } else {
+        const productMatch = productsCache.find(pc => pc.name && pc.name.toLowerCase() === (t.name || '').toLowerCase());
+        if(productMatch) cat = productMatch.category || 'Uncategorized';
+      }
+      categoryAgg[cat] = (categoryAgg[cat] || 0) + t.revenue;
+    }
+    const topCat = Object.entries(categoryAgg).sort((a,b)=> b[1]-a[1])[0];
+    document.getElementById('analytics_top_category').textContent = topCat ? `${topCat[0]} (${fmt(topCat[1])})` : '—';
+
+    // ---- NEW: update product popularity based on top product revenue (guarded) ----
+    try {
+      await updatePopularityFromTop(res.top);
+    } catch(e){
+      console.warn('updatePopularityFromTop error', e);
+    }
+    // ---- end popularity update ----
+  }
+
+  function openTopProductModal(t, fromIso, toIso){
+    // show details: total qty, revenue, and list of matching products & orders if found
+    const modal = document.getElementById('modalContent');
+    modal.innerHTML = `<h3>${escapeHtml(t.name)}</h3>
+      <div class="muted">Quantity sold: <strong>${t.qty}</strong></div>
+      <div class="muted" style="margin-top:6px">Revenue from this item: <strong>${fmt(t.revenue)}</strong></div>
+      <div style="margin-top:12px"><button id="viewOrdersContainingProduct" class="small-btn">Show Orders containing this product</button> <button id="closeTopModal" style="margin-left:8px">Close</button></div>
+    `;
+    document.getElementById('modalWrap').style.display = 'flex';
+    document.getElementById('closeTopModal').addEventListener('click', ()=> { modalWrap.style.display='none'; });
+    document.getElementById('viewOrdersContainingProduct').addEventListener('click', async ()=>{
+      // fetch orders in range and show filtered orders
+      const res = await fetchOrdersInRange(fromIso, toIso);
+      const ordersWith = res.orders.filter(o => {
+        const items = parseOrderItems(o.items);
+        return items.some(it => (it.product_id && String(it.product_id) === String(t.pid)) || (String(it.item || it.product_name || it.name || '').toLowerCase() === String(t.name).toLowerCase()));
+      });
+      const listHtml = ordersWith.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><div><strong>${o.order_number || o.id}</strong> • ${escapeHtml(o.customer_name || '')}</div><div class="muted">${new Date(o.created_at).toLocaleString()} • ${fmt(o.total)}</div></div>`).join('') || '<div class="muted">No orders found</div>';
+      modal.innerHTML = `<h3>Orders containing ${escapeHtml(t.name)}</h3><div style="max-height:400px;overflow:auto">${listHtml}</div><div style="margin-top:12px"><button id="closeOrdersList" class="small-btn">Close</button></div>`;
+      document.getElementById('closeOrdersList').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
+    });
+  }
+
+  // wire analytics controls
+  document.getElementById('analytics_run').addEventListener('click', ()=>{
+    const from = document.getElementById('analytics_from').value;
+    const to = document.getElementById('analytics_to').value;
+    if(!from || !to) return showToast('Select range');
+    runAnalytics(from, to);
+  });
+  document.getElementById('range_day').addEventListener('click', ()=>{
+    const today = new Date(); const iso = today.toISOString().slice(0,10);
+    document.getElementById('analytics_from').value = iso; document.getElementById('analytics_to').value = iso; document.getElementById('analytics_run').click();
+  });
+  document.getElementById('range_week').addEventListener('click', ()=>{
+    const today = new Date(); const to = new Date(); const from = new Date(); from.setDate(today.getDate()-7);
+    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = to.toISOString().slice(0,10); document.getElementById('analytics_run').click();
+  });
+  document.getElementById('range_month').addEventListener('click', ()=>{
+    const today = new Date(); const from = new Date(); from.setMonth(today.getMonth()-1);
+    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = new Date().toISOString().slice(0,10); document.getElementById('analytics_run').click();
+  });
+  document.getElementById('range_year').addEventListener('click', ()=>{
+    const today = new Date(); const from = new Date(); from.setFullYear(today.getFullYear()-1);
+    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = new Date().toISOString().slice(0,10); document.getElementById('analytics_run').click();
+  });
+
+  /* ------------------ Out-of-stock quick view ------------------ */
+  // add an out-of-stock card on dashboard (count & click to view)
+  (function addOutOfStockCard(){
+    try {
+      const grid = document.querySelector('.grid');
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.cursor = 'pointer';
+      card.innerHTML = `<h3>Out of Stock</h3><p id="outOfStockCount">0</p>`;
+      card.addEventListener('click', ()=> {
+        const out = productsCache.filter(p => Number(p.quantity || 0) === 0);
+        const html = out.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><strong>${escapeHtml(o.name)}</strong><div class="muted">${escapeHtml(o.category || '')} • SKU: ${escapeHtml(o.sku || '')}</div></div>`).join('') || '<div class="muted">No out-of-stock products</div>';
+        modalContent.innerHTML = `<h3>Out of Stock</h3><div style="max-height:400px;overflow:auto">${html}</div><div style="margin-top:12px"><button id="closeOOS" class="small-btn">Close</button></div>`;
+        modalWrap.style.display = 'flex';
+        document.getElementById('closeOOS').addEventListener('click', ()=> modalWrap.style.display = 'none');
+      });
+      grid.appendChild(card);
+    } catch(e){ console.warn('addOutOfStockCard failed', e); }
+  })();
+
+  // Update out-of-stock count whenever we load products
+  const origLoadProducts = loadProducts;
+  loadProducts = function(){
+    origLoadProducts();
+    try {
+      const el = document.getElementById('outOfStockCount');
+      if(el) el.textContent = productsCache.filter(p => Number(p.quantity || 0) === 0).length;
+    } catch(e){}
+  };
+
+  /* ------------------ end analytics/out-of-stock ------------------ */
+
+  // initial load: fetch categories then products
+  await fetchCategories();
+  await fetchProducts();
+
+})();
+</script>
+</body>
+</html>

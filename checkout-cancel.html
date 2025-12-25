@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Cancelled - Umzila</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f7f7f9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .cancel-card {
+      background: white;
+      border-radius: 12px;
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 6px 18px rgba(11,13,20,0.08);
+    }
+    .cancel-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+      color: #dc3545;
+    }
+    h1 {
+      color: #0a2f66;
+      margin-bottom: 10px;
+    }
+    p {
+      color: #6b6b74;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .btn {
+      display: inline-block;
+      background: #0a2f66;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background: #08315f;
+    }
+  </style>
+</head>
+<body>
+  <div class="cancel-card">
+    <div class="cancel-icon">❌</div>
+    <h1>Payment Cancelled</h1>
+    <p>Your payment was cancelled. No charges have been made to your account.</p>
+    <p>Your cart has been saved so you can complete your purchase when you're ready.</p>
+    
+    <a href="index.html" class="btn">Continue Shopping</a>
+    <a href="index.html" onclick="window.history.back(); return false;" 
+       class="btn" style="background: #6c757d; margin-left: 10px;">
+       Try Again
+    </a>
+  </div>
+</body>
+</html>

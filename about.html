@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About-Streetsale</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --main:#0D47A1;
+      --soft:#64B5F6;
+      --body:#1A1A1A;
+      --muted:#9aa6bd;
+      --card-bg:#ffffff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial;color:var(--body);background:#fff}
+
+    .site-header{position:fixed;left:0;right:0;top:0;height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;z-index:90;transition:background-color .35s,box-shadow .35s;color:var(--main)}
+    .site-header.transparent{background:transparent}
+    .site-header.solid{background:var(--main);box-shadow:0 6px 20px rgba(13,71,161,.16);color:#fff}
+    .logo{font-weight:800;font-size:20px;letter-spacing:1px;color:var(--main)}
+    .site-header.solid .logo{color:#fff}
+
+    .nav-right{display:flex;align-items:center;gap:18px}
+    .nav-right a{font-weight:600;text-decoration:none;color:var(--main);padding:8px 10px;border-radius:8px}
+    .site-header.solid .nav-right a{color:#fff}
+    .nav-right a.home{font-weight:800;color:var(--main)}
+    .site-header.solid .nav-right a.home{color:#fff}
+
+    .hero{min-height:95vh;display:grid;grid-template-columns:1fr 520px;align-items:center;padding:110px 6vw 40px;gap:40px}
+    .hero-left{max-width:780px}
+    .hero h1{font-size:64px;line-height:0.95;margin:0 0 14px;color:var(--main);font-weight:800}
+    .hero p{font-size:18px;color:var(--body);max-width:56ch}
+    .small-powered{font-size:13px;color:var(--muted);margin-top:28px}
+
+    .hero-visual{display:flex;align-items:center;justify-content:center}
+    .hero-visual img{max-width:100%;height:auto;border-radius:16px;box-shadow:0 18px 40px rgba(13,71,161,.12)}
+
+    .powered{padding:18px 6vw 36px;background:#fff;display:flex;flex-direction:column;align-items:flex-start;gap:12px;overflow:hidden}
+    .powered .label{font-size:13px;color:var(--muted);}
+    .carousel-wrap{width:100%;overflow:hidden;position:relative}
+    .carousel-inner{display:flex;gap:40px;align-items:center;will-change:transform}
+
+    .logo-item{flex:0 0 calc((100% - 80px)/3);height:120px;display:flex;align-items:center;justify-content:center;transition:transform .25s,filter .25s;pointer-events:auto;background:none}
+    .logo-item img{height:100%;width:auto;object-fit:contain;filter:grayscale(.1) brightness(.95);transition:transform .25s,filter .25s;}
+    .logo-item.hover-raise img{transform:translateY(-10px) scale(1.05);filter:brightness(1.1)}
+
+    .carousel-mask{pointer-events:none;position:absolute;inset:0;mask-image:linear-gradient(90deg,transparent 0%, black 8%, black 92%, transparent 100%);}    
+
+    .carousel-anim{animation:scroll-left linear infinite;animation-timing-function:linear}
+    @keyframes scroll-left{0%{transform:translateX(0)}100%{transform:translateX(-50%)} }
+
+    .cards{padding:64px 6vw;background:linear-gradient(180deg,#f9fbff, #f2f7ff)}
+    .card{max-width:1100px;margin:40px auto;padding:40px;border-radius:20px;background:#fff;display:grid;grid-template-columns:220px 1fr;align-items:center;gap:40px;box-shadow:0 8px 24px rgba(10,30,80,.06);transition:transform .4s,background .35s;min-height:240px}
+    .card.alt{grid-template-columns:1fr 220px}
+    .card .logo-wrap{display:flex;align-items:center;justify-content:center}
+    /* changed only background here */
+    .card .logo{width:160px;height:160px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:40px;color:#063a7a;transform:scale(.98);transition:transform .5s}
+
+    .card h3{margin:6px 0 12px;font-size:26px;color:var(--main)}
+    .card p{margin:0;color:var(--body);opacity:.85;font-size:18px}
+    .card .contact{margin-top:18px}
+
+    .card.dim{filter:blur(6px) saturate(.9) opacity(.5);transform:translateY(28px)}
+    .card.in-view{filter:none;opacity:1;transform:translateY(0)}
+
+    .logo.pop{animation:logoPop .45s cubic-bezier(.18,.9,.32,1) forwards}
+    .logo.levitate{animation:levitate 3s ease-in-out infinite}
+    @keyframes logoPop{0%{transform:scale(.5)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
+    @keyframes levitate{0%{transform:translateY(0)}50%{transform:translateY(-8px)}100%{transform:translateY(0)}}
+
+    .card:hover{background:linear-gradient(180deg,#ffffff,#f3fbff);box-shadow:0 18px 50px rgba(13,71,161,.08)}
+
+    footer{padding:28px 6vw;background:var(--main);color:#fff;text-align:center}
+    footer a{color:rgba(255,255,255,.95);text-decoration:none;margin:0 10px}
+
+    @media(max-width:960px){
+      .hero{grid-template-columns:1fr;padding-top:100px;text-align:left}
+      .hero-visual{order:-1;margin-bottom:22px}
+      .hero h1{font-size:44px}
+      .logo-item{flex:0 0 calc((100% - 40px)/2);height:100px}
+      .card{grid-template-columns:1fr;text-align:left;padding:32px}
+      .card.alt{grid-template-columns:1fr}
+    }
+    @media(max-width:480px){.logo-item{flex:0 0 220px;height:80px}}
+
+    /* Modal styles (appended) */
+    .modal-overlay{position:fixed;inset:0;background:rgba(12,20,40,.6);display:none;align-items:center;justify-content:center;z-index:200}
+    .modal-overlay.active{display:flex}
+    .modal{background:#fff;border-radius:12px;max-width:980px;width:calc(100% - 40px);max-height:86vh;box-shadow:0 30px 80px rgba(8,24,84,.45);overflow:hidden;display:flex;flex-direction:column}
+    .modal-header{display:flex;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid rgba(12,37,86,.06);background:linear-gradient(90deg,#fff,#f7fbff)}
+    .modal-back{background:none;border:none;color:var(--main);font-weight:700;cursor:pointer;padding:8px 12px;border-radius:8px}
+    .modal-title{font-weight:800;font-size:18px;color:var(--body);flex:1}
+    .modal-close{background:transparent;border:none;font-size:20px;cursor:pointer;color:#9aa6bd}
+    .modal-body{padding:20px 28px;overflow:auto;color:#1a1a1a}
+    .modal-body h2,.modal-body h3{color:var(--main);margin-top:14px}
+    .modal-body p{line-height:1.55;margin:8px 0}
+    .modal-body ul{margin:8px 0 12px 20px}
+    .modal-footer{padding:12px 20px;border-top:1px solid rgba(12,37,86,.05);text-align:right;background:#fcfdff}
+    .btn-ghost{background:transparent;border:1px solid rgba(10,30,80,.06);padding:8px 12px;border-radius:8px;cursor:pointer;color:var(--main);font-weight:700}
+    @media(max-width:960px){
+      .modal{width:calc(100% - 28px)}
+      .modal-body{padding:16px 18px}
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header transparent" id="siteHeader">
+    <div class="logo"><img src="umzila.webp" alt="umzila logo" style="height:300px;display:block"></div>
+    <div class="nav-right">
+      <a href="login admin.html">Sign In</a>
+      <a href="index.html" class="home">Home</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="visionTitle">
+      <div class="hero-left">
+        <h1 id="visionTitle">Our Vision: The Path That Brings Value Closer</h1>
+        <p>Our vision is to bring quality products within reach, guiding shoppers to value they can trust, and supporting emerging sellers along the way.</p>
+        <div class="small-powered">The shortest path to what you want. — partners collaborating for quality.</div>
+		<div class="small-powered">Proudly 100% South African 🇿🇦.</div>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <img src="3.webp" alt="shopping cart illustration">
+      </div>
+    </section>
+
+    <section class="powered" aria-hidden="false">
+      <div class="label">powered by:</div>
+      <div class="carousel-wrap" aria-hidden="true">
+        <div id="carouselInner" class="carousel-inner carousel-anim" role="presentation"></div>
+        <div class="carousel-mask"></div>
+      </div>
+    </section>
+
+<section class="cards">
+  <div class="card dim" data-card-index="1" style="padding:50px 40px;">
+    <div class="logo-wrap" style="flex:1;display:flex;justify-content:center;align-items:center;">
+      <div class="logo" style="width:260px;height:260px;background:#fff;">
+        <img src="4.webp" alt="My Brand" style="width:100%;height:100%;object-fit:contain;">
+      </div>
+    </div>
+    <div style="flex:1;">
+      <h3>Fynbos Labs</h3>
+      <p>Fynbos Labs designs fast, beautiful websites and runs measurable marketing and social campaigns. We combine product thinking, creative execution and project coordination so your team can scale with confidence.</p>
+      <div class="contact">
+        <a href="https://fynboslabs.co.za">
+          <button class="btn primary" style="background:var(--main);color:#fff;padding:10px 14px;border-radius:999px;border:none;cursor:pointer">
+            Contact
+          </button>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="card alt dim" data-card-index="2" style="padding:50px 40px;">
+    <div style="flex:1;">
+      <h3>NECTELM (Pty) Ltd</h3>
+      <p>Nectelm (PTY) Ltd is a South African tech firm focused on building accessible digital systems for startups and small businesses. Offering affordable app and web development, automation services, and partnership models for promoting ideas</p>
+      <div class="contact">
+        <a href="https://nectelm.co.za">
+          <button class="btn primary" style="background:var(--main);color:#fff;padding:10px 14px;border-radius:999px;border:none;cursor:pointer">
+            Contact
+          </button>
+        </a>
+      </div>
+    </div>
+    <div class="logo-wrap" style="flex:1;display:flex;justify-content:center;align-items:center;">
+      <div class="logo" style="width:260px;height:260px;background:#fff;">
+        <img src="1.webp" alt="Partner Collective" style="width:100%;height:100%;object-fit:contain;">
+      </div>
+    </div>
+  </div>
+
+  <div class="card dim" data-card-index="3" style="padding:50px 40px;">
+    <div class="logo-wrap" style="flex:1;display:flex;justify-content:center;align-items:center;">
+      <div class="logo" style="width:260px;height:260px;background:#fff;">
+        <img src="2.webp" alt="Ground Team" style="width:100%;height:100%;object-fit:contain;">
+      </div>
+    </div>
+    <div style="flex:1;">
+      <h3>Traders Choice</h3>
+      <p>Traders Choice provides secure storage, real-time inventory control and rapid pick-and-pack fulfilment. We reduce stockouts, accelerate delivery and protect product quality every step of the way.</p>
+      <div class="contact">
+        <button class="btn primary" style="background:var(--main);color:#fff;padding:10px 14px;border-radius:999px;border:none;cursor:pointer">
+          Contact
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+  </main>
+
+  <footer>
+    <div style="max-width:960px;margin:0 auto;color:#fff">
+      <a href="#" id="openPrivacy">Privacy Policy</a> |
+      <a href="#" id="openTerms">Terms &amp; Conditions</a> |
+      <a href="mailto:umzilaecommerce@gmail.com">Contact</a>
+    </div>
+  </footer>
+
+  <!-- TERMS MODAL -->
+  <div id="termsOverlay" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="termsTitle">
+    <div class="modal" role="document">
+      <div class="modal-header">
+        <button class="modal-back" type="button" id="termsBackBtn" aria-label="Back">← Back</button>
+        <div class="modal-title" id="termsTitle">Terms &amp; Conditions — Umzila.store</div>
+        <button class="modal-close" type="button" id="termsCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Last Updated:</strong> <em>December 2025</em></p>
+
+        <p>Welcome to <strong>Umzila.store</strong>, a retail and wholesale marketplace operated through a partnership between Fynbos Labs, Traders Choice, and Nectelm (Pty) Ltd. These Terms set out the rules and responsibilities that apply when you use our platform. By using Umzila.store you agree to be bound by these Terms.</p>
+
+        <h3>1. Key Definitions</h3>
+        <ul>
+          <li><strong>Platform / Website</strong>: Umzila.store and related online services.</li>
+          <li><strong>User / Customer</strong>: Anyone browsing, registering, or purchasing on the platform.</li>
+          <li><strong>Partners</strong>: Fynbos Labs, Traders Choice, Nectelm (PTY) Ltd.</li>
+          <li><strong>Product</strong>: Any item offered for sale on Umzila.store.</li>
+        </ul>
+
+        <h3>2. Services &amp; Roles</h3>
+        <p>Each partner provides specific services:</p>
+        <ul>
+          <li><strong>Fynbos Labs</strong> — design, front-end development, marketing and content.</li>
+          <li><strong>Nectelm (PTY) Ltd</strong> — platform technology, back-end systems, and integrations.</li>
+          <li><strong>Traders Choice</strong> — warehousing, inventory management and fulfilment.</li>
+        </ul>
+
+        <h3>3. Eligibility &amp; Account Responsibility</h3>
+        <p>Users must be 18+ or have guardian permission. You are responsible for account security and all activity on your account. Notify us immediately if you suspect unauthorised access.</p>
+
+        <h3>4. Product Availability &amp; Ordering</h3>
+        <p>We aim for accurate product information but images, sizes and availability may vary. If an item is unavailable after purchase we will notify and refund you.</p>
+
+        <h3>5. Pricing &amp; Payments</h3>
+        <p>Prices are shown in ZAR and may change. Payments are processed by trusted third-party payment providers; we do not store card numbers.</p>
+
+        <h3>6. Shipping &amp; Fulfilment</h3>
+        <p>Traders Choice manage picking, packing and dispatch. Shipping times are estimates and may vary with courier performance and location.</p>
+
+        <h3>7. Returns &amp; Refunds</h3>
+        <p>Due to the nature of our inventory:</p>
+        <ul>
+          <li><strong>Retail items:</strong> Returns accepted only for wrong or damaged goods — notify us within 48 hours and provide evidence.</li>
+          <li><strong>Mystery boxes:</strong> Final sale unless incorrectly fulfilled or severely damaged in transit.</li>
+          <li><strong>Wholesale / bales:</strong> Final sale — no returns due to sorting and grading practices.</li>
+        </ul>
+
+        <h3>8. Intellectual Property</h3>
+        <p>All platform content (logos, photos, text, code) is owned by Umzila.store and collaborators. Do not copy or reuse without permission.</p>
+
+        <h3>9. Liability &amp; Indemnity</h3>
+        <p>Umzila.store and partners are not liable for indirect losses, courier delays, or user errors. Liability is limited to the purchase price. Users agree to indemnify Umzila.store against claims from misuse or breaches of these Terms.</p>
+
+        <h3>10. Prohibited Uses</h3>
+        <p>Do not use the platform to commit fraud, scrape data, distribute malware, or harass staff. Violations may result in suspension or legal action.</p>
+
+        <h3>11. Changes to Terms</h3>
+        <p>We may update these Terms. Continued use indicates acceptance of changes; changes will be posted with a revised date.</p>
+
+        <h3>12. Contact</h3>
+        <p>For queries about these Terms, contact our support team: <strong>info@umzila.store</strong>.</p>
+
+        <h3>Summary</h3>
+        <p>These Terms provide a clear operational framework for Umzila.store and its partners, cover ordering, fulfilment, returns, liability and data ownership, and are designed to protect customers, sellers and partner operations.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="termsCloseFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY MODAL -->
+  <div id="privacyOverlay" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="modal" role="document">
+      <div class="modal-header">
+        <button class="modal-back" type="button" id="privacyBackBtn" aria-label="Back">← Back</button>
+        <div class="modal-title" id="privacyTitle">Privacy Policy — Umzila.store</div>
+        <button class="modal-close" type="button" id="privacyCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>Last updated:</strong> <em>December 2025</em></p>
+        <p>Umzila.store (“we”, “our”, “us”) is committed to protecting your privacy. This Privacy Policy explains what information we collect, why we collect it, how it’s used and your rights under applicable law (including POPIA in South Africa).</p>
+
+        <h3>1. Information We Collect</h3>
+        <p><strong>Personal information you provide:</strong> name, email, phone, billing &amp; shipping addresses, account credentials, messages to support, and transaction data. Payment card details are processed by third-party payment providers and are not stored by Umzila.store.</p>
+        <p><strong>Automatically collected:</strong> IP address, device/browser type, pages viewed, cookies, session data and approximate location derived from IP.</p>
+
+        <h3>2. How We Use Your Information</h3>
+        <ul>
+          <li>To process and deliver orders</li>
+          <li>To manage accounts and verify identity</li>
+          <li>To provide support and communicate about orders</li>
+          <li>To personalise and improve the service</li>
+          <li>To detect and prevent fraud</li>
+        </ul>
+
+        <h3>3. Sharing &amp; Third Parties</h3>
+        <p>We do not sell personal data. We share personal data with payment processors, couriers, analytics providers, and other service partners only as necessary to operate the platform or when required by law.</p>
+
+        <h3>4. Cookies &amp; Tracking</h3>
+        <p>Cookies are used for login persistence, cart memory, analytics and personalised content. You may disable cookies in your browser, but some features may be affected.</p>
+
+        <h3>5. Data Retention &amp; Security</h3>
+        <p>We retain data only as long as necessary to fulfil orders, maintain accounts, comply with legal obligations and resolve disputes. We apply industry-standard security measures (SSL, access controls, audits). Absolute security cannot be guaranteed.</p>
+
+        <h3>6. Your Rights (POPIA)</h3>
+        <p>Under POPIA you can access and correct your personal information, request deletion, withdraw consent and request data portability. Contact us to exercise these rights.</p>
+
+        <h3>7. Children</h3>
+        <p>We do not knowingly collect information from children under 18. If we learn we have, we will delete it.</p>
+
+        <h3>8. Contact</h3>
+        <p>Questions or requests related to privacy: <strong>info@umzila.store</strong> | Phone: <strong>0797662768</strong> | Address: <strong>Durban CBD</strong>.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="privacyCloseFooter">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const header=document.getElementById('siteHeader');const changePoint=36;
+    window.addEventListener('scroll',()=>{if(window.scrollY>changePoint){header.classList.remove('transparent');header.classList.add('solid')}else{header.classList.add('transparent');header.classList.remove('solid')}});
+
+    const companies=['4.webp','1.webp','2.webp'];
+    const carouselInner=document.getElementById('carouselInner');
+    function makeLogoItem(src){const el=document.createElement('div');el.className='logo-item';const img=document.createElement('img');img.src=src;img.alt='partner logo';el.appendChild(img);return el;}
+    companies.forEach(c=>carouselInner.appendChild(makeLogoItem(c)));companies.forEach(c=>carouselInner.appendChild(makeLogoItem(c)));
+
+    const gap=40;
+    // continuous RAF-driven scroll (smooth, truly infinite without CSS restart)
+    let firstSetWidth = 0;
+    function calculateWidths(){
+      const n = companies.length;
+      if(!carouselInner.children.length) return;
+      // measure distance between first item of first set and first item of second set
+      if(carouselInner.children[n]){
+        firstSetWidth = carouselInner.children[n].offsetLeft - carouselInner.children[0].offsetLeft;
+      }
+      // fallback: sum widths + gaps
+      if(!firstSetWidth || firstSetWidth<=0){
+        firstSetWidth = 0;
+        for(let i=0;i<n;i++){
+          const w = carouselInner.children[i].getBoundingClientRect().width;
+          firstSetWidth += w + gap;
+        }
+      }
+    }
+
+    let pxPerSec = 18; // speed (pixels per second)
+    let rafId = null; let lastTs = null; let offset = 0;
+    function startLoop(){
+      // disable CSS animation if present
+      carouselInner.classList.remove('carousel-anim');
+      calculateWidths();
+      offset = 0; lastTs = null;
+      function step(ts){
+        if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if(lastTs==null) lastTs = ts;
+        const delta = (ts - lastTs)/1000; lastTs = ts;
+        offset += pxPerSec * delta;
+        if(firstSetWidth>0){
+          if(offset >= firstSetWidth) offset = offset - firstSetWidth;
+          carouselInner.style.transform = 'translateX(' + (-offset) + 'px)';
+        }
+        rafId = requestAnimationFrame(step);
+      }
+      if(rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(step);
+    }
+
+    window.addEventListener('load', ()=>{ setTimeout(()=>{ calculateWidths(); startLoop(); },80); });
+    window.addEventListener('resize', ()=>{ setTimeout(()=>{ calculateWidths(); },120); });
+
+    document.querySelectorAll('.logo-item').forEach(i=>i.setAttribute('tabindex','-1'));
+
+    (function(){
+      const wrap=document.querySelector('.carousel-wrap');
+      let lastMouse=null;let checkInterval=null;let lastRaised=null;
+      function highlightLogoUnderPointer(){if(!lastMouse) return; const el=document.elementFromPoint(lastMouse.x,lastMouse.y); if(!el) return; const logo=el.closest('.logo-item'); if(logo!==lastRaised){ if(lastRaised) lastRaised.classList.remove('hover-raise'); if(logo) logo.classList.add('hover-raise'); lastRaised=logo; }}
+      wrap.addEventListener('mousemove',e=>{ lastMouse={x:e.clientX,y:e.clientY}; highlightLogoUnderPointer(); if(!checkInterval){ checkInterval=setInterval(highlightLogoUnderPointer,120); } });
+      wrap.addEventListener('mouseleave',()=>{ lastMouse=null; if(checkInterval){ clearInterval(checkInterval); checkInterval=null; } if(lastRaised){ lastRaised.classList.remove('hover-raise'); lastRaised=null; } });
+      window.addEventListener('scroll',()=>{ if(lastRaised){ lastRaised.classList.remove('hover-raise'); lastRaised=null; } });
+    })();
+
+    const cards=document.querySelectorAll('.card');
+    const io=new IntersectionObserver((entries,observer)=>{entries.forEach(entry=>{if(entry.isIntersecting){const card=entry.target;card.classList.add('in-view');card.classList.remove('dim');const logo=card.querySelector('.logo');if(logo&&!logo.classList.contains('pop')){logo.classList.add('pop');setTimeout(()=>{logo.classList.add('levitate');},450);}observer.unobserve(card);}});},{threshold:0.22});
+    cards.forEach(c=>io.observe(c));
+
+    // reduced motion handling
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ if(rafId) cancelAnimationFrame(rafId); carouselInner.style.transform='none'; document.querySelectorAll('.logo.levitate').forEach(l=>l.style.animation='none'); }
+  </script>
+
+  <script>
+    // Modal logic (kept separate to avoid touching existing script)
+    const termsOverlay = document.getElementById('termsOverlay');
+    const privacyOverlay = document.getElementById('privacyOverlay');
+    const openTermsBtn = document.getElementById('openTerms');
+    const openPrivacyBtn = document.getElementById('openPrivacy');
+    const termsCloseBtn = document.getElementById('termsCloseBtn');
+    const privacyCloseBtn = document.getElementById('privacyCloseBtn');
+    const termsBackBtn = document.getElementById('termsBackBtn');
+    const privacyBackBtn = document.getElementById('privacyBackBtn');
+    const termsCloseFooter = document.getElementById('termsCloseFooter');
+    const privacyCloseFooter = document.getElementById('privacyCloseFooter');
+
+    function openModal(overlay){
+      overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden','false');
+      document.body.style.overflow = 'hidden';
+      // focus first focusable element inside modal
+      const focusable = overlay.querySelector('button, a, [tabindex]:not([tabindex="-1"])');
+      if(focusable) focusable.focus();
+    }
+    function closeModal(overlay){
+      overlay.classList.remove('active');
+      overlay.setAttribute('aria-hidden','true');
+      document.body.style.overflow = '';
+    }
+
+    if(openTermsBtn) openTermsBtn.addEventListener('click', (e)=>{ e.preventDefault(); openModal(termsOverlay); });
+    if(openPrivacyBtn) openPrivacyBtn.addEventListener('click', (e)=>{ e.preventDefault(); openModal(privacyOverlay); });
+
+    [termsCloseBtn, termsBackBtn, termsCloseFooter].forEach(btn=>{ if(btn) btn.addEventListener('click', ()=> closeModal(termsOverlay)); });
+    [privacyCloseBtn, privacyBackBtn, privacyCloseFooter].forEach(btn=>{ if(btn) btn.addEventListener('click', ()=> closeModal(privacyOverlay)); });
+
+    // Close when clicking outside the modal content
+    [termsOverlay, privacyOverlay].forEach(overlay=>{
+      if(!overlay) return;
+      overlay.addEventListener('click', (e)=>{
+        if(e.target === overlay) closeModal(overlay);
+      });
+    });
+
+    // Close with Escape key
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        if(termsOverlay && termsOverlay.classList.contains('active')) closeModal(termsOverlay);
+        if(privacyOverlay && privacyOverlay.classList.contains('active')) closeModal(privacyOverlay);
+      }
+    });
+
+    // Reset scroll of modal-body when opened
+    [termsOverlay, privacyOverlay].forEach(overlay=>{
+      if(!overlay) return;
+      overlay.addEventListener('transitionend', ()=>{ const body = overlay.querySelector('.modal-body'); if(body) body.scrollTop = 0; });
+    });
+  </script>
+
+</body>
+</html>
