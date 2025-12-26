@@ -11,26 +11,63 @@ const {
   SUPABASE_SERVICE_ROLE_KEY
 } = process.env;
 
-const PAYFAST_VALIDATE_URL = PAYFAST_SANDBOX === 'true'
+// FIX 1: Trim environment variables
+const PAYFAST_MERCHANT_ID_TRIMMED = (PAYFAST_MERCHANT_ID || '').trim();
+const PAYFAST_MERCHANT_KEY_TRIMMED = (PAYFAST_MERCHANT_KEY || '').trim();
+const PAYFAST_PASSPHRASE_TRIMMED = (PAYFAST_PASSPHRASE || '').trim();
+const PAYFAST_SANDBOX_TRIMMED = (PAYFAST_SANDBOX || 'true').trim();
+const SUPABASE_URL_TRIMMED = (SUPABASE_URL || '').trim();
+const SUPABASE_SERVICE_ROLE_KEY_TRIMMED = (SUPABASE_SERVICE_ROLE_KEY || '').trim();
+
+const PAYFAST_VALIDATE_URL = PAYFAST_SANDBOX_TRIMMED === 'true'
   ? 'https://sandbox.payfast.co.za/eng/query/validate'
   : 'https://www.payfast.co.za/eng/query/validate';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL_TRIMMED, SUPABASE_SERVICE_ROLE_KEY_TRIMMED);
 
-// FIX 1A: Same encoding as initiate-payfast.js
+// FIX 4: Fetch fallback
+let fetchFn = globalThis.fetch;
+if (!fetchFn) {
+  try { fetchFn = require('node-fetch'); } catch (e) { fetchFn = null; console.warn('No fetch available'); }
+}
+
+// FIX 1A: Keep encodePfValue only for debug logging
 function encodePfValue(value) {
   if (value === null || value === undefined) return '';
   return encodeURIComponent(String(value)).replace(/%20/g, '+');
 }
 
-// FIX 1B: Same signature calculation as initiate-payfast.js
+// FIX 2: Exact replacement for building the canonical param string used for signing
+function buildStringToSign(params, passphrase = '') {
+  // 1) filter out undefined / null / empty-string values
+  const entries = Object.entries(params).filter(([k, v]) => v !== undefined && v !== null && String(v) !== '');
+
+  // 2) sort keys alphabetically
+  entries.sort((a, b) => a[0].localeCompare(b[0]));
+
+  // 3) create URLSearchParams in sorted order (this matches browser form encoding)
+  const usp = new URLSearchParams();
+  for (const [k, v] of entries) {
+    usp.append(k, String(v));
+  }
+  let paramString = usp.toString(); // e.g. "amount=150.00&cancel_url=https%3A%2F%2F..."
+
+  // 4) append passphrase only if present (encoded the same way)
+  if (passphrase && String(passphrase).length > 0) {
+    paramString += `&passphrase=${encodeURIComponent(String(passphrase)).replace(/%20/g, '+')}`;
+  }
+
+  return paramString;
+}
+
+function md5Hash(s) {
+  return crypto.createHash('md5').update(s, 'utf8').digest('hex');
+}
+
+// Generate signature using the new buildStringToSign
 function generatePfSignature(params, passphrase = '') {
-  const sortedKeys = Object.keys(params).sort();
-  const paramString = sortedKeys
-    .map(key => `${key}=${encodePfValue(params[key])}`)
-    .join('&');
-  // append passphrase only if it's non-empty
-  return passphrase ? crypto.createHash('md5').update(`${paramString}&passphrase=${encodePfValue(passphrase)}`, 'utf8').digest('hex') : crypto.createHash('md5').update(paramString, 'utf8').digest('hex');
+  const stringToSign = buildStringToSign(params, passphrase);
+  return md5Hash(stringToSign);
 }
 
 module.exports.handler = async function (event) {
@@ -51,7 +88,7 @@ module.exports.handler = async function (event) {
     const dataForSignature = { ...data };
     delete dataForSignature.signature;
     
-    const calculatedSignature = generatePfSignature(dataForSignature, PAYFAST_PASSPHRASE);
+    const calculatedSignature = generatePfSignature(dataForSignature, PAYFAST_PASSPHRASE_TRIMMED);
     
     console.log('\n=== SIGNATURE CHECK ===');
     console.log('Received:', receivedSignature);
@@ -62,24 +99,27 @@ module.exports.handler = async function (event) {
       console.error('SIGNATURE MISMATCH!');
       
       // Debug what we calculated
-      const sortedKeys = Object.keys(dataForSignature).sort();
-      const debugString = sortedKeys
-        .map(key => `${key}=${encodePfValue(dataForSignature[key])}`)
-        .join('&');
-      console.log('String we hashed:', passphrase ? `${debugString}&passphrase=${encodePfValue(PAYFAST_PASSPHRASE)}` : debugString);
+      const stringToSign = buildStringToSign(dataForSignature, PAYFAST_PASSPHRASE_TRIMMED);
+      console.log('String we hashed:', stringToSign);
       
       return { statusCode: 400, body: 'Invalid signature' };
     }
     
     console.log('Signature verified successfully');
 
+    // FIX 4: Use fetchFn for server-to-server validation
+    if (!fetchFn) {
+      console.error('fetch not available for server-to-server validation');
+      return { statusCode: 500, body: 'Server environment missing fetch' };
+    }
+    
     // FIX 2E: Server-to-server validation with PayFast
-    const validateResp = await fetch(PAYFAST_VALIDATE_URL, {
+    const validateResp = await fetchFn(PAYFAST_VALIDATE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        merchant_id: PAYFAST_MERCHANT_ID,
-        merchant_key: PAYFAST_MERCHANT_KEY,
+        merchant_id: PAYFAST_MERCHANT_ID_TRIMMED,
+        merchant_key: PAYFAST_MERCHANT_KEY_TRIMMED,
         m_payment_id: data.m_payment_id
       })
     });
@@ -143,6 +183,7 @@ module.exports.handler = async function (event) {
       }
 
       console.log(`Order ${data.m_payment_id} marked as paid`);
+
       
     } else if (data.payment_status === 'FAILED' || data.payment_status === 'CANCELLED') {
       console.log('Payment FAILED for order:', data.m_payment_id);

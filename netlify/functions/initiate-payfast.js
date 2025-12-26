@@ -12,26 +12,42 @@ const {
   SUPABASE_SERVICE_ROLE_KEY
 } = process.env;
 
-const PAYFAST_URL = PAYFAST_SANDBOX === 'true'
+// FIX 1: Trim environment variables
+const PAYFAST_MERCHANT_ID_TRIMMED = (PAYFAST_MERCHANT_ID || '').trim();
+const PAYFAST_MERCHANT_KEY_TRIMMED = (PAYFAST_MERCHANT_KEY || '').trim();
+const PAYFAST_PASSPHRASE_TRIMMED = (PAYFAST_PASSPHRASE || '').trim();
+const PAYFAST_SANDBOX_TRIMMED = (PAYFAST_SANDBOX || 'true').trim();
+const SITE_BASE_URL_TRIMMED = (SITE_BASE_URL || '').trim();
+const SUPABASE_URL_TRIMMED = (SUPABASE_URL || '').trim();
+const SUPABASE_SERVICE_ROLE_KEY_TRIMMED = (SUPABASE_SERVICE_ROLE_KEY || '').trim();
+
+const PAYFAST_URL = PAYFAST_SANDBOX_TRIMMED === 'true'
   ? 'https://sandbox.payfast.co.za/eng/process'
   : 'https://www.payfast.co.za/eng/process';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(SUPABASE_URL_TRIMMED, SUPABASE_SERVICE_ROLE_KEY_TRIMMED);
 
-// FIX 1A: encode spaces as '+' which PayFast expects for signature
-function encodePfValue(value) {
-  if (value === null || value === undefined) return '';
-  return encodeURIComponent(String(value)).replace(/%20/g, '+');
-}
-
-// FIX 1B: Only append passphrase when it exists
+// FIX 2: Exact replacement for building the canonical param string used for signing
 function buildStringToSign(params, passphrase = '') {
-  const sortedKeys = Object.keys(params).sort();
-  const paramString = sortedKeys
-    .map(key => `${key}=${encodePfValue(params[key])}`)
-    .join('&');
-  // append passphrase only if it's non-empty
-  return passphrase ? `${paramString}&passphrase=${encodePfValue(passphrase)}` : paramString;
+  // 1) filter out undefined / null / empty-string values
+  const entries = Object.entries(params).filter(([k, v]) => v !== undefined && v !== null && String(v) !== '');
+
+  // 2) sort keys alphabetically
+  entries.sort((a, b) => a[0].localeCompare(b[0]));
+
+  // 3) create URLSearchParams in sorted order (this matches browser form encoding)
+  const usp = new URLSearchParams();
+  for (const [k, v] of entries) {
+    usp.append(k, String(v));
+  }
+  let paramString = usp.toString(); // e.g. "amount=150.00&cancel_url=https%3A%2F%2F..."
+
+  // 4) append passphrase only if present (encoded the same way)
+  if (passphrase && String(passphrase).length > 0) {
+    paramString += `&passphrase=${encodeURIComponent(String(passphrase)).replace(/%20/g, '+')}`;
+  }
+
+  return paramString;
 }
 
 function md5Hash(s) {
@@ -81,7 +97,7 @@ module.exports.handler = async function (event) {
     };
   }
 
-  // FIX 2C: Server-side price validation (replace your cart total loop)
+  // FIX 2C: Server-side price validation
   let totalNumber = 0;
   const validatedItems = [];
 
@@ -162,13 +178,14 @@ module.exports.handler = async function (event) {
     };
   }
 
-  // Build PayFast parameters
+  // Build PayFast parameters (use raw strings, not pre-encoded)
   const pfParams = {
-    merchant_id: PAYFAST_MERCHANT_ID,
-    merchant_key: PAYFAST_MERCHANT_KEY,
-    return_url: `${SITE_BASE_URL}/checkout-success?m_payment_id=${m_payment_id}`,
-    cancel_url: `${SITE_BASE_URL}/checkout-cancel?m_payment_id=${m_payment_id}`,
-    notify_url: `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
+    merchant_id: PAYFAST_MERCHANT_ID_TRIMMED,
+    merchant_key: PAYFAST_MERCHANT_KEY_TRIMMED,
+    // FIX 5: URL-encode m_payment_id in return/cancel URLs
+	return_url: `${SITE_BASE_URL_TRIMMED}/checkout-success?m_payment_id=${m_payment_id}`,
+	cancel_url: `${SITE_BASE_URL_TRIMMED}/checkout-cancel?m_payment_id=${m_payment_id}`,
+    notify_url: `${SITE_BASE_URL_TRIMMED}/.netlify/functions/payfast-itn`,
     m_payment_id: m_payment_id,
     amount: amountString,
     item_name: `Umzila Order #${m_payment_id}`,
@@ -176,16 +193,15 @@ module.exports.handler = async function (event) {
     email_address: customerEmail
   };
 
-  // Calculate signature with corrected encoding
-  const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE);
+  // Calculate signature with the new URLSearchParams approach
+  const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE_TRIMMED);
   const signature = md5Hash(stringToSign);
 
-  // Debug output
+  // FIX 7: Temporary debug logging
   console.log('\n=== SIGNATURE CALCULATION ===');
-  console.log('Amount:', amountString);
+  console.log('StringToSign:', stringToSign);
   console.log('Signature:', signature);
-  console.log('String to sign:', stringToSign);
-  console.log('Passphrase used:', PAYFAST_PASSPHRASE ? 'YES' : 'NO');
+  console.log('Passphrase used:', PAYFAST_PASSPHRASE_TRIMMED ? 'YES' : 'NO');
   console.log('=============================\n');
 
   // Build HTML form
