@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/UmzilaEcommerce/umzila#readme",
   "dependencies": {
-    "@supabase/supabase-js": "^2.89.0"
+    "@supabase/supabase-js": "^2.89.0",
+    "node-fetch": "^2.7.0"
   }
 }
