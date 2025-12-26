@@ -182,7 +182,7 @@ module.exports.handler = async function (event) {
         }
       }
 
-      console.log(`Order ${data.m_payment_id} marked as paid`);
+      console.log(`Order ${data.m_payment_id} marked as paid`); 
 
       
     } else if (data.payment_status === 'FAILED' || data.payment_status === 'CANCELLED') {

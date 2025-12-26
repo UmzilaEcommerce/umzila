@@ -178,7 +178,7 @@ module.exports.handler = async function (event) {
     };
   }
 
-  // Build PayFast parameters (use raw strings, not pre-encoded)
+  // Build PayFast parameters (use raw strings, not pre-encoded) 
   const pfParams = {
     merchant_id: PAYFAST_MERCHANT_ID_TRIMMED,
     merchant_key: PAYFAST_MERCHANT_KEY_TRIMMED,
