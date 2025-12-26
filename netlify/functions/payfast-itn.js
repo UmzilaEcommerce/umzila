@@ -38,27 +38,26 @@ function encodePfValue(value) {
 }
 
 // FIX 2: Exact replacement for building the canonical param string used for signing
+// Build string to sign using the PARAMETER INSERTION ORDER (matches form input order)
 function buildStringToSign(params, passphrase = '') {
-  // 1) filter out undefined / null / empty-string values
+  // 1) take params in insertion order and filter out undefined/null/empty-string
   const entries = Object.entries(params).filter(([k, v]) => v !== undefined && v !== null && String(v) !== '');
 
-  // 2) sort keys alphabetically
-  entries.sort((a, b) => a[0].localeCompare(b[0]));
-
-  // 3) create URLSearchParams in sorted order (this matches browser form encoding)
+  // 2) create URLSearchParams using insertion order (matches form post order)
   const usp = new URLSearchParams();
   for (const [k, v] of entries) {
     usp.append(k, String(v));
   }
-  let paramString = usp.toString(); // e.g. "amount=150.00&cancel_url=https%3A%2F%2F..."
+  let paramString = usp.toString();
 
-  // 4) append passphrase only if present (encoded the same way)
+  // 3) append passphrase only if present
   if (passphrase && String(passphrase).length > 0) {
     paramString += `&passphrase=${encodeURIComponent(String(passphrase)).replace(/%20/g, '+')}`;
   }
 
   return paramString;
 }
+
 
 function md5Hash(s) {
   return crypto.createHash('md5').update(s, 'utf8').digest('hex');
