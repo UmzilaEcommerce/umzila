@@ -306,7 +306,7 @@ module.exports.handler = async function (event) {
       document.getElementById('pfForm').submit();
     }, 1000);
   </script>
-</body>
+</body> 
 </html>`;
 
     return {

@@ -112,7 +112,7 @@ module.exports.handler = async function (event) {
       updateData.order_status = 'failed';
     } else if (data.payment_status === 'PENDING') {
       console.log('Payment PENDING for order:', data.m_payment_id);
-      updateData.order_status = 'pending';
+      updateData.order_status = 'pending'; 
     }
 
     // Update order
