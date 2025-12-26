@@ -18,20 +18,20 @@ const PAYFAST_URL = PAYFAST_SANDBOX === 'true'
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-// Correct encoding for PayFast
+// FIX 1A: encode spaces as '+' which PayFast expects for signature
 function encodePfValue(value) {
   if (value === null || value === undefined) return '';
-  return encodeURIComponent(String(value)); // PayFast uses %20 for spaces
+  return encodeURIComponent(String(value)).replace(/%20/g, '+');
 }
 
-// Signature calculation - ALWAYS include passphrase
+// FIX 1B: Only append passphrase when it exists
 function buildStringToSign(params, passphrase = '') {
   const sortedKeys = Object.keys(params).sort();
   const paramString = sortedKeys
     .map(key => `${key}=${encodePfValue(params[key])}`)
     .join('&');
-  
-  return `${paramString}&passphrase=${encodePfValue(passphrase)}`;
+  // append passphrase only if it's non-empty
+  return passphrase ? `${paramString}&passphrase=${encodePfValue(passphrase)}` : paramString;
 }
 
 function md5Hash(s) {
@@ -81,21 +81,86 @@ module.exports.handler = async function (event) {
     };
   }
 
-  // Calculate total from cart items (NO HARDCODING)
+  // FIX 2C: Server-side price validation (replace your cart total loop)
   let totalNumber = 0;
+  const validatedItems = [];
+
   for (const item of cartItems) {
-    if (!item?.product_id || !item?.quantity) continue;
-    
-    // In production, you would fetch product price from database
-    // For now, use a default or fetch from your products table
-    const itemPrice = item.price || 0; // Assuming price is sent in cart
-    totalNumber += itemPrice * item.quantity;
+    if (!item?.product_id || !item?.quantity) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid cart item format' })
+      };
+    }
+
+    // fetch price from DB
+    const { data: product, error: prodErr } = await supabase
+      .from('products')
+      .select('id, price, sale_price, stock, name')
+      .eq('id', item.product_id)
+      .single();
+
+    if (prodErr || !product) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: `Product ${item.product_id} not found` })
+      };
+    }
+
+    if (product.stock < item.quantity) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: `Insufficient stock for ${product.name}` })
+      };
+    }
+
+    const unitPrice = product.sale_price ?? product.price;
+    const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
+    totalNumber += lineTotal;
+
+    validatedItems.push({
+      product_id: product.id,
+      name: product.name,
+      unit_price: Number(unitPrice),
+      quantity: Number(item.quantity),
+      total: lineTotal
+    });
   }
-  
+
   totalNumber = Number(totalNumber.toFixed(2));
-  const amountString = totalNumber > 0 ? totalNumber.toFixed(2) : '150.00'; // Fallback only
+  if (totalNumber <= 0) {
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Invalid order total' })
+    };
+  }
+  const amountString = totalNumber.toFixed(2);
 
   const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Insert order with validated items and correct total
+  const { data: order, error: orderError } = await supabase.from('orders').insert([{
+    m_payment_id,
+    customer_name: customerName || customerEmail,
+    customer_email: customerEmail,
+    total: totalNumber,
+    items: validatedItems,
+    order_status: 'pending_payment',
+    created_at: new Date().toISOString()
+  }]).select().single();
+
+  if (orderError) {
+    console.error('Supabase insert error:', orderError.message);
+    return { 
+      statusCode: 500, 
+      headers: { 'Content-Type': 'application/json' }, 
+      body: JSON.stringify({ error: 'Failed to create order' }) 
+    };
+  }
 
   // Build PayFast parameters
   const pfParams = {
@@ -107,10 +172,11 @@ module.exports.handler = async function (event) {
     m_payment_id: m_payment_id,
     amount: amountString,
     item_name: `Umzila Order #${m_payment_id}`,
+    item_description: `Purchase from Umzila Store`,
     email_address: customerEmail
   };
 
-  // Calculate signature
+  // Calculate signature with corrected encoding
   const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE);
   const signature = md5Hash(stringToSign);
 
@@ -119,6 +185,7 @@ module.exports.handler = async function (event) {
   console.log('Amount:', amountString);
   console.log('Signature:', signature);
   console.log('String to sign:', stringToSign);
+  console.log('Passphrase used:', PAYFAST_PASSPHRASE ? 'YES' : 'NO');
   console.log('=============================\n');
 
   // Build HTML form
@@ -135,14 +202,9 @@ module.exports.handler = async function (event) {
   <title>PayFast Payment</title>
 </head>
 <body>
-  <h1>Processing Payment of R${amountString}</h1>
-  <p>Order ID: ${m_payment_id}</p>
-  
   <form id="pfForm" action="${PAYFAST_URL}" method="post">
     ${inputsHtml}
-    <button type="submit">Proceed to PayFast</button>
   </form>
-  
   <script>
     document.getElementById('pfForm').submit();
   </script>
