@@ -63,36 +63,8 @@
   @media (max-width:760px){ .grid{grid-template-columns:repeat(1,1fr)} .search-box input{max-width:80%} }
 </style>
 
-<!-- Supabase initialization via Netlify function -->
+<!-- Supabase UMD (needed for sync) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
-
-<script>
-(async function initSupabaseClient(){
-  try {
-    const res = await fetch('/.netlify/functions/get-client-config');
-    if (!res.ok) {
-      console.error('Failed to load Supabase config', res.status, await res.text());
-      return;
-    }
-    const cfg = await res.json();
-
-    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-      console.error('Missing Supabase config from server');
-      return;
-    }
-
-    // Initialize Supabase client
-    const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-    window.supabase = supabaseClient; // make it accessible globally
-
-    // Optional: notify other scripts that Supabase is ready
-    document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
-    console.log('Supabase client initialized');
-  } catch (err) {
-    console.error('Error initializing Supabase client', err);
-  }
-})();
-</script>
 </head>
 <body>
   <div id="toasts" class="toasts" aria-live="polite"></div>
@@ -301,12 +273,15 @@
 */
 
 /* ---------- Supabase init & helper sync functions (kept + extended) ---------- */
+const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
 let supabaseClient = null;
-
-// Wait for supabase to be initialized
-document.addEventListener('supabase-ready', (event) => {
-  supabaseClient = event.detail.supabase;
-});
+try {
+  supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+} catch (e) {
+  console.warn('Supabase init failed', e);
+  supabaseClient = null;
+}
 
 // Small helper: check if current browser has an authenticated Supabase user
 async function getSupabaseUser() {
@@ -353,32 +328,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
 /* ---------- App logic (products now live-only from Supabase) ---------- */
 (async function(){
-  // Wait for supabaseClient to be initialized
-  if (!supabaseClient) {
-    // Check if window.supabase is already available
-    if (window.supabase) {
-      supabaseClient = window.supabase;
-    } else {
-      // Wait for the supabase-ready event
-      await new Promise(resolve => {
-        if (window.supabase) {
-          supabaseClient = window.supabase;
-          resolve();
-        } else {
-          document.addEventListener('supabase-ready', (event) => {
-            supabaseClient = event.detail.supabase;
-            resolve();
-          });
-        }
-      });
-    }
-  }
-
-  if (!supabaseClient) {
-    console.error('Supabase client not initialized');
-    return;
-  }
-
   // Helpers
   const fmt = v => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(v);
   const ORDERS_KEY = 'scp_orders_v1';

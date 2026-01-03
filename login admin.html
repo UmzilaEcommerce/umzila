@@ -1,0 +1,410 @@
+<!doctype html> 
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Shop Control Panel — Login</title>
+<style>
+  :root{
+    --primary:#0073e6; --secondary:#ff9900; --bg1:#f8fbff; --bg2:#eef6ff;
+    --card:#ffffff; --text:#111827; --muted:#6b7280; --shadow: 0 10px 30px rgba(2,6,23,0.08);
+    font-family: Inter, Arial, sans-serif;
+  }
+  html,body{height:100%;margin:0;background: linear-gradient(180deg,var(--bg1),var(--bg2)); color:var(--text)}
+  .center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;animation:fadeIn .45s ease both}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .card{width:420px;max-width:96%;background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:28px}
+  .logo{font-weight:800;color:var(--primary);font-size:18px}
+  h1{margin:8px 0 18px;font-size:20px;color:#0f1724}
+  label{display:block;font-size:13px;color:var(--muted);margin-top:10px}
+  input,select{width:100%;padding:10px;border-radius:10px;border:1px solid #e6eef9;margin-top:6px;box-sizing:border-box}
+  .btn{display:inline-block;width:100%;background:var(--primary);color:#fff;padding:10px;border-radius:10px;border:0;margin-top:18px;font-weight:700;cursor:pointer;transition:transform .15s,filter .15s}
+  .btn:hover{transform:translateY(-2px);filter:brightness(.94)}
+  .meta{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
+  .error{color:#b91c1c;font-size:13px;margin-top:8px;display:none}
+  .links{margin-top:12px;font-size:13px;color:var(--muted);text-align:center}
+  .small{font-size:12px;color:#94a3b8}
+  footer{margin-top:14px;text-align:center;font-size:12px;color:var(--muted)}
+  /* simple second-factor / TOTP modal */
+  .sf-overlay{position:fixed;inset:0;background:rgba(2,6,23,0.45);display:flex;align-items:center;justify-content:center;z-index:1200}
+  .sf-modal{background:#fff;padding:18px;border-radius:12px;min-width:320px;max-width:420px;box-shadow:0 12px 40px rgba(2,6,23,0.25)}
+  .sf-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  .btn-secondary{background:#fff;border:1px solid #eef4ff;color:var(--text)}
+  .muted{color:var(--muted)}
+</style>
+<!-- Supabase UMD client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+  <div class="center">
+    <div class="card" role="main" aria-labelledby="loginTitle">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div>
+          <div class="logo">Shop Control Panel</div>
+          <div class="small">Admin & Logistics Access</div>
+        </div>
+      </div>
+
+      <h1 id="loginTitle">Sign in</h1>
+
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="you@business.co.za" autocomplete="username" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" placeholder="••••••••" autocomplete="current-password" />
+
+      <label for="role">Role</label>
+      <select id="role" aria-label="Select role">
+        <option value="Admin">Admin</option>
+        <option value="Logistics">Logistics</option>
+      </select>
+
+      <div id="error" class="error" role="alert" aria-live="assertive"></div>
+
+      <button id="loginBtn" class="btn" aria-label="Login">Login</button>
+
+      <div class="meta">Authentication protected. Contact the owner for access.</div>
+      <footer></footer>
+    </div>
+  </div>
+
+<script>
+  (function(){
+    // --- CONFIG: use your project URL + anon key ---
+    const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
+
+    // initialize supabase client
+    let supabaseClient = null;
+    try {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    } catch (err){
+      console.error('Supabase init error', err);
+      supabaseClient = null;
+    }
+
+    const loginBtn = document.getElementById('loginBtn');
+    const emailEl = document.getElementById('email');
+    const passwordEl = document.getElementById('password');
+    const roleEl = document.getElementById('role');
+    const errorEl = document.getElementById('error');
+
+    function showError(msg){
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+    }
+    function clearError(){
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+
+    /* ---------------------------
+       TOTP helpers (Web Crypto)
+       --------------------------- */
+
+    // base32 decode (RFC4648) -> Uint8Array
+    function base32ToBytes(base32) {
+      if(!base32) return new Uint8Array();
+      const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+      let bits = 0, value = 0;
+      const output = [];
+      base32 = base32.replace(/=+$/,'').toUpperCase().replace(/[^A-Z2-7]/g,'');
+      for (let i = 0; i < base32.length; i++) {
+        const idx = alphabet.indexOf(base32[i]);
+        if (idx === -1) continue;
+        value = (value << 5) | idx;
+        bits += 5;
+        if (bits >= 8) {
+          bits -= 8;
+          output.push((value >> bits) & 0xFF);
+        }
+      }
+      return new Uint8Array(output);
+    }
+
+    async function hmacSha1(keyBytes, messageBytes) {
+      const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+      const sig = await crypto.subtle.sign('HMAC', cryptoKey, messageBytes);
+      return new Uint8Array(sig);
+    }
+
+    function intToBytesBigEndian(num) {
+      const bytes = new Uint8Array(8);
+      for (let i = 7; i >= 0; i--) {
+        bytes[i] = num & 0xff;
+        num = num >> 8;
+      }
+      return bytes;
+    }
+
+    async function generateTotpToken(secretBase32, forTime = Date.now()) {
+      // standard TOTP: 30s step, 6 digits, HMAC-SHA1
+      const key = base32ToBytes(secretBase32);
+      const timestep = Math.floor(forTime / 1000 / 30);
+      const counter = intToBytesBigEndian(timestep);
+      const hmac = await hmacSha1(key, counter);
+      const offset = hmac[hmac.length - 1] & 0xf;
+      const code = ((hmac[offset] & 0x7f) << 24) |
+                   ((hmac[offset+1] & 0xff) << 16) |
+                   ((hmac[offset+2] & 0xff) << 8) |
+                   (hmac[offset+3] & 0xff);
+      const otp = (code % 1000000).toString().padStart(6, '0');
+      return otp;
+    }
+
+    async function verifyTotpCode(secretBase32, codeToVerify, window = 1) {
+      if(!secretBase32) return false;
+      codeToVerify = (''+codeToVerify).trim();
+      for (let w = -window; w <= window; w++) {
+        const time = Date.now() + (w * 30 * 1000);
+        const token = await generateTotpToken(secretBase32, time);
+        if (token === codeToVerify) return true;
+      }
+      return false;
+    }
+
+    /* ---------------------------
+       End TOTP helpers
+       --------------------------- */
+
+    // sign-in + authorization using user_roles
+    async function signInAndAuthorize(email, password, selectedRole){
+      if(!supabaseClient){
+        return { ok: false, reason: 'no_client', message: 'Unable to connect to authentication service.' };
+      }
+
+      try {
+        // 1) Sign in with password
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if(error){
+          // generic
+          return { ok: false, reason: 'auth_failed', message: 'Invalid credentials or role.' };
+        }
+        const user = data?.user ?? null;
+        if(!user){
+          return { ok: false, reason: 'no_user', message: 'Invalid credentials or role.' };
+        }
+
+        // 2) Query user_roles table for ANY roles the user has
+        //    We request totp_enabled and totp_secret if present (for client-side verification fallback).
+        const { data: rolesData, error: rolesErr } = await supabaseClient
+          .from('user_roles')
+          .select('role, is_active, totp_enabled, totp_secret')
+          .eq('user_id', user.id);
+
+        if(rolesErr){
+          console.warn('user_roles lookup error (see console):', rolesErr);
+          return { ok: false, reason: 'mapping_error', message: 'Login failed. Contact administrator.' };
+        }
+
+        if(!rolesData || rolesData.length === 0){
+          // No mapped roles -> not authorized for any section
+          return { ok: false, reason: 'not_authorized', message: 'Invalid credentials or role.' };
+        }
+
+        const sel = (selectedRole||'').toString().trim().toLowerCase();
+
+        // allow admin to access any role
+        const hasAdmin = rolesData.some(r => (r.role||'').toString().trim().toLowerCase() === 'admin' || (r.role||'').toString().trim().toLowerCase() === 'administrator');
+
+        const hasSelectedRole = rolesData.some(r => (r.role||'').toString().trim().toLowerCase() === sel);
+
+        if(!hasSelectedRole && !hasAdmin){
+          // user doesn't have selected role and is not admin -> generic fail
+          return { ok: false, reason: 'not_authorized', message: 'Invalid credentials or role.' };
+        }
+
+        // pick a TOTP secret if any role row has totp_enabled true and totp_secret present
+        let totpSecret = null;
+        const rowWithTotp = rolesData.find(r => r.totp_enabled && r.totp_secret);
+        if(rowWithTotp) totpSecret = rowWithTotp.totp_secret;
+
+        // success: return user, effective role, and whether TOTP required
+        const effectiveRole = hasSelectedRole ? sel : (hasAdmin ? 'admin' : sel);
+        return { ok: true, user, role: effectiveRole, totp_required: !!totpSecret, totp_secret: totpSecret || null };
+
+      } catch (err){
+        console.error('Unexpected signInAndAuthorize error', err);
+        return { ok: false, reason: 'unexpected', message: 'Login failed. Contact administrator.' };
+      }
+    }
+
+    // TOTP modal
+    function showTotpPrompt() {
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'sf-overlay';
+        overlay.innerHTML = `
+          <div class="sf-modal" role="dialog" aria-modal="true" aria-label="Two-factor verification">
+            <div style="font-weight:700;margin-bottom:6px">Two-factor authentication</div>
+            <div class="muted" style="margin-bottom:8px">Enter the 6-digit code from your authenticator app.</div>
+            <label style="font-size:13px;color:var(--muted)">TOTP code</label>
+            <input id="tf_code" type="text" inputmode="numeric" maxlength="6" style="margin-top:6px;padding:8px;border-radius:8px;border:1px solid #e6eef9;width:100%" />
+            <div id="tf_error" class="error" style="display:none;margin-top:8px"></div>
+            <div class="sf-actions">
+              <button id="tf_cancel" class="btn-secondary btn" style="padding:8px 12px;border-radius:8px;background:#fff">Cancel</button>
+              <button id="tf_verify" class="btn" style="padding:8px 12px;border-radius:8px">Verify</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        const codeInput = overlay.querySelector('#tf_code');
+        const err = overlay.querySelector('#tf_error');
+        const cancel = overlay.querySelector('#tf_cancel');
+        const verify = overlay.querySelector('#tf_verify');
+
+        function close(res){
+          overlay.remove();
+          resolve(res);
+        }
+
+        cancel.addEventListener('click', ()=> close({ ok: false, reason: 'cancelled' }));
+        verify.addEventListener('click', ()=> { close({ ok:true, code: (codeInput.value||'').trim() }); });
+        codeInput.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter') verify.click(); });
+        codeInput.focus();
+      });
+    }
+
+    // Second-step password fallback modal (kept for accounts without TOTP)
+    function showSecondFactorPrompt(email, expectedUserId, finalRole){
+      return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'sf-overlay';
+        overlay.innerHTML = `
+          <div class="sf-modal" role="dialog" aria-modal="true" aria-label="Verification">
+            <div style="font-weight:700;margin-bottom:6px">Verify your identity</div>
+            <div class="muted" style="margin-bottom:8px">For security, re-enter your password to continue.</div>
+            <label style="font-size:13px;color:var(--muted)">Password</label>
+            <input id="sf_password" type="password" style="margin-top:6px;padding:8px;border-radius:8px;border:1px solid #e6eef9;width:100%" autocomplete="current-password" />
+            <div id="sf_error" class="error" style="display:none;margin-top:8px"></div>
+            <div class="sf-actions">
+              <button id="sf_cancel" class="btn-secondary btn" style="padding:8px 12px;border-radius:8px;background:#fff">Cancel</button>
+              <button id="sf_verify" class="btn" style="padding:8px 12px;border-radius:8px">Verify</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(overlay);
+        const pw = overlay.querySelector('#sf_password');
+        const err = overlay.querySelector('#sf_error');
+        const cancel = overlay.querySelector('#sf_cancel');
+        const verify = overlay.querySelector('#sf_verify');
+
+        function close(cleanResult){
+          overlay.remove();
+          resolve(cleanResult);
+        }
+
+        cancel.addEventListener('click', ()=> close({ ok: false, reason: 'cancelled' }));
+
+        verify.addEventListener('click', async ()=>{
+          const p = (pw.value||'').trim();
+          err.style.display = 'none';
+          if(!p){
+            err.textContent = 'Password required.';
+            err.style.display = 'block';
+            return;
+          }
+          try {
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password: p });
+            if(error){
+              err.textContent = 'Verification failed.';
+              err.style.display = 'block';
+              return;
+            }
+            const u = data?.user ?? null;
+            if(!u || u.id !== expectedUserId){
+              err.textContent = 'Verification failed.';
+              err.style.display = 'block';
+              return;
+            }
+            close({ ok: true });
+          } catch(e){
+            console.error('Second factor error', e);
+            err.textContent = 'Verification failed.';
+            err.style.display = 'block';
+          }
+        });
+
+        // allow Enter
+        pw.addEventListener('keydown', (ev)=> { if(ev.key === 'Enter') verify.click(); });
+        pw.focus();
+      });
+    }
+
+    // Main click handler
+    loginBtn.addEventListener('click', async ()=>{
+      clearError();
+      const email = (emailEl.value||'').trim();
+      const password = (passwordEl.value||'').trim();
+      const selectedRole = (roleEl.value||'').trim();
+
+      if(!email || !password){
+        showError('Email and password are required.');
+        return;
+      }
+
+      const res = await signInAndAuthorize(email, password, selectedRole);
+
+      if(!res.ok){
+        console.warn('Login blocked:', res);
+        switch(res.reason){
+          case 'mapping_error':
+          case 'unexpected':
+            showError('Login failed. Contact administrator.');
+            break;
+          case 'no_client':
+            showError('Service unavailable. Try again later.');
+            break;
+          default:
+            showError('Invalid credentials or role.');
+        }
+        return;
+      }
+
+      // If TOTP required, prompt for code and verify (client-side)
+      if(res.totp_required && res.totp_secret){
+        const tf = await showTotpPrompt();
+        if(!tf || !tf.ok || !tf.code){
+          showError('Verification required.');
+          return;
+        }
+        // verify client-side using the secret retrieved from DB
+        let ok = false;
+        try {
+          ok = await verifyTotpCode(res.totp_secret, tf.code, 1); // allow +/-1 window
+        } catch(err){
+          console.error('TOTP verify error', err);
+          ok = false;
+        }
+        if(!ok){
+          showError('Invalid two-factor code.');
+          return;
+        }
+        // success -> proceed
+      } else {
+        // Fallback: require password re-entry as an extra check
+        const sf = await showSecondFactorPrompt(email, res.user.id, res.role);
+        if(!sf || !sf.ok){
+          showError('Verification required.');
+          return;
+        }
+      }
+
+      // final success: save minimal info and redirect
+      const cur = { email, role: res.role, user_id: res.user.id };
+      try { localStorage.setItem('scp_current_user', JSON.stringify(cur)); } catch(_) {}
+
+      if(res.role.toLowerCase() === 'admin' || res.role.toLowerCase() === 'administrator'){
+        location.href = 'admin.html';
+      } else {
+        location.href = 'logistics.html';
+      }
+    });
+
+    // allow Enter key to submit (but avoid double-submits)
+    document.addEventListener('keydown', (ev)=>{ if(ev.key === 'Enter' && document.activeElement !== document.getElementById('password')) loginBtn.click(); });
+
+  })();
+</script>
+</body>
+</html>

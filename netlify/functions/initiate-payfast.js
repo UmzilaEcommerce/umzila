@@ -1,7 +1,7 @@
-// netlify/functions/initiate-payfast.js
-const { createClient } = require('@supabase/supabase-js');
-const crypto = require('crypto');
+import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
+// Environment variables (set these in Netlify dashboard)
 const {
   PAYFAST_MERCHANT_ID,
   PAYFAST_MERCHANT_KEY,
@@ -12,223 +12,217 @@ const {
   SUPABASE_SERVICE_ROLE_KEY
 } = process.env;
 
-// FIX 1: Trim environment variables
-const PAYFAST_MERCHANT_ID_TRIMMED = (PAYFAST_MERCHANT_ID || '').trim();
-const PAYFAST_MERCHANT_KEY_TRIMMED = (PAYFAST_MERCHANT_KEY || '').trim();
-const PAYFAST_PASSPHRASE_TRIMMED = (PAYFAST_PASSPHRASE || '').trim();
-const PAYFAST_SANDBOX_TRIMMED = (PAYFAST_SANDBOX || 'true').trim();
-const SITE_BASE_URL_TRIMMED = (SITE_BASE_URL || '').trim();
-const SUPABASE_URL_TRIMMED = (SUPABASE_URL || '').trim();
-const SUPABASE_SERVICE_ROLE_KEY_TRIMMED = (SUPABASE_SERVICE_ROLE_KEY || '').trim();
-
-const PAYFAST_URL = PAYFAST_SANDBOX_TRIMMED === 'true'
+const PAYFAST_URL = PAYFAST_SANDBOX === 'true'
   ? 'https://sandbox.payfast.co.za/eng/process'
   : 'https://www.payfast.co.za/eng/process';
 
-const supabase = createClient(SUPABASE_URL_TRIMMED, SUPABASE_SERVICE_ROLE_KEY_TRIMMED);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false }
+});
 
-// FIX 2: Exact replacement for building the canonical param string used for signing
-// Build string to sign using the PARAMETER INSERTION ORDER (matches form input order)
-function buildStringToSign(params, passphrase = '') {
-  // 1) take params in insertion order and filter out undefined/null/empty-string
-  const entries = Object.entries(params).filter(([k, v]) => v !== undefined && v !== null && String(v) !== '');
-
-  // 2) create URLSearchParams using insertion order (matches form post order)
-  const usp = new URLSearchParams();
-  for (const [k, v] of entries) {
-    usp.append(k, String(v));
-  }
-  let paramString = usp.toString();
-
-  // 3) append passphrase only if present
-  if (passphrase && String(passphrase).length > 0) {
-    paramString += `&passphrase=${encodeURIComponent(String(passphrase)).replace(/%20/g, '+')}`;
-  }
-
-  return paramString;
+// PayFast requires this specific encoding
+function encodePfValue(value) {
+  // PayFast requires uppercase URL encoding and spaces as +
+  return encodeURIComponent(String(value))
+    .replace(/%[0-9a-f]{2}/g, match => match.toUpperCase())  // Ensure uppercase
+    .replace(/%20/g, '+');  // Spaces as +
 }
 
-
-function md5Hash(s) {
-  return crypto.createHash('md5').update(s, 'utf8').digest('hex');
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-module.exports.handler = async function (event) {
-  console.log('=== PAYFAST INITIATE ===');
-
-  // Parse request
-  let body = {};
-  try {
-    if (event.body) {
-      body = JSON.parse(event.body);
+function generatePfSignature(params, passphrase = '') {
+  // Define EXACT order as per PayFast documentation
+  const orderedKeys = [
+    // Merchant details (in exact order from docs)
+    'merchant_id',
+    'merchant_key',
+    'return_url',
+    'cancel_url',
+    'notify_url',
+    // Buyer details
+    'name_first',
+    'name_last',
+    'email_address',
+    'cell_number',
+    // Transaction details
+    'm_payment_id',
+    'amount',
+    'item_name',
+    'item_description',
+    // Transaction options
+    'email_confirmation',
+    'confirmation_address'
+  ];
+  
+  // Filter out empty values and build string in correct order
+  let paramString = '';
+  
+  orderedKeys.forEach(key => {
+    if (params[key] !== undefined && params[key] !== '') {
+      if (paramString !== '') paramString += '&';
+      paramString += `${key}=${encodePfValue(params[key])}`;
     }
-  } catch (e) {
-    return {
-      statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid JSON' })
-    };
+  });
+  
+  // Add passphrase if exists
+  const stringToSign = passphrase 
+    ? `${paramString}&passphrase=${encodePfValue(passphrase)}`
+    : paramString;
+  
+  return crypto.createHash('md5').update(stringToSign).digest('hex');
+}
+
+export async function handler(event) {
+  // CORS headers
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS'
+  };
+
+  // Handle preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
   }
 
-  const { cartItems, customerEmail, customerName = '' } = body;
-
-  if (!Array.isArray(cartItems) || cartItems.length === 0) {
-    return { 
-      statusCode: 400, 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ error: 'Cart empty' }) 
-    };
-  }
-  if (!customerEmail) {
-    return { 
-      statusCode: 400, 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ error: 'Email required' }) 
-    };
-  }
-
-  // FIX 2C: Server-side price validation
-  let totalNumber = 0;
-  const validatedItems = [];
-
-  for (const item of cartItems) {
-    if (!item?.product_id || !item?.quantity) {
+  try {
+    const body = JSON.parse(event.body);
+	// In the handler function, update the destructuring:
+	const { cartItems, customerEmail, customerFirst = '', customerLast = '', customerPhone = '' } = body;
+    if (!cartItems || !Array.isArray(cartItems) || cartItems.length === 0) {
       return {
         statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'Invalid cart item format' })
+        headers,
+        body: JSON.stringify({ error: 'Cart is empty' })
       };
     }
 
-    // fetch price from DB
-    const { data: product, error: prodErr } = await supabase
-      .from('products')
-      .select('id, price, sale_price, stock, name')
-      .eq('id', item.product_id)
+    if (!customerEmail) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Customer email is required' })
+      };
+    }
+
+    // 1. Validate cart items and calculate total from database
+    let totalAmount = 0;
+    const validatedItems = [];
+    
+    for (const item of cartItems) {
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('id, price, stock, name, sale_price')
+        .eq('id', item.product_id)
+        .single();
+
+      if (error || !product) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ error: `Product ${item.product_id} not found` })
+        };
+      }
+
+      if (product.stock < item.quantity) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({ 
+            error: `Insufficient stock for ${product.name}. Available: ${product.stock}` 
+          })
+        };
+      }
+
+      const price = product.sale_price || product.price;
+      const itemTotal = price * item.quantity;
+      totalAmount += itemTotal;
+
+      validatedItems.push({
+        product_id: product.id,
+        name: product.name,
+        unit_price: price,
+        quantity: item.quantity,
+        total: itemTotal
+      });
+    }
+
+    // Round to 2 decimal places
+    totalAmount = Math.round(totalAmount * 100) / 100;
+
+    // 2. Create unique payment ID
+    const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    // 3. Create order in database (with pending status)
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .insert([{
+        m_payment_id,
+        customer_email: customerEmail,
+        customer_first: customerFirst,
+        customer_last: customerLast,
+        amount: totalAmount,
+        raw_cart: validatedItems,
+        status: 'pending_payment',
+        created_at: new Date().toISOString()
+      }])
+      .select()
       .single();
 
-    if (prodErr || !product) {
+    if (orderError) {
+      console.error('Order creation error:', orderError);
       return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: `Product ${item.product_id} not found` })
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ error: 'Failed to create order' })
       };
     }
 
-    if (product.stock < item.quantity) {
-      return {
-        statusCode: 400,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: `Insufficient stock for ${product.name}` })
-      };
-    }
+    // 4. Prepare PayFast parameters
+    const pfParams = {
+      merchant_id: PAYFAST_MERCHANT_ID,
+      merchant_key: PAYFAST_MERCHANT_KEY,
+      return_url: `${SITE_BASE_URL}/checkout-success.html?payment_status=COMPLETE&m_payment_id=${m_payment_id}`,
+      cancel_url: `${SITE_BASE_URL}/checkout-cancel.html?payment_status=CANCELLED&m_payment_id=${m_payment_id}`,
+      notify_url: `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
+      name_first: customerFirst,
+      name_last: customerLast,
+      email_address: customerEmail,
+	  cell_number: customerPhone || '', 
+      m_payment_id: m_payment_id,
+      amount: totalAmount.toFixed(2),
+      item_name: `Umzila Order ${m_payment_id}`,
+      item_description: `${validatedItems.length} item(s) from Umzila Store`,
+      email_confirmation: '1',
+      confirmation_address: customerEmail
+    };
 
-    const unitPrice = product.sale_price ?? product.price;
-    const lineTotal = Number((unitPrice * item.quantity).toFixed(2));
-    totalNumber += lineTotal;
+    // 5. Generate signature
+    const signature = generatePfSignature(pfParams, PAYFAST_PASSPHRASE);
 
-    validatedItems.push({
-      product_id: product.id,
-      name: product.name,
-      unit_price: Number(unitPrice),
-      quantity: Number(item.quantity),
-      total: lineTotal
-    });
-  }
-
-  totalNumber = Number(totalNumber.toFixed(2));
-  if (totalNumber <= 0) {
+    // 6. Return PayFast data to client
     return {
-      statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid order total' })
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        order_id: order.id,
+        m_payment_id,
+        payfast_url: PAYFAST_URL,
+        params: pfParams,
+        signature,
+        amount: totalAmount
+      })
+    };
+
+  } catch (error) {
+    console.error('Server error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      })
     };
   }
-  const amountString = totalNumber.toFixed(2);
-
-  const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  // Insert order with validated items and correct total
-  const { data: order, error: orderError } = await supabase.from('orders').insert([{
-    m_payment_id,
-    customer_name: customerName || customerEmail,
-    customer_email: customerEmail,
-    total: totalNumber,
-    items: validatedItems,
-    order_status: 'pending_payment',
-    created_at: new Date().toISOString()
-  }]).select().single();
-
-  if (orderError) {
-    console.error('Supabase insert error:', orderError.message);
-    return { 
-      statusCode: 500, 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ error: 'Failed to create order' }) 
-    };
-  }
-
-  // Build PayFast parameters (use raw strings, not pre-encoded) 
-  const pfParams = {
-    merchant_id: PAYFAST_MERCHANT_ID_TRIMMED,
-    merchant_key: PAYFAST_MERCHANT_KEY_TRIMMED,
-    // FIX 5: URL-encode m_payment_id in return/cancel URLs
-	return_url: `${SITE_BASE_URL_TRIMMED}/checkout-success?m_payment_id=${m_payment_id}`,
-	cancel_url: `${SITE_BASE_URL_TRIMMED}/checkout-cancel?m_payment_id=${m_payment_id}`,
-    notify_url: `${SITE_BASE_URL_TRIMMED}/.netlify/functions/payfast-itn`,
-    m_payment_id: m_payment_id,
-    amount: amountString,
-    item_name: `Umzila Order #${m_payment_id}`,
-    item_description: `Purchase from Umzila Store`,
-    email_address: customerEmail
-  };
-
-  // Calculate signature with the new URLSearchParams approach
-  const stringToSign = buildStringToSign(pfParams, PAYFAST_PASSPHRASE_TRIMMED);
-  const signature = md5Hash(stringToSign);
-
-  // FIX 7: Temporary debug logging
-  console.log('\n=== SIGNATURE CALCULATION ===');
-  console.log('StringToSign:', stringToSign);
-  console.log('Signature:', signature);
-  console.log('Passphrase used:', PAYFAST_PASSPHRASE_TRIMMED ? 'YES' : 'NO');
-  console.log('=============================\n');
-
-  // Build HTML form
-  let inputsHtml = '';
-  for (const [key, value] of Object.entries(pfParams)) {
-    inputsHtml += `<input type="hidden" name="${key}" value="${escapeHtml(value)}" />\n`;
-  }
-  inputsHtml += `<input type="hidden" name="signature" value="${escapeHtml(signature)}" />`;
-
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>PayFast Payment</title>
-</head>
-<body>
-  <form id="pfForm" action="${PAYFAST_URL}" method="post">
-    ${inputsHtml}
-  </form>
-  <script>
-    document.getElementById('pfForm').submit();
-  </script>
-</body>
-</html>`;
-
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'text/html' },
-    body: html
-  };
-};
+}

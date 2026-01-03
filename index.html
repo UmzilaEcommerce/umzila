@@ -211,7 +211,7 @@
       position:absolute;top:-6px;right:-6px;background:var(--accent-2);color:#fff;padding:2px 6px;border-radius:999px;font-size:12px;font-weight:700;
     }
     .mini-cart{
-      position:absolute;right:0;top:44px;background:#fff;border-radius:10px;padding:12px;box-shadow:var(--shadow);min-width:260px;display:none;z-index:1300;
+      position:absolute;right:0;top:44px;background:#fff;border-radius:10px;padding:12px;min-width:260px;display:none;z-index:1300;box-shadow:var(--shadow);
     }
     .mini-cart .item{display:flex;gap:8px;align-items:center;margin-bottom:8px}
     .mini-cart .item img{width:48px;height:48px;object-fit:cover;border-radius:6px}
@@ -730,53 +730,6 @@
       }
     }
 
-    /* New styles for checkout flow */
-    .checkout-auth-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      z-index: 1600;
-    }
-    .checkout-auth-overlay.active {
-      display: flex;
-    }
-    .checkout-auth-modal {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      max-width: 500px;
-      width: 90%;
-      box-shadow: var(--shadow);
-    }
-    .auth-tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 20px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 12px;
-    }
-    .auth-tab {
-      padding: 8px 16px;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      font-weight: 600;
-      color: var(--muted);
-    }
-    .auth-tab.active {
-      color: var(--accent);
-      border-bottom: 2px solid var(--accent);
-    }
-    .auth-form {
-      display: none;
-    }
-    .auth-form.active {
-      display: block;
-    }
-    
     /* ---------- MOBILE HAMBURGER MENU ---------- */
     .mobile-menu-overlay {
       position: fixed;
@@ -915,36 +868,35 @@
       display: none;
     }
   </style>
-  <!-- Supabase initialization via Netlify function -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
-  <script>
-    (async function initSupabaseClient(){
-      try {
-        const res = await fetch('/.netlify/functions/get-client-config');
-        if (!res.ok) {
-          console.error('Failed to load Supabase config', res.status, await res.text());
-          return;
-        }
-        const cfg = await res.json();
+	<script>
+	  (async function initSupabaseClient(){
+		try {
+		  const res = await fetch('/.netlify/functions/get-client-config');
+		  if (!res.ok) {
+			console.error('Failed to load Supabase config', res.status, await res.text());
+			return;
+		  }
+		  const cfg = await res.json();
 
-        if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-          console.error('Missing Supabase config from server');
-          return;
-        }
+		  if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
+			console.error('Missing Supabase config from server');
+			return;
+		  }
 
-        // Initialize Supabase client
-        const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-        window.supabase = supabaseClient; // make it accessible globally
+		  // Initialize Supabase client
+		  const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+		  window.supabase = supabaseClient; // make it accessible globally
 
-        // Optional: notify other scripts that Supabase is ready
-        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
-        console.log('Supabase client initialized');
-      } catch (err) {
-        console.error('Error initializing Supabase client', err);
-      }
-    })();
-  </script>
+		  // Optional: notify other scripts that Supabase is ready
+		  document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
+		  console.log('Supabase client initialized');
+		} catch (err) {
+		  console.error('Error initializing Supabase client', err);
+		}
+	  })();
+	</script>
 </head>
 <body>
 
@@ -1013,60 +965,6 @@
       </div>
       <div class="mobile-menu-item">
         <a href="#" id="mobileSignIn">Sign In / Sign Up</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Checkout Authentication Overlay -->
-  <div id="checkoutAuthOverlay" class="checkout-auth-overlay">
-    <div class="checkout-auth-modal">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-        <h2 style="margin:0;color:var(--accent)">Sign in to Checkout</h2>
-        <button id="closeCheckoutAuth" class="close-btn" style="font-size:24px">×</button>
-      </div>
-      
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="login">Sign In</button>
-        <button class="auth-tab" data-tab="signup">Sign Up</button>
-      </div>
-      
-      <!-- Login Form -->
-      <div id="checkoutLoginForm" class="auth-form active">
-        <div style="margin-bottom:16px">
-          <label style="display:block;margin-bottom:8px;font-size:14px">Email</label>
-          <input type="email" id="checkoutLoginEmail" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px" placeholder="your@email.com">
-        </div>
-        <div style="margin-bottom:20px">
-          <label style="display:block;margin-bottom:8px;font-size:14px">Password</label>
-          <input type="password" id="checkoutLoginPassword" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px" placeholder="Your password">
-        </div>
-        <div id="checkoutLoginError" style="color:#dc3545;margin-bottom:12px;display:none;font-size:14px"></div>
-        <button id="checkoutLoginSubmit" class="btn" style="width:100%;padding:12px">Sign In & Continue to Checkout</button>
-        <div style="text-align:center;margin-top:12px">
-          <button id="checkoutForgotPassword" class="btn ghost" style="font-size:13px">Forgot password?</button>
-        </div>
-      </div>
-      
-      <!-- Signup Form -->
-      <div id="checkoutSignupForm" class="auth-form">
-        <div style="margin-bottom:16px">
-          <label style="display:block;margin-bottom:8px;font-size:14px">Full Name</label>
-          <input type="text" id="checkoutSignupName" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px" placeholder="Your name">
-        </div>
-        <div style="margin-bottom:16px">
-          <label style="display:block;margin-bottom:8px;font-size:14px">Email</label>
-          <input type="email" id="checkoutSignupEmail" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px" placeholder="your@email.com">
-        </div>
-        <div style="margin-bottom:20px">
-          <label style="display:block;margin-bottom:8px;font-size:14px">Password</label>
-          <input type="password" id="checkoutSignupPassword" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px" placeholder="Create a password">
-        </div>
-        <div id="checkoutSignupError" style="color:#dc3545;margin-bottom:12px;display:none;font-size:14px"></div>
-        <button id="checkoutSignupSubmit" class="btn" style="width:100%;padding:12px">Create Account & Checkout</button>
-      </div>
-      
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid #eee;font-size:13px;color:var(--muted)">
-        <p>By signing in or creating an account, you agree to our Terms and Privacy Policy.</p>
       </div>
     </div>
   </div>
@@ -1979,25 +1877,25 @@
     }
 
     /********************
-     * Supabase initialization
-     ********************/
-    let supabaseClient = null;
-    
-    // Listen for the supabase-ready event
-    document.addEventListener('supabase-ready', function(e) {
-      supabaseClient = e.detail.supabase;
-      console.log('Supabase client received via event');
-      
-      // Now that Supabase is ready, load products and check auth state
-      if (typeof loadProducts === 'function') {
-        loadProducts();
-      }
-      if (typeof checkInitialAuthState === 'function') {
-        checkInitialAuthState();
-      }
-    });
+	 * Supabase initialization via Netlify function
+	 ********************/
+	let supabaseClient = null;
 
-    /********************
+	// Listen for the supabase-ready event
+	document.addEventListener('supabase-ready', function(e) {
+	  supabaseClient = e.detail.supabase;
+	  console.log('Supabase client received via event');
+	  
+	  // Now that Supabase is ready, load products and check auth state
+	  if (typeof loadProducts === 'function') {
+		loadProducts();
+	  }
+	  if (typeof checkInitialAuthState === 'function') {
+		checkInitialAuthState();
+	  }
+	});
+
+	/********************
      * State & basic helpers
      ********************/
     let state = { 
@@ -2025,12 +1923,6 @@
     
     // Store current auth user
     let currentUser = null;
-    
-    // Track checkout intent
-    let checkoutIntent = {
-      active: false,
-      source: null // 'mini-cart' or 'cart-page'
-    };
     
     // Current product for quick add modal
     let currentQuickAddProduct = null;
@@ -2136,408 +2028,38 @@
     const quickAddStockInfo = document.getElementById('quickAddStockInfo');
     const quickAddStockError = document.getElementById('quickAddStockError');
     
-    // New checkout auth overlay elements
-    const checkoutAuthOverlay = document.getElementById('checkoutAuthOverlay');
-    const closeCheckoutAuth = document.getElementById('closeCheckoutAuth');
-    const authTabs = document.querySelectorAll('.auth-tab');
-    const checkoutLoginForm = document.getElementById('checkoutLoginForm');
-    const checkoutSignupForm = document.getElementById('checkoutSignupForm');
-    const checkoutLoginEmail = document.getElementById('checkoutLoginEmail');
-    const checkoutLoginPassword = document.getElementById('checkoutLoginPassword');
-    const checkoutLoginError = document.getElementById('checkoutLoginError');
-    const checkoutLoginSubmit = document.getElementById('checkoutLoginSubmit');
-    const checkoutForgotPassword = document.getElementById('checkoutForgotPassword');
-    const checkoutSignupName = document.getElementById('checkoutSignupName');
-    const checkoutSignupEmail = document.getElementById('checkoutSignupEmail');
-    const checkoutSignupPassword = document.getElementById('checkoutSignupPassword');
-    const checkoutSignupError = document.getElementById('checkoutSignupError');
-    const checkoutSignupSubmit = document.getElementById('checkoutSignupSubmit');
-
     /********************
-     * Checkout Authentication System
+     * Checkout Redirection
      ********************/
-    
-    // Show checkout auth overlay
-    function showCheckoutAuth(source) {
-      checkoutIntent.active = true;
-      checkoutIntent.source = source;
-      checkoutAuthOverlay.classList.add('active');
-      document.body.style.overflow = 'hidden';
-      
-      // Reset forms
-      checkoutLoginError.style.display = 'none';
-      checkoutSignupError.style.display = 'none';
-      checkoutLoginEmail.value = '';
-      checkoutLoginPassword.value = '';
-      checkoutSignupName.value = '';
-      checkoutSignupEmail.value = '';
-      checkoutSignupPassword.value = '';
-      
-      // Show login tab by default
-      setActiveAuthTab('login');
-    }
-    
-    // Hide checkout auth overlay
-    function hideCheckoutAuth() {
-      checkoutAuthOverlay.classList.remove('active');
-      document.body.style.overflow = '';
-      checkoutIntent.active = false;
-    }
-    
-    // Set active auth tab
-    function setActiveAuthTab(tab) {
-      authTabs.forEach(t => t.classList.remove('active'));
-      document.querySelector(`.auth-tab[data-tab="${tab}"]`).classList.add('active');
-      
-      if (tab === 'login') {
-        checkoutLoginForm.classList.add('active');
-        checkoutSignupForm.classList.remove('active');
-      } else {
-        checkoutLoginForm.classList.remove('active');
-        checkoutSignupForm.classList.add('active');
-      }
-    }
-    
-    // Process checkout after successful authentication
-   /********************
- * PayFast Checkout Integration
- ********************/
-
-// Updated checkout processing function
-async function proceedToPayFastCheckout(customerInfo) {
-  // Get the correct checkout button
-  let checkoutBtn;
-  let originalText;
-  
-  try {
-    if (checkoutIntent.source === 'mini-cart') {
-      checkoutBtn = document.getElementById('checkoutBtn');
-    } else {
-      checkoutBtn = document.getElementById('cartCheckout');
-    }
-    
-    // Store original text
-    originalText = checkoutBtn.textContent;
-    
-    // Show loading state
-    checkoutBtn.disabled = true;
-    checkoutBtn.textContent = 'Processing...';
-
-    // Prepare cart items
-    const cartItems = state.cart.map(item => ({
-      product_id: item.id,
-      quantity: item.qty
-    }));
-
-// Call Netlify function
-const response = await fetch('/.netlify/functions/initiate-payfast', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    cartItems,
-    customerEmail: customerInfo.email,
-    customerFirst: customerInfo.first_name || '',
-    customerLast: customerInfo.last_name || ''
-  })
-});
-
-// Parse as text first
-const text = await response.text();
-const ct = response.headers.get('content-type') || '';
-
-let data;
-if (ct.includes('text/html')) {
-  // The server returned the auto-submitting HTML form
-  // Replace current page with it
-  document.open();
-  document.write(text);
-  document.close();
-  return; // stop here
-} else {
-  // Otherwise parse JSON
-  try {
-    data = JSON.parse(text);
-  } catch (err) {
-    console.error('Invalid JSON response from initiate-payfast:', text);
-    throw new Error('Payment server error');
-  }
-}
-
-// If JSON returned success = false, throw
-if (!data.success) {
-  throw new Error(data.error || 'Payment failed');
-}
-
-// Otherwise, fallback — build form in-page (your original approach)
-const form = document.createElement('form');
-form.method = 'POST';
-form.action = data.payfast_url;
-
-// Add parameters
-Object.entries(data.params).forEach(([key, value]) => {
-  const input = document.createElement('input');
-  input.type = 'hidden';
-  input.name = key;
-  input.value = value;
-  form.appendChild(input);
-});
-
-// Add signature
-const sigInput = document.createElement('input');
-sigInput.type = 'hidden';
-sigInput.name = 'signature';
-sigInput.value = data.signature;
-form.appendChild(sigInput);
-
-document.body.appendChild(form);
-form.submit();
-
-
-  } catch (error) {
-    console.error('Checkout error:', error);
-    alert('Checkout failed: ' + error.message);
-    
-    // Reset button state
-    if (checkoutBtn && originalText) {
-      checkoutBtn.disabled = false;
-      checkoutBtn.textContent = originalText;
-    }
-  }
-}
-
-// Updated checkout handler to use PayFast
-async function processCheckoutAfterAuth() {
-  if (!currentUser) {
-    console.error('No user logged in');
-    return;
-  }
-
-  // Prepare customer info
-  const customerInfo = {
-    email: currentUser.email,
-    first_name: currentUser.user_metadata?.full_name?.split(' ')[0] || '',
-    last_name: currentUser.user_metadata?.full_name?.split(' ').slice(1).join(' ') || ''
-  };
-
-  // Process referral reward if applicable (will be handled in webhook)
-  const referralCode = document.getElementById('signupReferralCode')?.value;
-  if (referralCode) {
-    // Store referral code in session for webhook to use
-    sessionStorage.setItem('pending_referral', referralCode);
-  }
-
-  // Proceed to PayFast checkout
-  await proceedToPayFastCheckout(customerInfo);
-}
-
-// Update checkout button handlers to use new flow
-function setupCheckoutHandlers() {
-  // Mini cart checkout button
-  const checkoutBtn = document.getElementById('checkoutBtn');
-  const cartCheckout = document.getElementById('cartCheckout');
-  
-  if (checkoutBtn) {
-    checkoutBtn.addEventListener('click', () => {
+    function redirectToCheckout() {
       if (state.cart.length === 0) {
         alert('Your cart is empty.');
         return;
       }
       
-      if (!currentUser) {
-        showCheckoutAuth('mini-cart');
-      } else {
-        processCheckoutAfterAuth();
-      }
-    });
-  }
-  
-  // Cart page checkout button
-  if (cartCheckout) {
-    cartCheckout.addEventListener('click', () => {
-      if (state.cart.length === 0) {
-        alert('Your cart is empty.');
-        return;
-      }
-      
-      if (!currentUser) {
-        showCheckoutAuth('cart-page');
-      } else {
-        processCheckoutAfterAuth();
-      }
-    });
-  }
-}
-
-// Initialize checkout auth system
-function initCheckoutAuth() {
-  const authTabs = document.querySelectorAll('.auth-tab');
-  const closeCheckoutAuth = document.getElementById('closeCheckoutAuth');
-  const checkoutAuthOverlay = document.getElementById('checkoutAuthOverlay');
-  const checkoutLoginEmail = document.getElementById('checkoutLoginEmail');
-  const checkoutLoginPassword = document.getElementById('checkoutLoginPassword');
-  const checkoutLoginError = document.getElementById('checkoutLoginError');
-  const checkoutLoginSubmit = document.getElementById('checkoutLoginSubmit');
-  const checkoutForgotPassword = document.getElementById('checkoutForgotPassword');
-  const checkoutSignupName = document.getElementById('checkoutSignupName');
-  const checkoutSignupEmail = document.getElementById('checkoutSignupEmail');
-  const checkoutSignupPassword = document.getElementById('checkoutSignupPassword');
-  const checkoutSignupError = document.getElementById('checkoutSignupError');
-  const checkoutSignupSubmit = document.getElementById('checkoutSignupSubmit');
-  const checkoutLoginForm = document.getElementById('checkoutLoginForm');
-  const checkoutSignupForm = document.getElementById('checkoutSignupForm');
-  
-  // Tab switching
-  authTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      authTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      
-      if (tab.dataset.tab === 'login') {
-        checkoutLoginForm.classList.add('active');
-        checkoutSignupForm.classList.remove('active');
-      } else {
-        checkoutLoginForm.classList.remove('active');
-        checkoutSignupForm.classList.add('active');
-      }
-    });
-  });
-  
-  // Close button
-  if (closeCheckoutAuth) {
-    closeCheckoutAuth.addEventListener('click', hideCheckoutAuth);
-  }
-  
-  if (checkoutAuthOverlay) {
-    checkoutAuthOverlay.addEventListener('click', (e) => {
-      if (e.target === checkoutAuthOverlay) {
-        hideCheckoutAuth();
-      }
-    });
-  }
-  
-  // Checkout login
-  if (checkoutLoginSubmit) {
-    checkoutLoginSubmit.addEventListener('click', async () => {
-      const email = checkoutLoginEmail.value.trim();
-      const password = checkoutLoginPassword.value;
-      
-      if (!email || !password) {
-        checkoutLoginError.textContent = 'Please enter email and password.';
-        checkoutLoginError.style.display = 'block';
-        return;
-      }
-      
-      checkoutLoginSubmit.disabled = true;
-      checkoutLoginSubmit.textContent = 'Signing in...';
-      
+      // Save cart to localStorage to pass to checkout page
       try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-          email,
-          password
-        });
-        
-        if (error) {
-          checkoutLoginError.textContent = error.message || 'Invalid credentials.';
-          checkoutLoginError.style.display = 'block';
-          return;
-        }
-        
-        currentUser = data.user;
-        updateAuthUI(currentUser);
-        
-        // Process checkout after successful login
-        await processCheckoutAfterAuth();
-        
-      } catch (err) {
-        console.error('Login error:', err);
-        checkoutLoginError.textContent = 'An error occurred. Please try again.';
-        checkoutLoginError.style.display = 'block';
-      } finally {
-        checkoutLoginSubmit.disabled = false;
-        checkoutLoginSubmit.textContent = 'Sign In & Continue to Checkout';
-      }
-    });
-  }
-  
-  // Checkout signup
-  if (checkoutSignupSubmit) {
-    checkoutSignupSubmit.addEventListener('click', async () => {
-      const name = checkoutSignupName.value.trim();
-      const email = checkoutSignupEmail.value.trim();
-      const password = checkoutSignupPassword.value;
-      
-      if (!name || !email || !password) {
-        checkoutSignupError.textContent = 'Please complete all fields.';
-        checkoutSignupError.style.display = 'block';
-        return;
+        localStorage.setItem('checkoutCart', JSON.stringify(state.cart));
+      } catch (e) {
+        console.error('Failed to save cart:', e);
       }
       
-      if (!checkPasswordRules(password)) {
-        checkoutSignupError.textContent = 'Password does not meet requirements.';
-        checkoutSignupError.style.display = 'block';
-        return;
+      // Redirect to checkout.html
+      window.location.href = 'checkout.html';
+    }
+    
+    // Setup checkout button handlers
+    function setupCheckoutHandlers() {
+      // Mini cart checkout button
+      if (checkoutBtn) {
+        checkoutBtn.addEventListener('click', redirectToCheckout);
       }
       
-      checkoutSignupSubmit.disabled = true;
-      checkoutSignupSubmit.textContent = 'Creating account...';
-      
-      try {
-        const { data, error } = await supabaseClient.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: name
-            }
-          }
-        });
-        
-        if (error) {
-          checkoutSignupError.textContent = error.message || 'Signup failed.';
-          checkoutSignupError.style.display = 'block';
-          return;
-        }
-        
-        currentUser = data.user;
-        
-        // Create profile
-        if (currentUser && supabaseClient.from) {
-          await supabaseClient.from('profiles').upsert([{
-            user_id: currentUser.id,
-            email: currentUser.email,
-            first_name: name.split(' ')[0] || name,
-            last_name: name.split(' ').slice(1).join(' ') || '',
-            referral_code: generateReferralCode()
-          }], {
-            onConflict: 'user_id',
-            returning: 'minimal'
-          });
-        }
-        
-        updateAuthUI(currentUser);
-        
-        // Process checkout after successful signup
-        await processCheckoutAfterAuth();
-        
-      } catch (err) {
-        console.error('Signup error:', err);
-        checkoutSignupError.textContent = 'An error occurred. Please try again.';
-        checkoutSignupError.style.display = 'block';
-      } finally {
-        checkoutSignupSubmit.disabled = false;
-        checkoutSignupSubmit.textContent = 'Create Account & Checkout';
+      // Cart page checkout button
+      if (cartCheckout) {
+        cartCheckout.addEventListener('click', redirectToCheckout);
       }
-    });
-  }
-  
-  // Forgot password
-  if (checkoutForgotPassword) {
-    checkoutForgotPassword.addEventListener('click', () => {
-      const resetModal = document.getElementById('resetModal');
-      showModal(resetModal);
-    });
-  }
-}
+    }
 
     /********************
      * Load product variants from Supabase
@@ -2600,7 +2122,7 @@ function initCheckoutAuth() {
           const salePrice = row.sale_price || 0;
           const sizes = row.sizes || [];
           
-          // Get images from product_images table
+          // Get images from product_images table with lazy loading support
           let allImages = [];
           if (row.product_images && Array.isArray(row.product_images) && row.product_images.length > 0) {
             const sortedImages = row.product_images.sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
@@ -2844,71 +2366,6 @@ function initCheckoutAuth() {
       } catch (e) {
         console.error('Error in createReferrerRewardCode:', e);
         return null;
-      }
-    }
-    
-    // Process referral reward when purchase is made
-    async function processReferralReward(userId, orderTotal) {
-      if (!supabaseClient || !userId) return;
-      
-      try {
-        const { data: userProfile, error: profileError } = await supabaseClient
-          .from('profiles')
-          .select('referred_by, email')
-          .eq('user_id', userId)
-          .single();
-        
-        if (profileError || !userProfile || !userProfile.referred_by) {
-          return;
-        }
-        
-        const { data: existingReward, error: rewardError } = await supabaseClient
-          .from('discount_codes')
-          .select('id')
-          .eq('referee_email', userProfile.email)
-          .eq('type', 'referrer_reward')
-          .eq('used', false)
-          .maybeSingle();
-        
-        if (existingReward) {
-          return;
-        }
-        
-        const { data: referralRecord, error: trackError } = await supabaseClient
-          .from('referral_tracking')
-          .select('referral_code, created_at')
-          .eq('referee_id', userId)
-          .eq('referrer_id', userProfile.referred_by)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (trackError || !referralRecord) {
-          return;
-        }
-        
-        const referrerReward = await createReferrerRewardCode(
-          userProfile.referred_by,
-          userProfile.email,
-          referralRecord.referral_code
-        );
-        
-        if (referrerReward) {
-          console.log(`R40 reward created for referrer: ${referrerReward.code}`);
-          
-          await supabaseClient
-            .from('referral_tracking')
-            .update({ 
-              status: 'completed',
-              completed_at: new Date().toISOString(),
-              reward_code: referrerReward.code
-            })
-            .eq('referee_id', userId)
-            .eq('referrer_id', userProfile.referred_by);
-        }
-        
-      } catch (e) {
-        console.error('Error processing referral reward:', e);
       }
     }
     
@@ -3281,11 +2738,6 @@ function initCheckoutAuth() {
           
           updateAuthUI(user);
           
-          // If there was a checkout intent, process it
-          if (checkoutIntent.active) {
-            await processCheckoutAfterAuth();
-          }
-          
           setTimeout(() => {
             hideModal(document.getElementById('loginModal'));
             if (loginEmail) loginEmail.value = '';
@@ -3301,6 +2753,73 @@ function initCheckoutAuth() {
         } finally {
           loginSubmit.disabled = false;
           loginSubmit.textContent = originalText;
+        }
+      });
+    }
+
+    // Forgot password functionality
+    if (document.getElementById('forgotPwdBtn')) {
+      document.getElementById('forgotPwdBtn').addEventListener('click', function(e) {
+        e.preventDefault();
+        hideModal(document.getElementById('loginModal'));
+        showModal(document.getElementById('resetModal'));
+      });
+    }
+    
+    if (document.getElementById('resetSubmit')) {
+      document.getElementById('resetSubmit').addEventListener('click', async function(e) {
+        e.preventDefault();
+        
+        const resetEmail = document.getElementById('resetEmail').value.trim();
+        const resetMsg = document.getElementById('resetMsg');
+        
+        if (!resetEmail) {
+          resetMsg.textContent = 'Please enter your email address.';
+          resetMsg.style.color = '#b00020';
+          return;
+        }
+        
+        if (!supabaseClient) {
+          resetMsg.textContent = 'Auth client not available.';
+          resetMsg.style.color = '#b00020';
+          return;
+        }
+        
+        const resetSubmit = document.getElementById('resetSubmit');
+        resetSubmit.disabled = true;
+        const originalText = resetSubmit.textContent;
+        resetSubmit.textContent = 'Sending...';
+        
+        try {
+          const { error } = await supabaseClient.auth.resetPasswordForEmail(resetEmail, {
+            redirectTo: `${window.location.origin}/reset-password.html`
+          });
+          
+          if (error) {
+            console.error('Password reset error:', error);
+            resetMsg.textContent = error.message || 'Failed to send reset email.';
+            resetMsg.style.color = '#b00020';
+            return;
+          }
+          
+          resetMsg.textContent = 'Password reset email sent! Check your inbox.';
+          resetMsg.style.color = 'green';
+          
+          // Clear email field
+          document.getElementById('resetEmail').value = '';
+          
+          // Close modal after 3 seconds
+          setTimeout(() => {
+            hideModal(document.getElementById('resetModal'));
+          }, 3000);
+          
+        } catch (err) {
+          console.error('Unexpected reset error:', err);
+          resetMsg.textContent = err?.message || 'Unexpected error.';
+          resetMsg.style.color = '#b00020';
+        } finally {
+          resetSubmit.disabled = false;
+          resetSubmit.textContent = originalText;
         }
       });
     }
@@ -3590,7 +3109,51 @@ function initCheckoutAuth() {
     });
 
     /********************
-     * Rendering helpers (updated to use product_images)
+     * Lazy Loading Implementation
+     ********************/
+    function setupLazyLoading() {
+      // Use Intersection Observer for lazy loading
+      const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
+              img.src = img.dataset.src;
+              img.removeAttribute('data-src');
+            }
+            observer.unobserve(img);
+          }
+        });
+      }, {
+        rootMargin: '50px 0px',
+        threshold: 0.1
+      });
+      
+      // Observe all product images
+      document.addEventListener('DOMContentLoaded', () => {
+        const lazyImages = document.querySelectorAll('img[data-src]');
+        lazyImages.forEach(img => {
+          lazyLoadObserver.observe(img);
+        });
+      });
+      
+      // Also observe dynamically added images
+      const originalRenderAll = renderAll;
+      renderAll = function(products) {
+        originalRenderAll.call(this, products);
+        
+        // Set up lazy loading for newly added images
+        setTimeout(() => {
+          const newLazyImages = document.querySelectorAll('img[data-src]');
+          newLazyImages.forEach(img => {
+            lazyLoadObserver.observe(img);
+          });
+        }, 100);
+      };
+    }
+
+    /********************
+     * Rendering helpers (updated with lazy loading)
      ********************/
     function makeCardHTML(p){ 
       // Check if product is on sale
@@ -3606,14 +3169,17 @@ function initCheckoutAuth() {
       // Get available stock
       const totalStock = p.stock || 0;
       
+      // Determine loading attribute - lazy load all except first few items
+      const shouldLazyLoad = true; // We'll use Intersection Observer for all
+      
       return `<div class="product-card fade-up" data-id="${p.id}">
         <div class="product-media" role="button" aria-label="Open ${p.title}">
           <div class="badges">
             ${p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:''}
             ${isOnSale && !p.badge ? '<span class="badge sale">Sale</span>' : ''}
           </div>
-          <img src="${primaryImage}" loading="lazy" alt="${p.title}" onerror="this.src='${svgPlaceholder(p.title,400,300)}'">
-          ${secondaryImage ? `<img class="secondary" src="${secondaryImage}" loading="lazy" alt="${p.title} back">` : ''}
+          <img src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${primaryImage}" loading="lazy" alt="${p.title}" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">
+          ${secondaryImage ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
           <div class="quick-add" data-id="${p.id}">+ Quick add</div>
         </div>
         <div class="card-body">
@@ -3834,7 +3400,7 @@ function initCheckoutAuth() {
     cartBtn.addEventListener('mouseleave',()=>miniCart.style.display='none');
 
     /********************
-     * Modal product detail (updated to use product_images)
+     * Modal product detail (updated with lazy loading)
      ********************/
     let currentModalId = null;
     let modalProductRaw = null;
@@ -3850,10 +3416,40 @@ function initCheckoutAuth() {
       const allImages = p.all_images || p.imgs || [];
       const primaryImage = allImages[0] || svgPlaceholder(p.title);
       
+      // Load primary image immediately (not lazy)
       modalImg.src = primaryImage;
-      modalThumbs.innerHTML = allImages.map((src,idx)=>`<img src="${src}" loading="lazy" alt="thumb" style="width:64px;height:64px;object-fit:cover;border-radius:6px;cursor:pointer" data-src="${src}" onerror="this.src='${svgPlaceholder(p.title,120,120)}'" />`).join('');
       
-      modalThumbs.querySelectorAll('img').forEach(img=>img.addEventListener('click',()=>modalImg.src=img.dataset.src));
+      // Create thumbnails with lazy loading
+      modalThumbs.innerHTML = '';
+      allImages.forEach((src,idx) => {
+        const img = document.createElement('img');
+        img.src = svgPlaceholder(p.title,120,120,'#f0f0f0','#999');
+        img.dataset.src = src;
+        img.loading = 'lazy';
+        img.style.width = '64px';
+        img.style.height = '64px';
+        img.style.objectFit = 'cover';
+        img.style.borderRadius = '6px';
+        img.style.cursor = 'pointer';
+        img.alt = 'thumb';
+        img.onerror = function() {
+          this.src = svgPlaceholder(p.title,120,120);
+          this.removeAttribute('data-src');
+        };
+        img.addEventListener('click', () => {
+          // Load clicked image immediately
+          modalImg.src = src;
+        });
+        modalThumbs.appendChild(img);
+        
+        // Load first few thumbnails immediately
+        if (idx < 3) {
+          setTimeout(() => {
+            img.src = src;
+            img.removeAttribute('data-src');
+          }, 100);
+        }
+      });
       
       modalTitle.textContent = p.title;
       
@@ -4124,41 +3720,6 @@ function initCheckoutAuth() {
           renderCartPage(); 
           try{ localStorage.setItem('ss_cart',JSON.stringify(state.cart)); }catch(e){} 
         }); 
-      });
-    }
-    
-    /********************
-     * Checkout button handlers
-     ********************/
-    function setupCheckoutHandlers() {
-      // Mini cart checkout button
-      checkoutBtn.addEventListener('click', () => {
-        if (state.cart.length === 0) {
-          alert('Your cart is empty.');
-          return;
-        }
-        
-        if (!currentUser) {
-          showCheckoutAuth('mini-cart');
-        } else {
-          // User is logged in, proceed to checkout
-          processCheckoutAfterAuth();
-        }
-      });
-      
-      // Cart page checkout button
-      cartCheckout.addEventListener('click', () => {
-        if (state.cart.length === 0) {
-          alert('Your cart is empty.');
-          return;
-        }
-        
-        if (!currentUser) {
-          showCheckoutAuth('cart-page');
-        } else {
-          // User is logged in, proceed to checkout
-          processCheckoutAfterAuth();
-        }
       });
     }
     
@@ -4473,128 +4034,6 @@ function initCheckoutAuth() {
     }
 
     /********************
-     * Load products from Supabase with product_images
-     ********************/
-    async function loadSupabaseProducts(){
-      if(!supabaseClient) return;
-      
-      try {
-        // First load variants
-        await loadProductVariants();
-        
-        const { data, error } = await supabaseClient
-          .from('products')
-          .select(`
-            *,
-            product_images!fk_product_images_product(*)
-          `)
-          .order('created_at', { ascending: false });
-        
-        if(error){
-          console.warn('Supabase fetch error (products):', error);
-          return;
-        }
-        
-        if(!data || data.length === 0) return;
-        
-        // Map supabase rows to the product shape used by your UI
-        const mapped = data.map((row) => {
-          const metadata = row.metadata || {};
-          const sale = row.sale || false;
-          const salePrice = row.sale_price || 0;
-          const tags = row.tags || [];
-          const type = metadata.type || 'New';
-          const color = metadata.color || '';
-          const sizes = row.sizes || [];
-          
-          // Get images from product_images table, sorted by image_order
-          let allImages = [];
-          if (row.product_images && Array.isArray(row.product_images) && row.product_images.length > 0) {
-            // Sort by image_order
-            const sortedImages = row.product_images.sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
-            allImages = sortedImages.map(img => img.url);
-          } else if (row.image) {
-            // Fallback to image column in products table
-            allImages = [row.image];
-          } else {
-            // Fallback to placeholder
-            const seed = encodeURIComponent((row.name||'product') + '_' + row.id);
-            allImages = [
-              `https://picsum.photos/seed/${seed}/400/300`,
-              `https://picsum.photos/seed/${seed}_back/400/300`
-            ];
-          }
-          
-          // Get variants for this product
-          const variants = state.productVariants[row.id] || [];
-          
-          // Calculate total stock from variants
-          let totalStock = row.stock || 0;
-          if (variants.length > 0) {
-            totalStock = variants.reduce((sum, variant) => sum + (variant.stock || 0), 0);
-          }
-          
-          // Get available sizes from variants
-          const availableSizes = [];
-          if (variants.length > 0) {
-            variants.forEach(variant => {
-              if (variant.size && !availableSizes.includes(variant.size)) {
-                availableSizes.push(variant.size);
-              }
-            });
-          } else if (sizes.length > 0) {
-            availableSizes.push(...sizes);
-          } else {
-            availableSizes.push('S', 'M', 'L', 'XL');
-          }
-          
-          // Determine badge - check if on sale
-          let badge = row.badge || '';
-          if (sale && !badge) {
-            badge = 'Sale';
-          }
-          
-          return {
-            id: row.id,
-            title: row.name || 'Product',
-            price: Number(row.price) || 0,
-            sale: sale,
-            salePrice: salePrice,
-            category: row.category || 'All',
-            primary_image: allImages[0] || null,
-            secondary_image: allImages[1] || null,
-            all_images: allImages,
-            imgs: allImages, // Keep for backward compatibility
-            size: availableSizes,
-            badge: badge,
-            stock: totalStock,
-            variants: variants,
-            type: type,
-            color: color,
-            tags: tags,
-            popularity: Number(row.popularity || 50),
-            desc: row.description || '',
-            metadata: metadata
-          };
-        });
-        
-        // Replace products array
-        state.products = mapped;
-        
-        // Load filter options after products are loaded
-        await loadFilterOptions();
-        
-        // Re-run filters & render
-        applyFilters();
-        updateSuggestions(searchInput.value || '');
-        
-        console.info('Supabase products loaded:', mapped.length);
-      } catch (e) {
-        console.warn('Unexpected supabase load error', e);
-      }
-    }
-
-    /********************
      * Initialize
      ********************/
     document.addEventListener('DOMContentLoaded', function() {
@@ -4604,27 +4043,21 @@ function initCheckoutAuth() {
       // Check initial auth state
       checkInitialAuthState();
       
-      // Load products from Supabase if client is ready
-      if (supabaseClient) {
-        loadSupabaseProducts().catch(e => {
-          console.error('Failed to load Supabase products:', e);
-          // Fallback to local products if Supabase fails
-          state.products = fallbackProducts;
-          applyFilters();
-        });
-      } else {
-        // Fallback to local products if Supabase isn't ready yet
+      // Setup lazy loading
+      setupLazyLoading();
+      
+      // Load products from Supabase
+      loadProducts().catch(e => {
+        console.error('Failed to load Supabase products:', e);
+        // Fallback to local products if Supabase fails
         state.products = fallbackProducts;
         applyFilters();
-      }
+      });
       
       // Initialize mobile functionality
       initMobileSearch();
       initMobileMenu();
       initMobileFilters();
-      
-      // Initialize checkout auth system
-      initCheckoutAuth();
       
       // Setup checkout handlers
       setupCheckoutHandlers();
