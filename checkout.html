@@ -953,35 +953,16 @@
       'Northern Cape': 140
     };
     
-    // PayFast Configuration (use sandbox for testing)
-    const PAYFAST_CONFIG = {
-      merchant_id: '10000100', // Sandbox test ID
-      merchant_key: '46f0cd694581a', // Sandbox test key
-      passphrase: '', // Your PayFast passphrase
-      sandbox: true // Set to false for production
+    // Configuration will be fetched from environment variables via Netlify Function
+    let CONFIG = {
+      supabaseUrl: '',
+      supabaseAnonKey: '',
+      payfastMerchantId: '',
+      payfastMerchantKey: '',
+      payfastPassphrase: '',
+      payfastSandbox: true, // Default to sandbox for safety
+      siteUrl: window.location.origin
     };
-    
-    /********************
-     * SUPABASE CONFIGURATION
-     ********************/
-    const SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
-    
-    // Initialize Supabase (this should work on Netlify)
-    let supabase;
-    try {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      console.log('Supabase initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize Supabase:', error);
-      // Fallback: show error to user
-      document.getElementById('loadingState').innerHTML = `
-        <div class="error-message">
-          <p>Unable to connect to server. Please check your internet connection and refresh the page.</p>
-          <p><a href="index.html">Return to Home</a></p>
-        </div>
-      `;
-    }
     
     /********************
      * APPLICATION STATE
@@ -993,7 +974,8 @@
       selectedProvince: null,
       currentStep: 'shipping',
       orderId: null,
-      orderTotal: 0
+      orderTotal: 0,
+      configLoaded: false
     };
     
     /********************
@@ -1111,7 +1093,7 @@
       return SHIPPING_COSTS[province] || 0;
     }
     
-    // Generate PayFast signature
+    // Generate PayFast signature (PHP-compatible version as per PayFast docs)
     function generateSignature(data, passphrase = null) {
       // Create parameter string in EXACT order as per PayFast docs
       let pfOutput = '';
@@ -1130,6 +1112,69 @@
       
       // Use the MD5 library we included
       return md5(getString);
+    }
+    
+    /********************
+     * FETCH CONFIGURATION FROM NETLIFY FUNCTION
+     ********************/
+    
+    async function fetchConfiguration() {
+      try {
+        const response = await fetch('/.netlify/functions/get-config');
+        if (!response.ok) {
+          throw new Error(`Failed to fetch configuration: ${response.status}`);
+        }
+        
+        const config = await response.json();
+        CONFIG = { ...CONFIG, ...config };
+        state.configLoaded = true;
+        console.log('Configuration loaded successfully');
+        
+        // Initialize Supabase with fetched config
+        initializeSupabase();
+        
+      } catch (error) {
+        console.error('Error fetching configuration:', error);
+        // Fallback to empty config - will show error to user
+        showConfigurationError();
+      }
+    }
+    
+    // Show configuration error to user
+    function showConfigurationError() {
+      elements.loadingState.innerHTML = `
+        <div class="error-message">
+          <h3>Configuration Error</h3>
+          <p>Unable to load checkout configuration. Please try refreshing the page.</p>
+          <p>If the problem persists, please contact support.</p>
+          <button onclick="window.location.reload()" class="btn" style="margin-top: 15px;">Refresh Page</button>
+        </div>
+      `;
+    }
+    
+    /********************
+     * SUPABASE INITIALIZATION
+     ********************/
+    
+    let supabase = null;
+    
+    function initializeSupabase() {
+      try {
+        if (!CONFIG.supabaseUrl || !CONFIG.supabaseAnonKey) {
+          console.error('Supabase configuration missing');
+          return;
+        }
+        
+        supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+        console.log('Supabase initialized successfully');
+        
+        // Now we can proceed with the rest of initialization
+        continueInitialization();
+        
+      } catch (error) {
+        console.error('Failed to initialize Supabase:', error);
+        showConfigurationError();
+      }
     }
     
     /********************
@@ -1601,10 +1646,10 @@
     }
     
     /********************
-     * PAYFAST INTEGRATION
+     * PAYFAST INTEGRATION (COMPLIANT WITH PAYFAST DOCS)
      ********************/
     
-    // Generate PayFast parameters
+    // Generate PayFast parameters in EXACT order as per PayFast documentation
     function generatePayFastParams() {
       // Generate unique payment ID
       const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1615,42 +1660,57 @@
         ? state.cart[0].name 
         : `${state.cart.length} items from Umzila Store`;
       
-      // Create parameters in EXACT PayFast order
+      // Build parameters in EXACT order as specified in PayFast documentation
+      // This order is CRITICAL for signature generation
       const params = {
-        // Merchant details (MUST be in this exact order)
-        merchant_id: PAYFAST_CONFIG.merchant_id,
-        merchant_key: PAYFAST_CONFIG.merchant_key,
-        return_url: `${window.location.origin}/checkout-success.html`,
-        cancel_url: `${window.location.origin}/checkout-cancel.html`,
-        notify_url: `${window.location.origin}/.netlify/functions/payfast-itn`,
+        // Merchant details (MUST be first and in this exact order)
+        merchant_id: CONFIG.payfastMerchantId,
+        merchant_key: CONFIG.payfastMerchantKey,
+        return_url: `${CONFIG.siteUrl}/checkout-success.html`,
+        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html`,
+        notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
         
-        // Buyer details
-        name_first: state.shippingInfo.firstName,
-        name_last: state.shippingInfo.lastName,
-        email_address: state.shippingInfo.email,
-        cell_number: state.shippingInfo.phone.replace(/\D/g, ''),
+        // Buyer details (in exact order from docs)
+        name_first: state.shippingInfo.firstName.substring(0, 100),
+        name_last: state.shippingInfo.lastName.substring(0, 100),
+        email_address: state.shippingInfo.email.substring(0, 100),
+        cell_number: state.shippingInfo.phone.replace(/\D/g, '').substring(0, 100),
         
-        // Transaction details
-        m_payment_id: m_payment_id,
-        amount: state.orderTotal.toFixed(2),
+        // Transaction details (in exact order from docs)
+        m_payment_id: m_payment_id.substring(0, 100),
+        amount: parseFloat(state.orderTotal).toFixed(2),
         item_name: `Umzila Order - ${itemDescription.substring(0, 95)}`,
         item_description: itemDescription.substring(0, 250),
         
         // Transaction options
         email_confirmation: '1',
-        confirmation_address: state.shippingInfo.email
+        confirmation_address: state.shippingInfo.email.substring(0, 100)
+        
+        // Note: Additional fields like custom_str1, custom_int1, payment_method can be added here
+        // if needed, following the exact order from documentation
       };
       
-      // Generate signature
-      const signature = generateSignature(params, PAYFAST_CONFIG.passphrase);
-      
-      return { params, signature, m_payment_id };
+      return { params, m_payment_id };
     }
     
     // Submit to PayFast
     function submitToPayFast() {
+      // First validate configuration is loaded
+      if (!state.configLoaded) {
+        showError(elements.paymentError, 'Configuration not loaded. Please refresh the page.');
+        return;
+      }
+      
+      if (!CONFIG.payfastMerchantId || !CONFIG.payfastMerchantKey) {
+        showError(elements.paymentError, 'Payment gateway configuration missing.');
+        return;
+      }
+      
       // Generate parameters
-      const { params, signature, m_payment_id } = generatePayFastParams();
+      const { params, m_payment_id } = generatePayFastParams();
+      
+      // Generate signature using passphrase from environment variables
+      const signature = generateSignature(params, CONFIG.payfastPassphrase);
       
       // Save order info to localStorage for success page
       const orderData = {
@@ -1669,11 +1729,12 @@
       // Build PayFast form
       elements.payfastForm.innerHTML = '';
       elements.payfastForm.method = 'post';
-      elements.payfastForm.action = PAYFAST_CONFIG.sandbox 
+      elements.payfastForm.action = CONFIG.payfastSandbox 
         ? 'https://sandbox.payfast.co.za/eng/process'
         : 'https://www.payfast.co.za/eng/process';
       
-      // Add all parameters to form
+      // Add all parameters to form in the SAME order as in params object
+      // This is important for PayFast compatibility
       Object.keys(params).forEach(key => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -1682,7 +1743,7 @@
         elements.payfastForm.appendChild(input);
       });
       
-      // Add signature
+      // Add signature as the LAST parameter (as per PayFast docs)
       const sigInput = document.createElement('input');
       sigInput.type = 'hidden';
       sigInput.name = 'signature';
@@ -1727,10 +1788,10 @@
     }
     
     /********************
-     * INITIALIZATION
+     * CONTINUE INITIALIZATION AFTER CONFIG LOAD
      ********************/
     
-    async function initialize() {
+    async function continueInitialization() {
       try {
         // First, load cart and provinces (these don't need auth)
         loadCart();
@@ -1748,7 +1809,9 @@
         
         // If not authenticated, show auth modal
         if (!isAuthenticated) {
-          showAuthModal();
+          setTimeout(() => {
+            showAuthModal();
+          }, 500);
         }
         
         // Check for successful payment return
@@ -1759,7 +1822,9 @@
         // Still hide loading and show form, but show error
         elements.loadingState.classList.add('hidden');
         elements.shippingSection.classList.remove('hidden');
-        showAuthModal();
+        setTimeout(() => {
+          showAuthModal();
+        }, 500);
       }
     }
     
@@ -1818,8 +1883,8 @@
         }
       });
       
-      // Initialize the app
-      initialize();
+      // Start initialization by fetching configuration
+      fetchConfiguration();
     });
     
     // Listen for auth state changes
