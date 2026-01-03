@@ -1200,7 +1200,7 @@
      * SUPABASE INITIALIZATION
      ********************/
     
-    let supabase = null;
+	let supabaseClient = null;
     
     function initializeSupabase() {
       try {
@@ -1211,7 +1211,7 @@
         }
         
         // Create Supabase client
-        supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+		supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
         console.log('Supabase initialized successfully');
         
         // Now we can proceed with the rest of initialization
@@ -1230,12 +1230,12 @@
     // Check authentication status
     async function checkAuth() {
       try {
-        if (!supabase) {
+        if (!supabaseClient) {
           console.error('Supabase not initialized');
           return false;
         }
         
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
         
         if (error) {
           console.error('Auth session error:', error);
@@ -1258,9 +1258,9 @@
     // Load user profile
     async function loadUserProfile() {
       try {
-        if (!supabase || !state.user) return;
+        if (!supabaseClient || !state.user) return;
         
-        const { data: profile, error } = await supabase
+        const { data: profile, error } = await supabaseClient
           .from('profiles')
           .select('*')
           .eq('user_id', state.user.id)
@@ -1365,13 +1365,13 @@
     // Load product from Supabase using product ID
     async function loadProductFromId(productId, couponCode = null) {
       try {
-        if (!supabase) {
+        if (!supabaseClient) {
           console.error('Supabase not initialized');
           return;
         }
         
         // Fetch product details
-        const { data: product, error } = await supabase
+        const { data: product, error } = await supabaseClient
           .from('products')
           .select('*')
           .eq('id', productId)
@@ -1382,7 +1382,7 @@
         // Fetch product image
         let imageUrl = 'https://via.placeholder.com/400x400?text=Product+Image';
         if (product.image_id) {
-          const { data: image, error: imageError } = await supabase
+          const { data: image, error: imageError } = await supabaseClient
             .from('product_images')
             .select('image_url')
             .eq('id', product.image_id)
@@ -1422,9 +1422,9 @@
     // Apply coupon code
     async function applyCoupon(code) {
       try {
-        if (!supabase) return false;
+        if (!supabaseClient) return false;
         
-        const { data: coupon, error } = await supabase
+        const { data: coupon, error } = await supabaseClient
           .from('coupons')
           .select('*')
           .eq('code', code.toUpperCase())
@@ -1907,8 +1907,8 @@
         }
         
         try {
-          if (supabase) {
-            const { data, error } = await supabase.auth.signInWithPassword({
+          if (supabaseClient) {
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
               email,
               password
             });
