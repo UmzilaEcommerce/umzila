@@ -2,12 +2,15 @@
   publish = "."
   functions = "netlify/functions"
 
+# Allow direct access to functions (must be above the SPA rule)
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# SPA catch-all (keep last)
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Access-Control-Allow-Origin = "*"
