@@ -430,6 +430,10 @@
       color: var(--success);
     }
     
+    .summary-row.discount {
+      color: var(--success);
+    }
+    
     /* ---------- PAYMENT SECTION ---------- */
     .payment-methods {
       display: flex;
@@ -657,6 +661,8 @@
   </style>
   <!-- Include MD5 library for PayFast signature -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
+  <!-- Include Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <!-- Header -->
@@ -858,6 +864,10 @@
             <span>Subtotal</span>
             <span id="subtotalAmount">R0.00</span>
           </div>
+          <div class="summary-row discount hidden" id="discountRow">
+            <span>Discount</span>
+            <span id="discountAmount">-R0.00</span>
+          </div>
           <div class="summary-row shipping">
             <span>Shipping</span>
             <span id="shippingAmount">Calculating...</span>
@@ -960,7 +970,7 @@
       payfastMerchantId: '',
       payfastMerchantKey: '',
       payfastPassphrase: '',
-      payfastSandbox: true, // Default to sandbox for safety
+      payfastSandbox: true,
       siteUrl: window.location.origin
     };
     
@@ -975,7 +985,9 @@
       currentStep: 'shipping',
       orderId: null,
       orderTotal: 0,
-      configLoaded: false
+      configLoaded: false,
+      discount: 0,
+      couponCode: null
     };
     
     /********************
@@ -1015,6 +1027,8 @@
       subtotalAmount: document.getElementById('subtotalAmount'),
       shippingAmount: document.getElementById('shippingAmount'),
       totalAmount: document.getElementById('totalAmount'),
+      discountRow: document.getElementById('discountRow'),
+      discountAmount: document.getElementById('discountAmount'),
       
       // Confirmation
       orderIdDisplay: document.getElementById('orderIdDisplay'),
@@ -1064,22 +1078,10 @@
       }, 5000);
     }
     
-    // Show success message
-    function showSuccess(message) {
-      alert(message);
-    }
-    
     // Validate email
     function isValidEmail(email) {
       const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       return re.test(email);
-    }
-    
-    // Validate password
-    function isValidPassword(password) {
-      const hasNumber = /\d/.test(password);
-      const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-      return password.length >= 8 && hasNumber && hasSpecial;
     }
     
     // Validate phone number
@@ -1093,9 +1095,8 @@
       return SHIPPING_COSTS[province] || 0;
     }
     
-    // Generate PayFast signature (PHP-compatible version as per PayFast docs)
+    // Generate PayFast signature
     function generateSignature(data, passphrase = null) {
-      // Create parameter string in EXACT order as per PayFast docs
       let pfOutput = '';
       for (let key in data) {
         if (data.hasOwnProperty(key) && data[key] !== '') {
@@ -1103,14 +1104,12 @@
         }
       }
       
-      // Remove last ampersand
       let getString = pfOutput.slice(0, -1);
       
       if (passphrase !== null) {
         getString += '&passphrase=' + encodeURIComponent(passphrase.trim()).replace(/%20/g, '+');
       }
       
-      // Use the MD5 library we included
       return md5(getString);
     }
     
@@ -1120,34 +1119,79 @@
     
     async function fetchConfiguration() {
       try {
+        console.log('Fetching configuration from Netlify function...');
         const response = await fetch('/.netlify/functions/get-config');
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers.get('content-type'));
+        
         if (!response.ok) {
-          throw new Error(`Failed to fetch configuration: ${response.status}`);
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          // Try to read the response as text to see what we got
+          const text = await response.text();
+          console.error('Non-JSON response received:', text.substring(0, 500));
+          throw new Error(`Expected JSON but got: ${contentType}`);
         }
         
         const config = await response.json();
+        
+        // Check for error in response
+        if (config.error) {
+          throw new Error(config.error);
+        }
+        
         CONFIG = { ...CONFIG, ...config };
         state.configLoaded = true;
-        console.log('Configuration loaded successfully');
+        console.log('Configuration loaded successfully:', {
+          supabaseUrl: CONFIG.supabaseUrl ? 'Set' : 'Missing',
+          supabaseAnonKey: CONFIG.supabaseAnonKey ? 'Set' : 'Missing',
+          payfastMerchantId: CONFIG.payfastMerchantId ? 'Set' : 'Missing',
+          payfastMerchantKey: CONFIG.payfastMerchantKey ? 'Set' : 'Missing',
+          payfastSandbox: CONFIG.payfastSandbox
+        });
         
         // Initialize Supabase with fetched config
         initializeSupabase();
         
       } catch (error) {
         console.error('Error fetching configuration:', error);
-        // Fallback to empty config - will show error to user
-        showConfigurationError();
+        // Fallback: try to load from localStorage (for development only)
+        try {
+          const devConfig = localStorage.getItem('umzila_config');
+          if (devConfig) {
+            console.warn('Using development configuration from localStorage');
+            CONFIG = { ...CONFIG, ...JSON.parse(devConfig) };
+            state.configLoaded = true;
+            initializeSupabase();
+          } else {
+            showConfigurationError(error.message);
+          }
+        } catch (e) {
+          showConfigurationError(error.message);
+        }
       }
     }
     
     // Show configuration error to user
-    function showConfigurationError() {
+    function showConfigurationError(errorDetails = '') {
       elements.loadingState.innerHTML = `
         <div class="error-message">
           <h3>Configuration Error</h3>
-          <p>Unable to load checkout configuration. Please try refreshing the page.</p>
-          <p>If the problem persists, please contact support.</p>
-          <button onclick="window.location.reload()" class="btn" style="margin-top: 15px;">Refresh Page</button>
+          <p>Unable to load checkout configuration. This might be because:</p>
+          <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+            <li>The Netlify function is not set up</li>
+            <li>Environment variables are missing</li>
+            <li>You're running locally without the function</li>
+          </ul>
+          ${errorDetails ? `<p><small>Details: ${errorDetails}</small></p>` : ''}
+          <div style="margin-top: 20px;">
+            <button onclick="window.location.reload()" class="btn" style="margin-right: 10px;">Refresh Page</button>
+            <button onclick="window.location.href='index.html'" class="btn ghost">Return to Store</button>
+          </div>
         </div>
       `;
     }
@@ -1162,9 +1206,11 @@
       try {
         if (!CONFIG.supabaseUrl || !CONFIG.supabaseAnonKey) {
           console.error('Supabase configuration missing');
+          showConfigurationError('Supabase URL or key is missing');
           return;
         }
         
+        // Create Supabase client
         supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
         console.log('Supabase initialized successfully');
         
@@ -1173,7 +1219,7 @@
         
       } catch (error) {
         console.error('Failed to initialize Supabase:', error);
-        showConfigurationError();
+        showConfigurationError('Failed to initialize database connection');
       }
     }
     
@@ -1220,7 +1266,7 @@
           .eq('user_id', state.user.id)
           .single();
         
-        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        if (error && error.code !== 'PGRST116') {
           console.error('Profile load error:', error);
           return;
         }
@@ -1276,136 +1322,36 @@
       document.body.style.overflow = '';
     }
     
-    // Setup authentication event listeners
-    function setupAuthListeners() {
-      // Switch between login/signup tabs
-      elements.authTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          elements.authTabs.forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-          
-          if (tab.dataset.tab === 'login') {
-            elements.loginForm.classList.add('active');
-            elements.signupForm.classList.remove('active');
-          } else {
-            elements.loginForm.classList.remove('active');
-            elements.signupForm.classList.add('active');
-          }
-        });
-      });
-      
-      // Handle login
-      elements.loginSubmit.addEventListener('click', async () => {
-        const email = elements.loginEmail.value.trim();
-        const password = elements.loginPassword.value;
-        
-        if (!email || !password) {
-          showError(elements.loginError, 'Please enter both email and password.');
-          return;
-        }
-        
-        if (!isValidEmail(email)) {
-          showError(elements.loginError, 'Please enter a valid email address.');
-          return;
-        }
-        
-        try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-          });
-          
-          if (error) throw error;
-          
-          state.user = data.user;
-          await loadUserProfile();
-          updateAuthUI();
-          showSuccess('Successfully logged in!');
-          
-        } catch (error) {
-          showError(elements.loginError, error.message || 'Invalid credentials.');
-        }
-      });
-      
-      // Handle signup
-      elements.signupSubmit.addEventListener('click', async () => {
-        const name = elements.signupName.value.trim();
-        const email = elements.signupEmail.value.trim();
-        const password = elements.signupPassword.value;
-        
-        if (!name || !email || !password) {
-          showError(elements.signupError, 'Please complete all fields.');
-          return;
-        }
-        
-        if (!isValidEmail(email)) {
-          showError(elements.signupError, 'Please enter a valid email address.');
-          return;
-        }
-        
-        if (!isValidPassword(password)) {
-          showError(elements.signupError, 'Password must be at least 8 characters with numbers and special characters.');
-          return;
-        }
-        
-        try {
-          // Sign up user
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: {
-                full_name: name
-              }
-            }
-          });
-          
-          if (error) throw error;
-          
-          // Create user profile
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([{
-              user_id: data.user.id,
-              email: email,
-              first_name: name.split(' ')[0] || name,
-              last_name: name.split(' ').slice(1).join(' ') || '',
-              phone: '',
-              shipping_address: {}
-            }]);
-          
-          if (profileError) console.error('Profile creation error:', profileError);
-          
-          state.user = data.user;
-          updateAuthUI();
-          showSuccess('Account created! You can now proceed with checkout.');
-          
-        } catch (error) {
-          showError(elements.signupError, error.message || 'Signup failed. Please try again.');
-        }
-      });
-      
-      // Close auth modal
-      elements.closeAuthModal.addEventListener('click', hideAuthModal);
-      elements.authModal.addEventListener('click', (e) => {
-        if (e.target === elements.authModal) {
-          hideAuthModal();
-        }
-      });
-    }
-    
     /********************
      * CART MANAGEMENT
      ********************/
     
-    // Load cart from localStorage
+    // Load cart from URL parameters or localStorage
     function loadCart() {
       try {
+        // First check URL parameters (from index.html "Buy Now" button)
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('product');
+        const couponCode = urlParams.get('coupon');
+        
+        // Check localStorage for cart data
         const savedCart = localStorage.getItem('umzila_cart');
-        if (savedCart) {
+        const savedCoupon = localStorage.getItem('umzila_coupon');
+        
+        if (productId) {
+          // Load product from URL parameter
+          loadProductFromId(productId, couponCode);
+        } else if (savedCart) {
+          // Load from localStorage
           state.cart = JSON.parse(savedCart);
+          if (savedCoupon) {
+            const couponData = JSON.parse(savedCoupon);
+            state.couponCode = couponData.code;
+            state.discount = couponData.discount || 0;
+          }
           updateOrderSummary();
         } else {
+          // No cart found
           state.cart = [];
           showEmptyCart();
         }
@@ -1416,11 +1362,128 @@
       }
     }
     
+    // Load product from Supabase using product ID
+    async function loadProductFromId(productId, couponCode = null) {
+      try {
+        if (!supabase) {
+          console.error('Supabase not initialized');
+          return;
+        }
+        
+        // Fetch product details
+        const { data: product, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', productId)
+          .single();
+        
+        if (error) throw error;
+        
+        // Fetch product image
+        let imageUrl = 'https://via.placeholder.com/400x400?text=Product+Image';
+        if (product.image_id) {
+          const { data: image, error: imageError } = await supabase
+            .from('product_images')
+            .select('image_url')
+            .eq('id', product.image_id)
+            .single();
+          
+          if (!imageError && image) {
+            imageUrl = image.image_url;
+          }
+        }
+        
+        // Add product to cart
+        state.cart = [{
+          id: product.id,
+          name: product.name,
+          price: product.price,
+          quantity: 1,
+          size: product.size || 'One Size',
+          image: imageUrl
+        }];
+        
+        // Apply coupon if provided
+        if (couponCode) {
+          await applyCoupon(couponCode);
+        }
+        
+        // Save to localStorage
+        localStorage.setItem('umzila_cart', JSON.stringify(state.cart));
+        
+        updateOrderSummary();
+        
+      } catch (error) {
+        console.error('Error loading product:', error);
+        showEmptyCart();
+      }
+    }
+    
+    // Apply coupon code
+    async function applyCoupon(code) {
+      try {
+        if (!supabase) return false;
+        
+        const { data: coupon, error } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('code', code.toUpperCase())
+          .eq('is_active', true)
+          .single();
+        
+        if (error) {
+          console.log('Invalid coupon:', error);
+          return false;
+        }
+        
+        // Check if coupon is expired
+        const now = new Date();
+        const validFrom = new Date(coupon.valid_from);
+        const validTo = new Date(coupon.valid_to);
+        
+        if (now < validFrom || now > validTo) {
+          console.log('Coupon expired or not yet valid');
+          return false;
+        }
+        
+        // Calculate discount
+        let discount = 0;
+        if (coupon.discount_type === 'percentage') {
+          discount = (state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * coupon.discount_value) / 100;
+        } else {
+          discount = coupon.discount_value;
+        }
+        
+        // Apply minimum order amount if specified
+        if (coupon.minimum_order && state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) < coupon.minimum_order) {
+          console.log('Minimum order amount not met');
+          return false;
+        }
+        
+        state.couponCode = coupon.code;
+        state.discount = discount;
+        
+        // Save coupon to localStorage
+        localStorage.setItem('umzila_coupon', JSON.stringify({
+          code: coupon.code,
+          discount: discount
+        }));
+        
+        updateOrderSummary();
+        return true;
+        
+      } catch (error) {
+        console.error('Error applying coupon:', error);
+        return false;
+      }
+    }
+    
     // Show empty cart message
     function showEmptyCart() {
       elements.orderItems.innerHTML = `
         <div class="text-center text-muted" style="padding: 40px;">
-          Your cart is empty. <a href="index.html" style="color: var(--accent);">Continue shopping</a>
+          <p>Your cart is empty.</p>
+          <a href="index.html" class="btn" style="margin-top: 15px;">Continue shopping</a>
         </div>
       `;
       elements.subtotalAmount.textContent = formatCurrency(0);
@@ -1444,7 +1507,7 @@
         itemsHTML += `
           <div class="order-item">
             <div class="item-image">
-              <img src="${item.image || 'placeholder.jpg'}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
+              <img src="${item.image || 'https://via.placeholder.com/80x80?text=Product'}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
             </div>
             <div class="item-details">
               <div class="item-title">${item.name}</div>
@@ -1456,7 +1519,6 @@
       });
       
       elements.orderItems.innerHTML = itemsHTML;
-      elements.subtotalAmount.textContent = formatCurrency(subtotal);
       
       // Update shipping and total
       updateShippingAndTotal(subtotal);
@@ -1472,11 +1534,22 @@
       }
       
       const shipping = state.selectedProvince ? calculateShipping(state.selectedProvince) : 0;
-      const total = subtotal + shipping;
+      const discount = state.discount || 0;
+      const total = Math.max(0, subtotal - discount + shipping);
       state.orderTotal = total;
       
       elements.subtotalAmount.textContent = formatCurrency(subtotal);
       elements.shippingAmount.textContent = state.selectedProvince ? formatCurrency(shipping) : 'Select province';
+      
+      // Update discount display
+      if (discount > 0 && state.couponCode) {
+        elements.discountRow.classList.remove('hidden');
+        elements.discountAmount.textContent = `-${formatCurrency(discount)}`;
+        elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})</span> <span>-${formatCurrency(discount)}</span>`;
+      } else {
+        elements.discountRow.classList.add('hidden');
+      }
+      
       elements.totalAmount.textContent = formatCurrency(total);
     }
     
@@ -1526,6 +1599,10 @@
       
       updateShippingAndTotal();
     }
+    
+    /********************
+     * CHECKOUT FLOW
+     ********************/
     
     // Validate shipping form
     function validateShippingForm() {
@@ -1577,42 +1654,7 @@
         shippingCost: parseFloat(elements.shippingCost.value),
         instructions: elements.deliveryInstructions.value.trim()
       };
-      
-      // Update user profile if logged in
-      if (state.user) {
-        updateUserProfile();
-      }
     }
-    
-    // Update user profile with shipping info
-    async function updateUserProfile() {
-      if (!supabase || !state.user) return;
-      
-      try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            first_name: state.shippingInfo.firstName,
-            last_name: state.shippingInfo.lastName,
-            phone: state.shippingInfo.phone,
-            shipping_address: {
-              address: state.shippingInfo.address,
-              city: state.shippingInfo.city,
-              postal_code: state.shippingInfo.postalCode,
-              province: state.shippingInfo.province
-            }
-          })
-          .eq('user_id', state.user.id);
-        
-        if (error) console.error('Profile update error:', error);
-      } catch (error) {
-        console.error('Error updating profile:', error);
-      }
-    }
-    
-    /********************
-     * CHECKOUT FLOW
-     ********************/
     
     // Go to step
     function goToStep(step) {
@@ -1625,7 +1667,9 @@
         if (s.dataset.step === step) {
           s.classList.add('active');
           stepReached = true;
-        } else if (s.dataset.step < step || (step === 'confirmation' && s.dataset.step !== 'confirmation')) {
+        } else if (step === 'confirmation' && s.dataset.step !== 'confirmation') {
+          s.classList.add('completed');
+        } else if (step === 'payment' && s.dataset.step === 'shipping') {
           s.classList.add('completed');
         }
       });
@@ -1646,48 +1690,37 @@
     }
     
     /********************
-     * PAYFAST INTEGRATION (COMPLIANT WITH PAYFAST DOCS)
+     * PAYFAST INTEGRATION
      ********************/
     
-    // Generate PayFast parameters in EXACT order as per PayFast documentation
+    // Generate PayFast parameters
     function generatePayFastParams() {
-      // Generate unique payment ID
       const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      // Get cart items description
       const itemNames = state.cart.map(item => item.name).join(', ');
       const itemDescription = state.cart.length === 1 
         ? state.cart[0].name 
         : `${state.cart.length} items from Umzila Store`;
       
-      // Build parameters in EXACT order as specified in PayFast documentation
-      // This order is CRITICAL for signature generation
       const params = {
-        // Merchant details (MUST be first and in this exact order)
         merchant_id: CONFIG.payfastMerchantId,
         merchant_key: CONFIG.payfastMerchantKey,
         return_url: `${CONFIG.siteUrl}/checkout-success.html`,
         cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html`,
         notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
         
-        // Buyer details (in exact order from docs)
         name_first: state.shippingInfo.firstName.substring(0, 100),
         name_last: state.shippingInfo.lastName.substring(0, 100),
         email_address: state.shippingInfo.email.substring(0, 100),
         cell_number: state.shippingInfo.phone.replace(/\D/g, '').substring(0, 100),
         
-        // Transaction details (in exact order from docs)
         m_payment_id: m_payment_id.substring(0, 100),
         amount: parseFloat(state.orderTotal).toFixed(2),
         item_name: `Umzila Order - ${itemDescription.substring(0, 95)}`,
         item_description: itemDescription.substring(0, 250),
         
-        // Transaction options
         email_confirmation: '1',
         confirmation_address: state.shippingInfo.email.substring(0, 100)
-        
-        // Note: Additional fields like custom_str1, custom_int1, payment_method can be added here
-        // if needed, following the exact order from documentation
       };
       
       return { params, m_payment_id };
@@ -1695,7 +1728,6 @@
     
     // Submit to PayFast
     function submitToPayFast() {
-      // First validate configuration is loaded
       if (!state.configLoaded) {
         showError(elements.paymentError, 'Configuration not loaded. Please refresh the page.');
         return;
@@ -1706,13 +1738,10 @@
         return;
       }
       
-      // Generate parameters
       const { params, m_payment_id } = generatePayFastParams();
-      
-      // Generate signature using passphrase from environment variables
       const signature = generateSignature(params, CONFIG.payfastPassphrase);
       
-      // Save order info to localStorage for success page
+      // Save order info
       const orderData = {
         orderId: m_payment_id,
         customerEmail: state.shippingInfo.email,
@@ -1720,11 +1749,12 @@
         amount: state.orderTotal,
         date: new Date().toISOString(),
         cart: state.cart,
-        shipping: state.shippingInfo
+        shipping: state.shippingInfo,
+        coupon: state.couponCode,
+        discount: state.discount
       };
       
       localStorage.setItem('last_order', JSON.stringify(orderData));
-      localStorage.removeItem('umzila_cart'); // Clear cart
       
       // Build PayFast form
       elements.payfastForm.innerHTML = '';
@@ -1733,8 +1763,7 @@
         ? 'https://sandbox.payfast.co.za/eng/process'
         : 'https://www.payfast.co.za/eng/process';
       
-      // Add all parameters to form in the SAME order as in params object
-      // This is important for PayFast compatibility
+      // Add parameters
       Object.keys(params).forEach(key => {
         const input = document.createElement('input');
         input.type = 'hidden';
@@ -1743,12 +1772,16 @@
         elements.payfastForm.appendChild(input);
       });
       
-      // Add signature as the LAST parameter (as per PayFast docs)
+      // Add signature
       const sigInput = document.createElement('input');
       sigInput.type = 'hidden';
       sigInput.name = 'signature';
       sigInput.value = signature;
       elements.payfastForm.appendChild(sigInput);
+      
+      // Clear cart
+      localStorage.removeItem('umzila_cart');
+      localStorage.removeItem('umzila_coupon');
       
       // Submit form
       elements.payfastForm.submit();
@@ -1756,75 +1789,49 @@
     
     // Process payment
     async function processPayment() {
-      try {
-        // Validate terms agreement
-        if (!elements.termsAgreement.checked) {
-          showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
-          return;
-        }
-        
-        // Validate cart
-        if (state.cart.length === 0) {
-          showError(elements.paymentError, 'Your cart is empty.');
-          return;
-        }
-        
-        // Save shipping info
-        saveShippingInfo();
-        
-        // Show loading state
-        elements.payNowBtn.disabled = true;
-        elements.payNowBtn.textContent = 'Processing...';
-        
-        // Submit to PayFast
-        submitToPayFast();
-        
-      } catch (error) {
-        console.error('Payment error:', error);
-        showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
-        elements.payNowBtn.disabled = false;
-        elements.payNowBtn.textContent = 'Pay Now';
+      if (!elements.termsAgreement.checked) {
+        showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+        return;
       }
+      
+      if (state.cart.length === 0) {
+        showError(elements.paymentError, 'Your cart is empty.');
+        return;
+      }
+      
+      if (!state.shippingInfo) {
+        saveShippingInfo();
+      }
+      
+      elements.payNowBtn.disabled = true;
+      elements.payNowBtn.textContent = 'Processing...';
+      
+      submitToPayFast();
     }
     
     /********************
-     * CONTINUE INITIALIZATION AFTER CONFIG LOAD
+     * CONTINUE INITIALIZATION
      ********************/
     
     async function continueInitialization() {
       try {
-        // First, load cart and provinces (these don't need auth)
         loadCart();
         populateProvinces();
         
-        // Setup auth listeners
-        setupAuthListeners();
-        
         // Check authentication
-        const isAuthenticated = await checkAuth();
+        await checkAuth();
         
         // Hide loading state
         elements.loadingState.classList.add('hidden');
         elements.shippingSection.classList.remove('hidden');
-        
-        // If not authenticated, show auth modal
-        if (!isAuthenticated) {
-          setTimeout(() => {
-            showAuthModal();
-          }, 500);
-        }
         
         // Check for successful payment return
         checkPaymentStatus();
         
       } catch (error) {
         console.error('Initialization error:', error);
-        // Still hide loading and show form, but show error
         elements.loadingState.classList.add('hidden');
         elements.shippingSection.classList.remove('hidden');
-        setTimeout(() => {
-          showAuthModal();
-        }, 500);
       }
     }
     
@@ -1835,32 +1842,24 @@
       const mPaymentId = urlParams.get('m_payment_id');
       
       if (paymentStatus === 'COMPLETE' && mPaymentId) {
-        // Show confirmation
         goToStep('confirmation');
         elements.orderIdDisplay.textContent = mPaymentId;
-        elements.confirmationEmail.textContent = state.user?.email || localStorage.getItem('last_order_email') || '';
-        
-        // Clear cart
-        localStorage.removeItem('umzila_cart');
+        elements.confirmationEmail.textContent = state.user?.email || state.shippingInfo?.email || '';
       }
     }
     
     /********************
-     * EVENT LISTENERS
+     * SETUP EVENT LISTENERS
      ********************/
     
-    // Set up event listeners after DOM loads
-    document.addEventListener('DOMContentLoaded', () => {
+    function setupEventListeners() {
       // Continue to payment button
       elements.continueToPayment.addEventListener('click', (e) => {
         e.preventDefault();
         
         if (!validateShippingForm()) return;
         
-        // Save shipping info
         saveShippingInfo();
-        
-        // Proceed to payment step
         goToStep('payment');
       });
       
@@ -1883,24 +1882,69 @@
         }
       });
       
-      // Start initialization by fetching configuration
-      fetchConfiguration();
-    });
-    
-    // Listen for auth state changes
-    if (supabase) {
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          state.user = session.user;
-          await loadUserProfile();
+      // Simple auth for demo
+      elements.authBtn.addEventListener('click', showAuthModal);
+      elements.closeAuthModal.addEventListener('click', hideAuthModal);
+      elements.authModal.addEventListener('click', (e) => {
+        if (e.target === elements.authModal) {
+          hideAuthModal();
+        }
+      });
+      
+      // Demo login
+      elements.loginSubmit.addEventListener('click', async () => {
+        const email = elements.loginEmail.value.trim();
+        const password = elements.loginPassword.value;
+        
+        if (!email || !password) {
+          showError(elements.loginError, 'Please enter both email and password.');
+          return;
+        }
+        
+        if (!isValidEmail(email)) {
+          showError(elements.loginError, 'Please enter a valid email address.');
+          return;
+        }
+        
+        try {
+          if (supabase) {
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email,
+              password
+            });
+            
+            if (error) throw error;
+            
+            state.user = data.user;
+            elements.customerEmail.value = state.user.email;
+            updateAuthUI();
+            hideAuthModal();
+          } else {
+            // Fallback for demo
+            state.user = { email: email };
+            elements.customerEmail.value = email;
+            updateAuthUI();
+            hideAuthModal();
+          }
+        } catch (error) {
+          showError(elements.loginError, 'Login failed. Using demo mode.');
+          // Fallback
+          state.user = { email: email };
+          elements.customerEmail.value = email;
           updateAuthUI();
-        } else if (event === 'SIGNED_OUT') {
-          state.user = null;
-          updateAuthUI();
-          // Don't show auth modal automatically on sign out
+          hideAuthModal();
         }
       });
     }
+    
+    /********************
+     * INITIALIZE
+     ********************/
+    
+    document.addEventListener('DOMContentLoaded', () => {
+      setupEventListeners();
+      fetchConfiguration();
+    });
   </script>
 </body>
 </html>
