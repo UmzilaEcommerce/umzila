@@ -1327,40 +1327,60 @@
      ********************/
     
     // Load cart from URL parameters or localStorage
-    function loadCart() {
-      try {
-        // First check URL parameters (from index.html "Buy Now" button)
-        const urlParams = new URLSearchParams(window.location.search);
-        const productId = urlParams.get('product');
-        const couponCode = urlParams.get('coupon');
-        
-        // Check localStorage for cart data
-        const savedCart = localStorage.getItem('umzila_cart');
-        const savedCoupon = localStorage.getItem('umzila_coupon');
-        
-        if (productId) {
-          // Load product from URL parameter
-          loadProductFromId(productId, couponCode);
-        } else if (savedCart) {
-          // Load from localStorage
-          state.cart = JSON.parse(savedCart);
-          if (savedCoupon) {
-            const couponData = JSON.parse(savedCoupon);
-            state.couponCode = couponData.code;
-            state.discount = couponData.discount || 0;
-          }
-          updateOrderSummary();
-        } else {
-          // No cart found
-          state.cart = [];
-          showEmptyCart();
-        }
-      } catch (error) {
-        console.error('Error loading cart:', error);
-        state.cart = [];
-        showEmptyCart();
+    // Load cart from URL parameters or localStorage
+function loadCart() {
+  try {
+    // First check URL parameters (from index.html "Buy Now" button)
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = urlParams.get('product');
+    const couponCode = urlParams.get('coupon');
+    
+    // Check localStorage for cart data
+    const savedCart = localStorage.getItem('umzila_cart');
+    const savedCoupon = localStorage.getItem('umzila_coupon');
+    
+    // MOCK ITEM FOR TESTING - Add this if no cart is found
+    const mockCartItem = {
+      id: 'mock-product-001',
+      name: 'Test Product',
+      price: 299.99,
+      quantity: 1,
+      size: 'Medium',
+      image: 'https://via.placeholder.com/400x400?text=Test+Product'
+    };
+    
+    if (productId) {
+      // Load product from URL parameter
+      loadProductFromId(productId, couponCode);
+    } else if (savedCart) {
+      // Load from localStorage
+      state.cart = JSON.parse(savedCart);
+      if (savedCoupon) {
+        const couponData = JSON.parse(savedCoupon);
+        state.couponCode = couponData.code;
+        state.discount = couponData.discount || 0;
       }
+      updateOrderSummary();
+    } else {
+      // No cart found - use mock item for testing
+      state.cart = [mockCartItem];
+      console.log('Using mock item for testing:', mockCartItem);
+      updateOrderSummary();
     }
+  } catch (error) {
+    console.error('Error loading cart:', error);
+    // Use mock item if there's an error
+    state.cart = [{
+      id: 'mock-product-001',
+      name: 'Test Product',
+      price: 299.99,
+      quantity: 1,
+      size: 'Medium',
+      image: 'https://via.placeholder.com/400x400?text=Test+Product'
+    }];
+    updateOrderSummary();
+  }
+}
     
     // Load product from Supabase using product ID
     async function loadProductFromId(productId, couponCode = null) {
