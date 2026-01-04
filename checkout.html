@@ -298,40 +298,8 @@
     }
     
     /* ---------- SHIPPING PROVINCES ---------- */
-    .province-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 15px;
-      margin-top: 15px;
-    }
-    
-    .province-option {
-      padding: 15px;
-      border: 2px solid #e9ecef;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: var(--transition);
-      text-align: center;
-    }
-    
-    .province-option:hover {
-      border-color: var(--accent-2);
-    }
-    
-    .province-option.selected {
-      border-color: var(--accent);
-      background: rgba(10, 47, 102, 0.05);
-    }
-    
-    .province-name {
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    
-    .province-price {
-      color: var(--cta);
-      font-weight: 700;
-      font-size: 18px;
+    .province-dropdown {
+      width: 100%;
     }
     
     /* ---------- ORDER SUMMARY ---------- */
@@ -432,6 +400,43 @@
     
     .summary-row.discount {
       color: var(--success);
+    }
+    
+    /* Promo Code Section */
+    .promo-code-section {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+    }
+    
+    .promo-code-input {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .promo-code-input input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    
+    .promo-message {
+      font-size: 14px;
+      margin-top: 5px;
+      display: none;
+    }
+    
+    .promo-message.success {
+      color: var(--success);
+      display: block;
+    }
+    
+    .promo-message.error {
+      color: var(--error);
+      display: block;
     }
     
     /* ---------- PAYMENT SECTION ---------- */
@@ -632,6 +637,19 @@
         position: static;
         margin-top: 30px;
       }
+      
+      .item-image {
+        width: 60px;
+        height: 60px;
+      }
+      
+      .item-title {
+        font-size: 14px;
+      }
+      
+      .promo-code-input {
+        flex-direction: column;
+      }
     }
     
     /* ---------- UTILITY CLASSES ---------- */
@@ -763,10 +781,18 @@
 
             <div class="form-group">
               <label class="form-label">Province <span class="required">*</span></label>
-              <div class="province-grid" id="provinceOptions">
-                <!-- Province options will be populated by JavaScript -->
-              </div>
-              <input type="hidden" id="selectedProvince" required>
+              <select id="provinceSelect" class="form-control" required>
+                <option value="">Select a province</option>
+                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                <option value="Gauteng">Gauteng</option>
+                <option value="Western Cape">Western Cape</option>
+                <option value="Eastern Cape">Eastern Cape</option>
+                <option value="Free State">Free State</option>
+                <option value="Limpopo">Limpopo</option>
+                <option value="Mpumalanga">Mpumalanga</option>
+                <option value="North West">North West</option>
+                <option value="Northern Cape">Northern Cape</option>
+              </select>
               <input type="hidden" id="shippingCost" value="0">
             </div>
 
@@ -857,6 +883,14 @@
         
         <div id="orderItems" class="order-items">
           <!-- Order items will be populated here -->
+        </div>
+
+        <div class="promo-code-section">
+          <div class="promo-code-input">
+            <input type="text" id="promoCodeInput" placeholder="Enter promo code">
+            <button id="applyPromoCode" class="btn">Apply</button>
+          </div>
+          <div id="promoMessage" class="promo-message"></div>
         </div>
 
         <div class="summary-totals">
@@ -979,6 +1013,7 @@
      ********************/
     const state = {
       user: null,
+      profile: null,
       cart: [],
       shippingInfo: null,
       selectedProvince: null,
@@ -987,7 +1022,8 @@
       orderTotal: 0,
       configLoaded: false,
       discount: 0,
-      couponCode: null
+      couponCode: null,
+      appliedPromoCode: null
     };
     
     /********************
@@ -1010,8 +1046,7 @@
       shippingAddress: document.getElementById('shippingAddress'),
       city: document.getElementById('city'),
       postalCode: document.getElementById('postalCode'),
-      provinceOptions: document.getElementById('provinceOptions'),
-      selectedProvince: document.getElementById('selectedProvince'),
+      provinceSelect: document.getElementById('provinceSelect'),
       shippingCost: document.getElementById('shippingCost'),
       deliveryInstructions: document.getElementById('deliveryInstructions'),
       continueToPayment: document.getElementById('continueToPayment'),
@@ -1029,6 +1064,9 @@
       totalAmount: document.getElementById('totalAmount'),
       discountRow: document.getElementById('discountRow'),
       discountAmount: document.getElementById('discountAmount'),
+      promoCodeInput: document.getElementById('promoCodeInput'),
+      applyPromoCode: document.getElementById('applyPromoCode'),
+      promoMessage: document.getElementById('promoMessage'),
       
       // Confirmation
       orderIdDisplay: document.getElementById('orderIdDisplay'),
@@ -1122,57 +1160,22 @@
         console.log('Fetching configuration from Netlify function...');
         const response = await fetch('/.netlify/functions/get-client-config');
         
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers.get('content-type'));
-        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          // Try to read the response as text to see what we got
-          const text = await response.text();
-          console.error('Non-JSON response received:', text.substring(0, 500));
-          throw new Error(`Expected JSON but got: ${contentType}`);
-        }
-        
         const config = await response.json();
-        
-        // Check for error in response
-        if (config.error) {
-          throw new Error(config.error);
-        }
         
         CONFIG = { ...CONFIG, ...config };
         state.configLoaded = true;
-        console.log('Configuration loaded successfully:', {
-          supabaseUrl: CONFIG.supabaseUrl ? 'Set' : 'Missing',
-          supabaseAnonKey: CONFIG.supabaseAnonKey ? 'Set' : 'Missing',
-          payfastMerchantId: CONFIG.payfastMerchantId ? 'Set' : 'Missing',
-          payfastMerchantKey: CONFIG.payfastMerchantKey ? 'Set' : 'Missing',
-          payfastSandbox: CONFIG.payfastSandbox
-        });
+        console.log('Configuration loaded successfully');
         
         // Initialize Supabase with fetched config
         initializeSupabase();
         
       } catch (error) {
         console.error('Error fetching configuration:', error);
-        // Fallback: try to load from localStorage (for development only)
-        try {
-          const devConfig = localStorage.getItem('umzila_config');
-          if (devConfig) {
-            console.warn('Using development configuration from localStorage');
-            CONFIG = { ...CONFIG, ...JSON.parse(devConfig) };
-            state.configLoaded = true;
-            initializeSupabase();
-          } else {
-            showConfigurationError(error.message);
-          }
-        } catch (e) {
-          showConfigurationError(error.message);
-        }
+        showConfigurationError(error.message);
       }
     }
     
@@ -1200,7 +1203,7 @@
      * SUPABASE INITIALIZATION
      ********************/
     
-	let supabaseClient = null;
+    let supabaseClient = null;
     
     function initializeSupabase() {
       try {
@@ -1211,7 +1214,7 @@
         }
         
         // Create Supabase client
-		supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+        supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
         console.log('Supabase initialized successfully');
         
         // Now we can proceed with the rest of initialization
@@ -1224,10 +1227,10 @@
     }
     
     /********************
-     * AUTHENTICATION
+     * AUTHENTICATION & PROFILE VERIFICATION
      ********************/
     
-    // Check authentication status
+    // Check authentication status and verify profile exists
     async function checkAuth() {
       try {
         if (!supabaseClient) {
@@ -1244,7 +1247,9 @@
         
         if (session?.user) {
           state.user = session.user;
-          await loadUserProfile();
+          
+          // Verify profile exists (like in index.html)
+          await verifyUserProfile(session.user.id);
           updateAuthUI();
           return true;
         }
@@ -1255,43 +1260,72 @@
       }
     }
     
-    // Load user profile
-    async function loadUserProfile() {
+    // Verify user profile exists (like in index.html)
+    async function verifyUserProfile(userId) {
       try {
-        if (!supabaseClient || !state.user) return;
+        if (!supabaseClient || !userId) return;
         
         const { data: profile, error } = await supabaseClient
           .from('profiles')
           .select('*')
-          .eq('user_id', state.user.id)
+          .eq('user_id', userId)
           .single();
         
-        if (error && error.code !== 'PGRST116') {
-          console.error('Profile load error:', error);
-          return;
+        if (error) {
+          // Profile doesn't exist, create one
+          const { data: userData } = await supabaseClient.auth.getUser();
+          const userEmail = userData?.user?.email || '';
+          
+          const { data: newProfile, error: createError } = await supabaseClient
+            .from('profiles')
+            .insert([{ 
+              user_id: userId,
+              email: userEmail,
+              first_name: '',
+              last_name: '',
+              phone: ''
+            }])
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating profile:', createError);
+            return;
+          }
+          
+          state.profile = newProfile;
+        } else {
+          state.profile = profile;
         }
         
         // Pre-fill shipping form with profile data
-        if (profile) {
-          elements.firstName.value = profile.first_name || '';
-          elements.lastName.value = profile.last_name || '';
-          elements.customerEmail.value = state.user.email || '';
-          elements.phoneNumber.value = profile.phone || '';
-          
-          if (profile.shipping_address) {
-            const addr = profile.shipping_address;
-            elements.shippingAddress.value = addr.address || '';
-            elements.city.value = addr.city || '';
-            elements.postalCode.value = addr.postal_code || '';
-            elements.selectedProvince.value = addr.province || '';
-            
-            if (addr.province) {
-              selectProvince(addr.province);
-            }
-          }
-        }
+        loadProfileData();
       } catch (error) {
-        console.error('Profile load error:', error);
+        console.error('Profile verification error:', error);
+      }
+    }
+    
+    // Load profile data into form
+    function loadProfileData() {
+      if (!state.profile) return;
+      
+      elements.firstName.value = state.profile.first_name || '';
+      elements.lastName.value = state.profile.last_name || '';
+      elements.customerEmail.value = state.user?.email || state.profile.email || '';
+      elements.phoneNumber.value = state.profile.phone || '';
+      
+      if (state.profile.address) {
+        elements.shippingAddress.value = state.profile.address;
+      }
+      if (state.profile.city) {
+        elements.city.value = state.profile.city;
+      }
+      if (state.profile.postal_code) {
+        elements.postalCode.value = state.profile.postal_code;
+      }
+      if (state.profile.province) {
+        elements.provinceSelect.value = state.profile.province;
+        selectProvince(state.profile.province);
       }
     }
     
@@ -1323,66 +1357,50 @@
     }
     
     /********************
-     * CART MANAGEMENT
+     * CART MANAGEMENT WITH PRODUCT IMAGES
      ********************/
     
     // Load cart from URL parameters or localStorage
-    // Load cart from URL parameters or localStorage
-function loadCart() {
-  try {
-    // First check URL parameters (from index.html "Buy Now" button)
-    const urlParams = new URLSearchParams(window.location.search);
-    const productId = urlParams.get('product');
-    const couponCode = urlParams.get('coupon');
-    
-    // Check localStorage for cart data
-    const savedCart = localStorage.getItem('umzila_cart');
-    const savedCoupon = localStorage.getItem('umzila_coupon');
-    
-    // MOCK ITEM FOR TESTING - Add this if no cart is found
-    const mockCartItem = {
-      id: 'mock-product-001',
-      name: 'Test Product',
-      price: 299.99,
-      quantity: 1,
-      size: 'Medium',
-      image: 'https://via.placeholder.com/400x400?text=Test+Product'
-    };
-    
-    if (productId) {
-      // Load product from URL parameter
-      loadProductFromId(productId, couponCode);
-    } else if (savedCart) {
-      // Load from localStorage
-      state.cart = JSON.parse(savedCart);
-      if (savedCoupon) {
-        const couponData = JSON.parse(savedCoupon);
-        state.couponCode = couponData.code;
-        state.discount = couponData.discount || 0;
+    async function loadCart() {
+      try {
+        // First check URL parameters (from index.html "Buy Now" button)
+        const urlParams = new URLSearchParams(window.location.search);
+        const productId = urlParams.get('product');
+        const couponCode = urlParams.get('coupon');
+        
+        // Check localStorage for cart data
+        const savedCart = localStorage.getItem('umzila_cart');
+        const savedCoupon = localStorage.getItem('umzila_coupon');
+        
+        if (productId) {
+          // Load product from URL parameter
+          await loadProductFromId(productId, couponCode);
+        } else if (savedCart) {
+          // Load from localStorage
+          state.cart = JSON.parse(savedCart);
+          
+          // Load product images for each cart item
+          await loadProductImagesForCart();
+          
+          if (savedCoupon) {
+            const couponData = JSON.parse(savedCoupon);
+            state.couponCode = couponData.code;
+            state.discount = couponData.discount || 0;
+          }
+          updateOrderSummary();
+        } else {
+          // No cart found
+          state.cart = [];
+          showEmptyCart();
+        }
+      } catch (error) {
+        console.error('Error loading cart:', error);
+        state.cart = [];
+        showEmptyCart();
       }
-      updateOrderSummary();
-    } else {
-      // No cart found - use mock item for testing
-      state.cart = [mockCartItem];
-      console.log('Using mock item for testing:', mockCartItem);
-      updateOrderSummary();
     }
-  } catch (error) {
-    console.error('Error loading cart:', error);
-    // Use mock item if there's an error
-    state.cart = [{
-      id: 'mock-product-001',
-      name: 'Test Product',
-      price: 299.99,
-      quantity: 1,
-      size: 'Medium',
-      image: 'https://via.placeholder.com/400x400?text=Test+Product'
-    }];
-    updateOrderSummary();
-  }
-}
     
-    // Load product from Supabase using product ID
+    // Load product from Supabase using product ID with images
     async function loadProductFromId(productId, couponCode = null) {
       try {
         if (!supabaseClient) {
@@ -1390,27 +1408,24 @@ function loadCart() {
           return;
         }
         
-        // Fetch product details
+        // Fetch product details with images
         const { data: product, error } = await supabaseClient
           .from('products')
-          .select('*')
+          .select(`
+            *,
+            product_images!fk_product_images_product(*)
+          `)
           .eq('id', productId)
           .single();
         
         if (error) throw error;
         
-        // Fetch product image
+        // Get first product image
         let imageUrl = 'https://via.placeholder.com/400x400?text=Product+Image';
-        if (product.image_id) {
-          const { data: image, error: imageError } = await supabaseClient
-            .from('product_images')
-            .select('image_url')
-            .eq('id', product.image_id)
-            .single();
-          
-          if (!imageError && image) {
-            imageUrl = image.image_url;
-          }
+        if (product.product_images && product.product_images.length > 0) {
+          // Sort by image_order if available
+          const sortedImages = product.product_images.sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
+          imageUrl = sortedImages[0].url;
         }
         
         // Add product to cart
@@ -1420,7 +1435,8 @@ function loadCart() {
           price: product.price,
           quantity: 1,
           size: product.size || 'One Size',
-          image: imageUrl
+          image: imageUrl,
+          product_data: product // Store full product data for later use
         }];
         
         // Apply coupon if provided
@@ -1439,16 +1455,61 @@ function loadCart() {
       }
     }
     
+    // Load product images for all cart items
+    async function loadProductImagesForCart() {
+      if (!supabaseClient || state.cart.length === 0) return;
+      
+      try {
+        // Get all product IDs from cart
+        const productIds = state.cart.map(item => item.id);
+        
+        // Fetch products with their images
+        const { data: products, error } = await supabaseClient
+          .from('products')
+          .select(`
+            *,
+            product_images!fk_product_images_product(*)
+          `)
+          .in('id', productIds);
+        
+        if (error) throw error;
+        
+        // Create a map of product ID to product data with images
+        const productMap = {};
+        products.forEach(product => {
+          let imageUrl = 'https://via.placeholder.com/400x400?text=Product+Image';
+          if (product.product_images && product.product_images.length > 0) {
+            const sortedImages = product.product_images.sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
+            imageUrl = sortedImages[0].url;
+          }
+          productMap[product.id] = {
+            ...product,
+            primary_image: imageUrl
+          };
+        });
+        
+        // Update cart items with images
+        state.cart = state.cart.map(item => ({
+          ...item,
+          image: productMap[item.id]?.primary_image || item.image,
+          product_data: productMap[item.id] || item.product_data
+        }));
+        
+      } catch (error) {
+        console.error('Error loading product images:', error);
+      }
+    }
+    
     // Apply coupon code
     async function applyCoupon(code) {
       try {
         if (!supabaseClient) return false;
         
         const { data: coupon, error } = await supabaseClient
-          .from('coupons')
+          .from('discount_codes')
           .select('*')
           .eq('code', code.toUpperCase())
-          .eq('is_active', true)
+          .eq('used', false)
           .single();
         
         if (error) {
@@ -1458,35 +1519,31 @@ function loadCart() {
         
         // Check if coupon is expired
         const now = new Date();
-        const validFrom = new Date(coupon.valid_from);
-        const validTo = new Date(coupon.valid_to);
+        const expiresAt = new Date(coupon.expires_at);
         
-        if (now < validFrom || now > validTo) {
-          console.log('Coupon expired or not yet valid');
+        if (now > expiresAt) {
+          console.log('Coupon expired');
           return false;
         }
         
-        // Calculate discount
+        // Calculate discount based on coupon type
         let discount = 0;
-        if (coupon.discount_type === 'percentage') {
-          discount = (state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * coupon.discount_value) / 100;
+        if (coupon.type === 'percentage') {
+          const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+          discount = (subtotal * coupon.amount) / 100;
         } else {
-          discount = coupon.discount_value;
-        }
-        
-        // Apply minimum order amount if specified
-        if (coupon.minimum_order && state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) < coupon.minimum_order) {
-          console.log('Minimum order amount not met');
-          return false;
+          discount = coupon.amount;
         }
         
         state.couponCode = coupon.code;
         state.discount = discount;
+        state.appliedPromoCode = coupon;
         
         // Save coupon to localStorage
         localStorage.setItem('umzila_coupon', JSON.stringify({
           code: coupon.code,
-          discount: discount
+          discount: discount,
+          coupon_data: coupon
         }));
         
         updateOrderSummary();
@@ -1496,6 +1553,29 @@ function loadCart() {
         console.error('Error applying coupon:', error);
         return false;
       }
+    }
+    
+    // Apply promo code from input
+    async function applyPromoCode() {
+      const code = elements.promoCodeInput.value.trim();
+      if (!code) {
+        showPromoMessage('Please enter a promo code', 'error');
+        return;
+      }
+      
+      const success = await applyCoupon(code);
+      if (success) {
+        showPromoMessage(`Promo code applied! Discount: ${formatCurrency(state.discount)}`, 'success');
+        elements.promoCodeInput.value = '';
+      } else {
+        showPromoMessage('Invalid or expired promo code', 'error');
+      }
+    }
+    
+    // Show promo code message
+    function showPromoMessage(message, type) {
+      elements.promoMessage.textContent = message;
+      elements.promoMessage.className = 'promo-message ' + type;
     }
     
     // Show empty cart message
@@ -1577,46 +1657,10 @@ function loadCart() {
      * SHIPPING MANAGEMENT
      ********************/
     
-    // Populate province options
-    function populateProvinces() {
-      const provinces = Object.keys(SHIPPING_COSTS);
-      let html = '';
-      
-      provinces.forEach(province => {
-        const cost = SHIPPING_COSTS[province];
-        html += `
-          <div class="province-option" data-province="${province}" data-cost="${cost}">
-            <div class="province-name">${province}</div>
-            <div class="province-price">${formatCurrency(cost)}</div>
-          </div>
-        `;
-      });
-      
-      elements.provinceOptions.innerHTML = html;
-      
-      // Add click handlers
-      document.querySelectorAll('.province-option').forEach(option => {
-        option.addEventListener('click', () => {
-          selectProvince(option.dataset.province);
-        });
-      });
-    }
-    
     // Select province
     function selectProvince(province) {
-      document.querySelectorAll('.province-option').forEach(opt => {
-        opt.classList.remove('selected');
-      });
-      
-      const selectedOption = document.querySelector(`[data-province="${province}"]`);
-      if (selectedOption) {
-        selectedOption.classList.add('selected');
-      }
-      
       state.selectedProvince = province;
-      elements.selectedProvince.value = province;
       elements.shippingCost.value = SHIPPING_COSTS[province] || 0;
-      
       updateShippingAndTotal();
     }
     
@@ -1634,7 +1678,7 @@ function loadCart() {
         { element: elements.shippingAddress, name: 'Shipping Address' },
         { element: elements.city, name: 'City' },
         { element: elements.postalCode, name: 'Postal Code' },
-        { element: elements.selectedProvince, name: 'Province' }
+        { element: elements.provinceSelect, name: 'Province' }
       ];
       
       for (const field of requiredFields) {
@@ -1670,7 +1714,7 @@ function loadCart() {
         address: elements.shippingAddress.value.trim(),
         city: elements.city.value.trim(),
         postalCode: elements.postalCode.value.trim(),
-        province: elements.selectedProvince.value,
+        province: elements.provinceSelect.value,
         shippingCost: parseFloat(elements.shippingCost.value),
         instructions: elements.deliveryInstructions.value.trim()
       };
@@ -1725,8 +1769,8 @@ function loadCart() {
       const params = {
         merchant_id: CONFIG.payfastMerchantId,
         merchant_key: CONFIG.payfastMerchantKey,
-        return_url: `${CONFIG.siteUrl}/checkout-success.html`,
-        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html`,
+        return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${m_payment_id}`,
+        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${m_payment_id}`,
         notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
         
         name_first: state.shippingInfo.firstName.substring(0, 100),
@@ -1736,7 +1780,7 @@ function loadCart() {
         
         m_payment_id: m_payment_id.substring(0, 100),
         amount: parseFloat(state.orderTotal).toFixed(2),
-        item_name: `Umzila Order - ${itemDescription.substring(0, 95)}`,
+        item_name: `Umzila Order ${m_payment_id.substring(0, 95)}`,
         item_description: itemDescription.substring(0, 250),
         
         email_confirmation: '1',
@@ -1747,7 +1791,7 @@ function loadCart() {
     }
     
     // Submit to PayFast
-    function submitToPayFast() {
+    async function submitToPayFast() {
       if (!state.configLoaded) {
         showError(elements.paymentError, 'Configuration not loaded. Please refresh the page.');
         return;
@@ -1761,20 +1805,43 @@ function loadCart() {
       const { params, m_payment_id } = generatePayFastParams();
       const signature = generateSignature(params, CONFIG.payfastPassphrase);
       
-      // Save order info
-      const orderData = {
-        orderId: m_payment_id,
-        customerEmail: state.shippingInfo.email,
-        customerName: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
-        amount: state.orderTotal,
-        date: new Date().toISOString(),
-        cart: state.cart,
-        shipping: state.shippingInfo,
-        coupon: state.couponCode,
-        discount: state.discount
-      };
-      
-      localStorage.setItem('last_order', JSON.stringify(orderData));
+      try {
+        // Save order to Supabase
+        if (supabaseClient) {
+          const orderData = {
+            user_id: state.user?.id || null,
+            customer_email: state.shippingInfo.email,
+            customer_name: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
+            customer_phone: state.shippingInfo.phone,
+            delivery_address: state.shippingInfo.address,
+            city: state.shippingInfo.city,
+            province: state.shippingInfo.province,
+            postal_code: state.shippingInfo.postalCode,
+            items: state.cart,
+            total: state.orderTotal,
+            discount: state.discount,
+            shipping_cost: state.shippingInfo.shippingCost,
+            order_status: 'pending',
+            order_number: m_payment_id,
+            m_payment_id: m_payment_id,
+            profile_id: state.profile?.id || null
+          };
+          
+          const { data: order, error } = await supabaseClient
+            .from('orders')
+            .insert([orderData])
+            .select()
+            .single();
+          
+          if (error) {
+            console.error('Error saving order:', error);
+          } else {
+            state.orderId = order.id;
+          }
+        }
+      } catch (error) {
+        console.error('Error saving order to Supabase:', error);
+      }
       
       // Build PayFast form
       elements.payfastForm.innerHTML = '';
@@ -1826,7 +1893,7 @@ function loadCart() {
       elements.payNowBtn.disabled = true;
       elements.payNowBtn.textContent = 'Processing...';
       
-      submitToPayFast();
+      await submitToPayFast();
     }
     
     /********************
@@ -1835,11 +1902,15 @@ function loadCart() {
     
     async function continueInitialization() {
       try {
-        loadCart();
-        populateProvinces();
+        await loadCart();
         
         // Check authentication
-        await checkAuth();
+        const isAuthenticated = await checkAuth();
+        
+        if (!isAuthenticated) {
+          // Show auth modal if not logged in
+          showAuthModal();
+        }
         
         // Hide loading state
         elements.loadingState.classList.add('hidden');
@@ -1873,6 +1944,11 @@ function loadCart() {
      ********************/
     
     function setupEventListeners() {
+      // Province select change
+      elements.provinceSelect.addEventListener('change', (e) => {
+        selectProvince(e.target.value);
+      });
+      
       // Continue to payment button
       elements.continueToPayment.addEventListener('click', (e) => {
         e.preventDefault();
@@ -1889,6 +1965,9 @@ function loadCart() {
         processPayment();
       });
       
+      // Apply promo code button
+      elements.applyPromoCode.addEventListener('click', applyPromoCode);
+      
       // Edit buttons
       document.getElementById('editShipping')?.addEventListener('click', () => goToStep('shipping'));
       document.getElementById('editPayment')?.addEventListener('click', () => goToStep('payment'));
@@ -1902,7 +1981,7 @@ function loadCart() {
         }
       });
       
-      // Simple auth for demo
+      // Authentication
       elements.authBtn.addEventListener('click', showAuthModal);
       elements.closeAuthModal.addEventListener('click', hideAuthModal);
       elements.authModal.addEventListener('click', (e) => {
@@ -1911,7 +1990,18 @@ function loadCart() {
         }
       });
       
-      // Demo login
+      // Auth tabs
+      elements.authTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          elements.authTabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          
+          elements.loginForm.classList.toggle('active', tab.dataset.tab === 'login');
+          elements.signupForm.classList.toggle('active', tab.dataset.tab === 'signup');
+        });
+      });
+      
+      // Login
       elements.loginSubmit.addEventListener('click', async () => {
         const email = elements.loginEmail.value.trim();
         const password = elements.loginPassword.value;
@@ -1936,23 +2026,79 @@ function loadCart() {
             if (error) throw error;
             
             state.user = data.user;
+            await verifyUserProfile(data.user.id);
             elements.customerEmail.value = state.user.email;
-            updateAuthUI();
-            hideAuthModal();
-          } else {
-            // Fallback for demo
-            state.user = { email: email };
-            elements.customerEmail.value = email;
             updateAuthUI();
             hideAuthModal();
           }
         } catch (error) {
-          showError(elements.loginError, 'Login failed. Using demo mode.');
-          // Fallback
-          state.user = { email: email };
-          elements.customerEmail.value = email;
-          updateAuthUI();
-          hideAuthModal();
+          showError(elements.loginError, error.message || 'Login failed.');
+        }
+      });
+      
+      // Signup
+      elements.signupSubmit.addEventListener('click', async () => {
+        const name = elements.signupName.value.trim();
+        const email = elements.signupEmail.value.trim();
+        const password = elements.signupPassword.value;
+        
+        if (!name || !email || !password) {
+          showError(elements.signupError, 'Please complete all fields.');
+          return;
+        }
+        
+        if (!isValidEmail(email)) {
+          showError(elements.signupError, 'Please enter a valid email address.');
+          return;
+        }
+        
+        try {
+          if (supabaseClient) {
+            const { data, error } = await supabaseClient.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  full_name: name
+                }
+              }
+            });
+            
+            if (error) throw error;
+            
+            state.user = data.user;
+            await verifyUserProfile(data.user.id);
+            elements.customerEmail.value = state.user.email;
+            updateAuthUI();
+            hideAuthModal();
+            
+            showError(elements.signupError, 'Account created! Please check your email for verification.');
+            elements.signupError.style.color = 'green';
+          }
+        } catch (error) {
+          showError(elements.signupError, error.message || 'Signup failed.');
+        }
+      });
+      
+      // Forgot password
+      elements.forgotPassword.addEventListener('click', () => {
+        const email = elements.loginEmail.value.trim();
+        if (email && supabaseClient) {
+          supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${CONFIG.siteUrl}/reset-password.html`
+          }).then(() => {
+            alert('Password reset email sent! Check your inbox.');
+          });
+        } else {
+          alert('Please enter your email address first.');
+        }
+      });
+      
+      // Enter key for promo code
+      elements.promoCodeInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          applyPromoCode();
         }
       });
     }
