@@ -677,8 +677,6 @@
       margin-top: 20px;
     }
   </style>
-  <!-- Include MD5 library for PayFast signature -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/blueimp-md5/2.19.0/js/md5.min.js"></script>
   <!-- Include Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -1133,46 +1131,7 @@
       return SHIPPING_COSTS[province] || 0;
     }
     
-    function generateSignature(data, passphrase = '') {
-    console.log('=== Generating PayFast Signature ===');
-    console.log('Data for signature:', data);
-    console.log('Passphrase:', passphrase || '(empty)');
-    
-    // Build the parameter string in EXACT order required by PayFast
-    const params = [
-        `merchant_id=${encodeURIComponent(data.merchant_id).replace(/%20/g, '+')}`,
-        `merchant_key=${encodeURIComponent(data.merchant_key).replace(/%20/g, '+')}`,
-        `return_url=${encodeURIComponent(data.return_url).replace(/%20/g, '+')}`,
-        `cancel_url=${encodeURIComponent(data.cancel_url).replace(/%20/g, '+')}`,
-        `notify_url=${encodeURIComponent(data.notify_url).replace(/%20/g, '+')}`,
-        `name_first=${encodeURIComponent(data.name_first).replace(/%20/g, '+')}`,
-        `name_last=${encodeURIComponent(data.name_last).replace(/%20/g, '+')}`,
-        `email_address=${encodeURIComponent(data.email_address).replace(/%20/g, '+')}`,
-        `cell_number=${encodeURIComponent(data.cell_number).replace(/%20/g, '+')}`,
-        `m_payment_id=${encodeURIComponent(data.m_payment_id).replace(/%20/g, '+')}`,
-        `amount=${encodeURIComponent(data.amount).replace(/%20/g, '+')}`,
-        `item_name=${encodeURIComponent(data.item_name).replace(/%20/g, '+')}`,
-        `item_description=${encodeURIComponent(data.item_description).replace(/%20/g, '+')}`,
-        `email_confirmation=${encodeURIComponent(data.email_confirmation).replace(/%20/g, '+')}`,
-        `confirmation_address=${encodeURIComponent(data.confirmation_address).replace(/%20/g, '+')}`
-    ];
-    
-    // Join parameters
-    let paramString = params.join('&');
-    console.log('Parameter string:', paramString);
-    
-    // IMPORTANT: PayFast ALWAYS requires the passphrase parameter, even if empty
-    // This is where most people get it wrong
-    paramString += `&passphrase=${encodeURIComponent(passphrase || '').replace(/%20/g, '+')}`;
-    
-    console.log('Full string to hash:', paramString);
-    
-    // Generate MD5 hash
-    const signature = md5(paramString);
-    console.log('Generated signature:', signature);
-    
-    return signature;
-}
+
     
     /********************
      * FETCH CONFIGURATION FROM NETLIFY FUNCTION
@@ -1872,98 +1831,6 @@ async function validateCheckout() {
     }
 }
 
-// Enhanced process payment function
-async function processPayment() {
-    try {
-        // Validate form
-        if (!elements.termsAgreement.checked) {
-            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
-            return;
-        }
-        
-        // Server-side cart validation
-        const validatedCart = await validateCheckout();
-        
-        if (validatedCart.length === 0) {
-            showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
-            return;
-        }
-        
-        // Save shipping info
-        if (!state.shippingInfo) {
-            if (!validateShippingForm()) return;
-            saveShippingInfo();
-        }
-        
-        // Disable button during processing
-        elements.payNowBtn.disabled = true;
-        elements.payNowBtn.textContent = 'Processing...';
-        
-        // Generate order ID
-        const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Calculate totals based on validated cart
-        const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const shipping = state.shippingInfo?.shippingCost || 0;
-        const discount = state.discount || 0;
-        const total = Math.max(0, subtotal - discount + shipping);
-        
-        // Save order to Supabase before payment
-        if (supabaseClient) {
-            const orderData = {
-                user_id: state.user?.id || null,
-                profile_id: state.profile?.id || null,
-                customer_email: state.shippingInfo.email,
-                customer_name: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
-                customer_phone: state.shippingInfo.phone,
-                delivery_address: state.shippingInfo.address,
-                city: state.shippingInfo.city,
-                province: state.shippingInfo.province,
-                postal_code: state.shippingInfo.postalCode,
-                items: validatedCart,
-                total: total,
-                discount: discount,
-                shipping_cost: shipping,
-                order_status: 'pending',
-                order_number: orderId,
-                m_payment_id: orderId,
-                label: state.shippingInfo.label || 'Standard Delivery'
-            };
-            
-            const { data: order, error } = await supabaseClient
-                .from('orders')
-                .insert([orderData])
-                .select()
-                .single();
-                
-            if (error) {
-                console.error('Error saving order:', error);
-                throw new Error('Failed to create order. Please try again.');
-            }
-            
-            state.orderId = order.id;
-        }
-        
-        // Clear cart after successful order creation
-        if (supabaseClient && state.user) {
-            await supabaseClient
-                .from('carts')
-                .delete()
-                .eq('user_id', state.user.id);
-        }
-        localStorage.removeItem('ss_cart');
-        localStorage.removeItem('ss_coupon');
-        
-        // Generate PayFast parameters
-        await submitToPayFast(validatedCart, orderId, total);
-        
-    } catch (error) {
-        console.error('Payment processing error:', error);
-        showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
-        elements.payNowBtn.disabled = false;
-        elements.payNowBtn.textContent = 'Pay Now';
-    }
-}
     
     // Show promo code message
     function showPromoMessage(message, type) {
@@ -2214,199 +2081,76 @@ function showNotification(message, type = 'info') {
      * PAYFAST INTEGRATION
      ********************/
     
-    // Generate PayFast parameters
-    function generatePayFastParams() {
-      const m_payment_id = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      const itemNames = state.cart.map(item => item.name).join(', ');
-      const itemDescription = state.cart.length === 1 
-        ? state.cart[0].name 
-        : `${state.cart.length} items from Umzila Store`;
-      
-      const params = {
-        merchant_id: CONFIG.payfastMerchantId,
-        merchant_key: CONFIG.payfastMerchantKey,
-        return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${m_payment_id}`,
-        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${m_payment_id}`,
-        notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
-        
-        name_first: state.shippingInfo.firstName.substring(0, 100),
-        name_last: state.shippingInfo.lastName.substring(0, 100),
-        email_address: state.shippingInfo.email.substring(0, 100),
-        cell_number: state.shippingInfo.phone.replace(/\D/g, '').substring(0, 100),
-        
-        m_payment_id: m_payment_id.substring(0, 100),
-        amount: parseFloat(state.orderTotal).toFixed(2),
-        item_name: `Umzila Order ${m_payment_id.substring(0, 95)}`,
-        item_description: itemDescription.substring(0, 250),
-        
-        email_confirmation: '1',
-        confirmation_address: state.shippingInfo.email.substring(0, 100)
-      };
-      
-      return { params, m_payment_id };
-    }
     
+// submitToPayFast: request a server-generated signature and submit the PayFast form
 async function submitToPayFast(cartItems, orderId, total) {
-    if (!state.configLoaded) {
-        throw new Error('Configuration not loaded. Please refresh the page.');
-    }
-    
-    if (!CONFIG.payfastMerchantId || !CONFIG.payfastMerchantKey) {
-        throw new Error('Payment gateway configuration missing.');
-    }
-    
-    // Get passphrase from CONFIG
-    const passphrase = CONFIG.payfastPassphrase || '';
-    console.log('Using passphrase:', passphrase ? 'Yes' : 'No');
-    
-    // Build data in EXACT order
-    const data = {
-        merchant_id: CONFIG.payfastMerchantId,
-        merchant_key: CONFIG.payfastMerchantKey,
-        return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${orderId}&order_id=${state.orderId}`,
-        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${orderId}`,
-        notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
-        name_first: state.shippingInfo.firstName,
-        name_last: state.shippingInfo.lastName,
-        email_address: state.shippingInfo.email,
-        cell_number: state.shippingInfo.phone.replace(/\D/g, ''),
-        m_payment_id: orderId,
-        amount: parseFloat(total).toFixed(2),
-        item_name: `Umzila Order ${orderId}`,
-        item_description: cartItems.length === 1 
-            ? cartItems[0].name 
-            : `${cartItems.length} items from Umzila Store`,
-        email_confirmation: '1',
-        confirmation_address: state.shippingInfo.email
-    };
-    
-    console.log('=== PayFast Data ===');
-    console.log('Data to be signed:', JSON.stringify(data, null, 2));
-    
-    // Generate signature
-    const signature = generateSignature(data, passphrase);
-    
-    // Add signature to data
-    data.signature = signature;
-    
-    // Create and submit form
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = CONFIG.payfastSandbox 
-        ? 'https://sandbox.payfast.co.za/eng/process'
-        : 'https://www.payfast.co.za/eng/process';
-    form.style.display = 'none';
-    
-    // Add parameters in EXACT same order as signature generation
-    const paramOrder = [
-        'merchant_id', 'merchant_key', 'return_url', 'cancel_url', 'notify_url',
-        'name_first', 'name_last', 'email_address', 'cell_number', 'm_payment_id',
-        'amount', 'item_name', 'item_description', 'email_confirmation', 
-        'confirmation_address', 'signature'
-    ];
-    
-    paramOrder.forEach(key => {
-        if (data[key]) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = data[key];
-            form.appendChild(input);
-        }
-    });
-    
-    document.body.appendChild(form);
-    console.log('Submitting form to PayFast...');
-    form.submit();
+  if (!state.configLoaded) {
+    throw new Error('Configuration not loaded. Please refresh the page.');
+  }
+
+  // Build the payload to send to the serverless function.
+  // IMPORTANT: do NOT include merchant_key (secret) here.
+  const payload = {
+    // public / non-secret fields only:
+    m_payment_id: String(orderId).substring(0, 100),
+    amount: parseFloat(total).toFixed(2),
+    item_name: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
+    item_description: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
+    return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${orderId}&order_id=${state.orderId || ''}`,
+    cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${orderId}`,
+    notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
+    name_first: (state.shippingInfo?.firstName || '').substring(0, 100),
+    name_last: (state.shippingInfo?.lastName || '').substring(0, 100),
+    email_address: (state.shippingInfo?.email || '').substring(0, 100),
+    cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100),
+    email_confirmation: '1',
+    confirmation_address: (state.shippingInfo?.email || '').substring(0, 100)
+    // add custom_strX / custom_intX here if you want the server to sign them
+  };
+
+  // Call your Netlify function to generate signature + final params
+  const res = await fetch('/.netlify/functions/generate-payfast-signature', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payload, returnForm: false })
+  });
+
+  if (!res.ok) {
+    // show server response text to help debugging (strip in production)
+    const errText = await res.text();
+    console.error('generate-payfast-signature error:', errText);
+    throw new Error('Failed to obtain signed PayFast parameters.');
+  }
+
+  const json = await res.json();
+
+  // Server must return an object that includes:
+  // { actionUrl, params }  where params is a key/value map of values to submit.
+  // If your function returns pfHost or actionUrl, use that. We'll fallback sensibly.
+  const actionUrl = json.actionUrl || (json.pfHost ? `https://${json.pfHost}/eng/process` : (CONFIG.payfastSandbox ? 'https://sandbox.payfast.co.za/eng/process' : 'https://www.payfast.co.za/eng/process'));
+  const params = json.params || json; // tolerate different shapes for older functions
+
+  // Build and submit the form in the same page
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = actionUrl;
+  form.style.display = 'none';
+
+  // Append parameters as hidden inputs (only keys with non-empty values)
+  Object.entries(params).forEach(([key, value]) => {
+  if (value === undefined || value === null || String(value).trim() === '') return;
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = key;
+  input.value = String(value);
+  form.appendChild(input);
+});
+
+
+  document.body.appendChild(form);
+  form.submit();
 }
 
-function debugPayFastSignature() {
-    console.log('=== DEBUG: PayFast Signature Test ===');
-    
-    const testData = {
-        merchant_id: '',
-        merchant_key: '',
-        return_url: '',
-        cancel_url: '',
-        notify_url: '',
-        name_first: '',
-        name_last: '',
-        email_address: '',
-        cell_number: '',
-        m_payment_id: '',
-        amount: '',
-        item_name: '',
-        item_description: '',
-        email_confirmation: '1',
-        confirmation_address: ''
-    };
-    
-    const passphrase = CONFIG.payfastPassphrase || '';
-    
-    console.log('Test Data:', testData);
-    console.log('Passphrase:', passphrase);
-    
-    // Your current signature
-    const currentSig = generateSignature(testData, passphrase);
-    console.log('Current signature:', currentSig);
-    
-    // Also test with empty passphrase
-    const sigNoPassphrase = generateSignature(testData, '');
-    console.log('Signature with empty passphrase:', sigNoPassphrase);
-}
-
-// Add this helper function for debugging
-function getSignatureString(data, passphrase = null) {
-    let pfOutput = '';
-    
-    // Build string in same order as generateSignature
-    pfOutput += 'merchant_id=' + encodeURIComponent(data.merchant_id).replace(/%20/g, '+') + '&';
-    pfOutput += 'merchant_key=' + encodeURIComponent(data.merchant_key).replace(/%20/g, '+') + '&';
-    pfOutput += 'return_url=' + encodeURIComponent(data.return_url).replace(/%20/g, '+') + '&';
-    pfOutput += 'cancel_url=' + encodeURIComponent(data.cancel_url).replace(/%20/g, '+') + '&';
-    pfOutput += 'notify_url=' + encodeURIComponent(data.notify_url).replace(/%20/g, '+') + '&';
-    pfOutput += 'name_first=' + encodeURIComponent(data.name_first).replace(/%20/g, '+') + '&';
-    pfOutput += 'name_last=' + encodeURIComponent(data.name_last).replace(/%20/g, '+') + '&';
-    pfOutput += 'email_address=' + encodeURIComponent(data.email_address).replace(/%20/g, '+') + '&';
-    pfOutput += 'cell_number=' + encodeURIComponent(data.cell_number).replace(/%20/g, '+') + '&';
-    pfOutput += 'm_payment_id=' + encodeURIComponent(data.m_payment_id).replace(/%20/g, '+') + '&';
-    pfOutput += 'amount=' + encodeURIComponent(data.amount).replace(/%20/g, '+') + '&';
-    pfOutput += 'item_name=' + encodeURIComponent(data.item_name).replace(/%20/g, '+') + '&';
-    pfOutput += 'item_description=' + encodeURIComponent(data.item_description).replace(/%20/g, '+') + '&';
-    pfOutput += 'email_confirmation=' + encodeURIComponent(data.email_confirmation).replace(/%20/g, '+') + '&';
-    pfOutput += 'confirmation_address=' + encodeURIComponent(data.confirmation_address).replace(/%20/g, '+');
-    
-    let getString = pfOutput;
-    
-    if (passphrase !== null && passphrase !== '') {
-        getString += '&passphrase=' + encodeURIComponent(passphrase.trim()).replace(/%20/g, '+');
-    }
-    
-    return getString;
-}
-
-// Submit PayFast form
-function submitPayFastForm(params) {
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = CONFIG.payfastSandbox 
-        ? 'https://sandbox.payfast.co.za/eng/process'
-        : 'https://www.payfast.co.za/eng/process';
-    form.style.display = 'none';
-    
-    // Add all parameters as hidden inputs
-    Object.entries(params).forEach(([key, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-    });
-    
-    document.body.appendChild(form);
-    form.submit();
-}
     
     async function processPayment() {
     try {
