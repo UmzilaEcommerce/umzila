@@ -10,8 +10,31 @@
       --bg:#f7f7f9; --card:#fff; --muted:#6b6b74; --accent:#0a2f66; --cta:#ff6b2c; --shadow:0 6px 18px rgba(11,13,20,0.08);
     }
     *{box-sizing:border-box;margin:0;padding:0;font-family:Inter, system-ui, Arial, sans-serif}
-    body{background:var(--bg);color:#111;min-height:100vh}
-    header{background:#fff;padding:12px 18px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:12px}
+    html,body{height:100%;}
+    body{background:var(--bg);color:#111;min-height:100vh;-webkit-font-smoothing:antialiased}
+
+    /* Header */
+    header{background:#fff;padding:12px 18px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:1200}
+    .header-left{display:flex;align-items:center;gap:12px}
+    .brand{font-weight:700;color:var(--accent);font-size:16px}
+    .back-btn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent);text-decoration:none}
+    .header-title{flex:1;text-align:center;font-weight:700;color:#111}
+
+    /* Desktop logout button shown on larger screens */
+    #logoutBtn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent)}
+
+    /* Mobile menu (hamburger) */
+    .hamburger{display:none;border:none;background:transparent;padding:8px;border-radius:8px;cursor:pointer}
+    .hamburger .bar{display:block;width:20px;height:2px;background:var(--accent);margin:4px 0;border-radius:2px}
+
+    /* Mobile nav drawer */
+    .mobile-nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1300}
+    .mobile-nav{position:fixed;right:0;top:0;height:100%;width:280px;background:#fff;box-shadow: -12px 0 24px rgba(10,15,30,0.12);transform:translateX(100%);transition:transform .28s ease;padding:18px;z-index:1400}
+    .mobile-nav.open{transform:translateX(0)}
+    .mobile-nav .nav-item{padding:12px;border-radius:8px;display:block;color:var(--accent);font-weight:600;margin-bottom:8px}
+    .mobile-nav .nav-item.secondary{font-weight:400;color:var(--muted)}
+
+    /* Layout */
     .container{max-width:1200px;margin:18px auto;padding:0 18px}
     .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer}
     .btn.ghost{background:transparent;border:1px solid #e6e6ea;color:var(--accent)}
@@ -28,15 +51,17 @@
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
     .addresses-list, .orders-list{display:flex;flex-direction:column;gap:10px}
     .address-item, .order-item{padding:12px;border-radius:8px;background:#fafafa;border:1px solid #f0f0f5;cursor:pointer}
+    .order-item{transition:box-shadow .18s ease}
     .order-item:hover{box-shadow:0 6px 18px rgba(10,15,30,0.04)}
     .muted-inline{font-size:12px;color:var(--muted)}
     table{width:100%;border-collapse:collapse}
     th,td{padding:8px;border-bottom:1px solid #f2f2f6;text-align:left;font-size:14px}
-    @media (max-width:900px){
-      .profile-wrap{flex-direction:column}
-    }
 
-    /* --- Order detail modal (keeps look consistent) --- */
+    /* Order thumbnails */
+    .order-item img{width:48px;height:48px;border-radius:6px;object-fit:cover}
+    .order-item .thumbs{display:flex;align-items:center}
+
+    /* Modal */
     .modal { position: fixed; inset: 0; background: rgba(4,6,12,0.5); display:none; align-items:center; justify-content:center; z-index:2200; padding:18px; }
     .modal.open { display:flex; }
     .modal-card { background: #fff; border-radius:12px; width:100%; max-width:800px; max-height:90vh; overflow:auto; padding:18px; box-shadow:var(--shadow); }
@@ -45,12 +70,28 @@
     .modal-close { background:transparent;border:none;font-size:18px;cursor:pointer; }
     .modal-row .value { font-weight: 600; color: #111; }
     .confirm-body { display:flex; gap:12px; align-items:center; justify-content:center; padding-top:12px; }
+
+    @media (max-width:900px){
+      .profile-wrap{flex-direction:column}
+      .header-title{text-align:left;padding-left:8px}
+      .back-btn{display:inline-flex}
+      /* hide desktop logout and show hamburger */
+      #logoutBtn{display:none}
+      .hamburger{display:block}
+      .header-title{font-size:15px}
+      .brand{font-size:14px}
+      .profile-card{width:100%;min-width:unset}
+      .panel{min-width:unset}
+      .mobile-nav-overlay{display:block}
+    }
+
   </style>
 
-  <!-- Supabase initialization via Netlify function -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <!-- Use Supabase JS v2 (UMD bundle) so behavior matches other pages -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <script>
+  // Fetch config and create a single global supabase client instance early
   (async function initSupabaseClient(){
     try {
       const res = await fetch('/.netlify/functions/get-client-config');
@@ -65,13 +106,14 @@
         return;
       }
 
-      // Initialize Supabase client
+      // Create a stable client and expose as window.supabaseClient
       const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-      window.supabase = supabaseClient; // make it accessible globally
+      window.supabaseClient = supabaseClient;
+      window.SUPABASE_CONFIG = cfg;
 
-      // Optional: notify other scripts that Supabase is ready
-      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
-      console.log('Supabase client initialized');
+      // Let the rest of the page know supabase is ready
+      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient } }));
+      console.log('Supabase client initialized (profile.html)');
     } catch (err) {
       console.error('Error initializing Supabase client', err);
     }
@@ -80,11 +122,27 @@
 </head>
 <body>
   <header>
-    <a href="index.html" class="btn ghost">← Back</a>
-    <div style="flex:1">
-      <strong>StreetSale — Your profile</strong>
+    <div class="header-left">
+      <a href="index.html" class="back-btn">← Back</a>
+      <div class="brand">StreetSale</div>
     </div>
+    <div class="header-title">Your profile</div>
     <button id="logoutBtn" class="btn ghost">Log out</button>
+    <button id="menuBtn" class="hamburger" aria-label="Open menu" aria-expanded="false">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </button>
+
+    <!-- Mobile nav drawer -->
+    <div id="mobileNavOverlay" class="mobile-nav-overlay" style="display:none"></div>
+    <nav id="mobileNav" class="mobile-nav" aria-hidden="true">
+      <a href="profile.html" class="nav-item">Profile</a>
+      <a href="#orders" id="navOrders" class="nav-item">Orders</a>
+      <a href="#addresses" id="navAddresses" class="nav-item">Addresses</a>
+      <a href="#security" id="navSecurity" class="nav-item">Security</a>
+      <button id="mobileLogout" class="nav-item secondary" style="border:none;background:transparent;text-align:left;padding:0;margin-top:12px">Log out</button>
+    </nav>
   </header>
 
   <div class="container">
@@ -149,7 +207,7 @@
             <button id="deleteAccount" class="btn ghost">Delete account (!)</button>
             <button id="refreshBtn" class="btn">Refresh</button>
           </div>
-          <div class="small" style="margin-top:8px">Deleting an account is irreversible. This button will attempt to delete auth user and linked profile rows if allowed by your DB policies.</div>
+          
         </div>
       </main>
     </div>
@@ -186,19 +244,17 @@
 
   <script>
   (async function(){
-    // Wait for supabase to be initialized
-    if (!window.supabase) {
+    // Wait for supabase client ready
+    if (!window.supabaseClient) {
       await new Promise(resolve => {
-        if (window.supabase) {
-          resolve();
-        } else {
-          document.addEventListener('supabase-ready', () => resolve());
-        }
+        if (window.supabaseClient) return resolve();
+        document.addEventListener('supabase-ready', () => resolve());
+        // defensive timeout so page doesn't hang forever
+        setTimeout(resolve, 3000);
       });
     }
-    
-    // initialize supabase client
-    const supabase = window.supabase;
+
+    const supabase = window.supabaseClient;
 
     if(!supabase){
       console.error('Supabase client not initialized. Check script include and keys.');
@@ -206,7 +262,7 @@
       return;
     }
 
-    // ---------- DOM refs ----------
+    // DOM refs
     const profileEmail = document.getElementById('profileEmail');
     const profileFirstName = document.getElementById('profileFirstName');
     const profileLastName = document.getElementById('profileLastName');
@@ -238,18 +294,48 @@
     const logoutYes = document.getElementById('logoutYes');
     const logoutNo = document.getElementById('logoutNo');
 
-    // ---------- helpers ----------
+    // mobile menu elements
+    const menuBtn = document.getElementById('menuBtn');
+    const mobileNav = document.getElementById('mobileNav');
+    const mobileNavOverlay = document.getElementById('mobileNavOverlay');
+    const mobileLogout = document.getElementById('mobileLogout');
+
+    function openMobileNav(){
+      mobileNav.classList.add('open');
+      mobileNav.setAttribute('aria-hidden','false');
+      menuBtn.setAttribute('aria-expanded','true');
+      mobileNavOverlay.style.display = 'block';
+    }
+    function closeMobileNav(){
+      mobileNav.classList.remove('open');
+      mobileNav.setAttribute('aria-hidden','true');
+      menuBtn.setAttribute('aria-expanded','false');
+      mobileNavOverlay.style.display = 'none';
+    }
+
+    menuBtn && menuBtn.addEventListener('click', ()=>{
+      if(mobileNav.classList.contains('open')) closeMobileNav(); else openMobileNav();
+    });
+    mobileNavOverlay && mobileNavOverlay.addEventListener('click', closeMobileNav);
+    document.getElementById('navOrders')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('ordersContainer')?.scrollIntoView({behavior:'smooth'}); });
+    document.getElementById('navAddresses')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('addressesContainer')?.scrollIntoView({behavior:'smooth'}); });
+    document.getElementById('navSecurity')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('emailForReset')?.scrollIntoView({behavior:'smooth'}); });
+    mobileLogout && mobileLogout.addEventListener('click', ()=>{ closeMobileNav(); showModal(logoutConfirm); });
+
+    // helpers
     function showModal(el){ if(!el) return; el.classList.add('open'); el.setAttribute('aria-hidden','false'); el.style.display='flex'; }
     function hideModal(el){ if(!el) return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); el.style.display='none'; }
     function showError(el, msg){ if(!el) return; el.style.color='red'; el.textContent = msg || ''; }
     function showSuccess(el, msg){ if(!el) return; el.style.color='green'; el.textContent = msg || ''; }
-    function escapeHtml(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+    function escapeHtml(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'})[m]); }
 
+    // Use getSession consistently
     async function getUserOrRedirect(){
       try{
-        const { data } = await supabase.auth.getUser();
-        const user = data?.user || null;
+        const { data } = await supabase.auth.getSession();
+        const user = data?.session?.user || null;
         if(!user){
+          // not signed in — send back to store
           window.location.href = 'index.html';
           return null;
         }
@@ -261,10 +347,11 @@
       }
     }
 
-    // ---------- profile load/save (single-address model) ----------
+    // profile load/save (single-address model)
     async function loadProfile(){
       const user = await getUserOrRedirect();
       if(!user) return;
+
       profileEmail.textContent = user.email || (user.user_metadata && user.user_metadata.email) || '—';
       emailForReset.value = user.email || '';
 
@@ -291,15 +378,22 @@
           addrPostal.value = data.postal_code || data.postal || data.zip || '';
           renderSavedAddressPreview(data);
         } else {
-          profileFirstName.value = '';
-          profileLastName.value = '';
-          profilePhone.value = '';
-          addrLabel.value = '';
-          addrLine.value = '';
-          addrCity.value = '';
-          addrProvince.value = '';
-          addrPostal.value = '';
-          addressesContainer.innerHTML = '<div class="small" style="color:var(--muted)">No address saved yet.</div>';
+          // Profile row missing in DB; create minimal row so other pages (index.html) can rely on it
+          const payload = {
+            user_id: user.id,
+            email: user.email || null,
+            first_name: '',
+            last_name: '',
+            phone: ''
+          };
+          const { data: newProfile, error: createErr } = await supabase.from('profiles').insert([payload]).select().maybeSingle();
+          if(createErr){
+            console.warn('Could not create profile row automatically', createErr);
+            addressesContainer.innerHTML = '<div class="small" style="color:var(--muted)">No address saved yet.</div>';
+          } else {
+            // reload to pick up created row
+            await loadProfile();
+          }
         }
       }catch(e){
         console.warn('loadProfile exception', e);
@@ -327,7 +421,7 @@
         </div>`;
     }
 
-    // Upsert profile row (will create if missing)
+    // save (upsert) profile row
     saveBtn.addEventListener('click', async ()=>{
       const user = await getUserOrRedirect();
       if(!user) return;
@@ -363,126 +457,95 @@
       }
     });
 
-    // Save address button reuses save logic (single-address model)
     addAddressBtn.addEventListener('click', ()=> saveBtn.click());
 
-    // ---------- orders ----------
+    // orders
     async function loadOrders(){
       ordersContainer.innerHTML = '';
       const user = await getUserOrRedirect();
       if(!user) return;
       try{
-        const { data, error } = await supabase
+        const { data: orders, error } = await supabase
           .from('orders')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(100);
 
-        if(error){
-          console.warn('orders select error', error);
-          ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">No orders or orders table unavailable. To show order history create an <code>orders</code> table with a <code>user_id</code> column and <code>created_at</code>.</div>`;
-          return;
-        }
-        if(!data || data.length===0){
+        if(error || !orders || orders.length===0){
           ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">You have no orders yet.</div>`;
           return;
         }
 
-        ordersContainer.innerHTML = data.map(o => {
-          const id = o.id || '';
-          const order_number = o.order_number || '';
-          const total = (o.total !== null && o.total !== undefined) ? 'R' + Number(o.total).toFixed(2) : '';
-          const status = o.order_status || '';
-          const created = o.created_at ? new Date(o.created_at).toLocaleString() : '';
-          const qty = o.quantity || '';
-          const displayTitle = order_number ? `${order_number}` : String(id).slice(0,8);
-          const smallMeta = `${escapeHtml(created)} • ${escapeHtml(String(qty))} items`;
+        // collect product ids from order items
+        const productIds = Array.from(new Set(orders.flatMap(o => (o.items||[]).map(i => i.product_id || i.id).filter(Boolean))));
+        let imageMap = {};
+        if(productIds.length){
+          const { data: imgs } = await supabase.from('product_images').select('*').in('product_id', productIds);
+          (imgs||[]).forEach(img => {
+            if(!imageMap[img.product_id] || (img.image_order||0) < (imageMap[img.product_id].image_order||0)){
+              imageMap[img.product_id] = img;
+            }
+          });
+        }
 
-          return `<div class="order-item" data-order-id="${escapeHtml(id)}" role="button" tabindex="0">
+        ordersContainer.innerHTML = orders.map(o => {
+          const items = o.items || [];
+          const thumbs = items.slice(0,3).map(it=>{
+            const img = imageMap[it.product_id || it.id];
+            const src = img?.url || 'https://via.placeholder.com/48x48?text=Item';
+            return `<img src="${escapeHtml(src)}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;margin-right:6px">`;
+          }).join('');
+          return `<div class="order-item" data-order-id="${o.id}">
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <div>
-                <strong>Order ${escapeHtml(displayTitle)}</strong>
-                <div class="muted-inline" style="margin-top:6px">${smallMeta}</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                ${thumbs}
+                <div>
+                  <strong>Order ${escapeHtml(o.order_number||String(o.id).slice(0,8))}</strong>
+                  <div class="muted-inline">${new Date(o.created_at).toLocaleString()}</div>
+                </div>
               </div>
               <div style="text-align:right">
-                <div style="font-weight:700">${escapeHtml(total)}</div>
-                <div class="muted-inline">${escapeHtml(status)}</div>
+                <strong>R${Number(o.total||0).toFixed(2)}</strong>
+                <div class="muted-inline">${escapeHtml(o.order_status||'')}</div>
               </div>
             </div>
           </div>`;
         }).join('');
 
-        Array.from(ordersContainer.querySelectorAll('.order-item')).forEach(el=>{
-          el.addEventListener('click', ()=> openOrderModal(el.getAttribute('data-order-id')));
-          el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') openOrderModal(el.getAttribute('data-order-id')); });
+        ordersContainer.querySelectorAll('.order-item').forEach(el=>{
+          el.addEventListener('click',()=>openOrderModal(el.dataset.orderId));
         });
-
       }catch(e){
-        console.warn('loadOrders exception', e);
-        ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">Unable to load orders (see console).</div>`;
+        ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">Unable to load orders.</div>`;
       }
     }
 
     async function openOrderModal(orderId){
       if(!orderId) return;
-      try{
-        const { data, error } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
-        if(error){ console.warn('order fetch error', error); alert('Unable to load order details. See console.'); return; }
-        if(!data){ alert('Order not found'); return; }
+      const { data: o } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+      if(!o) return;
+      orderModalTitle.textContent = `Order ${o.order_number || o.id}`;
+      orderModalSub.textContent = new Date(o.created_at).toLocaleString();
 
-        const title = data.order_number || data.id || 'Order';
-        const sub = data.created_at ? new Date(data.created_at).toLocaleString() : '';
+      const rows = [];
+      rows.push(`<div class="modal-row"><div class="label">Delivery address</div><div class="value">${escapeHtml(o.delivery_address||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">City</div><div class="value">${escapeHtml(o.city||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">Province</div><div class="value">${escapeHtml(o.province||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">Postal code</div><div class="value">${escapeHtml(o.postal_code||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">Phone</div><div class="value">${escapeHtml(o.customer_phone||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">Status</div><div class="value">${escapeHtml(o.order_status||'')}</div></div>`);
+      rows.push(`<div class="modal-row"><div class="label">Total</div><div class="value">R${Number(o.total||0).toFixed(2)}</div></div>`);
 
-        orderModalTitle.textContent = `Order ${title}`;
-        orderModalSub.textContent = sub;
-
-        const rows = [];
-        const keysOrder = ['order_number','customer_name','customer_phone','order_status','quantity','total','package_type','pickup_address','delivery_address','notes','created_at','updated_at','user_id','profile_id','id'];
-        const allKeys = Object.keys(data);
-        const remaining = allKeys.filter(k=>!keysOrder.includes(k)).sort();
-        const finalKeys = keysOrder.concat(remaining).filter(Boolean);
-
-        // Hide sensitive fields from modal
-        const HIDDEN_FIELDS = [
-          'created_at',
-          'updated_at',
-          'user_id',
-          'profile_id',
-          'id'
-        ];
-
-        finalKeys.forEach(k=>{
-          if (HIDDEN_FIELDS.includes(k)) return; // <-- do not display sensitive fields
-          if(!(k in data)) return;
-          let label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
-          let val = data[k];
-          if(val === null || val === undefined) val = '';
-          if(k === 'total' && val!=='') { try{ val = 'R' + Number(val).toFixed(2); } catch(e){} }
-          if((k.endsWith('_at') || k === 'created_at' || k === 'updated_at') && val){
-            try{ val = new Date(val).toLocaleString(); }catch(e){}
-          }
-          if(typeof val === 'string' && val.includes('\n')) {
-            val = val.split('\n').map(escapeHtml).join('<br>');
-          } else {
-            val = escapeHtml(String(val));
-          }
-          rows.push(`<div class="modal-row"><div class="label">${escapeHtml(label)}</div><div class="value" style="flex:1">${val}</div></div>`);
-        });
-
-        orderModalBody.innerHTML = rows.join('');
-        showModal(orderModal);
-      }catch(e){
-        console.error('openOrderModal exception', e);
-        alert('Unable to load order details (see console).');
-      }
+      orderModalBody.innerHTML = rows.join('');
+      showModal(orderModal);
     }
 
     orderModalClose.addEventListener('click', ()=> hideModal(orderModal));
     orderModalClose2.addEventListener('click', ()=> hideModal(orderModal));
     orderModal.addEventListener('click', (e)=> { if(e.target === orderModal) hideModal(orderModal); });
 
-    // ---------- password reset ----------
+    // password reset
     sendReset.addEventListener('click', async ()=>{
       const email = (emailForReset.value || '').trim();
       if(!email){ showError(resetStatus, 'Enter an email'); return; }
@@ -497,27 +560,36 @@
       }
     });
 
-    // ---------- logout ----------
+    // logout (confirm)
     logoutBtn.addEventListener('click', ()=> showModal(logoutConfirm));
     logoutNo.addEventListener('click', ()=> hideModal(logoutConfirm));
     logoutConfirm.addEventListener('click', (e)=> { if(e.target === logoutConfirm) hideModal(logoutConfirm); });
 
     logoutYes.addEventListener('click', async ()=>{
       hideModal(logoutConfirm);
+      await supabase.auth.signOut();
+      localStorage.setItem('ss_signout', Date.now());
+      window.location.href = 'index.html';
+    });
+
+    window.addEventListener('storage', e=>{
+      if(e.key==='ss_signout'){
+        supabase.auth.signOut().finally(()=>window.location.href='index.html');
+      }
+    });
       try{ await supabase.auth.signOut(); } catch(e){ console.warn('signOut error', e); }
+      // explicit redirect after sign out
       alert('You have been logged out.');
       window.location.href = 'index.html';
     });
 
-    // ---------- delete account (safe: only show success when delete actually succeeds) ----------
+    // delete account
     deleteAccount.addEventListener('click', async ()=>{
       if(!confirm('Delete account? This is irreversible.')) return;
       const user = await getUserOrRedirect();
       if(!user) return;
 
       try{
-        // Attempt to delete the profile row(s) that are linked to this user.
-        // We use user_id as the filter because that's how profiles are looked up elsewhere.
         const { data: deletedRows, error: delErr } = await supabase
           .from('profiles')
           .delete()
@@ -529,10 +601,8 @@
           return;
         }
 
-        // Optionally delete addresses (if your project uses an addresses table)
-        try{ await supabase.from('addresses').delete().eq('user_id', user.id); }catch(e){ /* ignore if missing */ }
+        try{ await supabase.from('addresses').delete().eq('user_id', user.id); }catch(e){ }
 
-        // We're done client-side — sign out and redirect.
         try{ await supabase.auth.signOut(); }catch(e){ console.warn('signOut after delete failed', e); }
 
         alert('Profile deleted (client-side). If you need the Auth user removed please deploy a server-side function to perform full deletion.');
@@ -543,18 +613,29 @@
       }
     });
 
-    // ---------- refresh ----------
     refreshBtn.addEventListener('click', async ()=>{ await loadAll(); alert('Refreshed'); });
 
-    // ---------- init ----------
+    // init loader
     async function loadAll(){
       await loadProfile();
       await loadOrders();
     }
 
+    // --- auth state listener to avoid "logout then immediate login" loops and to re-load profile on sign-in ---
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log('auth event', event);
+      if(event === 'SIGNED_OUT'){
+        // user explicitly signed out; ensure page redirects and does not auto-sign-in
+        window.location.href = 'index.html';
+      }
+      if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
+        // reload profile data when user signs in on another tab
+        loadAll().catch(e=>console.warn('loadAll after auth event failed', e));
+      }
+    });
+
+    // initial check: require session and then load data
     (async function init(){
-      // require client
-      if(!supabase){ console.error('Supabase not initialized. aborting profile load.'); return; }
       const { data } = await supabase.auth.getSession();
       const session = data?.session || null;
       if(!session || !session.user){ window.location.href = 'index.html'; return; }
