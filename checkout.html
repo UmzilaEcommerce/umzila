@@ -2325,21 +2325,21 @@ function debugPayFastSignature() {
     console.log('=== DEBUG: PayFast Signature Test ===');
     
     const testData = {
-        merchant_id: '10044598',
-        merchant_key: 'e19a7eqdu1fb0',
-        return_url: 'https://umzilastore.netlify.app/checkout-success.html?m_payment_id=UMZILA-1767632649922-q34z5ilhs&order_id=7b1a3b72-b435-429c-b127-bf2eba0a8416',
-        cancel_url: 'https://umzilastore.netlify.app/checkout-cancel.html?m_payment_id=UMZILA-1767632649922-q34z5ilhs',
-        notify_url: 'https://umzilastore.netlify.app/.netlify/functions/payfast-itn',
-        name_first: 'ntando',
-        name_last: 'shazi',
-        email_address: 'ntandob38@gmail.com',
-        cell_number: '0621972297',
-        m_payment_id: 'UMZILA-1767632649922-q34z5ilhs',
-        amount: '1239.00',
-        item_name: 'Umzila Order UMZILA-1767632649922-q34z5ilhs',
-        item_description: '3 item(s) from Umzila',
+        merchant_id: '',
+        merchant_key: '',
+        return_url: '',
+        cancel_url: '',
+        notify_url: '',
+        name_first: '',
+        name_last: '',
+        email_address: '',
+        cell_number: '',
+        m_payment_id: '',
+        amount: '',
+        item_name: '',
+        item_description: '',
         email_confirmation: '1',
-        confirmation_address: 'ntandob38@gmail.com'
+        confirmation_address: ''
     };
     
     const passphrase = CONFIG.payfastPassphrase || '';
@@ -2350,11 +2350,6 @@ function debugPayFastSignature() {
     // Your current signature
     const currentSig = generateSignature(testData, passphrase);
     console.log('Current signature:', currentSig);
-    
-    // Expected signature (from error)
-    const expectedSig = '4aa0e1e4b7ce6f0b2cbc6df8571c78ec';
-    console.log('Expected signature:', expectedSig);
-    console.log('Match:', currentSig === expectedSig);
     
     // Also test with empty passphrase
     const sigNoPassphrase = generateSignature(testData, '');
