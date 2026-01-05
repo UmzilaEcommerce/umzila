@@ -74,66 +74,75 @@ exports.handler = async function(event, context) {
         let total = 0;
         let hasChanges = false;
         
-        for (const item of cartItems) {
-            const product = productMap[item.id];
-            
-            if (!product) {
-                // Product no longer exists
-                hasChanges = true;
-                continue;
-            }
-            
-            let itemPrice = product.price;
-            let itemStock = product.stock;
-            let maxQuantity = itemStock;
-            
-            // Check for variant
-            if (product.product_variants && product.product_variants.length > 0) {
-                const variant = product.product_variants.find(v => 
-                    v.size === item.size || 
-                    (item.variant_id && v.id === item.variant_id)
-                );
-                
-                if (variant) {
-                    itemPrice = variant.price_override || product.price;
-                    itemStock = variant.stock || product.stock;
-                    maxQuantity = itemStock;
-                }
-            }
-            
-            // Check for sale
-            if (product.sale && product.sale_price) {
-                itemPrice = product.sale_price;
-            }
-            
-            // Validate quantity doesn't exceed stock
-            const quantity = Math.min(item.quantity || 1, itemStock);
-            
-            if (quantity <= 0) {
-                // Out of stock
-                hasChanges = true;
-                continue;
-            }
-            
-            // Check if price has changed
-            if (itemPrice !== item.price) {
-                hasChanges = true;
-            }
-            
-            validatedCart.push({
-                id: product.id,
-                name: product.name,
-                price: itemPrice,
-                quantity: quantity,
-                size: item.size || 'One Size',
-                image: product.image || item.image,
-                variant_id: item.variant_id,
-                max_quantity: maxQuantity,
-                subtotal: itemPrice * quantity
-            });
-            
-            total += itemPrice * quantity;
-        }
+        for (const rawItem of cartItems) {
+  // Normalize incoming fields so the rest of the logic can rely on stable names
+  const item = {
+    id: rawItem.id || rawItem.product_id || rawItem.productId || null,
+    name: rawItem.name || rawItem.title || '',
+    price: typeof rawItem.price !== 'undefined' ? rawItem.price : (rawItem.Price || 0),
+    quantity: rawItem.quantity || rawItem.qty || rawItem.Qty || 1,
+    size: rawItem.size || rawItem.variant_size || 'One Size',
+    image: rawItem.image || rawItem.img || '',
+    variant_id: rawItem.variant_id || rawItem.variantId || rawItem.variant || null,
+    // keep any other fields if needed
+    _raw: rawItem
+  };
+
+  // now use `item` instead of rawItem below
+  const pid = item.id;
+  const product = productMap[pid];
+  if (!product) {
+    hasChanges = true;
+    console.log('Product not found:', pid);
+    continue;
+  }
+
+  // default
+  let itemPrice = product.price;
+  let itemStock = Number.isFinite(product.stock) ? product.stock : Infinity;
+  let maxQuantity = itemStock;
+
+  // If item has variant_id use that, else try by size
+  let variant = null;
+  if (item.variant_id) variant = variantMap[item.variant_id];
+  if (!variant && item.size) variant = variantMap[`${pid}::${item.size}`];
+
+  if (variant) {
+    itemPrice = variant.price_override || product.price;
+    itemStock = variant.stock != null ? variant.stock : itemStock;
+    maxQuantity = itemStock;
+  }
+
+  if (product.sale && product.sale_price) {
+    itemPrice = product.sale_price;
+  }
+
+  const qty = Math.min(item.quantity || 1, itemStock || Infinity);
+  if (qty <= 0) {
+    hasChanges = true;
+    continue;
+  }
+
+  if (typeof item.price !== 'undefined' && Number(item.price) !== Number(itemPrice)) {
+    hasChanges = true;
+  }
+
+  validatedCart.push({
+    id: product.id,
+    product_id: product.id,
+    name: item.name || product.name,
+    price: itemPrice,
+    quantity: qty,
+    size: item.size || 'One Size',
+    image: product.image || item.image,
+    variant_id: item.variant_id,
+    max_quantity: maxQuantity,
+    subtotal: itemPrice * qty
+  });
+
+  total += itemPrice * qty;
+}
+
         
         // If user is authenticated, update their cart in database
         if (userId) {
