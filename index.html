@@ -1645,31 +1645,6 @@ function sanitizeCartData(cart) {
           expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
         };
         
-		// inside saveCartToServer() just before sanitize + upsert
-console.log('state.cart raw:', JSON.stringify(state.cart, null, 2));
-const cartData = {
-  items: state.cart.map(item => ({
-    id: item.id,            // keep id here too (helps sanitize)
-    product_id: item.id,    // old code used product_id — keep both
-    name: item.title,
-    price: item.price,
-    quantity: item.qty || item.quantity,
-    size: item.size,
-    image: item.img,
-    variant_id: item.variantId || null,
-    stock: item.stock || 0,
-    max_quantity: item.maxQuantity || item.qty
-  })),
-  updated_at: new Date().toISOString(),
-  expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-};
-
-console.log('cartData.items (before sanitize):', JSON.stringify(cartData.items, null, 2));
-const sanitizedItems = sanitizeCartData(cartData.items);
-console.log('sanitizedItems (after sanitize):', JSON.stringify(sanitizedItems, null, 2));
-
- 
-		
         // Sanitize data before sending
         const sanitizedItems = sanitizeCartData(cartData.items);
         
