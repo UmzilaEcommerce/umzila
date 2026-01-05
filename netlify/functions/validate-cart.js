@@ -33,27 +33,41 @@ exports.handler = async function(event, context) {
         const supabase = createClient(supabaseUrl, supabaseKey);
         
         // Get product IDs from cart
-        const productIds = cartItems.map(item => item.id);
+const productIds = cartItems
+  .map(i => i.id || i.product_id || i.productId)
+  .filter(Boolean)
+  .map(String);
+
+if (!productIds.length) {
+  return {
+    statusCode: 400,
+    body: JSON.stringify({ error: 'No valid product IDs in cart' })
+  };
+}
         
-        // Fetch current product prices and stock
-        const { data: products, error: productsError } = await supabase
-            .from('products')
-            .select(`
-                id,
-                price,
-                sale,
-                sale_price,
-                stock,
-                name,
-                image,
-                product_variants!fk_product_variants_product(
-                    id,
-                    size,
-                    price_override,
-                    stock
-                )
-            `)
-            .in('id', productIds);
+        // Fetch products (simple)
+const { data: products, error: productsError } = await supabase
+  .from('products')
+  .select('id, price, sale, sale_price, stock, name, image')
+  .in('id', productIds);
+
+// then fetch variants separately
+const { data: variants = [], error: variantsError } = await supabase
+  .from('product_variants')
+  .select('id, product_id, size, price_override, stock')
+  .in('product_id', productIds);
+
+if (variantsError) {
+  console.error('Error fetching variants:', variantsError);
+  return {
+    statusCode: 500,
+    body: JSON.stringify({ error: 'Failed to validate cart' })
+  };
+}
+
+
+// then build productMap and variantMap from those two arrays
+
             
         if (productsError) {
             console.error('Error fetching products:', productsError);
@@ -69,6 +83,17 @@ exports.handler = async function(event, context) {
             productMap[product.id] = product;
         });
         
+// Build variantMap from variants query
+const variantMap = {};
+variants.forEach(v => {
+  if (v.id) variantMap[v.id] = v;
+  if (v.product_id && v.size) {
+    variantMap[`${v.product_id}::${v.size}`] = v;
+  }
+});
+
+
+		
         // Validate each cart item
         const validatedCart = [];
         let total = 0;
