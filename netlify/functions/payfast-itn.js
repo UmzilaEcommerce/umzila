@@ -1,169 +1,118 @@
-import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
-import fetch from 'node-fetch';
+const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
-const {
-  PAYFAST_MERCHANT_ID,
-  PAYFAST_MERCHANT_KEY,
-  PAYFAST_PASSPHRASE = '',
-  PAYFAST_SANDBOX = 'true',
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
-} = process.env;
-
-const PAYFAST_VALIDATE_URL = PAYFAST_SANDBOX === 'true'
-  ? 'https://sandbox.payfast.co.za/eng/query/validate'
-  : 'https://www.payfast.co.za/eng/query/validate';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false }
-});
-
-function encodePfValue(value) {
-  // PayFast requires uppercase URL encoding and spaces as +
-  return encodeURIComponent(String(value))
-    .replace(/%[0-9a-f]{2}/g, match => match.toUpperCase())  // Ensure uppercase
-    .replace(/%20/g, '+');  // Spaces as +
-}
-
-function generatePfSignature(params, passphrase = '') {
-  // Define EXACT order as per PayFast documentation (same as initiate-payfast)
-  const orderedKeys = [
-    'merchant_id',
-    'merchant_key',
-    'return_url',
-    'cancel_url',
-    'notify_url',
-    'name_first',
-    'name_last',
-    'email_address',
-    'cell_number',
-    'm_payment_id',
-    'amount',
-    'item_name',
-    'item_description',
-    'email_confirmation',
-    'confirmation_address'
-  ];
-  
-  // Filter out empty values and build string in correct order
-  let paramString = '';
-  
-  orderedKeys.forEach(key => {
-    if (params[key] !== undefined && params[key] !== '' && params[key] !== null) {
-      if (paramString !== '') paramString += '&';
-      paramString += `${key}=${encodePfValue(params[key])}`;
-    }
-  });
-  
-  // Add passphrase if exists
-  const stringToSign = passphrase 
-    ? `${paramString}&passphrase=${encodePfValue(passphrase)}`
-    : paramString;
-  
-  return crypto.createHash('md5').update(stringToSign).digest('hex');
-}
-
-export async function handler(event) {
-  // PayFast sends data as form-urlencoded
-  const params = new URLSearchParams(event.body);
-  const data = Object.fromEntries(params.entries());
-
-  try {
-    // 1. Verify signature
-    const receivedSignature = data.signature;
-    delete data.signature;
+exports.handler = async function(event, context) {
+    // Tell PayFast we received the notification
+    const headers = {
+        'Content-Type': 'text/plain'
+    };
     
-    const calculatedSignature = generatePfSignature(data, PAYFAST_PASSPHRASE);
+    // Immediately return 200 to prevent retries
+    const immediateResponse = {
+        statusCode: 200,
+        headers,
+        body: 'OK'
+    };
     
-    if (receivedSignature !== calculatedSignature) {
-      console.error('Signature mismatch:', { receivedSignature, calculatedSignature });
-      return { statusCode: 400, body: 'Invalid signature' };
+    try {
+        // Parse the POST data from PayFast
+        const params = new URLSearchParams(event.body);
+        const pfData = {};
+        
+        for (const [key, value] of params) {
+            pfData[key] = value;
+        }
+        
+        console.log('PayFast ITN received:', JSON.stringify(pfData, null, 2));
+        
+        // Initialize Supabase
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('Missing Supabase credentials');
+            return immediateResponse;
+        }
+        
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        
+        // Verify the signature
+        const passphrase = process.env.PAYFAST_PASSPHRASE || '';
+        const signatureValid = verifySignature(pfData, passphrase);
+        
+        if (!signatureValid) {
+            console.error('Invalid signature');
+            return immediateResponse;
+        }
+        
+        // Check payment status
+        if (pfData.payment_status === 'COMPLETE') {
+            // Update order in Supabase
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    order_status: 'paid',
+                    pf_payment_id: pfData.pf_payment_id,
+                    amount_gross: parseFloat(pfData.amount_gross || 0),
+                    amount_fee: parseFloat(pfData.amount_fee || 0),
+                    amount_net: parseFloat(pfData.amount_net || 0),
+                    payment_date: new Date().toISOString()
+                })
+                .eq('m_payment_id', pfData.m_payment_id);
+                
+            if (error) {
+                console.error('Error updating order:', error);
+            } else {
+                console.log('Order marked as paid:', pfData.m_payment_id);
+            }
+        } else if (pfData.payment_status === 'CANCELLED') {
+            // Update order as cancelled
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    order_status: 'cancelled',
+                    pf_payment_id: pfData.pf_payment_id
+                })
+                .eq('m_payment_id', pfData.m_payment_id);
+                
+            if (error) {
+                console.error('Error cancelling order:', error);
+            }
+        }
+        
+        return immediateResponse;
+        
+    } catch (error) {
+        console.error('ITN processing error:', error);
+        return immediateResponse;
     }
+};
 
-    // 2. Server-to-server validation with PayFast
-    const validateResponse = await fetch(PAYFAST_VALIDATE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        merchant_id: PAYFAST_MERCHANT_ID,
-        merchant_key: PAYFAST_MERCHANT_KEY,
-        m_payment_id: data.m_payment_id
-      })
-    });
-
-    const validateText = await validateResponse.text();
+// Verify PayFast signature
+function verifySignature(pfData, passphrase = '') {
+    // Create parameter string (excluding signature itself)
+    let pfParamString = '';
     
-    if (!validateText.includes('VALID')) {
-      console.error('PayFast validation failed:', validateText);
-      return { statusCode: 400, body: 'PayFast validation failed' };
-    }
-
-    // 3. Find the order
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('m_payment_id', data.m_payment_id)
-      .single();
-
-    if (orderError || !order) {
-      console.error('Order not found:', data.m_payment_id);
-      return { statusCode: 404, body: 'Order not found' };
-    }
-
-    // 4. Check if already processed
-    if (order.status === 'paid') {
-      return { statusCode: 200, body: 'OK (already processed)' };
-    }
-
-    // 5. Verify payment status
-    const paymentStatus = data.payment_status;
+    // Get all keys except signature
+    const keys = Object.keys(pfData).filter(key => key !== 'signature');
     
-    if (paymentStatus === 'COMPLETE') {
-      // Update order status
-      const { error: updateError } = await supabase
-        .from('orders')
-        .update({
-          status: 'paid',
-          pf_payment_id: data.pf_payment_id,
-          pf_response: data,
-          paid_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('m_payment_id', data.m_payment_id);
-
-      if (updateError) {
-        console.error('Order update error:', updateError);
-        return { statusCode: 500, body: 'Failed to update order' };
-      }
-
-      // Reserve stock (call the PostgreSQL function)
-      const { error: stockError } = await supabase.rpc('reserve_stock', {
-        order_items: order.raw_cart
-      });
-
-      if (stockError) {
-        console.error('Stock reservation error:', stockError);
-        // Log error but don't fail - we can handle stock manually
-      }
-
-      console.log(`Order ${data.m_payment_id} marked as paid`);
-    } else if (paymentStatus === 'FAILED' || paymentStatus === 'CANCELLED') {
-      // Mark as failed
-      await supabase
-        .from('orders')
-        .update({
-          status: 'failed',
-          pf_response: data,
-          updated_at: new Date().toISOString()
-        })
-        .eq('m_payment_id', data.m_payment_id);
+    // Sort keys as they come from PayFast (in order received)
+    for (const key of keys) {
+        if (pfData[key] !== '') {
+            pfParamString += `${key}=${encodeURIComponent(pfData[key].trim()).replace(/%20/g, '+')}&`;
+        }
     }
-
-    return { statusCode: 200, body: 'OK' };
-
-  } catch (error) {
-    console.error('ITN processing error:', error);
-    return { statusCode: 500, body: 'Server error' };
-  }
+    
+    // Remove last ampersand
+    pfParamString = pfParamString.slice(0, -1);
+    
+    // Add passphrase if exists
+    if (passphrase) {
+        pfParamString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, '+')}`;
+    }
+    
+    // Calculate MD5 hash
+    const calculatedSignature = crypto.createHash('md5').update(pfParamString).digest('hex');
+    
+    return calculatedSignature === pfData.signature;
 }

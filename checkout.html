@@ -1134,22 +1134,71 @@
     }
     
     // Generate PayFast signature
-    function generateSignature(data, passphrase = null) {
-      let pfOutput = '';
-      for (let key in data) {
-        if (data.hasOwnProperty(key) && data[key] !== '') {
-          pfOutput += key + '=' + encodeURIComponent(data[key].trim()).replace(/%20/g, '+') + '&';
-        }
-      }
-      
-      let getString = pfOutput.slice(0, -1);
-      
-      if (passphrase !== null) {
-        getString += '&passphrase=' + encodeURIComponent(passphrase.trim()).replace(/%20/g, '+');
-      }
-      
-      return md5(getString);
+    // Replace the ENTIRE generateSignature function with this:
+function generateSignature(data, passphrase = null) {
+    // Step 1: Create parameter string in the CORRECT order (not alphabetical!)
+    // PayFast requires EXACT order as they appear in documentation
+    let pfOutput = '';
+    
+    // Merchant details FIRST (in this exact order)
+    pfOutput += 'merchant_id=' + encodeURIComponent(data.merchant_id).replace(/%20/g, '+') + '&';
+    pfOutput += 'merchant_key=' + encodeURIComponent(data.merchant_key).replace(/%20/g, '+') + '&';
+    
+    // Return, cancel, notify URLs
+    if (data.return_url && data.return_url !== '') {
+        pfOutput += 'return_url=' + encodeURIComponent(data.return_url).replace(/%20/g, '+') + '&';
     }
+    if (data.cancel_url && data.cancel_url !== '') {
+        pfOutput += 'cancel_url=' + encodeURIComponent(data.cancel_url).replace(/%20/g, '+') + '&';
+    }
+    if (data.notify_url && data.notify_url !== '') {
+        pfOutput += 'notify_url=' + encodeURIComponent(data.notify_url).replace(/%20/g, '+') + '&';
+    }
+    
+    // Customer details
+    if (data.name_first && data.name_first !== '') {
+        pfOutput += 'name_first=' + encodeURIComponent(data.name_first).replace(/%20/g, '+') + '&';
+    }
+    if (data.name_last && data.name_last !== '') {
+        pfOutput += 'name_last=' + encodeURIComponent(data.name_last).replace(/%20/g, '+') + '&';
+    }
+    if (data.email_address && data.email_address !== '') {
+        pfOutput += 'email_address=' + encodeURIComponent(data.email_address).replace(/%20/g, '+') + '&';
+    }
+    if (data.cell_number && data.cell_number !== '') {
+        pfOutput += 'cell_number=' + encodeURIComponent(data.cell_number).replace(/%20/g, '+') + '&';
+    }
+    
+    // Transaction details
+    if (data.m_payment_id && data.m_payment_id !== '') {
+        pfOutput += 'm_payment_id=' + encodeURIComponent(data.m_payment_id).replace(/%20/g, '+') + '&';
+    }
+    pfOutput += 'amount=' + encodeURIComponent(data.amount).replace(/%20/g, '+') + '&';
+    pfOutput += 'item_name=' + encodeURIComponent(data.item_name).replace(/%20/g, '+') + '&';
+    
+    if (data.item_description && data.item_description !== '') {
+        pfOutput += 'item_description=' + encodeURIComponent(data.item_description).replace(/%20/g, '+') + '&';
+    }
+    
+    // Transaction options
+    if (data.email_confirmation && data.email_confirmation !== '') {
+        pfOutput += 'email_confirmation=' + encodeURIComponent(data.email_confirmation).replace(/%20/g, '+') + '&';
+    }
+    if (data.confirmation_address && data.confirmation_address !== '') {
+        pfOutput += 'confirmation_address=' + encodeURIComponent(data.confirmation_address).replace(/%20/g, '+') + '&';
+    }
+    
+    // Remove last ampersand
+    let getString = pfOutput.slice(0, -1);
+    
+    // Step 2: Add passphrase if provided
+    if (passphrase !== null && passphrase !== '') {
+        getString += '&passphrase=' + encodeURIComponent(passphrase.trim()).replace(/%20/g, '+');
+    }
+    
+    // Step 3: Generate MD5 hash
+    return md5(getString);
+}
     
     /********************
      * FETCH CONFIGURATION FROM NETLIFY FUNCTION
@@ -1329,20 +1378,129 @@
       }
     }
     
-    // Update authentication UI
-    function updateAuthUI() {
-      if (state.user) {
+  function updateAuthUI(user) {
+    if (user) {
         elements.authBtn.textContent = 'Profile';
         elements.authBtn.onclick = () => {
-          window.location.href = 'profile.html';
+            window.location.href = 'profile.html';
         };
-        elements.customerEmail.value = state.user.email;
-        hideAuthModal();
-      } else {
+        
+        // Pre-fill email if user is logged in
+        elements.customerEmail.value = user.email;
+        elements.customerEmail.readOnly = true;
+        
+        // Sync cart on login
+        syncCartOnLogin(user);
+    } else {
         elements.authBtn.textContent = 'Sign In';
         elements.authBtn.onclick = showAuthModal;
-      }
+        elements.customerEmail.readOnly = false;
     }
+}
+	
+	// Add cart sync function
+async function syncCartOnLogin(user) {
+    if (!supabaseClient || !user) return;
+    
+    try {
+        // Get localStorage cart
+        const localCart = JSON.parse(localStorage.getItem('ss_cart') || '[]');
+        
+        // Load server cart
+        const { data: serverCart, error } = await supabaseClient
+            .from('carts')
+            .select('items')
+            .eq('user_id', user.id)
+            .single();
+            
+        if (!error && serverCart && serverCart.items) {
+            // Merge with server cart
+            const serverIds = serverCart.items.map(item => `${item.product_id}-${item.size}`);
+            
+            localCart.forEach(item => {
+                const itemKey = `${item.id}-${item.size}`;
+                if (!serverIds.includes(itemKey)) {
+                    serverCart.items.push({
+                        product_id: item.id,
+                        name: item.name || item.title,
+                        price: item.price,
+                        quantity: item.quantity || item.qty,
+                        size: item.size,
+                        image: item.image || item.img,
+                        variant_id: item.variant_id || item.variantId,
+                        stock: item.stock || 0
+                    });
+                }
+            });
+            
+            state.cart = serverCart.items.map(item => ({
+                id: item.product_id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                size: item.size,
+                image: item.image,
+                variant_id: item.variant_id
+            }));
+            
+            // Save merged cart
+            localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+            await saveCartToServer();
+        } else if (localCart.length > 0) {
+            // No server cart, save local cart to server
+            await saveCartToServer();
+        } else {
+            // No carts, load empty
+            await loadCart();
+        }
+        
+        updateOrderSummary();
+        
+    } catch (error) {
+        console.error('Error syncing cart on login:', error);
+        await loadCart();
+    }
+}
+
+// Add saveCartToServer function
+async function saveCartToServer() {
+    if (!supabaseClient || !state.user) return;
+    
+    try {
+        const cartData = {
+            items: state.cart.map(item => ({
+                product_id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                size: item.size,
+                image: item.image,
+                variant_id: item.variant_id,
+                stock: item.stock || 0
+            })),
+            updated_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        };
+        
+        const { error } = await supabaseClient
+            .from('carts')
+            .upsert({
+                user_id: state.user.id,
+                items: cartData.items,
+                updated_at: cartData.updated_at,
+                expires_at: cartData.expires_at
+            }, {
+                onConflict: 'user_id'
+            });
+            
+        if (error) {
+            console.error('Error saving cart to server:', error);
+        }
+    } catch (error) {
+        console.error('Error in saveCartToServer:', error);
+    }
+}
+
     
     // Show authentication modal
     function showAuthModal() {
@@ -1361,44 +1519,170 @@
      ********************/
     
     // Load cart from URL parameters or localStorage
-    async function loadCart() {
-      try {
-        // First check URL parameters (from index.html "Buy Now" button)
+    // Load cart with server validation
+async function loadCart() {
+    try {
+        // Check URL parameters (from index.html "Buy Now" button)
         const urlParams = new URLSearchParams(window.location.search);
         const productId = urlParams.get('product');
         const couponCode = urlParams.get('coupon');
         
-        // Check localStorage for cart data
-        const savedCart = localStorage.getItem('umzila_cart');
-        const savedCoupon = localStorage.getItem('umzila_coupon');
-        
-        if (productId) {
-          // Load product from URL parameter
-          await loadProductFromId(productId, couponCode);
-        } else if (savedCart) {
-          // Load from localStorage
-          state.cart = JSON.parse(savedCart);
-          
-          // Load product images for each cart item
-          await loadProductImagesForCart();
-          
-          if (savedCoupon) {
-            const couponData = JSON.parse(savedCoupon);
-            state.couponCode = couponData.code;
-            state.discount = couponData.discount || 0;
-          }
-          updateOrderSummary();
+        if (state.user && supabaseClient) {
+            // Load from Supabase server cart
+            const { data, error } = await supabaseClient
+                .from('carts')
+                .select('items')
+                .eq('user_id', state.user.id)
+                .single();
+                
+            if (!error && data && data.items) {
+                // Validate and load cart items
+                await loadAndValidateCartItems(data.items);
+            } else {
+                // Fallback to localStorage
+                await loadFromLocalStorage();
+            }
         } else {
-          // No cart found
-          state.cart = [];
-          showEmptyCart();
+            // Not logged in, use localStorage only
+            await loadFromLocalStorage();
         }
-      } catch (error) {
+        
+        // Apply coupon if provided
+        if (couponCode) {
+            await applyCoupon(couponCode);
+        }
+        
+        updateOrderSummary();
+        
+    } catch (error) {
         console.error('Error loading cart:', error);
         state.cart = [];
         showEmptyCart();
-      }
     }
+}
+
+// Load and validate cart items from server
+async function loadAndValidateCartItems(serverItems) {
+    if (!supabaseClient) return;
+    
+    try {
+        // Get all product IDs from cart
+        const productIds = serverItems.map(item => item.product_id);
+        
+        // Fetch current product data with prices
+        const { data: products, error } = await supabaseClient
+            .from('products')
+            .select(`
+                *,
+                product_variants!fk_product_variants_product(*)
+            `)
+            .in('id', productIds);
+            
+        if (error) throw error;
+        
+        // Create product map for quick lookup
+        const productMap = {};
+        products.forEach(product => {
+            productMap[product.id] = product;
+        });
+        
+        // Validate each cart item
+        state.cart = [];
+        serverItems.forEach(item => {
+            const product = productMap[item.product_id];
+            if (!product) return; // Product no longer exists
+            
+            let itemPrice = item.price;
+            let itemStock = item.stock || 0;
+            
+            // Check if we need to update price from current product data
+            if (product.variants && product.variants.length > 0 && item.variant_id) {
+                const variant = product.variants.find(v => v.id === item.variant_id);
+                if (variant) {
+                    // Use variant price if available
+                    itemPrice = variant.price_override || product.price;
+                    itemStock = variant.stock || 0;
+                }
+            } else {
+                // Use product price
+                const salePrice = product.sale && product.sale_price ? product.sale_price : product.price;
+                itemPrice = salePrice;
+                itemStock = product.stock || 0;
+            }
+            
+            // Ensure we don't exceed stock
+            const quantity = Math.min(item.quantity, itemStock);
+            
+            if (quantity > 0) {
+                state.cart.push({
+                    id: item.product_id,
+                    name: product.name || item.name,
+                    price: itemPrice,
+                    quantity: quantity,
+                    size: item.size,
+                    image: item.image || product.image || 'https://via.placeholder.com/400x400?text=Product+Image',
+                    variant_id: item.variant_id,
+                    product_data: product
+                });
+            }
+        });
+        
+        // Save validated cart back to localStorage
+        localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+        
+    } catch (error) {
+        console.error('Error validating cart items:', error);
+        throw error;
+    }
+}
+
+// Load from localStorage (fallback)
+async function loadFromLocalStorage() {
+    const savedCart = localStorage.getItem('ss_cart');
+    const savedCoupon = localStorage.getItem('ss_coupon');
+    
+    if (savedCart) {
+        state.cart = JSON.parse(savedCart);
+        
+        // Validate prices by fetching current product data
+        if (supabaseClient && state.cart.length > 0) {
+            const productIds = state.cart.map(item => item.id);
+            
+            const { data: products, error } = await supabaseClient
+                .from('products')
+                .select('id, price, sale, sale_price, stock, name, image')
+                .in('id', productIds);
+                
+            if (!error && products) {
+                const productMap = {};
+                products.forEach(p => productMap[p.id] = p);
+                
+                // Update cart with current prices
+                state.cart = state.cart.map(item => {
+                    const product = productMap[item.id];
+                    if (product) {
+                        const currentPrice = product.sale && product.sale_price ? product.sale_price : product.price;
+                        return {
+                            ...item,
+                            price: currentPrice,
+                            name: product.name || item.name,
+                            image: product.image || item.image
+                        };
+                    }
+                    return item;
+                }).filter(item => productMap[item.id]); // Remove items that no longer exist
+            }
+        }
+        
+        if (savedCoupon) {
+            const couponData = JSON.parse(savedCoupon);
+            state.couponCode = couponData.code;
+            state.discount = couponData.discount || 0;
+        }
+    } else {
+        state.cart = [];
+    }
+}
     
     // Load product from Supabase using product ID with images
     async function loadProductFromId(productId, couponCode = null) {
@@ -1445,7 +1729,7 @@
         }
         
         // Save to localStorage
-        localStorage.setItem('umzila_cart', JSON.stringify(state.cart));
+        localStorage.setItem('ss_cart', JSON.stringify(state.cart));
         
         updateOrderSummary();
         
@@ -1540,7 +1824,7 @@
         state.appliedPromoCode = coupon;
         
         // Save coupon to localStorage
-        localStorage.setItem('umzila_coupon', JSON.stringify({
+        localStorage.setItem('ss_coupon', JSON.stringify({
           code: coupon.code,
           discount: discount,
           coupon_data: coupon
@@ -1571,6 +1855,141 @@
         showPromoMessage('Invalid or expired promo code', 'error');
       }
     }
+	
+	// Secure checkout validation
+async function validateCheckout() {
+    try {
+        if (state.cart.length === 0) {
+            throw new Error('Your cart is empty');
+        }
+        
+        // Send cart to server for validation
+        const response = await fetch('/.netlify/functions/validate-cart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                cartItems: state.cart,
+                userId: state.user?.id
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to validate cart');
+        }
+        
+        const result = await response.json();
+        
+        if (result.hasChanges) {
+            // Update cart with validated data
+            state.cart = result.validatedCart;
+            updateOrderSummary();
+            
+            // Show notification to user
+            showNotification('Cart updated with current prices and availability', 'info');
+        }
+        
+        return result.validatedCart;
+        
+    } catch (error) {
+        console.error('Checkout validation error:', error);
+        throw error;
+    }
+}
+
+// Enhanced process payment function
+async function processPayment() {
+    try {
+        // Validate form
+        if (!elements.termsAgreement.checked) {
+            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            return;
+        }
+        
+        // Server-side cart validation
+        const validatedCart = await validateCheckout();
+        
+        if (validatedCart.length === 0) {
+            showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
+            return;
+        }
+        
+        // Save shipping info
+        if (!state.shippingInfo) {
+            if (!validateShippingForm()) return;
+            saveShippingInfo();
+        }
+        
+        // Disable button during processing
+        elements.payNowBtn.disabled = true;
+        elements.payNowBtn.textContent = 'Processing...';
+        
+        // Generate order ID
+        const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Calculate totals based on validated cart
+        const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const shipping = state.shippingInfo?.shippingCost || 0;
+        const discount = state.discount || 0;
+        const total = Math.max(0, subtotal - discount + shipping);
+        
+        // Save order to Supabase before payment
+        if (supabaseClient) {
+            const orderData = {
+                user_id: state.user?.id || null,
+                profile_id: state.profile?.id || null,
+                customer_email: state.shippingInfo.email,
+                customer_name: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
+                customer_phone: state.shippingInfo.phone,
+                delivery_address: state.shippingInfo.address,
+                city: state.shippingInfo.city,
+                province: state.shippingInfo.province,
+                postal_code: state.shippingInfo.postalCode,
+                items: validatedCart,
+                total: total,
+                discount: discount,
+                shipping_cost: shipping,
+                order_status: 'pending',
+                order_number: orderId,
+                m_payment_id: orderId,
+                label: state.shippingInfo.label || 'Standard Delivery'
+            };
+            
+            const { data: order, error } = await supabaseClient
+                .from('orders')
+                .insert([orderData])
+                .select()
+                .single();
+                
+            if (error) {
+                console.error('Error saving order:', error);
+                throw new Error('Failed to create order. Please try again.');
+            }
+            
+            state.orderId = order.id;
+        }
+        
+        // Clear cart after successful order creation
+        if (supabaseClient && state.user) {
+            await supabaseClient
+                .from('carts')
+                .delete()
+                .eq('user_id', state.user.id);
+        }
+        localStorage.removeItem('ss_cart');
+        localStorage.removeItem('ss_coupon');
+        
+        // Generate PayFast parameters
+        await submitToPayFast(validatedCart, orderId, total);
+        
+    } catch (error) {
+        console.error('Payment processing error:', error);
+        showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
+        elements.payNowBtn.disabled = false;
+        elements.payNowBtn.textContent = 'Pay Now';
+    }
+}
     
     // Show promo code message
     function showPromoMessage(message, type) {
@@ -1668,9 +2087,9 @@
      * CHECKOUT FLOW
      ********************/
     
-    // Validate shipping form
-    function validateShippingForm() {
-      const requiredFields = [
+    // Validate shipping form - ADD THIS FUNCTION
+function validateShippingForm() {
+    const requiredFields = [
         { element: elements.firstName, name: 'First Name' },
         { element: elements.lastName, name: 'Last Name' },
         { element: elements.customerEmail, name: 'Email Address' },
@@ -1679,47 +2098,111 @@
         { element: elements.city, name: 'City' },
         { element: elements.postalCode, name: 'Postal Code' },
         { element: elements.provinceSelect, name: 'Province' }
-      ];
-      
-      for (const field of requiredFields) {
+    ];
+    
+    for (const field of requiredFields) {
         if (!field.element.value.trim()) {
-          alert(`Please fill in the ${field.name} field.`);
-          field.element.focus();
-          return false;
+            alert(`Please fill in the ${field.name} field.`);
+            field.element.focus();
+            return false;
         }
-      }
-      
-      if (!isValidEmail(elements.customerEmail.value)) {
+    }
+    
+    if (!isValidEmail(elements.customerEmail.value)) {
         alert('Please enter a valid email address.');
         elements.customerEmail.focus();
         return false;
-      }
-      
-      if (!isValidPhone(elements.phoneNumber.value)) {
+    }
+    
+    if (!isValidPhone(elements.phoneNumber.value)) {
         alert('Please enter a valid South African phone number (e.g., 0821234567 or +27821234567).');
         elements.phoneNumber.focus();
         return false;
-      }
-      
-      return true;
     }
     
-    // Save shipping information
-    function saveShippingInfo() {
-      state.shippingInfo = {
-        firstName: elements.firstName.value.trim(),
-        lastName: elements.lastName.value.trim(),
-        email: elements.customerEmail.value.trim(),
-        phone: elements.phoneNumber.value.trim(),
-        address: elements.shippingAddress.value.trim(),
-        city: elements.city.value.trim(),
-        postalCode: elements.postalCode.value.trim(),
-        province: elements.provinceSelect.value,
-        shippingCost: parseFloat(elements.shippingCost.value),
-        instructions: elements.deliveryInstructions.value.trim()
-      };
+    return true;
+}
+    
+ // Save shipping information - ADD THIS FUNCTION
+async function saveShippingInfo() {
+    try {
+        state.shippingInfo = {
+            firstName: elements.firstName.value.trim(),
+            lastName: elements.lastName.value.trim(),
+            email: elements.customerEmail.value.trim(),
+            phone: elements.phoneNumber.value.trim(),
+            address: elements.shippingAddress.value.trim(),
+            city: elements.city.value.trim(),
+            postalCode: elements.postalCode.value.trim(),
+            province: elements.provinceSelect.value,
+            shippingCost: parseFloat(elements.shippingCost.value),
+            instructions: elements.deliveryInstructions.value.trim()
+        };
+        
+        // Update user profile in Supabase if logged in
+        if (supabaseClient && state.user && state.profile) {
+            const { error } = await supabaseClient
+                .from('profiles')
+                .update({
+                    first_name: state.shippingInfo.firstName,
+                    last_name: state.shippingInfo.lastName,
+                    phone: state.shippingInfo.phone,
+                    address: state.shippingInfo.address,
+                    city: state.shippingInfo.city,
+                    postal_code: state.shippingInfo.postalCode,
+                    province: state.shippingInfo.province
+                })
+                .eq('id', state.profile.id);
+            
+            if (error) {
+                console.error('Error updating profile:', error);
+            }
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Error saving shipping info:', error);
+        return false;
+    }
+}
+
+ // Show notification - ADD THIS FUNCTION
+function showNotification(message, type = 'info') {
+    // Remove existing notification
+    const existingNotification = document.querySelector('.notification-toast');
+    if (existingNotification) {
+        existingNotification.remove();
     }
     
+    // Create new notification
+    const notification = document.createElement('div');
+    notification.className = `notification-toast notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        background: ${type === 'error' ? '#dc3545' : type === 'success' ? '#28a745' : '#007bff'};
+        color: white;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideIn 0.3s ease;
+        max-width: 400px;
+        font-size: 14px;
+    `;
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 5000);
+}  
+
+   
     // Go to step
     function goToStep(step) {
       elements.steps.forEach(s => {
@@ -1790,111 +2273,231 @@
       return { params, m_payment_id };
     }
     
-    // Submit to PayFast
-    async function submitToPayFast() {
-      if (!state.configLoaded) {
-        showError(elements.paymentError, 'Configuration not loaded. Please refresh the page.');
-        return;
-      }
-      
-      if (!CONFIG.payfastMerchantId || !CONFIG.payfastMerchantKey) {
-        showError(elements.paymentError, 'Payment gateway configuration missing.');
-        return;
-      }
-      
-      const { params, m_payment_id } = generatePayFastParams();
-      const signature = generateSignature(params, CONFIG.payfastPassphrase);
-      
-      try {
-        // Save order to Supabase
-        if (supabaseClient) {
-          const orderData = {
-            user_id: state.user?.id || null,
-            customer_email: state.shippingInfo.email,
-            customer_name: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
-            customer_phone: state.shippingInfo.phone,
-            delivery_address: state.shippingInfo.address,
-            city: state.shippingInfo.city,
-            province: state.shippingInfo.province,
-            postal_code: state.shippingInfo.postalCode,
-            items: state.cart,
-            total: state.orderTotal,
-            discount: state.discount,
-            shipping_cost: state.shippingInfo.shippingCost,
-            order_status: 'pending',
-            order_number: m_payment_id,
-            m_payment_id: m_payment_id,
-            profile_id: state.profile?.id || null
-          };
-          
-          const { data: order, error } = await supabaseClient
-            .from('orders')
-            .insert([orderData])
-            .select()
-            .single();
-          
-          if (error) {
-            console.error('Error saving order:', error);
-          } else {
-            state.orderId = order.id;
-          }
-        }
-      } catch (error) {
-        console.error('Error saving order to Supabase:', error);
-      }
-      
-      // Build PayFast form
-      elements.payfastForm.innerHTML = '';
-      elements.payfastForm.method = 'post';
-      elements.payfastForm.action = CONFIG.payfastSandbox 
+// Replace the ENTIRE submitToPayFast function with this:
+async function submitToPayFast(cartItems, orderId, total) {
+    if (!state.configLoaded) {
+        throw new Error('Configuration not loaded. Please refresh the page.');
+    }
+    
+    if (!CONFIG.payfastMerchantId || !CONFIG.payfastMerchantKey) {
+        throw new Error('Payment gateway configuration missing.');
+    }
+    
+    // Build the data object in EXACT order required by PayFast
+    const data = {
+        // Merchant details (MUST be first)
+        merchant_id: CONFIG.payfastMerchantId,
+        merchant_key: CONFIG.payfastMerchantKey,
+        return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${orderId}&order_id=${state.orderId}`,
+        cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${orderId}`,
+        notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
+        
+        // Customer details
+        name_first: state.shippingInfo.firstName.substring(0, 100),
+        name_last: state.shippingInfo.lastName.substring(0, 100),
+        email_address: state.shippingInfo.email.substring(0, 100),
+        cell_number: state.shippingInfo.phone.replace(/\D/g, '').substring(0, 100),
+        
+        // Transaction details
+        m_payment_id: orderId.substring(0, 100),
+        amount: parseFloat(total).toFixed(2),
+        item_name: `Umzila Order ${orderId.substring(0, 95)}`,
+        item_description: cartItems.length === 1 
+            ? cartItems[0].name 
+            : `${cartItems.length} item(s) from Umzila`,
+        
+        // Transaction options
+        email_confirmation: '1',
+        confirmation_address: state.shippingInfo.email.substring(0, 100)
+    };
+    
+    // Generate signature with passphrase
+    const signature = generateSignature(data, CONFIG.payfastPassphrase);
+    data.signature = signature;
+    
+    // Debug: Log the exact string being hashed
+    console.log('PayFast Signature String:', getSignatureString(data, CONFIG.payfastPassphrase));
+    console.log('Generated Signature:', signature);
+    
+    // Build and submit form
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = CONFIG.payfastSandbox 
         ? 'https://sandbox.payfast.co.za/eng/process'
         : 'https://www.payfast.co.za/eng/process';
-      
-      // Add parameters
-      Object.keys(params).forEach(key => {
+    form.style.display = 'none';
+    
+    // Add all parameters as hidden inputs IN THE SAME ORDER
+    Object.entries(data).forEach(([key, value]) => {
         const input = document.createElement('input');
         input.type = 'hidden';
         input.name = key;
-        input.value = params[key];
-        elements.payfastForm.appendChild(input);
-      });
-      
-      // Add signature
-      const sigInput = document.createElement('input');
-      sigInput.type = 'hidden';
-      sigInput.name = 'signature';
-      sigInput.value = signature;
-      elements.payfastForm.appendChild(sigInput);
-      
-      // Clear cart
-      localStorage.removeItem('umzila_cart');
-      localStorage.removeItem('umzila_coupon');
-      
-      // Submit form
-      elements.payfastForm.submit();
+        input.value = value;
+        form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Add this helper function for debugging
+function getSignatureString(data, passphrase = null) {
+    let pfOutput = '';
+    
+    // Build string in same order as generateSignature
+    pfOutput += 'merchant_id=' + encodeURIComponent(data.merchant_id).replace(/%20/g, '+') + '&';
+    pfOutput += 'merchant_key=' + encodeURIComponent(data.merchant_key).replace(/%20/g, '+') + '&';
+    pfOutput += 'return_url=' + encodeURIComponent(data.return_url).replace(/%20/g, '+') + '&';
+    pfOutput += 'cancel_url=' + encodeURIComponent(data.cancel_url).replace(/%20/g, '+') + '&';
+    pfOutput += 'notify_url=' + encodeURIComponent(data.notify_url).replace(/%20/g, '+') + '&';
+    pfOutput += 'name_first=' + encodeURIComponent(data.name_first).replace(/%20/g, '+') + '&';
+    pfOutput += 'name_last=' + encodeURIComponent(data.name_last).replace(/%20/g, '+') + '&';
+    pfOutput += 'email_address=' + encodeURIComponent(data.email_address).replace(/%20/g, '+') + '&';
+    pfOutput += 'cell_number=' + encodeURIComponent(data.cell_number).replace(/%20/g, '+') + '&';
+    pfOutput += 'm_payment_id=' + encodeURIComponent(data.m_payment_id).replace(/%20/g, '+') + '&';
+    pfOutput += 'amount=' + encodeURIComponent(data.amount).replace(/%20/g, '+') + '&';
+    pfOutput += 'item_name=' + encodeURIComponent(data.item_name).replace(/%20/g, '+') + '&';
+    pfOutput += 'item_description=' + encodeURIComponent(data.item_description).replace(/%20/g, '+') + '&';
+    pfOutput += 'email_confirmation=' + encodeURIComponent(data.email_confirmation).replace(/%20/g, '+') + '&';
+    pfOutput += 'confirmation_address=' + encodeURIComponent(data.confirmation_address).replace(/%20/g, '+');
+    
+    let getString = pfOutput;
+    
+    if (passphrase !== null && passphrase !== '') {
+        getString += '&passphrase=' + encodeURIComponent(passphrase.trim()).replace(/%20/g, '+');
     }
     
-    // Process payment
+    return getString;
+}
+
+// Submit PayFast form
+function submitPayFastForm(params) {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = CONFIG.payfastSandbox 
+        ? 'https://sandbox.payfast.co.za/eng/process'
+        : 'https://www.payfast.co.za/eng/process';
+    form.style.display = 'none';
+    
+    // Add all parameters as hidden inputs
+    Object.entries(params).forEach(([key, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+    
     async function processPayment() {
-      if (!elements.termsAgreement.checked) {
-        showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
-        return;
-      }
-      
-      if (state.cart.length === 0) {
-        showError(elements.paymentError, 'Your cart is empty.');
-        return;
-      }
-      
-      if (!state.shippingInfo) {
-        saveShippingInfo();
-      }
-      
-      elements.payNowBtn.disabled = true;
-      elements.payNowBtn.textContent = 'Processing...';
-      
-      await submitToPayFast();
+    try {
+        // Validate form
+        if (!elements.termsAgreement.checked) {
+            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            return;
+        }
+        
+        // Validate shipping form
+        if (!validateShippingForm()) {
+            return;
+        }
+        
+        // Save shipping info
+        if (!state.shippingInfo) {
+            await saveShippingInfo();
+        }
+        
+        // Disable button during processing
+        elements.payNowBtn.disabled = true;
+        elements.payNowBtn.textContent = 'Processing...';
+        
+        // Server-side cart validation
+        const validatedCart = await validateCheckout();
+        
+        if (validatedCart.length === 0) {
+            showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
+            elements.payNowBtn.disabled = false;
+            elements.payNowBtn.textContent = 'Pay Now';
+            return;
+        }
+        
+        // Generate order ID
+        const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Calculate totals based on validated cart
+        const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const shipping = state.shippingInfo?.shippingCost || 0;
+        const discount = state.discount || 0;
+        const total = Math.max(0, subtotal - discount + shipping);
+        
+        // Save order to Supabase before payment
+        if (supabaseClient) {
+            const orderData = {
+                user_id: state.user?.id || null,
+                profile_id: state.profile?.id || null,
+                customer_email: state.shippingInfo.email,
+                customer_name: `${state.shippingInfo.firstName} ${state.shippingInfo.lastName}`,
+                customer_phone: state.shippingInfo.phone,
+                delivery_address: state.shippingInfo.address,
+                city: state.shippingInfo.city,
+                province: state.shippingInfo.province,
+                postal_code: state.shippingInfo.postalCode,
+                items: validatedCart,
+                total: total,
+                discount: discount,
+                shipping_cost: shipping,
+                order_status: 'pending',
+                order_number: orderId,
+                m_payment_id: orderId,
+                label: state.shippingInfo.label || 'Standard Delivery',
+                notes: elements.orderNotes.value.trim() || ''
+            };
+            
+            const { data: order, error } = await supabaseClient
+                .from('orders')
+                .insert([orderData])
+                .select()
+                .single();
+                
+            if (error) {
+                console.error('Error saving order:', error);
+                throw new Error('Failed to create order. Please try again.');
+            }
+            
+            state.orderId = order.id;
+            
+            // Update coupon as used if one was applied
+            if (state.appliedPromoCode) {
+                await supabaseClient
+                    .from('discount_codes')
+                    .update({ used: true })
+                    .eq('id', state.appliedPromoCode.id);
+            }
+        }
+        
+        // Clear cart after successful order creation
+        if (supabaseClient && state.user) {
+            await supabaseClient
+                .from('carts')
+                .delete()
+                .eq('user_id', state.user.id);
+        }
+        localStorage.removeItem('ss_cart');
+        localStorage.removeItem('ss_coupon');
+        
+        // Generate PayFast parameters
+        await submitToPayFast(validatedCart, orderId, total);
+        
+    } catch (error) {
+        console.error('Payment processing error:', error);
+        showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
+        elements.payNowBtn.disabled = false;
+        elements.payNowBtn.textContent = 'Pay Now';
     }
+}
     
     /********************
      * CONTINUE INITIALIZATION
