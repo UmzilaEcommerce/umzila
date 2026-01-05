@@ -91,17 +91,16 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <script>
-  // Fetch config and create a single global supabase client instance early
   (async function initSupabaseClient(){
     try {
       const res = await fetch('/.netlify/functions/get-client-config');
       if (!res.ok) {
         console.error('Failed to load Supabase config', res.status, await res.text());
-        // don't return yet — allow fallback attempts below
+        // keep trying to parse body where possible
       }
       const cfg = await res.json().catch(()=>null) || {};
 
-      // Accept many possible key names from different environments
+      // accept multiple possible key names (Netlify / local dev variants)
       const supabaseUrl = cfg.SUPABASE_URL || cfg.supabaseUrl || cfg.url || (cfg.SUPABASE_URL && cfg.SUPABASE_URL.value) || (cfg.supabase && cfg.supabase.url) || '';
       const supabaseAnonKey = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || (cfg.SUPABASE_ANON_KEY && cfg.SUPABASE_ANON_KEY.value) || cfg.anonKey || cfg.key || (cfg.supabase && cfg.supabase.anonKey) || '';
 
@@ -113,14 +112,12 @@
         if (fbUrl && fbKey) {
           window.SUPABASE_CONFIG = { supabaseUrl: fbUrl, supabaseAnonKey: fbKey };
         } else {
-          // Final fallback: try looking for meta tags (useful during local dev)
-          const metaUrl = document.querySelector('meta[name="supabase-url"]')?.getAttribute('content');
-          const metaKey = document.querySelector('meta[name="supabase-anon-key"]')?.getAttribute('content');
+          const metaUrl = document.querySelector('meta[name=\"supabase-url\"]')?.getAttribute('content');
+          const metaKey = document.querySelector('meta[name=\"supabase-anon-key\"]')?.getAttribute('content');
           if (metaUrl && metaKey) {
             window.SUPABASE_CONFIG = { supabaseUrl: metaUrl, supabaseAnonKey: metaKey };
           } else {
             console.error('Supabase configuration not found. Ensure get-client-config returns credentials or provide meta tags.');
-            // still set empty config so page can handle gracefully
             window.SUPABASE_CONFIG = { supabaseUrl: '', supabaseAnonKey: '' };
           }
         }
@@ -128,23 +125,20 @@
         window.SUPABASE_CONFIG = { supabaseUrl, supabaseAnonKey };
       }
 
-      // Create a stable client and expose as window.supabaseClient and window.supabase
       try {
         const client = supabase.createClient(window.SUPABASE_CONFIG.supabaseUrl, window.SUPABASE_CONFIG.supabaseAnonKey);
         window.supabaseClient = client;
-        window.supabase = client; // some pages reference window.supabase
+        window.supabase = client;
       } catch (err) {
         console.error('Error creating Supabase client', err);
         window.supabaseClient = null;
         window.supabase = null;
       }
 
-      // Let the rest of the page know supabase is ready
       document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } }));
       console.log('Supabase client initialized (profile.html)');
     } catch (err) {
       console.error('Error initializing Supabase client', err);
-      // ensure event is still dispatched so page doesn't hang
       document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient || null } }));
     }
   })();
@@ -237,7 +231,6 @@
             <button id="deleteAccount" class="btn ghost">Delete account (!)</button>
             <button id="refreshBtn" class="btn">Refresh</button>
           </div>
-          
         </div>
       </main>
     </div>
@@ -279,7 +272,6 @@
       await new Promise(resolve => {
         if (window.supabaseClient) return resolve();
         document.addEventListener('supabase-ready', () => resolve());
-        // defensive timeout so page doesn't hang forever
         setTimeout(resolve, 4000);
       });
     }
@@ -303,7 +295,7 @@
       return;
     }
 
-    // DOM refs
+    // ---------- DOM refs ----------
     const profileEmail = document.getElementById('profileEmail');
     const profileFirstName = document.getElementById('profileFirstName');
     const profileLastName = document.getElementById('profileLastName');
@@ -342,20 +334,22 @@
     const mobileLogout = document.getElementById('mobileLogout');
 
     function openMobileNav(){
+      if(!mobileNav) return;
       mobileNav.classList.add('open');
       mobileNav.setAttribute('aria-hidden','false');
-      menuBtn.setAttribute('aria-expanded','true');
-      mobileNavOverlay.style.display = 'block';
+      menuBtn && menuBtn.setAttribute('aria-expanded','true');
+      if(mobileNavOverlay) mobileNavOverlay.style.display = 'block';
     }
     function closeMobileNav(){
+      if(!mobileNav) return;
       mobileNav.classList.remove('open');
       mobileNav.setAttribute('aria-hidden','true');
-      menuBtn.setAttribute('aria-expanded','false');
-      mobileNavOverlay.style.display = 'none';
+      menuBtn && menuBtn.setAttribute('aria-expanded','false');
+      if(mobileNavOverlay) mobileNavOverlay.style.display = 'none';
     }
 
     menuBtn && menuBtn.addEventListener('click', ()=>{
-      if(mobileNav.classList.contains('open')) closeMobileNav(); else openMobileNav();
+      if(mobileNav && mobileNav.classList.contains('open')) closeMobileNav(); else openMobileNav();
     });
     mobileNavOverlay && mobileNavOverlay.addEventListener('click', closeMobileNav);
     document.getElementById('navOrders')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('ordersContainer')?.scrollIntoView({behavior:'smooth'}); });
@@ -363,12 +357,12 @@
     document.getElementById('navSecurity')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('emailForReset')?.scrollIntoView({behavior:'smooth'}); });
     mobileLogout && mobileLogout.addEventListener('click', ()=>{ closeMobileNav(); showModal(logoutConfirm); });
 
-    // helpers
+    // ---------- helpers ----------
     function showModal(el){ if(!el) return; el.classList.add('open'); el.setAttribute('aria-hidden','false'); el.style.display='flex'; }
     function hideModal(el){ if(!el) return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); el.style.display='none'; }
     function showError(el, msg){ if(!el) return; el.style.color='red'; el.textContent = msg || ''; }
     function showSuccess(el, msg){ if(!el) return; el.style.color='green'; el.textContent = msg || ''; }
-    function escapeHtml(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>\"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'})[m]); }
+    function escapeHtml(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 
     // Use getSession consistently
     async function getUserOrRedirect(){
@@ -376,7 +370,6 @@
         const { data } = await supabase.auth.getSession();
         const user = data?.session?.user || null;
         if(!user){
-          // not signed in — send back to store
           window.location.href = 'index.html';
           return null;
         }
@@ -388,11 +381,10 @@
       }
     }
 
-    // profile load/save (single-address model)
+    // ---------- profile load/save (single-address model) ----------
     async function loadProfile(){
       const user = await getUserOrRedirect();
       if(!user) return;
-
       profileEmail.textContent = user.email || (user.user_metadata && user.user_metadata.email) || '—';
       emailForReset.value = user.email || '';
 
@@ -462,7 +454,7 @@
         </div>`;
     }
 
-    // save (upsert) profile row
+    // Upsert profile row (will create if missing)
     saveBtn.addEventListener('click', async ()=>{
       const user = await getUserOrRedirect();
       if(!user) return;
@@ -485,41 +477,237 @@
         const { error } = await supabase.from('profiles').upsert([payload], { onConflict: ['user_id'] });
         if(error){
           console.error('upsert profiles error', error);
-          alert('Profile deleted.');
+          alert('Error saving profile: ' + (error.message || JSON.stringify(error)));
+        } else {
+          showSuccess(resetStatus, 'Profile saved');
+          await loadProfile();
+        }
+      }catch(e){
+        console.error('save profile exception', e);
+        alert('Unexpected error. See console.');
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    // Save address button reuses save logic (single-address model)
+    addAddressBtn.addEventListener('click', ()=> saveBtn.click());
+
+    // ---------- orders ----------
+    async function loadOrders(){
+      ordersContainer.innerHTML = '';
+      const user = await getUserOrRedirect();
+      if(!user) return;
+      try{
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if(error){
+          console.warn('orders select error', error);
+          ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">No orders or orders table unavailable.</div>`;
+          return;
+        }
+        if(!orders || orders.length===0){
+          ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">You have no orders yet.</div>`;
+          return;
+        }
+
+        const productIds = Array.from(new Set(orders.flatMap(o => (o.items||[]).map(i => i.product_id || i.id).filter(Boolean))));
+        let imageMap = {};
+        if(productIds.length){
+          const { data: imgs } = await supabase.from('product_images').select('*').in('product_id', productIds);
+          (imgs||[]).forEach(img => {
+            if(!imageMap[img.product_id] || (img.image_order||0) < (imageMap[img.product_id].image_order||0)){
+              imageMap[img.product_id] = img;
+            }
+          });
+        }
+
+        ordersContainer.innerHTML = orders.map(o => {
+          const items = o.items || [];
+          const thumbs = items.slice(0,3).map(it=>{
+            const img = imageMap[it.product_id || it.id];
+            const src = img?.url || 'https://via.placeholder.com/48x48?text=Item';
+            return `<img src="${escapeHtml(src)}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;margin-right:6px">`;
+          }).join('');
+          return `<div class="order-item" data-order-id="${escapeHtml(o.id)}">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div class="thumbs">${thumbs}</div>
+                <div>
+                  <strong>Order ${escapeHtml(o.order_number||String(o.id).slice(0,8))}</strong>
+                  <div class="muted-inline">${escapeHtml(o.created_at ? new Date(o.created_at).toLocaleString() : '')}</div>
+                </div>
+              </div>
+              <div style="text-align:right">
+                <strong>R${Number(o.total||0).toFixed(2)}</strong>
+                <div class="muted-inline">${escapeHtml(o.order_status||'')}</div>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+        ordersContainer.querySelectorAll('.order-item').forEach(el=>{
+          el.addEventListener('click', ()=> openOrderModal(el.getAttribute('data-order-id')));
+        });
+
+      }catch(e){
+        console.warn('loadOrders exception', e);
+        ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">Unable to load orders.</div>`;
+      }
+    }
+
+    async function openOrderModal(orderId){
+      if(!orderId) return;
+      try{
+        const { data } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
+        if(!data){ alert('Order not found'); return; }
+
+        const title = data.order_number || data.id || 'Order';
+        const sub = data.created_at ? new Date(data.created_at).toLocaleString() : '';
+
+        const productIds = (data.items || []).map(i => i.product_id || i.id).filter(Boolean);
+        const imageMap = {};
+        if(productIds.length){
+          const { data: imgs } = await supabase.from('product_images').select('*').in('product_id', productIds);
+          (imgs||[]).forEach(img=>{
+            if(!imageMap[img.product_id] || (img.image_order||0) < (imageMap[img.product_id].image_order||0)) imageMap[img.product_id] = img;
+          });
+        }
+
+        const itemsHtml = (data.items || []).map(it=>{
+          const pid = it.product_id || it.id || '';
+          const imgObj = imageMap[pid];
+          const imgUrl = imgObj ? (imgObj.url || imgObj.path || '') : '';
+          const img = imgUrl || 'https://via.placeholder.com/80x80?text=Product';
+          const name = it.name || it.title || '';
+          const qty = it.quantity || it.qty || 1;
+          const price = (it.price !== undefined && it.price !== null) ? ('R' + Number(it.price).toFixed(2)) : '';
+          return `<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px"><img src="${escapeHtml(img)}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"><div><div style="font-weight:700">${escapeHtml(name)}</div><div class="muted-inline">Qty: ${escapeHtml(String(qty))} • ${escapeHtml(price)}</div></div></div>`;
+        }).join('');
+
+        const rows = [];
+        const fieldsToShow = ['order_number','customer_name','customer_phone','delivery_address','city','province','postal_code','notes','total','order_status'];
+        fieldsToShow.forEach(k=>{
+          if(k in data && data[k]){
+            let label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
+            let val = data[k];
+            if(k === 'total') val = 'R' + Number(val).toFixed(2);
+            rows.push(`<div class="modal-row"><div class="label">${escapeHtml(label)}</div><div class="value" style="flex:1">${escapeHtml(String(val))}</div></div>`);
+          }
+        });
+
+        orderModalTitle.textContent = `Order ${title}`;
+        orderModalSub.textContent = sub;
+        orderModalBody.innerHTML = `<div style="margin-bottom:12px">${itemsHtml || '<div class="small">No items available</div>'}</div>${rows.join('')}`;
+        showModal(orderModal);
+      }catch(e){
+        console.error('openOrderModal exception', e);
+        alert('Unable to load order details.');
+      }
+    }
+
+    orderModalClose.addEventListener('click', ()=> hideModal(orderModal));
+    orderModalClose2.addEventListener('click', ()=> hideModal(orderModal));
+    orderModal.addEventListener('click', (e)=> { if(e.target === orderModal) hideModal(orderModal); });
+
+    // ---------- password reset ----------
+    sendReset.addEventListener('click', async ()=>{
+      const email = (emailForReset.value || '').trim();
+      if(!email){ showError(resetStatus, 'Enter an email'); return; }
+      resetStatus.textContent = '';
+      try{
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/' });
+        if(error){ showError(resetStatus, error.message || 'Error requesting reset'); }
+        else { showSuccess(resetStatus, 'Reset link sent — check your email'); }
+      }catch(e){
+        console.warn('reset password exception', e);
+        showError(resetStatus, 'Unexpected error.');
+      }
+    });
+
+    // ---------- logout ----------
+    logoutBtn.addEventListener('click', ()=> showModal(logoutConfirm));
+    logoutNo.addEventListener('click', ()=> hideModal(logoutConfirm));
+    logoutConfirm.addEventListener('click', (e)=> { if(e.target === logoutConfirm) hideModal(logoutConfirm); });
+
+    logoutYes.addEventListener('click', async ()=>{
+      hideModal(logoutConfirm);
+      try{ await supabase.auth.signOut(); } catch(e){ console.warn('signOut error', e); }
+      try{ localStorage.setItem('ss_signout', String(Date.now())); }catch(e){}
+      alert('You have been logged out.');
+      window.location.href = 'index.html';
+    });
+
+    // cross-tab signout
+    window.addEventListener('storage', (e)=>{
+      if(e.key === 'ss_signout'){
+        supabase.auth.signOut().catch(()=>{});
+        window.location.href = 'index.html';
+      }
+    });
+
+    // ---------- delete account ----------
+    deleteAccount.addEventListener('click', async ()=>{
+      if(!confirm('Delete account? This is irreversible.')) return;
+      const user = await getUserOrRedirect(); if(!user) return;
+      try{
+        const { data: deletedRows, error: delErr } = await supabase
+          .from('profiles')
+          .delete()
+          .eq('user_id', user.id);
+
+        if(delErr){
+          console.warn('delete profiles error', delErr);
+          alert('Your profile could not be deleted.');
+          return;
+        }
+
+        try{ await supabase.from('addresses').delete().eq('user_id', user.id); }catch(e){ /* ignore */ }
+        try{ await supabase.auth.signOut(); }catch(e){ /* ignore */ }
+
+        alert('Profile deleted.');
         window.location.href = 'index.html';
       }catch(e){
         console.error('deleteAccount exception', e);
-        alert('Unable to delete account (see console).');
+        alert('Unable to delete account.');
       }
     });
 
     refreshBtn.addEventListener('click', async ()=>{ await loadAll(); alert('Refreshed'); });
 
-    // init loader
+    // ---------- refresh / init ----------
     async function loadAll(){
       await loadProfile();
       await loadOrders();
     }
 
-    // --- auth state listener to avoid "logout then immediate login" loops and to re-load profile on sign-in ---
+    // listen to auth state changes
     supabase.auth.onAuthStateChange((event, session) => {
       console.log('auth event', event);
       if(event === 'SIGNED_OUT'){
-        // user explicitly signed out; ensure page redirects and does not auto-sign-in
         window.location.href = 'index.html';
       }
       if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-        // reload profile data when user signs in on another tab
         loadAll().catch(e=>console.warn('loadAll after auth event failed', e));
       }
     });
 
     // initial check: require session and then load data
     (async function init(){
-      const { data } = await supabase.auth.getSession();
-      const session = data?.session || null;
-      if(!session || !session.user){ window.location.href = 'index.html'; return; }
-      await loadAll();
+      try{
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session || null;
+        if(!session || !session.user){ window.location.href = 'index.html'; return; }
+        await loadAll();
+      }catch(e){
+        console.warn('initial session check failed', e);
+        window.location.href='index.html';
+      }
     })();
 
     // expose for debug
