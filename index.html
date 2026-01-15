@@ -39,21 +39,23 @@
       padding:10px 18px;display:flex;align-items:center;gap:16px;
     }
     
-    /* Mobile header adjustments */
+    /* Mobile header adjustments - MORE SPACING */
     @media (max-width: 768px) {
       header {
-        padding: 8px 12px;
-        gap: 8px;
+        padding: 12px 16px;
+        gap: 12px;
       }
     }
     
     .container{max-width:1200px;margin:0 auto;width:100%}
     .header-inner{display:flex;align-items:center;gap:14px;width:100%}
     
-    /* Mobile header inner adjustments */
+    /* Mobile header inner adjustments - REORDERED FOR MOBILE */
     @media (max-width: 768px) {
       .header-inner {
-        gap: 8px;
+        gap: 12px;
+        justify-content: space-between;
+        flex-wrap: nowrap;
       }
     }
     
@@ -65,10 +67,12 @@
     @media (max-width: 768px) {
       .logo img {
         height: 48px;
+        order: 1; /* Logo comes after hamburger */
+        margin-left: 8px;
       }
     }
 
-    /* left hamburger (header) - HIDE ON MOBILE */
+    /* left hamburger (header) - HIDE ON MOBILE (now replaced by mobile-menu-icon) */
     .left-hamburger{
       background:transparent;border:1px solid transparent;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:18px;
       display:flex;align-items:center;justify-content:center;margin-right:6px;
@@ -160,6 +164,7 @@
     @media (max-width: 768px) {
       .mobile-search-icon {
         display: block;
+        order: 2; /* Place after logo */
       }
       
       /* Mobile search close button */
@@ -173,13 +178,32 @@
       }
     }
 
-    /* header right */
+    /* header right - UPDATED FOR MOBILE SPACING */
     .header-right{display:flex;gap:12px;align-items:center}
     
-    /* Mobile header right adjustments */
+    /* Mobile header right adjustments - REORDERED */
     @media (max-width: 768px) {
       .header-right {
-        gap: 6px;
+        gap: 8px;
+        flex-shrink: 0;
+        order: 3; /* Place at the end */
+        margin-left: auto;
+      }
+      
+      /* Mobile hamburger menu icon - MOVED TO FAR LEFT */
+      .mobile-menu-icon {
+        display: block !important;
+        background: transparent;
+        border: none;
+        font-size: 20px;
+        padding: 8px;
+        order: 0; /* First item on mobile */
+        margin-right: 4px;
+      }
+      
+      /* Ensure cart is on far right on mobile */
+      .cart {
+        margin-left: auto;
       }
     }
     
@@ -204,18 +228,14 @@
     @media (max-width: 768px) {
       .cart {
         font-size: 20px;
+        order: 3; /* Ensures cart is on far right */
       }
     }
     
     .cart-count{
       position:absolute;top:-6px;right:-6px;background:var(--accent-2);color:#fff;padding:2px 6px;border-radius:999px;font-size:12px;font-weight:700;
     }
-    .mini-cart{
-      position:absolute;right:0;top:44px;background:#fff;border-radius:10px;padding:12px;min-width:260px;display:none;z-index:1300;box-shadow:var(--shadow);
-    }
-    .mini-cart .item{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-    .mini-cart .item img{width:48px;height:48px;object-fit:cover;border-radius:6px}
-    .mini-cart .total{font-weight:700;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+    /* Mini cart removed - redirecting directly to checkout.html */
 
     /* ---------- MAIN LAYOUT ---------- */
     .layout{display:flex;gap:18px;max-width:1200px;margin:16px auto;padding:0 18px;align-items:flex-start;overflow:hidden}
@@ -497,28 +517,396 @@
       }
     }
 
-    /* modal - UPDATED LAYOUT */
-    .modal{position:fixed;inset:0;background:rgba(4,6,12,0.5);display:none;align-items:center;justify-content:center;z-index:1400;padding:18px}
-    .modal.open{display:flex}
-    .modal-card{background:#fff;border-radius:12px;max-width:1000px;width:100%;display:flex;gap:14px;overflow:hidden;max-height:90vh;}
-    .modal-media{flex:1;padding:14px;background:#fafafa;display:flex;flex-direction:column;gap:10px;position:sticky;top:0;height:90vh;overflow-y:auto;}
-    .modal-media .big{height:420px;border-radius:10px;overflow:hidden;flex-shrink:0;}
-    .modal-media .thumbs{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;flex-shrink:0;}
-    .modal-info{width:420px;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;height:90vh;}
-    .close-btn{background:transparent;border:none;font-size:18px;cursor:pointer}
-
-    /* Description fade effect */
-    .description-container{position:relative;}
-    .description-fade{max-height:60px;overflow:hidden;position:relative;}
-    .description-fade::after{content:'';position:absolute;bottom:0;left:0;right:0;height:30px;background:linear-gradient(transparent, white);}
-    .description-fade.expanded{max-height:none;}
-    .description-fade.expanded::after{display:none;}
-    .see-more-btn{background:transparent;border:none;color:var(--accent-2);cursor:pointer;font-size:14px;padding:5px 0;text-align:left;}
-
-    /* Review stars */
-    .review-stars{display:flex;align-items:center;gap:5px;}
-    .review-stars .stars{color:#ffd700;font-size:16px;}
-    .review-stars .count{font-size:13px;color:var(--muted);}
+    /* ===== UPDATED PRODUCT MODAL - REDESIGNED ===== */
+    .product-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+      padding: 20px;
+    }
+    
+    .product-modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .product-modal {
+      background-color: #fff;
+      border-radius: 16px;
+      max-width: 1200px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      transform: translateY(30px);
+      transition: transform 0.3s ease;
+    }
+    
+    .product-modal-overlay.active .product-modal {
+      transform: translateY(0);
+    }
+    
+    .product-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background-color: #2d3748;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      cursor: pointer;
+      z-index: 10;
+      transition: all 0.3s ease;
+      border: none;
+    }
+    
+    .product-modal-close:hover {
+      background-color: #e63946;
+    }
+    
+    .product-modal-content {
+      display: flex;
+      flex-wrap: wrap;
+      min-height: 600px;
+    }
+    
+    .product-modal-images {
+      flex: 1;
+      min-width: 300px;
+      padding: 40px;
+      background-color: #edf2f7;
+    }
+    
+    .product-modal-main-image {
+      width: 100%;
+      height: 400px;
+      overflow: hidden;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    
+    .product-modal-main-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .product-modal-thumbnails {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 10px;
+    }
+    
+    .product-thumbnail {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .product-thumbnail.active {
+      border-color: #0a2f66;
+    }
+    
+    .product-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .product-modal-details {
+      flex: 1;
+      min-width: 300px;
+      padding: 40px;
+    }
+    
+    .product-modal-title {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      color: #2d3748;
+    }
+    
+    .product-modal-rating {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    .product-modal-price {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #ff6b2c;
+      margin-bottom: 20px;
+    }
+    
+    .product-modal-original-price {
+      text-decoration: line-through;
+      color: #a0aec0;
+      margin-left: 10px;
+      font-size: 1.5rem;
+    }
+    
+    .product-modal-sizes {
+      margin-bottom: 25px;
+    }
+    
+    .product-modal-sizes h3 {
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+    }
+    
+    .size-options {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .size-option {
+      padding: 10px 20px;
+      border: 1px solid #a0aec0;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .size-option.selected {
+      background-color: #0a2f66;
+      color: white;
+      border-color: #0a2f66;
+    }
+    
+    .product-modal-colors {
+      margin-bottom: 25px;
+    }
+    
+    .product-modal-colors h3 {
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+    }
+    
+    .color-options {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .color-option {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .color-option.selected {
+      border-color: #2d3748;
+      transform: scale(1.1);
+    }
+    
+    .product-modal-quantity {
+      margin-bottom: 25px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .quantity-selector {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .quantity-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 1px solid #a0aec0;
+      background: white;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .quantity-value {
+      font-size: 1.2rem;
+      font-weight: 600;
+      min-width: 30px;
+      text-align: center;
+    }
+    
+    .product-modal-add-to-cart {
+      background-color: #2d3748;
+      color: white;
+      border: none;
+      padding: 18px 40px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border-radius: 30px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      width: 100%;
+      margin-bottom: 25px;
+    }
+    
+    .product-modal-add-to-cart:hover {
+      background-color: #0a2f66;
+    }
+    
+    /* Bundle Suggestion Section */
+    .bundle-suggestion {
+      margin: 25px 0;
+      padding: 20px;
+      background-color: #edf2f7;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .bundle-product-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .bundle-product-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .bundle-info {
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    .bundle-title {
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    
+    .bundle-text {
+      color: #4a5568;
+      font-size: 0.9rem;
+      margin-bottom: 10px;
+    }
+    
+    .bundle-button {
+      background-color: #0a2f66;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    .bundle-button:hover {
+      background-color: #00a0ff;
+    }
+    
+    .product-modal-description {
+      margin-top: 30px;
+      padding-top: 30px;
+      border-top: 1px solid #edf2f7;
+    }
+    
+    .product-modal-description h3 {
+      margin-bottom: 15px;
+      font-size: 1.3rem;
+    }
+    
+    .description-text {
+      line-height: 1.8;
+      color: #4a5568;
+      margin-bottom: 15px;
+    }
+    
+    .description-text.collapsed {
+      max-height: 120px;
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .description-text.collapsed::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      background: linear-gradient(transparent, white);
+    }
+    
+    .see-more-btn {
+      background: none;
+      border: none;
+      color: #00a0ff;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0;
+    }
+    
+    /* Mobile responsive for modal */
+    @media (max-width: 992px) {
+      .product-modal-content {
+        flex-direction: column;
+      }
+      
+      .product-modal-images {
+        padding: 20px;
+      }
+      
+      .product-modal-details {
+        padding: 20px;
+      }
+      
+      .product-modal-title {
+        font-size: 2rem;
+      }
+      
+      .product-modal-price {
+        font-size: 1.5rem;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .product-modal {
+        width: 95%;
+        max-height: 95vh;
+      }
+      
+      .product-modal-main-image {
+        height: 300px;
+      }
+    }
 
     /* horizontal carousels */
     .hscroll{display:flex;gap:12px;overflow:auto;padding-bottom:10px;scroll-behavior:smooth}
@@ -867,6 +1255,129 @@
       font-size: 13px;
       display: none;
     }
+
+    /* ---------- MODAL STYLES ---------- */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+    
+    .modal.open {
+      display: flex;
+    }
+    
+    .modal-card {
+      background: #fff;
+      border-radius: 12px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    
+    .modal-header {
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .modal-header h3 {
+      margin: 0;
+      color: var(--accent);
+    }
+    
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    
+    .modal-body {
+      padding: 20px;
+    }
+    
+    .modal-footer {
+      padding: 20px;
+      border-top: 1px solid #eee;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    
+    .error-message {
+      color: #dc3545;
+      font-size: 14px;
+      margin-top: 5px;
+      display: none;
+    }
+    
+    .success-message {
+      color: #28a745;
+      font-size: 14px;
+      margin-top: 5px;
+      display: none;
+    }
+    
+    .forgot-password {
+      text-align: right;
+      margin-top: 10px;
+    }
+    
+    .forgot-password a {
+      color: var(--accent-2);
+      text-decoration: none;
+      font-size: 14px;
+    }
+    
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 14px;
+    }
+    
+    .auth-switch a {
+      color: var(--accent-2);
+      text-decoration: none;
+      font-weight: 600;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
@@ -916,6 +1427,9 @@
   <!-- HEADER -->
   <header>
     <div class="container header-inner" style="align-items:center">
+      <!-- Mobile hamburger menu icon - NOW ON FAR LEFT -->
+      <button class="mobile-menu-icon" id="mobileMenuIcon" style="display:none">☰</button>
+
       <!-- Left hamburger - HIDDEN ON MOBILE -->
       <button id="leftHamburger" class="left-hamburger" aria-label="Toggle categories (left)">☰</button>
 
@@ -939,16 +1453,9 @@
         <button id="profileBtnHeader" class="btn ghost" style="display:none;margin-left:6px">Profile</button>
         <span id="orderUpdatesBadge" style="display:none;background:#ff6b2c;color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
 
-        <div class="cart" id="cartBtn" aria-haspopup="true" aria-expanded="false">
+        <!-- Cart button - NOW REDIRECTS DIRECTLY TO CHECKOUT -->
+        <div class="cart" id="cartBtn" aria-haspopup="false">
           🛒 <span class="cart-count" id="cartCount">0</span>
-          <div class="mini-cart" id="miniCart" aria-hidden="true">
-            <div id="miniItems">No items yet.</div>
-            <div class="total"><div>Subtotal</div><div id="miniSub">R0.00</div></div>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="btn" id="checkoutBtn">Checkout</button>
-              <button class="btn ghost" id="viewCartBtn">View cart</button>
-            </div>
-          </div>
         </div>
 
         <!-- mobile hamburger to open sidebar - HIDDEN ON MOBILE (REMOVED AS REQUESTED) -->
@@ -1289,57 +1796,12 @@
     </main>
   </div>
 
-  <!-- PRODUCT MODAL (updated structure) -->
-  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal-card">
-      <div class="modal-media">
-        <div class="big" id="modalBig"><img src="" alt="" id="modalImg" style="width:100%;height:100%;object-fit:contain"></div>
-        <div class="thumbs" id="modalThumbs"></div>
-      </div>
-      <div class="modal-info">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div id="modalTitle" style="font-weight:800;font-size:18px"></div>
-            <div class="review-stars" style="margin-top:5px;">
-              <span class="stars">★★★★★</span>
-              <span class="count">(1)</span>
-            </div>
-            <div id="modalPrice" style="color:var(--cta);font-weight:800;margin-top:6px"></div>
-          </div>
-          <button class="close-btn" id="modalClose">✕</button>
-        </div>
-        
-        <div class="description-container">
-          <div class="description-fade" id="modalDesc"></div>
-          <button class="see-more-btn" id="seeMoreBtn">see more...</button>
-        </div>
-
-        <div>
-          <label>Size</label>
-          <select id="modalSize" class="size-select">
-            <!-- Sizes will be populated dynamically -->
-          </select>
-          <div class="stock-info" id="modalStockInfo" style="margin-top:5px;"></div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <label>Qty</label>
-          <select id="modalQty" class="qty">
-            <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-            <option>6</option><option>7</option><option>8</option><option>9</option><option>10</option>
-          </select>
-          <button id="modalAdd" class="add-btn">Add to cart</button>
-        </div>
-        <div class="stock-error" id="modalStockError">Quantity exceeds available stock for selected size</div>
-
-        <div style="margin-top:8px;font-size:13px;color:var(--muted)">
-          <strong>Material & care</strong>
-          <div id="modalCare">Cotton blend — machine wash cold. Returns within 14 days.</div>
-        </div>
-
-        <div style="margin-top:12px">
-          <strong>Related</strong>
-          <div class="hscroll" id="modalRelated"></div>
-        </div>
+  <!-- ===== UPDATED PRODUCT MODAL (redesigned) ===== -->
+  <div id="productModal" class="product-modal-overlay">
+    <div class="product-modal">
+      <div class="product-modal-close" id="closeProductModal">&times;</div>
+      <div class="product-modal-content" id="productModalContent">
+        <!-- Content will be dynamically generated -->
       </div>
     </div>
   </div>
@@ -1371,7 +1833,7 @@
     </div>
   </div>
 
-  <!-- Panel used for See More and Cart (added, behaviour wired in script) -->
+  <!-- Panel used for See More only (cart page removed) -->
   <div id="sectionPanel" class="panel" aria-hidden="true">
     <div class="panel-header">
       <h2 id="panelTitle"></h2>
@@ -1380,153 +1842,95 @@
     <div id="panelContent" class="panel-grid"></div>
   </div>
 
-  <div id="cartPage" class="panel" aria-hidden="true">
-    <div class="panel-header">
-      <h2>Shopping Cart</h2>
-      <div><button id="cartClose" class="btn ghost">✕</button></div>
-    </div>
-    <div style="display:flex;gap:18px;align-items:flex-start;">
-      <div style="flex:1">
-        <div id="cartList" class="cart-list"></div>
+  <!-- ===== AUTH MODALS ===== -->
+  <!-- Login Modal -->
+  <div id="loginModal" class="modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Sign In</h3>
+        <button class="modal-close" id="loginModalClose">&times;</button>
       </div>
-      <div style="width:320px;background:#fafafa;padding:12px;border-radius:10px">
-        <div style="font-weight:800;margin-bottom:8px">Order summary</div>
-        <div style="display:flex;justify-content:space-between" id="cartSummarySub"><div>Subtotal</div><div>R0.00</div></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px" id="cartSummaryDisc"><div>Discount</div><div>R0.00</div></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px;font-weight:800" id="cartSummaryTotal"><div>Total</div><div>R0.00</div></div>
-
-        <div class="promo-row" style="margin-top:12px;display:flex;gap:8px;align-items:center">
-          <input id="promoCode" placeholder="Promo code" style="flex:1;padding:8px;border-radius:8px;border:1px solid #eee" />
-          <button id="applyPromo" class="btn ghost">Apply</button>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modalLoginEmail">Email</label>
+          <input type="email" id="modalLoginEmail" placeholder="Enter your email">
+          <div class="error-message" id="modalLoginEmailError"></div>
         </div>
-
-        <div style="margin-top:14px">
-          <button id="cartCheckout" class="btn" style="width:100%">Checkout</button>
+        <div class="form-group">
+          <label for="modalLoginPassword">Password</label>
+          <input type="password" id="modalLoginPassword" placeholder="Enter your password">
+          <div class="error-message" id="modalLoginPasswordError"></div>
         </div>
+        <div class="forgot-password">
+          <a href="#" id="modalForgotPassword">Forgot Password?</a>
+        </div>
+        <div class="error-message" id="modalLoginError"></div>
+        <div class="success-message" id="modalLoginSuccess"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- ===== ADDED FROM FILE 2: SIGN IN & SIGN UP MODALS ===== -->
-  <!-- LOGIN MODAL -->
-  <div id="loginModal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal-card" style="max-width:720px;">
-      <div style="flex:1;padding:20px;">
-        <h3 style="font-size:20px;margin-bottom:8px">Sign in</h3>
-        <p style="color:var(--muted)">Welcome back — sign in with your email.</p>
-
-        <div style="margin-top:12px;">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Email</label>
-          <input id="loginEmail" type="email" style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
-        </div>
-
-        <div style="margin-top:12px;">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Password</label>
-          <input id="loginPassword" type="password" style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
-        </div>
-
-        <div id="loginError" style="color:#b00020;margin-top:8px;display:none"></div>
-        <div id="loginSuccess" style="color:green;margin-top:8px;display:none"></div>
-
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button id="loginSubmit" class="btn">Sign In</button>
-          <button id="openSignupFromLogin" class="btn ghost">Create account</button>
-          <button id="forgotPwdBtn" class="btn ghost" style="margin-left:auto">Forgot?</button>
-        </div>
-      </div>
-
-      <div style="width:360px;padding:18px;background:#fafafa;display:flex;flex-direction:column;gap:12px;align-items:flex-start">
-        <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
-          <strong>Quick help</strong>
-          <button class="close-btn" data-close="loginModal">✕</button>
-        </div>
-        <div style="color:var(--muted);font-size:13px">
-          You can sign in with the email you used to create your account.
-        </div>
-        <div style="font-size:13px;color:var(--muted)">
-          Don't have an account? Click "Create account" or use the Sign Up button in the header.
-        </div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="modalOpenSignup">Create Account</button>
+        <button class="btn" id="modalLoginSubmit">Sign In</button>
       </div>
     </div>
   </div>
 
-  <!-- SIGNUP MODAL -->
-  <div id="signupModal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal-card" style="max-width:720px;">
-      <div style="flex:1;padding:20px;">
-        <h3 style="font-size:20px;margin-bottom:8px">Create account</h3>
-        <p style="color:var(--muted)">Sign up with your email. You'll need to verify your email after registering.</p>
-
-        <div style="margin-top:12px;">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Full name</label>
-          <input id="signupName" type="text" style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
+  <!-- Signup Modal -->
+  <div id="signupModal" class="modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create Account</h3>
+        <button class="modal-close" id="signupModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="modalSignupName">Full Name</label>
+          <input type="text" id="modalSignupName" placeholder="Enter your full name">
+          <div class="error-message" id="modalSignupNameError"></div>
         </div>
-
-        <div style="margin-top:12px;">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Email</label>
-          <input id="signupEmail" type="email" style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
+        <div class="form-group">
+          <label for="modalSignupEmail">Email</label>
+          <input type="email" id="modalSignupEmail" placeholder="Enter your email">
+          <div class="error-message" id="modalSignupEmailError"></div>
         </div>
-
-        <div style="margin-top:12px;">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Password</label>
-          <input id="signupPassword" type="password" style="width:100%;padding:10px;border-radius:8px;border:1px solid #eee" />
+        <div class="form-group">
+          <label for="modalSignupPassword">Password</label>
+          <input type="password" id="modalSignupPassword" placeholder="Create a password">
+          <div class="error-message" id="modalSignupPasswordError"></div>
+          <div style="margin-top: 8px; font-size: 12px; color: var(--muted);">
+            Password must be at least 8 characters with 1 number and 1 special character.
+          </div>
         </div>
-
         <!-- Hidden referral code input -->
-        <input type="hidden" id="signupReferralCode" value="" />
-
-        <div style="margin-top:8px;font-size:13px;color:var(--muted)">
-          <div><strong>Password must:</strong></div>
-          <ul style="margin-top:6px;margin-left:18px">
-            <li id="pwRuleLen">• Be at least <strong>8</strong> characters</li>
-            <li id="pwRuleNum">• Contain at least <strong>1 number</strong></li>
-            <li id="pwRuleSpec">• Contain at least <strong>1 special character</strong> (e.g. !@#$%)</li>
-          </ul>
-        </div>
-
-        <div id="signupError" style="color:#b00020;margin-top:8px;display:none"></div>
-        <div id="signupSuccess" style="color:green;margin-top:8px;display:none"></div>
-
-        <div style="display:flex;gap:8px;margin-top:16px">
-          <button id="signupSubmit" class="btn">Create account</button>
-          <button id="openLoginFromSignup" class="btn ghost">Sign in</button>
-        </div>
+        <input type="hidden" id="modalSignupReferralCode" value="" />
+        <div class="error-message" id="modalSignupError"></div>
+        <div class="success-message" id="modalSignupSuccess"></div>
       </div>
-
-      <div style="width:360px;padding:18px;background:#fafafa;display:flex;flex-direction:column;gap:12px;align-items:flex-start">
-        <div style="display:flex;justify-content:space-between;width:100%;align-items:center">
-          <strong>Create account</strong>
-          <button class="close-btn" data-close="signupModal">✕</button>
-        </div>
-        <div style="color:var(--muted);font-size:13px">
-          After creating your account we'll send a verification email. Click the link in the email to confirm your address.
-        </div>
-        <div style="font-size:13px;color:var(--muted)">
-          If email verification is required for purchases, we'll notify you until it's complete.
-        </div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="modalOpenLogin">Already have an account?</button>
+        <button class="btn" id="modalSignupSubmit">Create Account</button>
       </div>
     </div>
   </div>
 
-  <!-- RESET PASSWORD -->
-  <div id="resetModal" class="modal" role="dialog" aria-hidden="true">
-    <div class="modal-card" style="max-width:520px;width:100%;display:flex;justify-content:center">
-      <div class="modal-info" style="width:420px;padding:18px;">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <h3 style="margin:0">Reset password</h3>
-          <button id="resetClose" class="close-btn" title="Close">✕</button>
+  <!-- Forgot Password Modal -->
+  <div id="forgotPasswordModal" class="modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Reset Password</h3>
+        <button class="modal-close" id="forgotPasswordModalClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 20px; color: var(--muted);">Enter your email address and we'll send you a link to reset your password.</p>
+        <div class="form-group">
+          <label for="modalForgotPasswordEmail">Email</label>
+          <input type="email" id="modalForgotPasswordEmail" placeholder="Enter your email">
+          <div class="error-message" id="modalForgotPasswordError"></div>
+          <div class="success-message" id="modalForgotPasswordSuccess"></div>
         </div>
-
-        <div id="resetMsg" style="margin-top:10px;font-size:14px;color:var(--muted)"></div>
-
-        <div style="margin-top:12px">
-          <label style="display:block;font-size:13px;margin-bottom:6px">Email</label>
-          <input id="resetEmail" type="email" placeholder="you@example.com" style="width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6ea" />
-        </div>
-
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button id="resetSubmit" class="btn">Send reset link</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="modalForgotPasswordCancel">Cancel</button>
+        <button class="btn" id="modalForgotPasswordSubmit">Send Reset Link</button>
       </div>
     </div>
   </div>
@@ -1565,40 +1969,38 @@
     };
 
     // Sanitize cart data
-    // Sanitize cart data (fixed)
-function sanitizeCartData(cart) {
-  return cart.map(item => {
-    // Accept either item.id or item.product_id; normalize to id (string)
-    const rawId = item.id || item.product_id || item.productId || item.product_id;
-    const id = (typeof rawId === 'string' || typeof rawId === 'number') ? String(rawId) : null;
+    function sanitizeCartData(cart) {
+      return cart.map(item => {
+        // Accept either item.id or item.product_id; normalize to id (string)
+        const rawId = item.id || item.product_id || item.productId || item.product_id;
+        const id = (typeof rawId === 'string' || typeof rawId === 'number') ? String(rawId) : null;
 
-    // Price: accept numbers or numeric strings
-    let price = 0;
-    if (typeof item.price === 'number') {
-      price = Number(item.price);
-    } else if (typeof item.price === 'string' && item.price.trim() !== '') {
-      const p = parseFloat(item.price.replace(/[^0-9.-]+/g, ''));
-      price = Number.isFinite(p) ? p : 0;
+        // Price: accept numbers or numeric strings
+        let price = 0;
+        if (typeof item.price === 'number') {
+          price = Number(item.price);
+        } else if (typeof item.price === 'string' && item.price.trim() !== '') {
+          const p = parseFloat(item.price.replace(/[^0-9.-]+/g, ''));
+          price = Number.isFinite(p) ? p : 0;
+        }
+
+        const quantity = (typeof item.quantity === 'number') ? Math.max(1, Math.floor(item.quantity)) :
+                         (typeof item.qty === 'number' ? Math.max(1, Math.floor(item.qty)) : 1);
+
+        return {
+          // keep both id and product_id so other code can use either
+          id,
+          product_id: id,
+          name: typeof item.name === 'string' ? item.name.substring(0, 100) : '',
+          price: Math.max(0, Number(price.toFixed ? Number(price).toFixed(2) : price)),
+          quantity,
+          size: typeof item.size === 'string' ? item.size.substring(0, 20) : 'One Size',
+          image: typeof item.image === 'string' ? item.image.substring(0, 500) : '',
+          variant_id: item.variant_id || item.variantId || null
+        };
+      })
+      .filter(item => item.id && item.price > 0);
     }
-
-    const quantity = (typeof item.quantity === 'number') ? Math.max(1, Math.floor(item.quantity)) :
-                     (typeof item.qty === 'number' ? Math.max(1, Math.floor(item.qty)) : 1);
-
-    return {
-      // keep both id and product_id so other code can use either
-      id,
-      product_id: id,
-      name: typeof item.name === 'string' ? item.name.substring(0, 100) : '',
-      price: Math.max(0, Number(price.toFixed ? Number(price).toFixed(2) : price)),
-      quantity,
-      size: typeof item.size === 'string' ? item.size.substring(0, 20) : 'One Size',
-      image: typeof item.image === 'string' ? item.image.substring(0, 500) : '',
-      variant_id: item.variant_id || item.variantId || null
-    };
-  })
-  .filter(item => item.id && item.price > 0);
-}
-
 
     /********************
      * SECURE CART MANAGEMENT WITH SUPABASE SYNC
@@ -1722,14 +2124,12 @@ function sanitizeCartData(cart) {
           }
         }
         
-        renderCart();
         updateCartBadge();
         
       } catch (error) {
         console.error('Error loading cart:', error);
         const savedCart = localStorage.getItem('ss_cart');
         state.cart = savedCart ? JSON.parse(savedCart) : [];
-        renderCart();
       }
     }
 
@@ -1791,7 +2191,7 @@ function sanitizeCartData(cart) {
       }
     }
 
-    // Enhanced add to cart function with validation
+    // Enhanced add to cart function with validation - FIXED TO WORK PROPERLY
     async function addToCart(id, qty = 1, size = 'M') {
       const p = state.products.find(x => x.id === id);
       if (!p) return;
@@ -1841,15 +2241,21 @@ function sanitizeCartData(cart) {
         await saveCartToServer();
       }
       
-      renderCart();
-      miniCart.style.display = 'block';
-      setTimeout(() => miniCart.style.display = 'none', 2800);
+      updateCartBadge();
+      
+      // Show success notification
+      showNotification(`Added ${qty} ${p.title} to cart!`);
     }
 
     // Update cart badge
     function updateCartBadge() {
       const totalItems = state.cart.reduce((sum, item) => sum + item.qty, 0);
-      cartCount.textContent = totalItems;
+      if (cartCount) cartCount.textContent = totalItems;
+      
+      // Update all cart count elements
+      document.querySelectorAll('.cart-count').forEach(element => {
+        element.textContent = totalItems;
+      });
     }
 
     // Clear cart from server and localStorage
@@ -1868,7 +2274,7 @@ function sanitizeCartData(cart) {
         }
       }
       
-      renderCart();
+      updateCartBadge();
     }
 
     // Initialize cart on page load
@@ -1903,7 +2309,7 @@ function sanitizeCartData(cart) {
         await loadCartWithSync();
       }
       
-      renderCart();
+      updateCartBadge();
     }
 
     /********************
@@ -1950,20 +2356,10 @@ function sanitizeCartData(cart) {
       const mobileShopItem = document.getElementById('mobileShopItem');
       const mobileCategoriesList = document.getElementById('mobileCategoriesList');
       const mobileSignIn = document.getElementById('mobileSignIn');
+      const mobileMenuIcon = document.getElementById('mobileMenuIcon');
       
-      // Mobile hamburger icon in header right
-      const mobileMenuIcon = document.createElement('button');
-      mobileMenuIcon.className = 'icon-btn';
-      mobileMenuIcon.innerHTML = '☰';
-      mobileMenuIcon.style.fontSize = '18px';
-      mobileMenuIcon.style.display = 'none';
-      
-      // Insert before cart button
-      const headerRight = document.querySelector('.header-right');
-      if (headerRight) {
-        headerRight.insertBefore(mobileMenuIcon, headerRight.querySelector('.cart'));
-        
-        // Show on mobile
+      if (mobileMenuIcon) {
+        // Show mobile menu icon on mobile
         if (isMobile()) {
           mobileMenuIcon.style.display = 'block';
         }
@@ -2009,12 +2405,14 @@ function sanitizeCartData(cart) {
       
       // Update on resize
       window.addEventListener('resize', () => {
-        if (isMobile()) {
-          mobileMenuIcon.style.display = 'block';
-        } else {
-          mobileMenuIcon.style.display = 'none';
-          mobileMenu.classList.remove('active');
-          mobileMenuOverlay.classList.remove('active');
+        if (mobileMenuIcon) {
+          if (isMobile()) {
+            mobileMenuIcon.style.display = 'block';
+          } else {
+            mobileMenuIcon.style.display = 'none';
+            mobileMenu.classList.remove('active');
+            mobileMenuOverlay.classList.remove('active');
+          }
         }
       });
     }
@@ -2280,6 +2678,9 @@ function sanitizeCartData(cart) {
 	  if (typeof checkInitialAuthState === 'function') {
 		checkInitialAuthState();
 	  }
+	  if (typeof loadFilterOptions === 'function') {
+		loadFilterOptions();
+	  }
 	});
 
 	/********************
@@ -2322,11 +2723,8 @@ function sanitizeCartData(cart) {
     const dots = document.getElementById('dots');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
-    const miniCart = document.getElementById('miniCart');
     const cartBtn = document.getElementById('cartBtn');
     const cartCount = document.getElementById('cartCount');
-    const miniItems = document.getElementById('miniItems');
-    const miniSub = document.getElementById('miniSub');
     const searchInput = document.getElementById('searchInput');
     const suggestions = document.getElementById('suggestions');
     const searchClear = document.getElementById('searchClear');
@@ -2350,63 +2748,16 @@ function sanitizeCartData(cart) {
     const panelContent = document.getElementById('panelContent');
     const panelClose = document.getElementById('panelClose');
     const signBtn = document.getElementById('signBtn');
-    const modal = document.getElementById('modal');
-    const modalImg = document.getElementById('modalImg');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalPrice = document.getElementById('modalPrice');
-    const modalDesc = document.getElementById('modalDesc');
-    const modalThumbs = document.getElementById('modalThumbs');
-    const modalAdd = document.getElementById('modalAdd');
-    const modalSize = document.getElementById('modalSize');
-    const modalQty = document.getElementById('modalQty');
-    const modalStockInfo = document.getElementById('modalStockInfo');
-    const modalStockError = document.getElementById('modalStockError');
-    const seeMoreBtn = document.getElementById('seeMoreBtn');
-    const panelCart = document.getElementById('cartPage');
-    const cartList = document.getElementById('cartList');
-    const cartClose = document.getElementById('cartClose');
-    const cartCheckoutBtn = document.getElementById('cartCheckout');
-    const applyPromoBtn = document.getElementById('applyPromo');
-    const promoCodeInput = document.getElementById('promoCode');
-    const sizesFilter = document.getElementById('sizesFilter');
-    const typeFilter = document.getElementById('typeFilter');
-    const colorSel = document.getElementById('colorSel');
-    const tagSel = document.getElementById('tagSel');
+    const modal = document.getElementById('productModal');
+    const modalClose = document.getElementById('closeProductModal');
     const copyReferralBtn = document.getElementById('copyReferral');
     const shareBtn = document.getElementById('shareBtn');
     const userReferralCode = document.getElementById('userReferralCode');
     const userReferralLink = document.getElementById('userReferralLink');
     const referralCodeDisplay = document.getElementById('referralCodeDisplay');
     const referralLinkDisplay = document.getElementById('referralLinkDisplay');
-    const loginModal = document.getElementById('loginModal');
-    const signupModal = document.getElementById('signupModal');
-    const resetModal = document.getElementById('resetModal');
     const profileBtnHeader = document.getElementById('profileBtnHeader');
     const orderUpdatesBadge = document.getElementById('orderUpdatesBadge');
-    const loginEmail = document.getElementById('loginEmail');
-    const loginPassword = document.getElementById('loginPassword');
-    const loginSubmit = document.getElementById('loginSubmit');
-    const loginError = document.getElementById('loginError');
-    const loginSuccess = document.getElementById('loginSuccess');
-    const openSignupFromLogin = document.getElementById('openSignupFromLogin');
-    const forgotPwdBtn = document.getElementById('forgotPwdBtn');
-    const signupName = document.getElementById('signupName');
-    const signupEmail = document.getElementById('signupEmail');
-    const signupPassword = document.getElementById('signupPassword');
-    const signupSubmit = document.getElementById('signupSubmit');
-    const signupError = document.getElementById('signupError');
-    const signupSuccess = document.getElementById('signupSuccess');
-    const openLoginFromSignup = document.getElementById('openLoginFromSignup');
-    const pwRuleLen = document.getElementById('pwRuleLen');
-    const pwRuleNum = document.getElementById('pwRuleNum');
-    const pwRuleSpec = document.getElementById('pwRuleSpec');
-    const resetEmailInput = document.getElementById('resetEmail');
-    const resetSubmit = document.getElementById('resetSubmit');
-    const resetMsg = document.getElementById('resetMsg');
-    const resetClose = document.getElementById('resetClose');
-    const checkoutBtn = document.getElementById('checkoutBtn');
-    const viewCartBtn = document.getElementById('viewCartBtn');
-    const cartCheckout = document.getElementById('cartCheckout');
     const quickAddModal = document.getElementById('quickAddModal');
     const quickAddClose = document.getElementById('quickAddClose');
     const quickAddSize = document.getElementById('quickAddSize');
@@ -2415,8 +2766,30 @@ function sanitizeCartData(cart) {
     const quickAddStockInfo = document.getElementById('quickAddStockInfo');
     const quickAddStockError = document.getElementById('quickAddStockError');
     
+    // Modal elements
+    const loginModal = document.getElementById('loginModal');
+    const signupModal = document.getElementById('signupModal');
+    const forgotPasswordModal = document.getElementById('forgotPasswordModal');
+    const loginModalClose = document.getElementById('loginModalClose');
+    const signupModalClose = document.getElementById('signupModalClose');
+    const forgotPasswordModalClose = document.getElementById('forgotPasswordModalClose');
+    const modalLoginEmail = document.getElementById('modalLoginEmail');
+    const modalLoginPassword = document.getElementById('modalLoginPassword');
+    const modalLoginSubmit = document.getElementById('modalLoginSubmit');
+    const modalOpenSignup = document.getElementById('modalOpenSignup');
+    const modalSignupName = document.getElementById('modalSignupName');
+    const modalSignupEmail = document.getElementById('modalSignupEmail');
+    const modalSignupPassword = document.getElementById('modalSignupPassword');
+    const modalSignupSubmit = document.getElementById('modalSignupSubmit');
+    const modalOpenLogin = document.getElementById('modalOpenLogin');
+    const modalForgotPassword = document.getElementById('modalForgotPassword');
+    const modalForgotPasswordEmail = document.getElementById('modalForgotPasswordEmail');
+    const modalForgotPasswordSubmit = document.getElementById('modalForgotPasswordSubmit');
+    const modalForgotPasswordCancel = document.getElementById('modalForgotPasswordCancel');
+    const modalSignupReferralCode = document.getElementById('modalSignupReferralCode');
+    
     /********************
-     * Checkout Redirection
+     * Checkout Redirection - DIRECT TO checkout.html
      ********************/
     function redirectToCheckout() {
       if (state.cart.length === 0) {
@@ -2445,19 +2818,6 @@ function sanitizeCartData(cart) {
       window.location.href = 'checkout.html';
     }
     
-    // Setup checkout button handlers
-    function setupCheckoutHandlers() {
-      // Mini cart checkout button
-      if (checkoutBtn) {
-        checkoutBtn.addEventListener('click', redirectToCheckout);
-      }
-      
-      // Cart page checkout button
-      if (cartCheckout) {
-        cartCheckout.addEventListener('click', redirectToCheckout);
-      }
-    }
-
     /********************
      * Load product variants from Supabase
      ********************/
@@ -2772,9 +3132,8 @@ function sanitizeCartData(cart) {
       const refCode = urlParams.get('ref');
       
       if (refCode) {
-        const signupReferralInput = document.getElementById('signupReferralCode');
-        if (signupReferralInput) {
-          signupReferralInput.value = refCode;
+        if (modalSignupReferralCode) {
+          modalSignupReferralCode.value = refCode;
         }
         
         try {
@@ -2844,7 +3203,7 @@ function sanitizeCartData(cart) {
             
             updatedCopyBtn.addEventListener('click', function() {
               navigator.clipboard.writeText(info.code).then(() => {
-                alert(`Referral code copied: ${info.code}`);
+                showNotification(`Referral code copied: ${info.code}`);
               });
             });
             
@@ -2857,7 +3216,7 @@ function sanitizeCartData(cart) {
                 });
               } else {
                 navigator.clipboard.writeText(info.link).then(() => {
-                  alert(`Referral link copied to clipboard: ${info.link}`);
+                  showNotification(`Referral link copied to clipboard: ${info.link}`);
                 });
               }
             });
@@ -2868,11 +3227,11 @@ function sanitizeCartData(cart) {
         referralLinkDisplay.style.display = 'none';
         
         updatedCopyBtn.addEventListener('click', function() {
-          showModal(document.getElementById('loginModal'));
+          showModal(loginModal);
         });
         
         updatedShareBtn.addEventListener('click', function() {
-          showModal(document.getElementById('loginModal'));
+          showModal(loginModal);
         });
       }
     }
@@ -2896,19 +3255,29 @@ function sanitizeCartData(cart) {
       }
     }
     
-    // Close buttons
-    document.querySelectorAll('.close-btn').forEach(btn => {
-      btn.addEventListener('click', function() {
-        const dataClose = this.getAttribute('data-close');
-        if (dataClose) {
-          const modal = document.getElementById(dataClose);
-          hideModal(modal);
-        } else {
-          const modal = this.closest('.modal');
-          hideModal(modal);
-        }
-      });
+    // Close buttons for modals
+    if (loginModalClose) {
+      loginModalClose.addEventListener('click', () => hideModal(loginModal));
+    }
+    
+    if (signupModalClose) {
+      signupModalClose.addEventListener('click', () => hideModal(signupModal));
+    }
+    
+    if (forgotPasswordModalClose) {
+      forgotPasswordModalClose.addEventListener('click', () => hideModal(forgotPasswordModal));
+    }
+    
+    // Close modals when clicking outside
+    document.addEventListener('click', (e) => {
+      if (e.target.classList.contains('modal')) {
+        hideModal(e.target);
+      }
     });
+
+    /********************
+     * AUTHENTICATION SYSTEM - UPDATED FOR MODALS
+     ********************/
     
     // Password validation
     function checkPasswordRules(password) {
@@ -2918,67 +3287,54 @@ function sanitizeCartData(cart) {
         spec: /[!@#$%^&*(),.?":{}|<>]/.test(password || '')
       };
       
-      const pwRuleLen = document.getElementById('pwRuleLen');
-      const pwRuleNum = document.getElementById('pwRuleNum');
-      const pwRuleSpec = document.getElementById('pwRuleSpec');
-      
-      if (pwRuleLen) pwRuleLen.style.fontWeight = rules.len ? '700' : '400';
-      if (pwRuleNum) pwRuleNum.style.fontWeight = rules.num ? '700' : '400';
-      if (pwRuleSpec) pwRuleSpec.style.fontWeight = rules.spec ? '700' : '400';
-      
       return rules.len && rules.num && rules.spec;
     }
-
-    /********************
-     * AUTHENTICATION SYSTEM
-     ********************/
     
     // Signup functionality with referral tracking
-    if (document.getElementById('signupSubmit')) {
-      document.getElementById('signupSubmit').addEventListener('click', async function(e) {
+    if (modalSignupSubmit) {
+      modalSignupSubmit.addEventListener('click', async function(e) {
         e.preventDefault();
         
-        const signupError = document.getElementById('signupError');
-        const signupSuccess = document.getElementById('signupSuccess');
-        const signupName = document.getElementById('signupName');
-        const signupEmail = document.getElementById('signupEmail');
-        const signupPassword = document.getElementById('signupPassword');
-        const signupReferralCode = document.getElementById('signupReferralCode');
+        const errorElement = document.getElementById('modalSignupError');
+        const successElement = document.getElementById('modalSignupSuccess');
         
-        if (signupError) signupError.style.display = 'none';
-        if (signupSuccess) signupSuccess.style.display = 'none';
+        if (errorElement) {
+          errorElement.style.display = 'none';
+          errorElement.textContent = '';
+        }
+        if (successElement) successElement.style.display = 'none';
         
-        const name = (signupName && signupName.value || '').trim();
-        const email = (signupEmail && signupEmail.value || '').trim();
-        const password = (signupPassword && signupPassword.value) || '';
-        const referralCode = signupReferralCode ? signupReferralCode.value : '';
+        const name = (modalSignupName && modalSignupName.value || '').trim();
+        const email = (modalSignupEmail && modalSignupEmail.value || '').trim();
+        const password = (modalSignupPassword && modalSignupPassword.value) || '';
+        const referralCode = modalSignupReferralCode ? modalSignupReferralCode.value : '';
         
         if (!name || !email || !password) {
-          if (signupError) {
-            signupError.textContent = 'Please complete all fields.';
-            signupError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = 'Please complete all fields.';
+            errorElement.style.display = 'block';
           }
           return;
         }
         
         if (!checkPasswordRules(password)) {
-          if (signupError) {
-            signupError.textContent = 'Password does not meet the requirements.';
-            signupError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = 'Password does not meet the requirements.';
+            errorElement.style.display = 'block';
           }
           return;
         }
         
         const client = supabaseClient;
         if (!client || !client.auth) {
-          if (signupError) {
-            signupError.textContent = 'Auth client not available.';
-            signupError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = 'Auth client not available.';
+            errorElement.style.display = 'block';
           }
           return;
         }
         
-        const signupSubmit = document.getElementById('signupSubmit');
+        const signupSubmit = modalSignupSubmit;
         signupSubmit.disabled = true;
         const originalText = signupSubmit.textContent;
         signupSubmit.textContent = 'Creating account...';
@@ -2997,9 +3353,9 @@ function sanitizeCartData(cart) {
           
           if (error) {
             console.error('Signup error:', error);
-            if (signupError) {
-              signupError.textContent = error.message || 'Sign up failed.';
-              signupError.style.display = 'block';
+            if (errorElement) {
+              errorElement.textContent = error.message || 'Sign up failed.';
+              errorElement.style.display = 'block';
             }
             return;
           }
@@ -3056,20 +3412,20 @@ function sanitizeCartData(cart) {
           }
           
           // Show success message
-          if (signupSuccess) {
+          if (successElement) {
             let successMsg = 'Account created! Check your email to verify your address.';
             if (referralCode && referrerId) {
               successMsg += '<br><strong>You will receive a R20 discount code via email!</strong>';
             }
-            signupSuccess.innerHTML = successMsg;
-            signupSuccess.style.display = 'block';
+            successElement.innerHTML = successMsg;
+            successElement.style.display = 'block';
           }
           
           // Clear forms
-          if (signupName) signupName.value = '';
-          if (signupEmail) signupEmail.value = '';
-          if (signupPassword) signupPassword.value = '';
-          if (signupReferralCode) signupReferralCode.value = '';
+          if (modalSignupName) modalSignupName.value = '';
+          if (modalSignupEmail) modalSignupEmail.value = '';
+          if (modalSignupPassword) modalSignupPassword.value = '';
+          if (modalSignupReferralCode) modalSignupReferralCode.value = '';
           
           // Clear stored referral
           try {
@@ -3078,7 +3434,7 @@ function sanitizeCartData(cart) {
           
           // Close modal after success
           setTimeout(() => {
-            hideModal(document.getElementById('signupModal'));
+            hideModal(signupModal);
             if (data?.session) {
               updateAuthUI(data.user);
             }
@@ -3086,9 +3442,9 @@ function sanitizeCartData(cart) {
           
         } catch (err) {
           console.error('Unexpected signup error:', err);
-          if (signupError) {
-            signupError.textContent = err?.message || 'Unexpected error during signup.';
-            signupError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = err?.message || 'Unexpected error during signup.';
+            errorElement.style.display = 'block';
           }
         } finally {
           signupSubmit.disabled = false;
@@ -3097,40 +3453,41 @@ function sanitizeCartData(cart) {
       });
     }
     
-    // Login functionality - ADD CART SYNC
-    if (document.getElementById('loginSubmit')) {
-      document.getElementById('loginSubmit').addEventListener('click', async function(e) {
+    // Login functionality
+    if (modalLoginSubmit) {
+      modalLoginSubmit.addEventListener('click', async function(e) {
         e.preventDefault();
         
-        const loginError = document.getElementById('loginError');
-        const loginSuccess = document.getElementById('loginSuccess');
-        const loginEmail = document.getElementById('loginEmail');
-        const loginPassword = document.getElementById('loginPassword');
+        const errorElement = document.getElementById('modalLoginError');
+        const successElement = document.getElementById('modalLoginSuccess');
         
-        if (loginError) loginError.style.display = 'none';
-        if (loginSuccess) loginSuccess.style.display = 'none';
+        if (errorElement) {
+          errorElement.style.display = 'none';
+          errorElement.textContent = '';
+        }
+        if (successElement) successElement.style.display = 'none';
         
-        const email = (loginEmail && loginEmail.value || '').trim();
-        const password = (loginPassword && loginPassword.value) || '';
+        const email = (modalLoginEmail && modalLoginEmail.value || '').trim();
+        const password = (modalLoginPassword && modalLoginPassword.value) || '';
         
         if (!email || !password) {
-          if (loginError) {
-            loginError.textContent = 'Please enter email and password.';
-            loginError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = 'Please enter email and password.';
+            errorElement.style.display = 'block';
           }
           return;
         }
         
         const client = supabaseClient;
         if (!client || !client.auth) {
-          if (loginError) {
-            loginError.textContent = 'Auth client not available.';
-            loginError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = 'Auth client not available.';
+            errorElement.style.display = 'block';
           }
           return;
         }
         
-        const loginSubmit = document.getElementById('loginSubmit');
+        const loginSubmit = modalLoginSubmit;
         loginSubmit.disabled = true;
         const originalText = loginSubmit.textContent;
         loginSubmit.textContent = 'Signing in...';
@@ -3143,42 +3500,40 @@ function sanitizeCartData(cart) {
           
           if (error) {
             console.error('Login error:', error);
-            if (loginError) {
-              loginError.textContent = error.message || 'Wrong credentials or email not registered.';
-              loginError.style.display = 'block';
+            if (errorElement) {
+              errorElement.textContent = error.message || 'Wrong credentials or email not registered.';
+              errorElement.style.display = 'block';
             }
             return;
           }
           
           const user = data?.user;
           if (!user) {
-            if (loginError) {
-              loginError.textContent = 'No user returned from auth.';
-              loginError.style.display = 'block';
+            if (errorElement) {
+              errorElement.textContent = 'No user returned from auth.';
+              errorElement.style.display = 'block';
             }
             return;
           }
           
-          if (loginSuccess) {
-            loginSuccess.textContent = 'Signed in successfully!';
-            loginSuccess.style.display = 'block';
+          if (successElement) {
+            successElement.textContent = 'Signed in successfully!';
+            successElement.style.display = 'block';
           }
           
           updateAuthUI(user);
           
-          // NO NEED TO CALL syncCartOnLogin HERE - it's already called in updateAuthUI
-          
           setTimeout(() => {
-            hideModal(document.getElementById('loginModal'));
-            if (loginEmail) loginEmail.value = '';
-            if (loginPassword) loginPassword.value = '';
+            hideModal(loginModal);
+            if (modalLoginEmail) modalLoginEmail.value = '';
+            if (modalLoginPassword) modalLoginPassword.value = '';
           }, 1000);
           
         } catch (err) {
           console.error('Unexpected login error:', err);
-          if (loginError) {
-            loginError.textContent = err?.message || 'Unexpected error during sign in.';
-            loginError.style.display = 'block';
+          if (errorElement) {
+            errorElement.textContent = err?.message || 'Unexpected error during sign in.';
+            errorElement.style.display = 'block';
           }
         } finally {
           loginSubmit.disabled = false;
@@ -3188,69 +3543,105 @@ function sanitizeCartData(cart) {
     }
 
     // Forgot password functionality
-    if (document.getElementById('forgotPwdBtn')) {
-      document.getElementById('forgotPwdBtn').addEventListener('click', function(e) {
+    if (modalForgotPassword) {
+      modalForgotPassword.addEventListener('click', function(e) {
         e.preventDefault();
-        hideModal(document.getElementById('loginModal'));
-        showModal(document.getElementById('resetModal'));
+        hideModal(loginModal);
+        showModal(forgotPasswordModal);
       });
     }
     
-    if (document.getElementById('resetSubmit')) {
-      document.getElementById('resetSubmit').addEventListener('click', async function(e) {
+    if (modalForgotPasswordCancel) {
+      modalForgotPasswordCancel.addEventListener('click', function(e) {
+        e.preventDefault();
+        hideModal(forgotPasswordModal);
+        showModal(loginModal);
+      });
+    }
+    
+    if (modalForgotPasswordSubmit) {
+      modalForgotPasswordSubmit.addEventListener('click', async function(e) {
         e.preventDefault();
         
-        const resetEmail = document.getElementById('resetEmail').value.trim();
-        const resetMsg = document.getElementById('resetMsg');
+        const email = modalForgotPasswordEmail.value.trim();
+        const errorElement = document.getElementById('modalForgotPasswordError');
+        const successElement = document.getElementById('modalForgotPasswordSuccess');
         
-        if (!resetEmail) {
-          resetMsg.textContent = 'Please enter your email address.';
-          resetMsg.style.color = '#b00020';
+        if (!email) {
+          if (errorElement) {
+            errorElement.textContent = 'Please enter your email address.';
+            errorElement.style.display = 'block';
+          }
           return;
         }
         
         if (!supabaseClient) {
-          resetMsg.textContent = 'Auth client not available.';
-          resetMsg.style.color = '#b00020';
+          if (errorElement) {
+            errorElement.textContent = 'Auth client not available.';
+            errorElement.style.display = 'block';
+          }
           return;
         }
         
-        const resetSubmit = document.getElementById('resetSubmit');
-        resetSubmit.disabled = true;
-        const originalText = resetSubmit.textContent;
-        resetSubmit.textContent = 'Sending...';
+        const submitBtn = modalForgotPasswordSubmit;
+        submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Sending...';
         
         try {
-          const { error } = await supabaseClient.auth.resetPasswordForEmail(resetEmail, {
+          const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: `${window.location.origin}/reset-password.html`
           });
           
           if (error) {
             console.error('Password reset error:', error);
-            resetMsg.textContent = error.message || 'Failed to send reset email.';
-            resetMsg.style.color = '#b00020';
+            if (errorElement) {
+              errorElement.textContent = error.message || 'Failed to send reset email.';
+              errorElement.style.display = 'block';
+            }
             return;
           }
           
-          resetMsg.textContent = 'Password reset email sent! Check your inbox.';
-          resetMsg.style.color = 'green';
+          if (successElement) {
+            successElement.textContent = 'Password reset email sent! Check your inbox.';
+            successElement.style.display = 'block';
+          }
           
           // Clear email field
-          document.getElementById('resetEmail').value = '';
+          modalForgotPasswordEmail.value = '';
           
           // Close modal after 3 seconds
           setTimeout(() => {
-            hideModal(document.getElementById('resetModal'));
+            hideModal(forgotPasswordModal);
           }, 3000);
           
         } catch (err) {
           console.error('Unexpected reset error:', err);
-          resetMsg.textContent = err?.message || 'Unexpected error.';
-          resetMsg.style.color = '#b00020';
+          if (errorElement) {
+            errorElement.textContent = err?.message || 'Unexpected error.';
+            errorElement.style.display = 'block';
+          }
         } finally {
-          resetSubmit.disabled = false;
-          resetSubmit.textContent = originalText;
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
         }
+      });
+    }
+
+    // Modal navigation
+    if (modalOpenSignup) {
+      modalOpenSignup.addEventListener('click', function(e) {
+        e.preventDefault();
+        hideModal(loginModal);
+        showModal(signupModal);
+      });
+    }
+    
+    if (modalOpenLogin) {
+      modalOpenLogin.addEventListener('click', function(e) {
+        e.preventDefault();
+        hideModal(signupModal);
+        showModal(loginModal);
       });
     }
 
@@ -3304,7 +3695,7 @@ function sanitizeCartData(cart) {
     document.getElementById('footerLogo').src = 'umzila.webp';
 
     /********************
-     * Store for filter options from Supabase
+     * Store for filter options from Supabase - UPDATED FOR CORRECT FILTERING
      ********************/
     let filterOptions = {
       categories: ['All'],
@@ -3328,7 +3719,7 @@ function sanitizeCartData(cart) {
 
     let slideIndex = 0; const slideCount = slides.children.length;
     function makeDots(){ for(let i=0;i<slideCount;i++){ const d=document.createElement('div'); d.className='dot'; if(i===0) d.classList.add('active'); d.addEventListener('click',()=>goToSlide(i)); dots.appendChild(d);} }
-    function goToSlide(i){ slideIndex=i; slides.style.transform = 'translateX('+(-i*100)+'%)'; Array.from(dots.children).forEach((d,idx)=>d.classList.toggle('active', idx===i)); }
+    function goToSlide(i){ slideIndex = i; slides.style.transform = 'translateX('+(-i*100)+'%)'; Array.from(dots.children).forEach((d,idx)=>d.classList.toggle('active', idx===i)); }
     makeDots(); let heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4000);
     document.getElementById('hero').addEventListener('mouseenter',()=>clearInterval(heroTimer)); document.getElementById('hero').addEventListener('mouseleave',()=>heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4000));
     prevBtn.addEventListener('click',()=>goToSlide((slideIndex-1+slideCount)%slideCount)); nextBtn.addEventListener('click',()=>goToSlide((slideIndex+1)%slideCount));
@@ -3627,7 +4018,6 @@ function sanitizeCartData(cart) {
 
       attachProductListeners();
       runReveal();
-      renderCart();
     }
 
     /********************
@@ -3659,7 +4049,7 @@ function sanitizeCartData(cart) {
     function attachProductListeners(){ 
       document.querySelectorAll('.product-card').forEach(card=>{ 
         const media = card.querySelector('.product-media'); 
-        if (media) media.addEventListener('click',()=>openModal(card.dataset.id)); 
+        if (media) media.addEventListener('click',()=>openProductModal(card.dataset.id)); 
         
         card.querySelectorAll('.add-btn').forEach(btn=>btn.addEventListener('click',(ev)=>{ 
           ev.stopPropagation(); 
@@ -3735,206 +4125,265 @@ function sanitizeCartData(cart) {
     }
 
     /********************
-     * Update cart badge
+     * UPDATED PRODUCT MODAL - REDESIGNED (as requested)
      ********************/
-    function updateCartBadge() {
-      const totalItems = state.cart.reduce((sum, item) => sum + item.qty, 0);
-      cartCount.textContent = totalItems;
-    }
-
-    function renderCart(){ 
-      cartCount.textContent = state.cart.reduce((s,i)=>s+i.qty,0); 
-      if(state.cart.length===0){ 
-        miniItems.innerHTML='No items yet.'; 
-        miniSub.textContent='R0.00'; 
-        return; 
-      } 
-      miniItems.innerHTML = state.cart.map(item=>`<div class="item"><img src="${item.img}" alt="" onerror="this.src='${svgPlaceholder(item.title)}'"><div style="flex:1"><div style="font-weight:700">${item.title}</div><div style="font-size:13px;color:var(--muted)">Size ${item.size} • ${item.qty} x ${format(item.price)}</div></div></div>`).join(''); 
-      const sub = state.cart.reduce((s,i)=>s + i.price*i.qty,0); 
-      miniSub.textContent = format(sub); 
-    }
-
-    cartBtn.addEventListener('mouseenter',()=>miniCart.style.display='block'); 
-    cartBtn.addEventListener('mouseleave',()=>miniCart.style.display='none');
-
-    /********************
-     * Modal product detail (updated with lazy loading)
-     ********************/
-    let currentModalId = null;
-    let modalProductRaw = null;
-
-    async function openModal(id){
-      currentModalId = id;
-      const p = state.products.find(x=>x.id==id);
-      if(!p) return;
-
-      modalProductRaw = p;
+    let currentModalProduct = null;
+    
+    async function openProductModal(id) {
+      currentModalProduct = state.products.find(x => x.id == id);
+      if (!currentModalProduct) return;
       
-      // Get all images for this product
-      const allImages = p.all_images || p.imgs || [];
-      const primaryImage = allImages[0] || svgPlaceholder(p.title);
-      
-      // Load primary image immediately (not lazy)
-      modalImg.src = primaryImage;
-      
-      // Create thumbnails with lazy loading
-      modalThumbs.innerHTML = '';
-      allImages.forEach((src,idx) => {
-        const img = document.createElement('img');
-        img.src = svgPlaceholder(p.title,120,120,'#f0f0f0','#999');
-        img.dataset.src = src;
-        img.loading = 'lazy';
-        img.style.width = '64px';
-        img.style.height = '64px';
-        img.style.objectFit = 'cover';
-        img.style.borderRadius = '6px';
-        img.style.cursor = 'pointer';
-        img.alt = 'thumb';
-        img.onerror = function() {
-          this.src = svgPlaceholder(p.title,120,120);
-          this.removeAttribute('data-src');
-        };
-        img.addEventListener('click', () => {
-          // Load clicked image immediately
-          modalImg.src = src;
-        });
-        modalThumbs.appendChild(img);
+      try {
+        // Get the most popular product for bundle suggestion (excluding current product)
+        const bundleProduct = state.products
+          .filter(p => p.id !== id)
+          .sort((a, b) => (b.popularity || 0) - (a.popularity || 0))[0];
         
-        // Load first few thumbnails immediately
-        if (idx < 3) {
-          setTimeout(() => {
-            img.src = src;
-            img.removeAttribute('data-src');
-          }, 100);
+        // Generate description with "see more" functionality
+        const words = currentModalProduct.desc ? currentModalProduct.desc.split(' ') : [];
+        const shortDescription = words.slice(0, 10).join(' ') + (words.length > 10 ? '...' : '');
+        const fullDescription = currentModalProduct.desc || '';
+        const hasLongDescription = words.length > 10;
+        
+        // Generate size options
+        const sizes = currentModalProduct.size || ['M'];
+        const sizeOptions = sizes.map(size => 
+          `<div class="size-option" data-size="${size}">${size}</div>`
+        ).join('');
+        
+        // Generate color options (if available)
+        let colorOptionsHTML = '';
+        if (currentModalProduct.color) {
+          colorOptionsHTML = `
+            <div class="product-modal-colors">
+              <h3>Color</h3>
+              <div class="color-options">
+                <div class="color-option selected" data-color="${currentModalProduct.color}" style="background-color: ${currentModalProduct.color.toLowerCase() === 'black' ? '#000' : currentModalProduct.color.toLowerCase() === 'white' ? '#fff' : currentModalProduct.color.toLowerCase() === 'blue' ? '#3a86ff' : '#ddd'}"></div>
+              </div>
+            </div>
+          `;
+        }
+        
+        // Generate thumbnails
+        const images = currentModalProduct.all_images || currentModalProduct.imgs || [];
+        const thumbnails = images.map((img, index) => 
+          `<div class="product-thumbnail ${index === 0 ? 'active' : ''}" data-image="${img}">
+            <img src="${img}" alt="${currentModalProduct.title} thumbnail ${index + 1}" loading="lazy">
+          </div>`
+        ).join('');
+        
+        // Generate bundle suggestion HTML
+        let bundleSuggestionHTML = '';
+        if (bundleProduct) {
+          bundleSuggestionHTML = `
+            <div class="bundle-suggestion">
+              <div class="bundle-product-image">
+                <img src="${bundleProduct.primary_image || (bundleProduct.imgs && bundleProduct.imgs[0]) || svgPlaceholder(bundleProduct.title,80,80)}" alt="${bundleProduct.title}" loading="lazy">
+              </div>
+              <div class="bundle-info">
+                <div class="bundle-title">Bundle with "${bundleProduct.title}"</div>
+                <div class="bundle-text">Get free shipping when you buy 2+ items!</div>
+                <button class="bundle-button" data-bundle-id="${bundleProduct.id}">Add Bundle</button>
+              </div>
+            </div>
+          `;
+        }
+        
+        // Check if product is on sale
+        const isOnSale = currentModalProduct.sale || false;
+        const salePrice = currentModalProduct.salePrice || 0;
+        const displayPrice = isOnSale ? salePrice : currentModalProduct.price;
+        const originalPrice = isOnSale ? currentModalProduct.price : null;
+        
+        const modalContent = document.getElementById('productModalContent');
+        modalContent.innerHTML = `
+          <div class="product-modal-images">
+            <div class="product-modal-main-image">
+              <img src="${images[0] || svgPlaceholder(currentModalProduct.title,400,300)}" alt="${currentModalProduct.title}" id="main-product-image" loading="lazy">
+            </div>
+            <div class="product-modal-thumbnails">
+              ${thumbnails}
+            </div>
+          </div>
+          <div class="product-modal-details">
+            <h1 class="product-modal-title">${currentModalProduct.title}</h1>
+            <div class="product-modal-rating">
+              <div class="stars" style="color: #ffd700; font-size: 16px;">
+                ${'★'.repeat(5)}
+              </div>
+              <span>5.0 (1 review)</span>
+            </div>
+            <div class="product-modal-price">
+              R${displayPrice.toFixed(2)}
+              ${isOnSale && originalPrice ? 
+                `<span class="product-modal-original-price">R${originalPrice.toFixed(2)}</span>` : ''}
+            </div>
+            
+            <div class="product-modal-sizes">
+              <h3>Size</h3>
+              <div class="size-options">
+                ${sizeOptions}
+              </div>
+            </div>
+            
+            ${colorOptionsHTML}
+            
+            <div class="product-modal-quantity">
+              <h3>Quantity</h3>
+              <div class="quantity-selector">
+                <button class="quantity-btn" id="decrease-qty">-</button>
+                <span class="quantity-value" id="quantity-value">1</span>
+                <button class="quantity-btn" id="increase-qty">+</button>
+              </div>
+            </div>
+            
+            ${bundleSuggestionHTML}
+            
+            <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}">Add to Cart</button>
+            
+            <div class="product-modal-description">
+              <h3>Description</h3>
+              <div class="description-text ${hasLongDescription ? 'collapsed' : ''}" id="product-description">
+                ${hasLongDescription ? shortDescription : fullDescription}
+              </div>
+              ${hasLongDescription ? '<button class="see-more-btn" id="see-more-btn">See More</button>' : ''}
+            </div>
+          </div>
+        `;
+        
+        // Show modal
+        modal.classList.add('active');
+        
+        // Add event listeners for the modal
+        setupProductModalEvents(bundleProduct);
+        
+      } catch (error) {
+        console.error('Error opening product modal:', error);
+      }
+    }
+    
+    /********************
+     * Setup product modal events
+     ********************/
+    function setupProductModalEvents(bundleProduct) {
+      // Thumbnail click
+      document.querySelectorAll('.product-thumbnail').forEach(thumb => {
+        thumb.addEventListener('click', function() {
+          const imageUrl = this.dataset.image;
+          document.getElementById('main-product-image').src = imageUrl;
+          
+          // Update active thumbnail
+          document.querySelectorAll('.product-thumbnail').forEach(t => t.classList.remove('active'));
+          this.classList.add('active');
+        });
+      });
+      
+      // Size selection
+      document.querySelectorAll('.size-option').forEach(option => {
+        option.addEventListener('click', function() {
+          document.querySelectorAll('.size-option').forEach(o => o.classList.remove('selected'));
+          this.classList.add('selected');
+        });
+      });
+      
+      // Color selection
+      document.querySelectorAll('.color-option').forEach(option => {
+        option.addEventListener('click', function() {
+          document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected'));
+          this.classList.add('selected');
+        });
+      });
+      
+      // Quantity controls
+      document.getElementById('increase-qty').addEventListener('click', function() {
+        const valueElement = document.getElementById('quantity-value');
+        let value = parseInt(valueElement.textContent);
+        valueElement.textContent = value + 1;
+      });
+      
+      document.getElementById('decrease-qty').addEventListener('click', function() {
+        const valueElement = document.getElementById('quantity-value');
+        let value = parseInt(valueElement.textContent);
+        if (value > 1) {
+          valueElement.textContent = value - 1;
         }
       });
       
-      modalTitle.textContent = p.title;
-      
-      // Check if product is on sale
-      const isOnSale = p.sale || false;
-      const salePrice = p.salePrice || 0;
-      const displayPrice = isOnSale ? salePrice : p.price;
-      const originalPrice = isOnSale ? p.price : null;
-      
-      modalPrice.innerHTML = `
-        ${isOnSale && originalPrice ? 
-          `<div style="text-decoration:line-through;color:#9ca3af;font-size:14px">${format(originalPrice)}</div>` : ''}
-        <div style="color:var(--cta);font-weight:800;font-size:${isOnSale ? '20px' : '24px'};margin-top:${isOnSale ? '4px' : '0'}">
-          ${format(displayPrice)}
-        </div>
-      `;
-      
-      // Set description with "see more" functionality
-      const desc = p.desc || '';
-      modalDesc.textContent = desc;
-      modalDesc.classList.remove('expanded');
-      
-      // Check if description needs "see more"
-      const words = desc.split(' ');
-      if (words.length > 10) {
-        seeMoreBtn.style.display = 'block';
-        seeMoreBtn.textContent = 'see more...';
-      } else {
-        seeMoreBtn.style.display = 'none';
+      // See more button
+      const seeMoreBtn = document.getElementById('see-more-btn');
+      if (seeMoreBtn) {
+        seeMoreBtn.addEventListener('click', function() {
+          const descriptionElement = document.getElementById('product-description');
+          if (descriptionElement.classList.contains('collapsed')) {
+            descriptionElement.textContent = currentModalProduct.desc;
+            descriptionElement.classList.remove('collapsed');
+            this.textContent = 'See Less';
+          } else {
+            const words = currentModalProduct.desc.split(' ');
+            const shortDescription = words.slice(0, 10).join(' ') + '...';
+            descriptionElement.textContent = shortDescription;
+            descriptionElement.classList.add('collapsed');
+            this.textContent = 'See More';
+          }
+        });
       }
       
-      // Populate size dropdown
-      modalSize.innerHTML = '';
-      p.size.forEach(size => {
-        const option = document.createElement('option');
-        option.value = size;
-        option.textContent = size;
-        modalSize.appendChild(option);
-      });
+      // Bundle button
+      const bundleButton = document.querySelector('.bundle-button');
+      if (bundleButton && bundleProduct) {
+        bundleButton.addEventListener('click', function() {
+          const bundleProductId = this.getAttribute('data-bundle-id');
+          const selectedSize = document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size[0];
+          const quantity = parseInt(document.getElementById('quantity-value').textContent);
+          
+          // Add both products to cart
+          addToCart(currentModalProduct.id, quantity, selectedSize);
+          addToCart(bundleProductId, 1, bundleProduct.size[0]);
+          
+          // Show notification
+          showNotification(`Added ${currentModalProduct.title} and ${bundleProduct.title} to cart for free shipping!`);
+          
+          // Close modal
+          modal.classList.remove('active');
+        });
+      }
       
-      // Update stock info
-      updateModalStockInfo();
-      
-      // Show modal
-      modal.classList.add('open');
-      modal.setAttribute('aria-hidden','false');
-
-      // Wire add button
-      modalAdd.onclick = function(){
-        const qty = Number(modalQty.value || 1);
-        const size = modalSize.value;
+      // Modal add to cart
+      document.getElementById('modal-add-to-cart').addEventListener('click', function() {
+        const productId = this.dataset.id;
+        const quantity = parseInt(document.getElementById('quantity-value').textContent);
+        const selectedSize = document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size[0];
         
         // Check stock
-        const variantStock = getVariantStock(p, size);
-        if (variantStock < qty) {
-          modalStockError.style.display = 'block';
+        const variantStock = getVariantStock(currentModalProduct, selectedSize);
+        if (variantStock < quantity) {
+          alert(`Only ${variantStock} items available for size ${selectedSize}`);
           return;
         }
         
-        addToCart(p.id, qty, size);
-        closeModal();
-      };
-    }
-    
-    /********************
-     * Update modal stock info
-     ********************/
-    function updateModalStockInfo() {
-      if (!modalProductRaw) return;
+        addToCart(productId, quantity, selectedSize);
+        showNotification(`Added ${quantity} "${currentModalProduct.title}" to cart!`);
+        modal.classList.remove('active');
+      });
       
-      const selectedSize = modalSize.value;
-      const stock = getVariantStock(modalProductRaw, selectedSize);
-      modalStockInfo.textContent = `${stock} items available`;
-      
-      // Update max quantity
-      const selectedQty = parseInt(modalQty.value);
-      if (selectedQty > stock) {
-        modalStockError.style.display = 'block';
-      } else {
-        modalStockError.style.display = 'none';
+      // Select first size and color by default
+      if (document.querySelector('.size-option')) {
+        document.querySelector('.size-option').classList.add('selected');
+      }
+      if (document.querySelector('.color-option')) {
+        document.querySelector('.color-option').classList.add('selected');
       }
     }
 
-    function closeModal(){ 
-      modal.classList.remove('open'); 
-      modal.setAttribute('aria-hidden','true'); 
-      modalStockError.style.display = 'none';
-    }
-    document.getElementById('modalClose').addEventListener('click',closeModal); 
-    modal.addEventListener('click',e=>{ if(e.target===modal) closeModal(); });
-    
-    // See more button for description
-    seeMoreBtn.addEventListener('click', () => {
-      const isExpanded = modalDesc.classList.contains('expanded');
-      if (isExpanded) {
-        modalDesc.classList.remove('expanded');
-        seeMoreBtn.textContent = 'see more...';
-      } else {
-        modalDesc.classList.add('expanded');
-        seeMoreBtn.textContent = 'see less';
-      }
+    // Close product modal
+    modalClose.addEventListener('click', () => {
+      modal.classList.remove('active');
     });
     
-    // Update stock when size changes
-    modalSize.addEventListener('change', updateModalStockInfo);
-    modalQty.addEventListener('change', updateModalStockInfo);
-    
-    // Quick add modal event listeners
-    quickAddSize.addEventListener('change', updateQuickAddStockInfo);
-    quickAddQty.addEventListener('change', updateQuickAddStockInfo);
-    quickAddClose.addEventListener('click', () => {
-      quickAddModal.classList.remove('open');
-    });
-    quickAddSubmit.addEventListener('click', () => {
-      if (!currentQuickAddProduct) return;
-      
-      const qty = Number(quickAddQty.value || 1);
-      const size = quickAddSize.value;
-      
-      // Check stock
-      const variantStock = getVariantStock(currentQuickAddProduct, size);
-      if (variantStock < qty) {
-        quickAddStockError.style.display = 'block';
-        return;
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.classList.remove('active');
       }
-      
-      addToCart(currentQuickAddProduct.id, qty, size);
     });
 
     /********************
@@ -4039,110 +4488,6 @@ function sanitizeCartData(cart) {
     });
 
     /********************
-     * Cart page
-     ********************/
-    function openCartPage(){ 
-      renderCartPage(); 
-      panelCart.classList.add('open'); 
-      panelCart.setAttribute('aria-hidden','false'); 
-    }
-    
-    document.getElementById('viewCartBtn').addEventListener('click', openCartPage);
-    cartBtn.addEventListener('click', (e)=>{ if(e.target.closest('.mini-cart')) return; openCartPage(); });
-    cartClose.addEventListener('click', ()=>{ panelCart.classList.remove('open'); panelCart.setAttribute('aria-hidden','true'); });
-
-    function renderCartPage(){ 
-      cartList.innerHTML=''; 
-      if(state.cart.length===0){ 
-        cartList.innerHTML='<div style="padding:20px;color:var(--muted)">Your cart is empty</div>'; 
-      } else { 
-        cartList.innerHTML = state.cart.map((item,idx)=>`<div class="cart-item" data-idx="${idx}" style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><img src="${item.img}" style="width:84px;height:84px;object-fit:cover;border-radius:8px" onerror="this.src='${svgPlaceholder(item.title,84,84)}'"><div style="flex:1"><div style="font-weight:700">${item.title}</div><div style="color:var(--muted);font-size:13px">Size ${item.size}</div><div style="margin-top:6px;display:flex;gap:8px;align-items:center"><select class="cart-qty"><option ${item.qty===1?'selected':''}>1</option><option ${item.qty===2?'selected':''}>2</option><option ${item.qty===3?'selected':''}>3</option><option ${item.qty===4?'selected':''}>4</option></select><button class="btn ghost remove-item">Remove</button><div style="margin-left:auto;font-weight:800">${format(item.price*item.qty)}</div></div></div></div>`).join(''); 
-      }
-      
-      const sub = state.cart.reduce((s,i)=>s + i.price*i.qty,0); 
-      document.getElementById('cartSummarySub').children[1].textContent = format(sub); 
-      document.getElementById('cartSummaryDisc').children[1].textContent = format(0); 
-      document.getElementById('cartSummaryTotal').children[1].textContent = format(sub);
-      
-      cartList.querySelectorAll('.cart-item').forEach(el=>{ 
-        const idx=Number(el.dataset.idx); 
-        el.querySelector('.cart-qty').addEventListener('change', (e)=>{ 
-          state.cart[idx].qty = Number(e.target.value); 
-          renderCart(); 
-          renderCartPage(); 
-          try{ localStorage.setItem('ss_cart',JSON.stringify(state.cart)); }catch(e){} 
-        }); 
-        el.querySelector('.remove-item').addEventListener('click', ()=>{ 
-          state.cart.splice(idx,1); 
-          renderCart(); 
-          renderCartPage(); 
-          try{ localStorage.setItem('ss_cart',JSON.stringify(state.cart)); }catch(e){} 
-        }); 
-      });
-    }
-    
-    /********************
-     * Discount/Promo Code Application
-     ********************/
-    async function validateDiscountCode(code) {
-      if (!supabaseClient) return null;
-      
-      try {
-        const { data, error } = await supabaseClient
-          .from('discount_codes')
-          .select('*')
-          .eq('code', code.toUpperCase())
-          .eq('used', false)
-          .gte('expires_at', new Date().toISOString())
-          .single();
-        
-        if (error || !data) return null;
-        return data;
-      } catch (e) {
-        console.error('Error validating discount code:', e);
-        return null;
-      }
-    }
-    
-    applyPromoBtn.addEventListener('click', async ()=>{ 
-      const code = promoCodeInput.value.trim(); 
-      if (!code) {
-        alert('Please enter a promo code');
-        return;
-      }
-      
-      const subtotal = state.cart.reduce((s,i)=>s+i.price*i.qty,0);
-      let disc = 0;
-      
-      // Check if it's a referral discount code
-      const discountData = await validateDiscountCode(code);
-      if (discountData) {
-        disc = Math.min(discountData.amount, subtotal);
-        
-        // Mark code as used (in real implementation, you'd do this after successful checkout)
-        // For demo, we'll just apply it
-        document.getElementById('cartSummaryDisc').children[1].textContent = format(disc);
-        document.getElementById('cartSummaryTotal').children[1].textContent = format(subtotal-disc);
-        
-        // Store the discount code in state for checkout
-        state.appliedDiscount = {
-          code: code,
-          amount: disc,
-          id: discountData.id
-        };
-        
-        alert(`Discount applied! R${disc.toFixed(2)} off your order.`);
-      } else if (code.toUpperCase()==='STUDENT10') {
-        disc = subtotal*0.10;
-        document.getElementById('cartSummaryDisc').children[1].textContent = format(disc);
-        document.getElementById('cartSummaryTotal').children[1].textContent = format(subtotal-disc);
-        state.appliedDiscount = { code: code, amount: disc };
-      } else {
-        alert('Invalid or expired promo code.');
-      }
-    });
-
-    /********************
      * Subscribe function
      ********************/
     async function handleSubscribe(email){
@@ -4179,7 +4524,7 @@ function sanitizeCartData(cart) {
     });
 
     /********************
-     * Load filter options from Supabase
+     * Load filter options from Supabase - UPDATED FOR CORRECT FILTERING
      ********************/
     async function loadFilterOptions() {
       if (!supabaseClient) {
@@ -4188,30 +4533,52 @@ function sanitizeCartData(cart) {
       }
 
       try {
-        // Get unique categories
-        const { data: categoriesData } = await supabaseClient
+        // Get unique categories from products table
+        const { data: categoriesData, error: categoriesError } = await supabaseClient
           .from('products')
           .select('category')
           .not('category', 'is', null);
 
-        if (categoriesData) {
+        if (categoriesError) {
+          console.error('Error loading categories:', categoriesError);
+        } else if (categoriesData) {
           const uniqueCategories = ['All', ...new Set(categoriesData.map(item => item.category).filter(Boolean))];
           filterOptions.categories = uniqueCategories;
           
           // Populate categories list
-          catList.innerHTML = uniqueCategories.map(cat => 
-            `<li data-cat="${cat}" class="${cat === 'All' ? 'active' : ''}">${cat}</li>`
-          ).join('');
+          if (catList) {
+            // Clear existing items (keep "All")
+            catList.innerHTML = '';
+            catList.innerHTML = '<li data-cat="All" class="active">All</li>';
+            
+            // Add other categories
+            uniqueCategories.forEach(cat => {
+              if (cat !== 'All') {
+                const li = document.createElement('li');
+                li.dataset.cat = cat;
+                li.textContent = cat;
+                li.addEventListener('click', () => {
+                  Array.from(catList.querySelectorAll('li')).forEach(li=>li.classList.remove('active'));
+                  li.classList.add('active');
+                  state.filters.category = cat;
+                  applyFilters();
+                });
+                catList.appendChild(li);
+              }
+            });
+          }
         }
 
         // Get price range from actual products
-        const { data: priceData } = await supabaseClient
+        const { data: priceData, error: priceError } = await supabaseClient
           .from('products')
           .select('price, sale_price')
           .order('price', { ascending: false })
           .limit(1);
 
-        if (priceData && priceData.length > 0) {
+        if (priceError) {
+          console.error('Error loading price range:', priceError);
+        } else if (priceData && priceData.length > 0) {
           const maxPrice = Math.ceil(priceData[0].price / 50) * 50; // Round up to nearest 50
           filterOptions.priceRange.max = maxPrice;
           filterOptions.priceRange.min = 0;
@@ -4220,118 +4587,118 @@ function sanitizeCartData(cart) {
           populatePriceDropdowns(maxPrice);
         }
 
-        // Get unique sizes from product_variants and products
-        const { data: variantsData } = await supabaseClient
+        // Get unique sizes from product_variants table
+        const { data: variantsData, error: variantsError } = await supabaseClient
           .from('product_variants')
           .select('size')
           .not('size', 'is', null);
 
-        const { data: productsData } = await supabaseClient
-          .from('products')
-          .select('sizes')
-          .not('sizes', 'is', null);
-
-        if (variantsData || productsData) {
-          const uniqueSizes = new Set();
-          
-          if (variantsData) {
-            variantsData.forEach(item => {
-              if (item.size) uniqueSizes.add(item.size);
-            });
-          }
-          
-          if (productsData) {
-            productsData.forEach(item => {
-              if (item.sizes && Array.isArray(item.sizes)) {
-                item.sizes.forEach(size => uniqueSizes.add(size));
-              }
-            });
-          }
-          
-          const sortedSizes = Array.from(uniqueSizes).sort();
-          filterOptions.sizes = sortedSizes;
+        if (variantsError) {
+          console.error('Error loading variants:', variantsError);
+        } else if (variantsData) {
+          const uniqueSizes = [...new Set(variantsData.map(item => item.size).filter(Boolean))];
+          uniqueSizes.sort();
+          filterOptions.sizes = uniqueSizes;
           
           // Populate sizes filter
           if (sizesFilter) {
-            sizesFilter.innerHTML = sortedSizes.map(size => 
-              `<label style="margin-right:8px; display:inline-block;">
-                <input type="checkbox" name="size" value="${size}"> ${size}
-              </label>`
-            ).join('');
-            
-            // Add event listeners to size checkboxes
-            sizesFilter.querySelectorAll('input[name="size"]').forEach(ch => {
-              ch.addEventListener('change', () => {
+            sizesFilter.innerHTML = '';
+            uniqueSizes.forEach(size => {
+              const label = document.createElement('label');
+              label.style.marginRight = '8px';
+              label.style.display = 'inline-block';
+              label.style.marginBottom = '8px';
+              
+              const input = document.createElement('input');
+              input.type = 'checkbox';
+              input.name = 'size';
+              input.value = size;
+              input.style.marginRight = '4px';
+              
+              input.addEventListener('change', () => {
                 state.filters.sizes = Array.from(sizesFilter.querySelectorAll('input[name="size"]:checked')).map(i => i.value);
                 applyFilters();
               });
+              
+              label.appendChild(input);
+              label.appendChild(document.createTextNode(size));
+              sizesFilter.appendChild(label);
             });
           }
         }
 
-        // Get unique types from metadata
-        const { data: metadataData } = await supabaseClient
+        // Get unique types from metadata or products table
+        const { data: productsData, error: productsError } = await supabaseClient
           .from('products')
-          .select('metadata')
-          .not('metadata', 'is', null);
+          .select('type')
+          .not('type', 'is', null);
 
-        if (metadataData) {
-          const types = new Set(['All']);
-          metadataData.forEach(item => {
-            if (item.metadata && item.metadata.type) {
-              types.add(item.metadata.type);
-            }
-          });
-          filterOptions.types = Array.from(types);
+        if (productsError) {
+          console.error('Error loading types:', productsError);
+        } else if (productsData) {
+          const types = ['All', ...new Set(productsData.map(item => item.type).filter(Boolean))];
+          filterOptions.types = types;
           
           // Populate type filter
           if (typeFilter) {
-            typeFilter.innerHTML = filterOptions.types.map(type => 
-              `<label style="margin-right:8px; display:inline-block;">
-                <input type="radio" name="type" value="${type}" ${type === 'All' ? 'checked' : ''}> ${type}
-              </label>`
-            ).join('');
-            
-            // Add event listeners to type radios
-            typeFilter.querySelectorAll('input[name="type"]').forEach(r => {
-              r.addEventListener('change', () => {
-                state.filters.type = typeFilter.querySelector('input[name="type"]:checked').value;
+            typeFilter.innerHTML = '';
+            types.forEach(type => {
+              const label = document.createElement('label');
+              label.style.marginRight = '8px';
+              label.style.display = 'inline-block';
+              label.style.marginBottom = '8px';
+              
+              const input = document.createElement('input');
+              input.type = 'radio';
+              input.name = 'type';
+              input.value = type;
+              if (type === 'All') input.checked = true;
+              
+              input.addEventListener('change', () => {
+                state.filters.type = type;
                 applyFilters();
               });
+              
+              label.appendChild(input);
+              label.appendChild(document.createTextNode(type));
+              typeFilter.appendChild(label);
             });
           }
         }
 
-        // Get unique colors from metadata
-        const { data: colorsData } = await supabaseClient
+        // Get unique colors from metadata or products table
+        const { data: colorsData, error: colorsError } = await supabaseClient
           .from('products')
-          .select('metadata')
-          .not('metadata', 'is', null);
+          .select('color')
+          .not('color', 'is', null);
 
-        if (colorsData) {
-          const colors = new Set(['Any']);
-          colorsData.forEach(item => {
-            if (item.metadata && item.metadata.color) {
-              colors.add(item.metadata.color);
-            }
-          });
-          filterOptions.colors = Array.from(colors);
+        if (colorsError) {
+          console.error('Error loading colors:', colorsError);
+        } else if (colorsData) {
+          const colors = ['Any', ...new Set(colorsData.map(item => item.color).filter(Boolean))];
+          filterOptions.colors = colors;
           
           // Populate color dropdown
           if (colorSel) {
-            colorSel.innerHTML = filterOptions.colors.map(color => 
-              `<option value="${color}">${color}</option>`
-            ).join('');
+            colorSel.innerHTML = '';
+            colors.forEach(color => {
+              const option = document.createElement('option');
+              option.value = color;
+              option.textContent = color;
+              colorSel.appendChild(option);
+            });
           }
         }
 
         // Get unique tags from tags column
-        const { data: tagsData } = await supabaseClient
+        const { data: tagsData, error: tagsError } = await supabaseClient
           .from('products')
           .select('tags')
           .not('tags', 'is', null);
 
-        if (tagsData) {
+        if (tagsError) {
+          console.error('Error loading tags:', tagsError);
+        } else if (tagsData) {
           const tags = new Set(['Any']);
           tagsData.forEach(item => {
             if (item.tags && Array.isArray(item.tags)) {
@@ -4342,9 +4709,13 @@ function sanitizeCartData(cart) {
           
           // Populate tags dropdown
           if (tagSel) {
-            tagSel.innerHTML = filterOptions.tags.map(tag => 
-              `<option value="${tag}">${tag}</option>`
-            ).join('');
+            tagSel.innerHTML = '';
+            filterOptions.tags.forEach(tag => {
+              const option = document.createElement('option');
+              option.value = tag;
+              option.textContent = tag;
+              tagSel.appendChild(option);
+            });
           }
         }
 
@@ -4392,50 +4763,160 @@ function sanitizeCartData(cart) {
     }
 
     /********************
+     * Show notification function
+     ********************/
+    function showNotification(message) {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 100px;
+        right: 20px;
+        background-color: var(--accent);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        box-shadow: var(--shadow);
+        animation: slideIn 0.3s ease;
+        font-size: 14px;
+        font-weight: 600;
+      `;
+      
+      notification.textContent = message;
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+          if (notification.parentNode) {
+            document.body.removeChild(notification);
+          }
+        }, 300);
+      }, 3000);
+    }
+
+    /********************
+     * Initialize mobile functionality
+     ********************/
+    function initializeMobileFunctionality() {
+      // Initialize mobile search
+      initMobileSearch();
+      
+      // Initialize mobile menu
+      initMobileMenu();
+      
+      // Initialize mobile filters
+      initMobileFilters();
+    }
+
+    /********************
      * Initialize
      ********************/
     document.addEventListener('DOMContentLoaded', function() {
       // Check URL for referral code
       checkUrlForReferral();
       
-      // Check initial auth state
-      checkInitialAuthState();
-      
       // Setup lazy loading
       setupLazyLoading();
       
-      // Load products from Supabase
-      loadProducts().catch(e => {
-        console.error('Failed to load Supabase products:', e);
-        // Fallback to local products if Supabase fails
-        state.products = fallbackProducts;
-        applyFilters();
-      });
-      
       // Initialize mobile functionality
-      initMobileSearch();
-      initMobileMenu();
-      initMobileFilters();
-      
-      // Setup checkout handlers
-      setupCheckoutHandlers();
+      initializeMobileFunctionality();
       
       // Initialize sign button
       const signBtn = document.getElementById('signBtn');
       if (signBtn) {
         signBtn.addEventListener('click', function(e) {
           e.preventDefault();
-          showModal(document.getElementById('loginModal'));
+          showModal(loginModal);
+        });
+      }
+      
+      // Initialize cart button to redirect to checkout
+      if (cartBtn) {
+        cartBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          redirectToCheckout();
+        });
+      }
+      
+      // Quick add modal close
+      if (quickAddClose) {
+        quickAddClose.addEventListener('click', () => {
+          quickAddModal.classList.remove('open');
+        });
+      }
+      
+      // Quick add size change
+      if (quickAddSize) {
+        quickAddSize.addEventListener('change', updateQuickAddStockInfo);
+      }
+      
+      // Quick add quantity change
+      if (quickAddQty) {
+        quickAddQty.addEventListener('change', updateQuickAddStockInfo);
+      }
+      
+      // Quick add submit
+      if (quickAddSubmit) {
+        quickAddSubmit.addEventListener('click', function() {
+          if (!currentQuickAddProduct) return;
+          
+          const selectedSize = quickAddSize.value;
+          const quantity = parseInt(quickAddQty.value);
+          const stock = getVariantStock(currentQuickAddProduct, selectedSize);
+          
+          if (quantity > stock) {
+            quickAddStockError.style.display = 'block';
+            return;
+          }
+          
+          addToCart(currentQuickAddProduct.id, quantity, selectedSize);
+          quickAddModal.classList.remove('open');
+        });
+      }
+      
+      // Password validation on input
+      if (modalSignupPassword) {
+        modalSignupPassword.addEventListener('input', function() {
+          // Simple validation - just check if it meets requirements
+          const isValid = checkPasswordRules(this.value);
+          const errorElement = document.getElementById('modalSignupPasswordError');
+          if (errorElement) {
+            if (!isValid && this.value.length > 0) {
+              errorElement.textContent = 'Password must be at least 8 characters with 1 number and 1 special character.';
+              errorElement.style.display = 'block';
+            } else {
+              errorElement.style.display = 'none';
+            }
+          }
         });
       }
       
       // Initialize cart
       initializeCart();
       
+      // Load filter options
+      loadFilterOptions();
+      
+      // Run reveal animations
+      runReveal();
+      
       // Save cart on unload
       window.addEventListener('beforeunload', () => {
         localStorage.setItem('ss_cart', JSON.stringify(state.cart));
       });
+      
+      // Check if we have a pending referral code
+      try {
+        const pendingReferral = localStorage.getItem('pending_referral');
+        if (pendingReferral) {
+          if (modalSignupReferralCode) {
+            modalSignupReferralCode.value = pendingReferral;
+          }
+        }
+      } catch (e) {}
     });
 
     function runReveal(){ 
@@ -4447,6 +4928,32 @@ function sanitizeCartData(cart) {
     
     window.addEventListener('scroll', runReveal); 
     window.addEventListener('resize', runReveal);
+    
+    // Add CSS for animations
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOut {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+      }
+    `;
+    document.head.appendChild(style);
     
   </script>
 </body>
