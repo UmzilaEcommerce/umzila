@@ -57,7 +57,7 @@
       return;
     }
     
-    const cfg = await res.json();
+    const cfg = await res.json(); 
     
     // Use camelCase property names to match your Netlify function
     if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
