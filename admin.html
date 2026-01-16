@@ -426,7 +426,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         // stale local flag — clear and require login
         localStorage.removeItem('scp_current_user');
         console.warn('Local admin flag present but supabase session missing — redirect to login');
-        setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+        setTimeout(()=>{ location.href = 'login-admin.html'; }, 250);
         throw new Error('not-authorized');
       }
       // verify that supUser is truly an admin in DB
@@ -470,7 +470,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
 
     console.warn('Access denied to admin.html — scp_current_user/local role not admin and no valid supabase admin session found.');
-    setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+    setTimeout(()=>{ location.href = 'login-admin.html'; }, 250);
     throw new Error('not-authorized');
   }
 
@@ -684,7 +684,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // Create a new product in supabase (uploads image to bucket, inserts product, image & variants)
   async function createProductFromForm(){
     // guard: must be signed in as admin
-    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
     const name = document.getElementById('prodName').value.trim();
     if(!name){ showToast('Product name required'); return; }
@@ -822,7 +822,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if(!(await isAdminAuthenticated())) { 
       showToast('Must be signed in as admin to create product'); 
       localStorage.removeItem('scp_current_user'); 
-      setTimeout(()=>{ location.href='login admin.html'; }, 300); 
+      setTimeout(()=>{ location.href='login-admin.html'; }, 300); 
       return null; 
     }
 
@@ -889,7 +889,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   async function deleteProduct(productId){
     if(!supabaseClient) { showToast('Supabase not available'); return; }
     // guard
-    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to delete product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to delete product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
     try {
       // delete product_images
@@ -941,7 +941,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     document.getElementById('edit_cancel_btn').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
     document.getElementById('edit_save_btn').addEventListener('click', async ()=> {
       // guard: admin required
-      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
       const name = document.getElementById('edit_name').value.trim();
       const price = parseFloat(document.getElementById('edit_price').value || 0);
@@ -972,7 +972,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     input.onchange = async (e)=>{
       const f = e.target.files && e.target.files[0]; if(!f) return;
       // guard: admin required
-      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to change image'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+      if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to change image'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
       const reader = new FileReader(); reader.onload = async ()=>{
         const dataUrl = reader.result;
@@ -992,7 +992,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // toggle sale for product (updates metadata.sale and salePrice if needed)
   async function toggleProductSale(productId){
     // guard
-    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to toggle sale'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to toggle sale'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
     const p = productsCache.find(x => x.id === productId); if(!p) return;
     const newSale = !p.sale;
@@ -1051,7 +1051,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // Add product button event -> create via supabase (guarded)
   document.getElementById('addProductBtn').addEventListener('click', async ()=>{
     // simple guard: must have supabase and admin in session
-    if(!(await isAdminAuthenticated())){ showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login admin.html'; }, 300); return; }
+    if(!(await isAdminAuthenticated())){ showToast('Must be signed in as admin to create product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
     await createProductFromForm();
   });
 
@@ -1071,7 +1071,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         if(supabaseClient && supabaseClient.auth){
           supabaseClient.auth.signOut().catch(e=>console.warn('supabase signOut failed', e));
         }
-        localStorage.removeItem('scp_current_user'); location.href = 'login admin.html'; return;
+        localStorage.removeItem('scp_current_user'); location.href = 'login-admin.html'; return;
       }
       Object.values(sections).forEach(sec => sec.style.display = 'none');
       if(sections[s]) sections[s].style.display = 'block';
@@ -1082,7 +1082,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if(supabaseClient && supabaseClient.auth){
       supabaseClient.auth.signOut().catch(e=>console.warn('supabase signOut failed', e));
     }
-    localStorage.removeItem('scp_current_user'); location.href='login admin.html';
+    localStorage.removeItem('scp_current_user'); location.href='login-admin.html';
   });
 
   // Search filter for products (client-side on current cache)

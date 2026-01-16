@@ -47,63 +47,143 @@
 
 <script>
 // Initialize Supabase client with Netlify environment variables
+
+/**
+ * Safe Supabase init for head placement.
+ * - Waits for DOMContentLoaded before touching DOM.
+ * - Supplies safeShowError() to avoid null deref.
+ * - Prefills UI when session exists but DOES NOT auto-redirect.
+ */
 (async function initSupabaseClient() {
+  // safe DOM updater for errors/messages
+  function safeShowError(msg) {
+    try {
+      const el = document.getElementById('error');
+      if (el) {
+        el.textContent = msg;
+        el.style.display = 'block';
+      } else {
+        console.error('UI error element not found:', msg);
+      }
+    } catch (e) {
+      console.error('safeShowError failed', e, msg);
+    }
+  }
+
+  // Wait for DOM to be parsed before any DOM ops
+  if (document.readyState === 'loading') {
+    await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  }
+
   try {
     const res = await fetch('/.netlify/functions/get-client-config');
     if (!res.ok) {
-      console.error('Failed to load Supabase config', res.status, await res.text());
-      document.getElementById('error').textContent = 'Service configuration error. Please contact administrator.';
-      document.getElementById('error').style.display = 'block';
-      return;
-    }
-    
-    const cfg = await res.json(); 
-    
-    // Use camelCase property names to match your Netlify function
-    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
-      console.error('Missing Supabase configuration');
-      document.getElementById('error').textContent = 'Service configuration incomplete.';
-      document.getElementById('error').style.display = 'block';
+      const body = await res.text().catch(()=>'<no-body>');
+      console.error('Failed to load Supabase config', res.status, body);
+      safeShowError('Service configuration error. Please contact administrator.');
       return;
     }
 
-    // Initialize Supabase client with camelCase properties
-    window.supabase = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: false
-      }
-    });
-    
-    console.log('Supabase client initialized successfully');
-    
-    // Rest of your code remains the same...
-    // Check for existing session
-    const { data: { session } } = await window.supabase.auth.getSession();
-    if (session) {
-      // Check if user has valid role before redirecting
-      const userRoles = await getUserRoles(session.user.id);
-      if (userRoles.length > 0) {
-        // User has roles, redirect based on last used or default
-        const lastRole = localStorage.getItem('last_role') || 'admin';
-        redirectBasedOnRole(userRoles, lastRole);
-      }
+    const cfg = await res.json().catch(() => null);
+    if (!cfg) {
+      console.error('Empty or invalid JSON from get-client-config');
+      safeShowError('Service configuration invalid. Please contact administrator.');
+      return;
     }
-    
+
+    // Accept camelCase or common variants
+    const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.supabaseUrl || cfg.supabase_url || cfg.url;
+    const key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.supabase_anon_key || cfg.anonKey;
+
+    if (!url || !key) {
+      console.error('Missing Supabase configuration keys', cfg);
+      safeShowError('Service configuration incomplete.');
+      return;
+    }
+
+    // Create client and expose globally
+    window.supabase = supabase.createClient(url, key, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    });
+    console.log('Supabase client initialized successfully');
+
+    // Now optionally prefill UI if session exists (no redirect)
+    try {
+      const { data: { session } = {} } = await window.supabase.auth.getSession().catch(e => ({ data: {} }));
+      if (session) {
+        const currentEmail = session.user?.email || '';
+        // Prefill email
+        const emailEl = document.getElementById('email');
+        if (emailEl) emailEl.value = currentEmail;
+
+        // pre-select last role if present
+        const lastRole = (localStorage.getItem('last_role') || '').toLowerCase();
+        const roleSelect = document.getElementById('role');
+        if (roleSelect && lastRole) {
+          for (const opt of Array.from(roleSelect.options)) {
+            if ((opt.value || '').toString().toLowerCase() === lastRole) {
+              roleSelect.value = opt.value;
+              break;
+            }
+          }
+        }
+
+        // helper text + sign out button
+        const card = document.querySelector('.card');
+        const helper = document.createElement('div');
+        helper.className = 'meta';
+        helper.style.marginTop = '12px';
+        helper.innerHTML = `
+          Signed in as <strong>${currentEmail}</strong>.<br/>
+          Choose the section you want and click <strong>Continue</strong>.
+          <div style="font-size:12px;margin-top:6px">
+            To use a different account, click <em>Sign out</em>.
+          </div>
+        `;
+        const signOutBtn = document.createElement('button');
+        signOutBtn.textContent = 'Sign out';
+        signOutBtn.className = 'btn-secondary';
+        signOutBtn.style.marginTop = '8px';
+        signOutBtn.addEventListener('click', async () => {
+          try {
+            await window.supabase.auth.signOut();
+          } catch (e) { console.warn('Sign out failed', e); }
+          localStorage.removeItem('current_user');
+          localStorage.removeItem('scp_current_user');
+          window.location.reload();
+        });
+
+        if (card) {
+          helper.appendChild(signOutBtn);
+          card.appendChild(helper);
+        } else {
+          // fallback: place signout near login button if present
+          const loginBtn = document.getElementById('loginBtn');
+          if (loginBtn && loginBtn.parentNode) loginBtn.parentNode.appendChild(signOutBtn);
+        }
+
+        // change login button label (optional)
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) loginBtn.textContent = `Continue as ${currentEmail.split('@')[0] || 'user'}`;
+      }
+    } catch (prefillErr) {
+      console.warn('Session prefill failed', prefillErr);
+    }
+
   } catch (err) {
     console.error('Error initializing Supabase:', err);
-    document.getElementById('error').textContent = 'Failed to initialize authentication service.';
-    document.getElementById('error').style.display = 'block';
+    safeShowError('Failed to initialize authentication service.');
   }
 })();
+
+
 
 // Get user roles from user_roles table
 async function getUserRoles(userId) {
   try {
     const { data, error } = await window.supabase
       .from('user_roles')
-      .select('role, is_active')
+      .select('role, is_active, totp_enabled')
       .eq('user_id', userId)
       .eq('is_active', true);
     
@@ -437,11 +517,11 @@ document.addEventListener('DOMContentLoaded', () => {
   emailInput.focus();
 });
 
-// Security: Clear sensitive data on page unload
 window.addEventListener('beforeunload', () => {
-  // Clear password field
-  document.getElementById('password').value = '';
+  const p = document.getElementById('password');
+  if (p) p.value = '';
 });
+
 
 // Prevent form submission
 document.addEventListener('submit', (e) => {

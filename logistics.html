@@ -334,7 +334,7 @@ document.addEventListener('supabase-ready', function(event) {
     }
 
     console.warn('Access denied to logistics.html — scp_current_user/local role not admin and no valid supabase admin session found.');
-    setTimeout(()=>{ location.href = 'login admin.html'; }, 250);
+    setTimeout(()=>{ location.href = 'login-admin.html'; }, 250);
     throw new Error('not-authorized');
   }
   /* ---------- end auth helpers ---------- */
@@ -1686,7 +1686,7 @@ document.addEventListener('supabase-ready', function(event) {
       } catch(e){}
       localStorage.removeItem('scp_current_user');
       showToast('Logged out');
-      window.location.href = 'login admin.html';
+      window.location.href = 'login-admin.html';
     }
     document.getElementById('logout').addEventListener('click', performLogoutAndRedirect);
     document.getElementById('lsout2').addEventListener('click', performLogoutAndRedirect);
