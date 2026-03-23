@@ -371,9 +371,10 @@ function redirectBasedOnRole(userRoles, selectedRole) {
   const isAdmin = userRoleNames.includes('admin') || 
                   userRoleNames.includes('administrator');
   
-  let redirectTo = 'admin.html';
-  
-  if (!isAdmin && selectedRole.toLowerCase() === 'logistics') {
+  if (!isAdmin && selectedRole.toLowerCase() === 'admin') {
+  redirectTo = 'admin.html';
+  }
+  else if (!isAdmin && selectedRole.toLowerCase() === 'logistics') {
     redirectTo = 'logistics.html';
   }
   

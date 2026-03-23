@@ -48,7 +48,7 @@
   .suggest-item{padding:8px 10px;border-bottom:1px solid #f6f8ff;cursor:pointer;display:flex;justify-content:space-between}
   .suggest-item:hover{background:#f8fbff}
   .panel-section{display:none}
-  .panel-section.active{Display:block}
+  .panel-section.active{display:block}
 
   input[type="text"], input[type="number"], select, textarea{font-family:inherit}
   table{border-collapse:collapse;width:100%}
@@ -87,13 +87,37 @@
     }
     const cfg = await res.json();
 
-    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-      console.error('Missing Supabase config from server');
+    // ---- NEW: flexible config parsing (matching admin.html) ----
+    const supabaseUrl =
+      cfg.supabaseUrl ||
+      cfg.SUPABASE_URL ||
+      cfg.supabase_url ||
+      cfg.url;
+
+    const supabaseAnonKey =
+      cfg.supabaseAnonKey ||
+      cfg.SUPABASE_ANON_KEY ||
+      cfg.supabase_anon_key ||
+      cfg.anonKey;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Missing Supabase config from server', cfg);
       return;
     }
 
-    // Initialize Supabase client
-    const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    // Initialize Supabase client with auth persistence
+    const supabaseClient = supabase.createClient(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false
+        }
+      }
+    );
+
     window.supabase = supabaseClient; // make it accessible globally
 
     // Optional: notify other scripts that Supabase is ready
@@ -251,9 +275,9 @@
             <h4 style="margin:8px 0">Top 10 Most-Ordered Products</h4>
             <div class="card" style="padding:8px;overflow:auto">
               <table id="top-products-table" style="min-width:700px">
-                <thead><tr><th>#</th><th>Product</th><th>Orders</th><th>Quantity</th><th>Revenue</th></tr></thead>
+                <thead> caption<th>#</th><th>Product</th><th>Orders</th><th>Quantity</th><th>Revenue</th> </thead>
                 <tbody></tbody>
-              </table>
+               </table>
             </div>
           </div>
         </div>
@@ -282,7 +306,11 @@ document.addEventListener('supabase-ready', function(event) {
   async function getSupabaseUser() {
     if(!supabaseClient) return null;
     try {
-      const { data } = await supabaseClient.auth.getUser();
+      const { data, error } = await supabaseClient.auth.getUser();
+      if(error){
+        console.warn('getUser error', error);
+        return null;
+      }
       return data?.user ?? null;
     } catch (e) {
       console.warn('supabase getUser failed', e);
@@ -290,53 +318,86 @@ document.addEventListener('supabase-ready', function(event) {
     }
   }
 
-  async function ensureAdminAccessOrRedirect(){
+  // ---- NEW: strict initialization gate (matches admin) ----
+  async function waitForSupabaseReady() {
+    for (let i = 0; i < 50; i++) {
+      if (window.supabase && window.supabase.auth) {
+        return window.supabase;
+      }
+      await new Promise(r => setTimeout(r, 100));
+    }
+    throw new Error("Supabase failed to initialize");
+  }
+
+  async function waitForSession(supabase) {
+    for (let i = 0; i < 20; i++) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) return data.session;
+      await new Promise(r => setTimeout(r, 150));
+    }
+    return null;
+  }
+
+  // ---- UPDATED: ensureLogisticsAccessOrRedirect (now also verifies session even if localStorage says allowed) ----
+  async function ensureLogisticsAccessOrRedirect() {
     const curRaw = localStorage.getItem('scp_current_user');
     let cur = {};
-    try { cur = JSON.parse(curRaw || '{}'); } catch(e){ cur = {}; }
-    const curRole = (cur.role || '').toString().trim().toLowerCase();
-    const localIsAdmin = (curRole === 'admin' || curRole === 'administrator');
-    if(localIsAdmin){
-      const nameElm = document.getElementById('profileName');
-      if(nameElm){
-        nameElm.textContent = cur.email ? `${(cur.email||'').split('@')[0]}` : 'Admin';
+    try { cur = JSON.parse(curRaw || '{}'); } catch {}
+
+    const localRole = (cur.role || '').toLowerCase();
+    const localAllowed = ['admin', 'administrator', 'logistics'].includes(localRole);
+
+    // If localStorage says allowed, we still need to verify the actual supabase session and DB role
+    if (localAllowed) {
+      const user = await getSupabaseUser();
+      if (!user) {
+        localStorage.removeItem('scp_current_user');
+        location.href = 'login-admin.html';
+        throw new Error('no-session');
       }
+      // continue to DB role verification instead of returning early
+    }
+
+    // Verify with Supabase (authoritative)
+    try {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) throw new Error('no-session');
+
+      const { data: roles, error } = await supabaseClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      if (error || !roles?.length) throw new Error('no-roles');
+
+      const roleNames = roles.map(r => r.role.toLowerCase());
+      const allowed = roleNames.includes('logistics') || roleNames.includes('admin');
+
+      if (!allowed) throw new Error('not-logistics');
+
+      const finalRole = roleNames.includes('admin') ? 'admin' : 'logistics';
+      localStorage.setItem('scp_current_user', JSON.stringify({
+        email: user.email,
+        role: finalRole,
+        user_id: user.id
+      }));
+
+      setProfileName(user.email, finalRole);
       return;
+    } catch (e) {
+      console.warn('Logistics access denied', e);
+      localStorage.removeItem('scp_current_user');
+      location.href = 'login-admin.html';
+      throw e;
     }
-
-    if(supabaseClient){
-      try {
-        const user = await getSupabaseUser();
-        if(user){
-          const { data: adminRow, error: adminErr } = await supabaseClient
-            .from('admins')
-            .select('role')
-            .eq('user_id', user.id)
-            .limit(1)
-            .maybeSingle();
-
-          if(!adminErr && adminRow && adminRow.role){
-            const finalRole = adminRow.role;
-            const curSave = { email: user.email || '', role: finalRole, user_id: user.id };
-            try { localStorage.setItem('scp_current_user', JSON.stringify(curSave)); } catch(_) {}
-            const nameElm = document.getElementById('profileName');
-            if(nameElm) nameElm.textContent = user.email ? `${(user.email||'').split('@')[0]}` : finalRole;
-            const rlow = (finalRole||'').toString().trim().toLowerCase();
-            if(rlow === 'admin' || rlow === 'administrator') return;
-            console.warn('Authenticated but role not admin:', finalRole);
-          } else {
-            console.warn('No admins row found for user or query error', adminErr, adminRow);
-          }
-        }
-      } catch (e){
-        console.warn('Supabase admin check failed', e);
-      }
-    }
-
-    console.warn('Access denied to logistics.html — scp_current_user/local role not admin and no valid supabase admin session found.');
-    setTimeout(()=>{ location.href = 'login-admin.html'; }, 250);
-    throw new Error('not-authorized');
   }
+
+  function setProfileName(email, role) {
+    const el = document.getElementById('profileName');
+    if (el) el.textContent = email ? email.split('@')[0] : role;
+  }
+
   /* ---------- end auth helpers ---------- */
 
 
@@ -356,6 +417,11 @@ document.addEventListener('supabase-ready', function(event) {
       customer: r.customer_name || r.customer || r.customer_full_name || '',
       email: r.customer_email || r.email || '',
       address: r.delivery_address || r.pickup_address || r.address || '',
+      city: r.city || '',
+      province: r.province || '',
+      postal_code: r.postal_code || '',
+      label: r.label || '',
+      details: r.details || '',
       date: (r.created_at ? (new Date(r.created_at)).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric', hour:'2-digit', minute:'2-digit'}) : (r.date || '')),
       status: r.order_status || r.status || 'Pending',
       items: Array.isArray(items) ? items : [],
@@ -388,7 +454,7 @@ document.addEventListener('supabase-ready', function(event) {
     }
   }
 
-  /* FIXED: Ensure a profile exists for email or phone with all address fields */
+  /* FIXED: Safer ensureProfile — split .or() into separate queries */
   async function ensureProfile({ email, phone, full_name, address, city, province, postal_code, label, details }) {
     if(!supabaseClient) return { profile_id: null, user_id: null, profile: null };
 
@@ -406,24 +472,22 @@ document.addEventListener('supabase-ready', function(event) {
       // First, try to find an existing profile by email or phone
       let existingProfile = null;
       
-      if (email || phone) {
-        let query = supabaseClient.from('profiles').select('*');
-        
-        if (email && phone) {
-          query = query.or(`email.eq.${email},phone.eq.${phone}`);
-        } else if (email) {
-          query = query.eq('email', email);
-        } else if (phone) {
-          query = query.eq('phone', phone);
-        }
-        
-        const { data: existing, error: errFind } = await query.limit(1);
-        
-        if(errFind){ 
-          console.warn('profiles find error', errFind); 
-        } else if(existing && existing.length){
-          existingProfile = existing[0];
-        }
+      if (email) {
+        const { data, error } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('email', email)
+          .limit(1);
+        if (!error && data && data.length) existingProfile = data[0];
+      }
+      
+      if (!existingProfile && phone) {
+        const { data, error } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('phone', phone)
+          .limit(1);
+        if (!error && data && data.length) existingProfile = data[0];
       }
 
       if (existingProfile) {
@@ -467,19 +531,30 @@ document.addEventListener('supabase-ready', function(event) {
         // Try to find it by email or phone again (maybe it was created concurrently)
         if(insertErr.code === '23505' && insertErr.message.includes('profiles_user_id_unique')) {
           // Try one more time to find by email or phone
-          const { data: retryData } = await supabaseClient
-            .from('profiles')
-            .select('*')
-            .or(`email.eq.${email},phone.eq.${phone}`)
-            .limit(1);
+          let retryProfile = null;
+          if (email) {
+            const { data: retryData } = await supabaseClient
+              .from('profiles')
+              .select('*')
+              .eq('email', email)
+              .limit(1);
+            if (retryData && retryData.length) retryProfile = retryData[0];
+          }
+          if (!retryProfile && phone) {
+            const { data: retryData } = await supabaseClient
+              .from('profiles')
+              .select('*')
+              .eq('phone', phone)
+              .limit(1);
+            if (retryData && retryData.length) retryProfile = retryData[0];
+          }
           
-          if(retryData && retryData.length) {
-            const p = retryData[0];
+          if(retryProfile) {
             return { 
-              profile_id: p.id || null, 
-              user_id: p.user_id || null,
-              profile: p,
-              customer: `${p.first_name || ''} ${p.last_name || ''}`.trim() || full_name
+              profile_id: retryProfile.id || null, 
+              user_id: retryProfile.user_id || null,
+              profile: retryProfile,
+              customer: `${retryProfile.first_name || ''} ${retryProfile.last_name || ''}`.trim() || full_name
             };
           }
         }
@@ -514,6 +589,11 @@ document.addEventListener('supabase-ready', function(event) {
         customer_email: order.email || null,
         customer_phone: order.customer_phone || null,
         delivery_address: order.address || null,
+        city: order.city || null,
+        province: order.province || null,
+        postal_code: order.postal_code || null,
+        label: order.label || null,
+        details: order.details || null,
         order_status: order.status || null,
         total: order.total || 0,
         discount: order.discount || 0,
@@ -930,7 +1010,7 @@ document.addEventListener('supabase-ready', function(event) {
       };
     }
 
-    // Details modal
+    // Details modal (updated to show address fields)
     function openDetailsModal(orderId){
       const arr = getOrders();
       const o = arr.find(x=>x.id === orderId);
@@ -947,12 +1027,15 @@ document.addEventListener('supabase-ready', function(event) {
         const discount = o.discount || 0;
         const total = subtotal - discount;
         
+        const addressParts = [o.address, o.city, o.province, o.postal_code].filter(Boolean).join(', ');
+        const labelDisplay = o.label ? ` • ${o.label}` : '';
+        
         const html = `
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div>
               <h3 style="margin:0">${escapeHtml(o.id)}</h3>
               <div class="muted" style="margin-top:6px">${escapeHtml(o.date)}</div>
-              <div style="margin-top:8px"><strong>${escapeHtml(o.customer)}</strong> • ${escapeHtml(o.email)} • ${escapeHtml(o.customer_phone || '')} • ${escapeHtml(o.address)}</div>
+              <div style="margin-top:8px"><strong>${escapeHtml(o.customer)}</strong> • ${escapeHtml(o.email)} • ${escapeHtml(o.customer_phone || '')}<br>${escapeHtml(addressParts)}${labelDisplay}</div>
             </div>
 
             <div style="text-align:right">
@@ -1006,7 +1089,7 @@ document.addEventListener('supabase-ready', function(event) {
       renderForm();
     }
 
-    // Edit modal (updated with new categories)
+    // Edit modal (UPDATED: added full address fields)
     function openEditModal(orderId){
       const arr = getOrders();
       const o = arr.find(x=>x.id === orderId);
@@ -1030,7 +1113,25 @@ document.addEventListener('supabase-ready', function(event) {
               <input id="detail_email" value="${escapeHtml(o.email)}" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
             </div>
             <input id="detail_phone" value="${escapeHtml(o.customer_phone||'')}" placeholder="Customer phone" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
-            <input id="detail_address" value="${escapeHtml(o.address)}" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+            
+            <!-- Address block (full) -->
+            <input id="detail_address" value="${escapeHtml(o.address||'')}" placeholder="Street address" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+            <div style="display:flex;gap:8px">
+              <input id="detail_city" value="${escapeHtml(o.city||'')}" placeholder="City" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+              <input id="detail_province" value="${escapeHtml(o.province||'')}" placeholder="Province" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+            </div>
+            <div style="display:flex;gap:8px">
+              <input id="detail_postal" value="${escapeHtml(o.postal_code||'')}" placeholder="Postal code" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+              <select id="detail_label" style="flex:1;padding:8px;border-radius:8px;border:1px solid #e6eef9">
+                <option value="">Label</option>
+                <option value="Home" ${o.label === 'Home' ? 'selected' : ''}>Home</option>
+                <option value="Work" ${o.label === 'Work' ? 'selected' : ''}>Work</option>
+                <option value="Other" ${o.label === 'Other' ? 'selected' : ''}>Other</option>
+              </select>
+            </div>
+            <input id="detail_label_other" value="${escapeHtml(o.label && !['Home','Work','Other'].includes(o.label) ? o.label : '')}" placeholder="Other label (if not listed)" style="padding:8px;border-radius:8px;border:1px solid #e6eef9" />
+            <textarea id="detail_details" placeholder="Delivery details (optional)" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">${escapeHtml(o.details||'')}</textarea>
+
             <textarea id="detail_notes" placeholder="Notes" style="padding:8px;border-radius:8px;border:1px solid #e6eef9">${escapeHtml(o.notes||'')}</textarea>
 
             <div style="display:flex;gap:8px;align-items:center">
@@ -1110,6 +1211,13 @@ document.addEventListener('supabase-ready', function(event) {
           const email = modalBody.querySelector('#detail_email').value.trim();
           const phone = modalBody.querySelector('#detail_phone').value.trim();
           const address = modalBody.querySelector('#detail_address').value.trim();
+          const city = modalBody.querySelector('#detail_city').value.trim();
+          const province = modalBody.querySelector('#detail_province').value.trim();
+          const postal_code = modalBody.querySelector('#detail_postal').value.trim();
+          let label = modalBody.querySelector('#detail_label').value;
+          const labelOther = modalBody.querySelector('#detail_label_other').value.trim();
+          if (label === 'Other' && labelOther) label = labelOther;
+          const details = modalBody.querySelector('#detail_details').value.trim();
           const notes = modalBody.querySelector('#detail_notes').value.trim();
           const category = modalBody.querySelector('#detail_category').value;
           const status = modalBody.querySelector('#detail_status').value;
@@ -1134,14 +1242,19 @@ document.addEventListener('supabase-ready', function(event) {
             const idx = arr2.findIndex(x=>x.id === o.id);
             if(idx === -1){ showToast('Order not found'); closeModal(); return; }
 
-            const prof = await ensureProfile({ email, phone, full_name: customer, address });
+            const prof = await ensureProfile({ email, phone, full_name: customer, address, city, province, postal_code, label, details });
             const subtotal = items.reduce((s,it)=> s + (it.price * it.quantity), 0);
-            const total = subtotal - discount;
+            const total = Math.max(0, subtotal - discount);
             
             arr2[idx].customer = customer;
             arr2[idx].email = email;
             arr2[idx].customer_phone = phone;
             arr2[idx].address = address;
+            arr2[idx].city = city;
+            arr2[idx].province = province;
+            arr2[idx].postal_code = postal_code;
+            arr2[idx].label = label;
+            arr2[idx].details = details;
             arr2[idx].notes = notes;
             arr2[idx].category = category;
             arr2[idx].status = status;
@@ -1157,7 +1270,8 @@ document.addEventListener('supabase-ready', function(event) {
               customer_phone: phone,
               notes,
               discount,
-              total
+              total,
+              city, province, postal_code, label, details
             });
 
             if(!updatedRow) showToast('Warning: failed to sync update to Supabase');
@@ -1222,7 +1336,7 @@ document.addEventListener('supabase-ready', function(event) {
     newOrderHeader.addEventListener('click', ()=> openCreateModal());
     newOrderOverview.addEventListener('click', ()=> openCreateModal());
 
-    // Create modal - UPDATED with all address fields and new categories
+    // Create modal - already has all address fields, no changes needed
     function openCreateModal(prefill = {}) {
       const html = `
         <h3>Create Order</h3>
@@ -1423,7 +1537,7 @@ document.addEventListener('supabase-ready', function(event) {
 
     modalConfirm.onclick = async ()=>{
       const user = await getSupabaseUser();
-      if(!user){ showToast('Must be signed in as admin to create order'); return; }
+      if(!user){ showToast('Must be signed in to create order'); return; }
 
       // Get all form elements
       const customerInput = modalBody.querySelector('#co_customer');
@@ -1529,7 +1643,12 @@ document.addEventListener('supabase-ready', function(event) {
           id, 
           customer: prof.customer || customer,
           email, 
-          address: `${address}${city ? ', ' + city : ''}${province ? ', ' + province : ''}${postal_code ? ', ' + postal_code : ''}`,
+          address,
+          city,
+          province,
+          postal_code,
+          label,
+          details,
           date: new Date(created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric', hour:'2-digit', minute:'2-digit'}),
           status, 
           items, 
@@ -1541,12 +1660,7 @@ document.addEventListener('supabase-ready', function(event) {
           notes,
           created_at,
           profile_id: prof.profile_id,
-          user_id: prof.user_id,
-          // Store individual address components separately for orders table
-          city: city,
-          province: province,
-          postal_code: postal_code,
-          label: label
+          user_id: prof.user_id
         };
 
         // Upsert to Supabase
@@ -1700,7 +1814,16 @@ document.addEventListener('supabase-ready', function(event) {
     // initial preload and render
     (async function init(){
       try {
-        await ensureAdminAccessOrRedirect();
+        // ---- NEW: strict initialization gate ----
+        const supabase = await waitForSupabaseReady();
+        const session = await waitForSession(supabase);
+        if (!session) {
+          console.warn("No session found → redirecting");
+          location.href = "login-admin.html";
+          return;
+        }
+        // Now proceed with access check
+        await ensureLogisticsAccessOrRedirect();
       } catch(e){
         return;
       }

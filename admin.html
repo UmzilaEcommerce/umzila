@@ -76,13 +76,35 @@
     }
     const cfg = await res.json();
 
-    if (!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY) {
-      console.error('Missing Supabase config from server');
-      return;
-    }
+    const supabaseUrl =
+  cfg.supabaseUrl ||
+  cfg.SUPABASE_URL ||
+  cfg.supabase_url ||
+  cfg.url;
 
-    // Initialize Supabase client
-    const supabaseClient = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+const supabaseAnonKey =
+  cfg.supabaseAnonKey ||
+  cfg.SUPABASE_ANON_KEY ||
+  cfg.supabase_anon_key ||
+  cfg.anonKey;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase config from server', cfg);
+  return;
+}
+
+const supabaseClient = supabase.createClient(
+  supabaseUrl,
+  supabaseAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false
+    }
+  }
+);
+
     window.supabase = supabaseClient; // make it accessible globally
 
     // Optional: notify other scripts that Supabase is ready
@@ -219,7 +241,7 @@
           <h3>Product List</h3>
           <div style="overflow:auto;margin-top:8px">
             <table id="productsTable" aria-live="polite">
-              <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Sale/Badge</th><th>Quantity</th><th>Sizes</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Sale/Badge</th><th>Quantity</th><th>Sizes</th><th>Actions</th> </thead>
               <tbody></tbody>
             </table>
           </div>
@@ -310,15 +332,18 @@ document.addEventListener('supabase-ready', (event) => {
 
 // Small helper: check if current browser has an authenticated Supabase user
 async function getSupabaseUser() {
-  if(!supabaseClient) return null;
-  try {
-    const { data } = await supabaseClient.auth.getUser();
-    return data?.user ?? null;
-  } catch (e) {
-    console.warn('supabase getUser failed', e);
+  if (!supabaseClient) return null;
+
+  const { data, error } = await supabaseClient.auth.getUser();
+
+  if (error) {
+    console.warn("getUser error", error);
     return null;
   }
+
+  return data.user || null;
 }
+
 
 /**
  * Try to upload a dataURL image to the 'product-images' bucket and
@@ -353,31 +378,41 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
 /* ---------- App logic (products now live-only from Supabase) ---------- */
 (async function(){
-  // Wait for supabaseClient to be initialized
-  if (!supabaseClient) {
-    // Check if window.supabase is already available
-    if (window.supabase) {
-      supabaseClient = window.supabase;
-    } else {
-      // Wait for the supabase-ready event
-      await new Promise(resolve => {
-        if (window.supabase) {
-          supabaseClient = window.supabase;
-          resolve();
-        } else {
-          document.addEventListener('supabase-ready', (event) => {
-            supabaseClient = event.detail.supabase;
-            resolve();
-          });
-        }
-      });
+  // ========== NEW: Strict initialization gate ==========
+  async function waitForSupabaseReady() {
+    for (let i = 0; i < 50; i++) {
+      if (window.supabase && window.supabase.auth) {
+        return window.supabase;
+      }
+      await new Promise(r => setTimeout(r, 100));
     }
+    throw new Error("Supabase failed to initialize");
   }
 
-  if (!supabaseClient) {
-    console.error('Supabase client not initialized');
+  async function waitForSession(supabase) {
+    for (let i = 0; i < 20; i++) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) return data.session;
+      await new Promise(r => setTimeout(r, 150));
+    }
+    return null;
+  }
+
+  try {
+    // STEP 1: Wait for Supabase client to be ready
+    supabaseClient = await waitForSupabaseReady();
+    // STEP 2: Wait for session to be hydrated
+    const session = await waitForSession(supabaseClient);
+    if (!session) {
+      console.warn("No session found → redirecting");
+      location.href = "login-admin.html";
+      return;
+    }
+  } catch (e) {
+    console.error(e);
     return;
   }
+  // ========== END new initialization ==========
 
   // Helpers
   const fmt = v => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(v);
@@ -389,7 +424,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     setTimeout(()=>{ t.remove(); }, 2200);
   }
 
-  /* ---------- NEW: robust auth check BEFORE continuing (tightened) ---------- */
+  /* ---------- robust auth check (unchanged, now runs after session ready) ---------- */
 
   // returns true only if supabase session exists AND user appears in admins table with admin role
   async function isAdminAuthenticated(){
@@ -645,7 +680,16 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const sizes = (p.sizes||[]).map(s=>s.size + (s.stock !== undefined ? ` (${s.stock})` : '')).join(', ');
       const saleCol = p.sale ? `<span class="tag-sale">On Sale</span> <span style="text-decoration:line-through;color:#9ca3af;margin-left:6px">${fmt(p.salePrice)}</span>` : '';
       const badgeCol = p.badge ? `<div style="margin-top:6px">${escapeHtml(p.badge)}</div>` : '';
-      tr.innerHTML = `<td></td><td>${escapeHtml(p.name)}<div style="font-size:12px;color:#6b7280;margin-top:6px">SKU: ${escapeHtml(p.sku || '')}</div></td><td>${escapeHtml(p.category||'')}</td><td>${fmt(p.price)}</td><td>${saleCol}${badgeCol}</td><td>${p.quantity}</td><td>${sizes}</td><td class="actions"></td>`;
+      tr.innerHTML = `
+        <td></td>
+        <td>${escapeHtml(p.name)}<div style="font-size:12px;color:#6b7280;margin-top:6px">SKU: ${escapeHtml(p.sku || '')}</div></td>
+        <td>${escapeHtml(p.category||'')}</td>
+        <td>${fmt(p.price)}</td>
+        <td>${saleCol}${badgeCol}</td>
+        <td>${p.quantity}</td>
+        <td>${sizes}</td>
+        <td class="actions"></td>
+      `;
       tr.children[0].replaceWith(imgCell);
       const actionsTd = tr.querySelector('.actions');
 
