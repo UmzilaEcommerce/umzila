@@ -210,62 +210,32 @@
       
       <!-- CATEGORY BUBBLES -->
       <div class="cat-bubbles-row" id="catBubblesRow">
-        <a class="cat-bubble" href="#hotSection">
-          <div class="cat-bubble-icon">🔥</div>
-          <div class="cat-bubble-label">Student Deals</div>
-        </a>
-        <a class="cat-bubble" href="#mysterySection">
-          <div class="cat-bubble-icon">🎁</div>
-          <div class="cat-bubble-label">Mystery Boxes</div>
-        </a>
-        <a class="cat-bubble" href="#trendingSection">
-          <div class="cat-bubble-icon">📈</div>
-          <div class="cat-bubble-label">Trending</div>
-        </a>
         <a class="cat-bubble" href="#trendingSection">
           <div class="cat-bubble-icon">👕</div>
           <div class="cat-bubble-label">Streetwear</div>
         </a>
-        <a class="cat-bubble" href="#bundlesSection">
+        <a class="cat-bubble" href="#mysterySection">
           <div class="cat-bubble-icon">📦</div>
+          <div class="cat-bubble-label">Mystery Boxes</div>
+        </a>
+        <a class="cat-bubble" href="#trendingSection">
+          <div class="cat-bubble-icon">🔥</div>
+          <div class="cat-bubble-label">Trending</div>
+        </a>
+        <a class="cat-bubble" href="#bundlesSection">
+          <div class="cat-bubble-icon">🎁</div>
           <div class="cat-bubble-label">Bundles</div>
         </a>
-        <a class="cat-bubble" href="#recSection">
-          <div class="cat-bubble-icon">⭐</div>
-          <div class="cat-bubble-label">For You</div>
+        <a class="cat-bubble" href="#hotSection">
+          <div class="cat-bubble-icon">🎓</div>
+          <div class="cat-bubble-label">Student Deals</div>
         </a>
       </div>
 
-      <!-- FEATURED SHOPS -->
-      <section class="featured-shops-section fade-up" id="featuredShopsSection">
+      <!-- FEATURED SHOPS — populated via supabase-ready event -->
+      <section class="featured-shops-section fade-up" id="featuredShopsSection" style="display:none">
         <h2>🧑‍🎨 Featured Shops <a href="#" class="see-all-shops" style="font-size:14px;color:var(--accent-2);margin-left:auto">See all</a></h2>
-        <div class="shops-hscroll" id="shopsScroll">
-          <div class="shop-card">
-            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop1/320/100')"></div>
-            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo1/60/60')"></div>
-            <div class="shop-card-name">Skhanda World</div>
-          </div>
-          <div class="shop-card">
-            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop2/320/100')"></div>
-            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo2/60/60')"></div>
-            <div class="shop-card-name">Campus Drip</div>
-          </div>
-          <div class="shop-card">
-            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop3/320/100')"></div>
-            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo3/60/60')"></div>
-            <div class="shop-card-name">Township Threads</div>
-          </div>
-          <div class="shop-card">
-            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop4/320/100')"></div>
-            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo4/60/60')"></div>
-            <div class="shop-card-name">Varsity Vault</div>
-          </div>
-          <div class="shop-card">
-            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop5/320/100')"></div>
-            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo5/60/60')"></div>
-            <div class="shop-card-name">Street Kulture</div>
-          </div>
-        </div>
+        <div class="shops-hscroll" id="shopsScroll"></div>
       </section>
 
       <!-- MOBILE FILTERS SECTION -->
@@ -349,9 +319,9 @@
       <div class="promo-banner fade-up">
         <div class="promo-banner-text">
           <strong>New sellers joining every week</strong>
-          <span>— find your next favourite brand.</span>
+          <span>— discover your next favourite brand.</span>
         </div>
-        <button class="promo-banner-cta" id="promoBannerSellBtn">Start Selling</button>
+        <button class="promo-banner-cta" id="promoBannerSellBtn">Explore Shops</button>
       </div>
 
       <!-- Mystery Boxes (now scrollable like trending) -->
@@ -644,6 +614,7 @@
   <script src="script.js"></script>
   <script>
   (function() {
+
     /* ── Smooth-scroll category bubbles ── */
     document.querySelectorAll('.cat-bubble').forEach(function(a) {
       a.addEventListener('click', function(e) {
@@ -653,14 +624,37 @@
       });
     });
 
-    /* ── Sell on Umzila modal ── */
-    var SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
-    var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
+    /* ── Featured Shops — load after supabase-ready ── */
+    document.addEventListener('supabase-ready', async function(ev) {
+      var sb = ev.detail && ev.detail.supabase;
+      if (!sb) return;
+      try {
+        var res = await sb.from('sellers').select('id,shop_name,banner_url,logo_url').limit(10);
+        var sellers = (res.data || []);
+        if (!sellers.length) return; // hide section silently if no sellers
+        var scroll = document.getElementById('shopsScroll');
+        scroll.innerHTML = sellers.map(function(s) {
+          var banner = s.banner_url ? 'url("' + s.banner_url + '")' : 'linear-gradient(135deg,var(--accent),var(--accent-2))';
+          var logo   = s.logo_url   ? 'url("' + s.logo_url   + '")' : '';
+          return '<div class="shop-card">' +
+            '<div class="shop-card-banner" style="background-image:' + banner + '"></div>' +
+            '<div class="shop-card-logo" style="background-image:' + logo + '"></div>' +
+            '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
+          '</div>';
+        }).join('');
+        document.getElementById('featuredShopsSection').style.display = '';
+      } catch(e) { /* hide section silently on error */ }
+    });
 
+    /* ── Sell on Umzila modal ── */
     function openSellModal() {
-      document.getElementById('sellModal').classList.add('open');
+      var m = document.getElementById('sellModal');
+      m.classList.add('open');
       document.getElementById('sellSubmitSuccess').style.display = 'none';
       document.getElementById('sellSubmitError').style.display = 'none';
+      document.getElementById('sellModalFooter').style.display = '';
+      document.getElementById('sellModalSubmitBtn').disabled = false;
+      document.getElementById('sellModalSubmitBtn').textContent = 'Submit Application';
     }
     function closeSellModal() {
       document.getElementById('sellModal').classList.remove('open');
@@ -677,49 +671,48 @@
     });
 
     document.getElementById('sellModalSubmitBtn').addEventListener('click', async function() {
-      var fullName = document.getElementById('sellFullName').value.trim();
-      var email = document.getElementById('sellEmail').value.trim();
-      var phone = document.getElementById('sellPhone').value.trim();
-      var shopName = document.getElementById('sellShopName').value.trim();
+      var fullName  = document.getElementById('sellFullName').value.trim();
+      var email     = document.getElementById('sellEmail').value.trim();
+      var phone     = document.getElementById('sellPhone').value.trim();
+      var shopName  = document.getElementById('sellShopName').value.trim();
       var planToSell = document.getElementById('sellPlanToSell').value.trim();
       var instagram = document.getElementById('sellInstagram').value.trim();
 
-      /* clear errors */
-      ['sellFullNameError','sellEmailError','sellPhoneError','sellShopNameError','sellPlanToSellError','sellSubmitError','sellSubmitSuccess'].forEach(function(id) {
+      /* clear previous errors */
+      ['sellFullNameError','sellEmailError','sellPhoneError','sellShopNameError',
+       'sellPlanToSellError','sellSubmitError','sellSubmitSuccess'].forEach(function(id) {
         document.getElementById(id).style.display = 'none';
       });
 
       var valid = true;
-      if (!fullName) { document.getElementById('sellFullNameError').style.display = 'block'; valid = false; }
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { document.getElementById('sellEmailError').style.display = 'block'; valid = false; }
-      if (!phone) { document.getElementById('sellPhoneError').style.display = 'block'; valid = false; }
-      if (!shopName) { document.getElementById('sellShopNameError').style.display = 'block'; valid = false; }
-      if (!planToSell) { document.getElementById('sellPlanToSellError').style.display = 'block'; valid = false; }
+      if (!fullName)  { document.getElementById('sellFullNameError').style.display = 'block';   valid = false; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+                      { document.getElementById('sellEmailError').style.display = 'block';       valid = false; }
+      if (!phone)     { document.getElementById('sellPhoneError').style.display = 'block';      valid = false; }
+      if (!shopName)  { document.getElementById('sellShopNameError').style.display = 'block';   valid = false; }
+      if (!planToSell){ document.getElementById('sellPlanToSellError').style.display = 'block'; valid = false; }
       if (!valid) return;
+
+      if (!window.supabase) {
+        document.getElementById('sellSubmitError').textContent = 'Service not ready yet. Please try again.';
+        document.getElementById('sellSubmitError').style.display = 'block';
+        return;
+      }
 
       var btn = this;
       btn.disabled = true;
       btn.textContent = 'Submitting...';
 
       try {
-        var res = await fetch(SUPABASE_URL + '/rest/v1/seller_applications', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON,
-            'Authorization': 'Bearer ' + SUPABASE_ANON,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
-            full_name: fullName,
-            email: email,
-            phone: phone,
-            shop_name: shopName,
-            plan_to_sell: planToSell,
-            instagram: instagram || null
-          })
+        var result = await window.supabase.from('seller_applications').insert({
+          full_name:    fullName,
+          email:        email,
+          phone:        phone,
+          shop_name:    shopName,
+          plan_to_sell: planToSell,
+          instagram:    instagram || null
         });
-        if (!res.ok) throw new Error('Submission failed');
+        if (result.error) throw result.error;
         document.getElementById('sellSubmitSuccess').style.display = 'block';
         document.getElementById('sellModalFooter').style.display = 'none';
         ['sellFullName','sellEmail','sellPhone','sellShopName','sellPlanToSell','sellInstagram'].forEach(function(id) {
@@ -738,11 +731,11 @@
     document.addEventListener('DOMContentLoaded', function() {
       var PAGE_SIZE = 8;
       var sectionMap = {
-        hot:         { el: document.getElementById('hotSection') },
-        mystery:     { el: document.getElementById('mysterySection') },
-        trending:    { el: document.getElementById('trendingSection') },
-        bundles:     { el: document.getElementById('bundlesSection') },
-        recommended: { el: document.getElementById('recSection') }
+        hot:         document.getElementById('hotSection'),
+        mystery:     document.getElementById('mysterySection'),
+        trending:    document.getElementById('trendingSection'),
+        bundles:     document.getElementById('bundlesSection'),
+        recommended: document.getElementById('recSection')
       };
       var defaultLabels = {
         hot: 'See all \u2192',
@@ -754,24 +747,26 @@
 
       function getProducts(sec) {
         var all = (typeof state !== 'undefined' && state.products) ? state.products.slice() : [];
-        if (sec === 'hot')      return all.filter(function(p){ return (p.badge||'').toString().toLowerCase()==='hot' || p.price<200; });
-        if (sec === 'mystery')  return all.filter(function(p){ return p.category==='Mystery Boxes'; });
-        if (sec === 'trending') return all.slice().sort(function(a,b){ return (b.popularity||0)-(a.popularity||0); });
-        if (sec === 'bundles')  return all.filter(function(p){ return p.category==='Bundles'; });
+        if (sec === 'hot')      return all.filter(function(p){ return (p.badge||'').toString().toLowerCase()==='hot' || p.price < 200; });
+        if (sec === 'mystery')  return all.filter(function(p){ return p.category === 'Mystery Boxes'; });
+        if (sec === 'trending') return all.slice().sort(function(a,b){ return (b.popularity||0) - (a.popularity||0); });
+        if (sec === 'bundles')  return all.filter(function(p){ return p.category === 'Bundles'; });
         return all;
       }
 
       document.querySelectorAll('.see-more').forEach(function(a) {
+        /* clone to remove script.js's panel-open listener */
         var clone = a.cloneNode(true);
         a.parentNode.replaceChild(clone, a);
 
         clone.addEventListener('click', function(e) {
           e.preventDefault();
           e.stopImmediatePropagation();
-          var sec = clone.dataset.section;
-          var secEl = sectionMap[sec] && sectionMap[sec].el;
+          var sec   = clone.dataset.section;
+          var secEl = sectionMap[sec];
           if (!secEl) return;
 
+          /* toggle if already created */
           var existing = secEl.querySelector('.section-expand');
           if (existing) {
             var hidden = existing.style.display === 'none';
@@ -781,6 +776,7 @@
             return;
           }
 
+          /* build expand grid */
           var products = getProducts(sec);
           var page = 1;
           var expand = document.createElement('div');
@@ -796,7 +792,8 @@
           expand.appendChild(loadBtn);
 
           function render() {
-            grid.innerHTML = products.slice(0, page * PAGE_SIZE).map(function(p){ return makeCardHTML(p); }).join('');
+            grid.innerHTML = products.slice(0, page * PAGE_SIZE)
+              .map(function(p){ return makeCardHTML(p); }).join('');
             loadBtn.style.display = (page * PAGE_SIZE >= products.length) ? 'none' : '';
             if (typeof attachProductListeners === 'function') attachProductListeners();
           }
@@ -808,6 +805,7 @@
         });
       });
     });
+
   })();
   </script>
 </body>

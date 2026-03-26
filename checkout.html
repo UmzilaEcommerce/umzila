@@ -676,6 +676,62 @@
     .mt-4 {
       margin-top: 20px;
     }
+
+    /* ---------- MOBILE-FIRST ENHANCEMENTS ---------- */
+    @media (max-width: 480px) {
+      .checkout-header { padding: 12px 0; }
+      .logo img { height: 32px; }
+      .logo span { font-size: 18px; }
+      .header-actions { gap: 8px; }
+      .header-actions .btn { padding: 7px 10px; font-size: 12px; }
+
+      .checkout-steps {
+        gap: 6px;
+        padding: 0 12px;
+        margin: 20px auto 16px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+      }
+      .checkout-steps::-webkit-scrollbar { display: none; }
+      .step { flex: 0 0 auto; flex-direction: column; align-items: center; gap: 4px; }
+      .step span { font-size: 11px; }
+      .step-number { width: 26px; height: 26px; font-size: 12px; }
+
+      .checkout-layout { margin: 16px auto; gap: 16px; }
+      .checkout-section { padding: 16px; margin-bottom: 16px; border-radius: 10px; }
+      .section-header h2 { font-size: 16px; }
+      .section-header { margin-bottom: 16px; }
+
+      .form-control { padding: 11px 12px; font-size: 16px; /* prevent iOS zoom */ }
+      .form-label { font-size: 13px; }
+      .btn { font-size: 15px; }
+
+      #continueToPayment, #payNowBtn {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 16px;
+      }
+
+      .order-summary { padding: 16px; border-radius: 10px; }
+      .summary-header { font-size: 17px; margin-bottom: 16px; }
+      .order-items { max-height: 240px; }
+      .order-item { gap: 10px; padding: 12px 0; }
+      .item-image { width: 54px; height: 54px; }
+      .item-title { font-size: 13px; }
+      .item-variant { font-size: 12px; }
+      .item-price { font-size: 13px; }
+      .summary-row { font-size: 14px; }
+      .summary-row.total { font-size: 16px; }
+
+      .promo-code-section { padding: 12px; }
+      .promo-code-input input, .promo-code-input .btn { width: 100%; }
+
+      .payment-method { padding: 14px; gap: 10px; }
+      .payment-details h4 { font-size: 14px; }
+      .payment-details p { font-size: 12px; }
+      .payment-icon { font-size: 20px; }
+    }
   </style>
   <!-- Include Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
