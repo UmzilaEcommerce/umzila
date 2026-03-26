@@ -84,7 +84,7 @@
       .card{grid-template-columns:1fr;text-align:left;padding:32px}
       .card.alt{grid-template-columns:1fr}
     }
-    @media(max-width:480px){.logo-item{flex:0 0 220px;height:80px}}
+    @media(max-width:480px){.logo-item{flex:0 0 140px;height:60px}}
 
     /* Modal styles (appended) */
     .modal-overlay{position:fixed;inset:0;background:rgba(12,20,40,.6);display:none;align-items:center;justify-content:center;z-index:200}
@@ -103,6 +103,28 @@
     @media(max-width:960px){
       .modal{width:calc(100% - 28px)}
       .modal-body{padding:16px 18px}
+    }
+
+    /* ── Mobile fixes ── */
+    .site-header .logo img{height:68px!important;display:block}
+    @media(max-width:768px){
+      .site-header .logo img{height:48px!important}
+      .hero{grid-template-columns:1fr;padding-top:90px}
+      .hero-visual{order:-1}
+      .hero h1{font-size:36px}
+    }
+    @media(max-width:480px){
+      .nav-right{gap:10px}
+      .nav-right a{font-size:13px}
+      .card{padding:24px 18px!important}
+      .card h3{font-size:20px}
+      .card p{font-size:15px}
+      .card .logo{width:180px!important;height:180px!important;max-width:100%!important}
+    }
+    @media(max-width:600px){
+      .modal{max-height:92vh}
+      .modal-body{padding:14px!important}
+      .modal-close,.modal-back{min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center}
     }
   </style>
 </head>

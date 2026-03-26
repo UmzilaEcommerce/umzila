@@ -168,6 +168,36 @@
     .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
     .empty-state-icon { font-size: 40px; margin-bottom: 10px; }
 
+    /* ── Image Upload ── */
+    .upload-group { display: flex; flex-direction: column; gap: 8px; }
+    .upload-preview-wrap { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .upload-preview { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; border: 2px dashed #dde1ea; display: none; }
+    .upload-preview.circle { border-radius: 50%; }
+    .upload-preview.wide { width: 140px; height: 72px; border-radius: 8px; }
+    .upload-file-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: #f2f4f8; border: 1.5px dashed #aab0c0; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); transition: background 0.15s; white-space: nowrap; }
+    .upload-file-btn:hover { background: #e6eaf2; }
+    .upload-file-btn input[type=file] { display: none; }
+    .upload-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .upload-progress { font-size: 12px; color: var(--accent-2); display: none; }
+
+    /* ── Analytics extras ── */
+    .analytics-section-title { font-size: 14px; font-weight: 700; color: var(--accent); margin: 20px 0 10px; }
+    .top-products-list { display: flex; flex-direction: column; gap: 8px; }
+    .top-prod-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
+    .top-prod-rank { font-size: 18px; font-weight: 800; color: var(--accent-2); min-width: 28px; text-align: center; }
+    .top-prod-info { flex: 1; min-width: 0; }
+    .top-prod-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-prod-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .top-prod-rev { font-weight: 700; font-size: 13px; color: var(--success); white-space: nowrap; }
+    .status-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+    @media (max-width: 400px) { .status-breakdown { grid-template-columns: 1fr 1fr; } }
+    .sb-card { padding: 14px 10px; border-radius: 10px; text-align: center; }
+    .sb-card.paid    { background: rgba(40,167,69,0.1);  color: var(--success); border: 1px solid rgba(40,167,69,0.3); }
+    .sb-card.pending { background: rgba(255,193,7,0.1);  color: #856404;        border: 1px solid rgba(255,193,7,0.3); }
+    .sb-card.other   { background: rgba(108,117,125,0.1);color: #495057;        border: 1px solid rgba(108,117,125,0.3); }
+    .sb-val { font-size: 22px; font-weight: 800; }
+    .sb-lbl { font-size: 11px; margin-top: 4px; }
+
     /* ── Toast ── */
     #sdToast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -206,7 +236,7 @@
     <div class="login-wrap">
       <div class="panel">
         <div class="panel-title">🏪 Seller Login</div>
-        <p class="login-subtitle">Sign in to manage your Umzila shop.</p>
+        <p class="login-subtitle">Only approved Umzila sellers can access this page.</p>
 
         <div class="form-group">
           <label class="form-label">Email</label>
@@ -293,12 +323,32 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Logo URL</label>
-            <input type="url" id="editLogo" class="form-control">
+            <label class="form-label">Shop Logo</label>
+            <div class="upload-group">
+              <div class="upload-preview-wrap">
+                <img id="editLogoPreview" class="upload-preview circle" alt="Logo preview">
+                <label class="upload-file-btn">
+                  📷 Upload Logo
+                  <input type="file" id="editLogoFile" accept="image/*">
+                </label>
+              </div>
+              <div class="upload-progress" id="editLogoProgress">Uploading...</div>
+              <input type="url" id="editLogo" class="form-control upload-hint" placeholder="Logo URL (auto-filled on upload)">
+            </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Banner URL</label>
-            <input type="url" id="editBanner" class="form-control">
+            <label class="form-label">Shop Banner</label>
+            <div class="upload-group">
+              <div class="upload-preview-wrap">
+                <img id="editBannerPreview" class="upload-preview wide" alt="Banner preview">
+                <label class="upload-file-btn">
+                  🖼️ Upload Banner
+                  <input type="file" id="editBannerFile" accept="image/*">
+                </label>
+              </div>
+              <div class="upload-progress" id="editBannerProgress">Uploading...</div>
+              <input type="url" id="editBanner" class="form-control upload-hint" placeholder="Banner URL (auto-filled on upload)">
+            </div>
           </div>
         </div>
         <div class="form-group">
@@ -367,8 +417,18 @@
             </div>
           </div>
           <div class="form-group">
-            <label class="form-label">Image URL <span class="opt">(optional)</span></label>
-            <input type="url" id="newProdImage" class="form-control" placeholder="https://...">
+            <label class="form-label">Product Image <span class="opt">(optional)</span></label>
+            <div class="upload-group">
+              <div class="upload-preview-wrap">
+                <img id="newProdImagePreview" class="upload-preview" alt="Image preview">
+                <label class="upload-file-btn">
+                  📷 Upload Image
+                  <input type="file" id="newProdImageFile" accept="image/*">
+                </label>
+              </div>
+              <div class="upload-progress" id="newProdImageProgress">Uploading...</div>
+              <input type="url" id="newProdImage" class="form-control upload-hint" placeholder="Image URL (auto-filled on upload)">
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Available Sizes</label>
@@ -449,8 +509,18 @@
           </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Image URL</label>
-          <input type="url" id="editProdImage" class="form-control">
+          <label class="form-label">Product Image</label>
+          <div class="upload-group">
+            <div class="upload-preview-wrap">
+              <img id="editProdImagePreview" class="upload-preview" alt="Image preview">
+              <label class="upload-file-btn">
+                📷 Upload Image
+                <input type="file" id="editProdImageFile" accept="image/*">
+              </label>
+            </div>
+            <div class="upload-progress" id="editProdImageProgress">Uploading...</div>
+            <input type="url" id="editProdImage" class="form-control upload-hint" placeholder="Image URL (auto-filled on upload)">
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Available Sizes</label>
@@ -489,6 +559,8 @@
     <div id="tabAnalytics" class="tab-panel" style="display:none">
       <div class="panel">
         <div class="panel-title">Analytics</div>
+
+        <!-- Overview stats -->
         <div class="analytics-grid">
           <div class="stat-card">
             <div class="stat-value" id="statProducts">—</div>
@@ -508,9 +580,49 @@
           </div>
         </div>
 
-        <hr class="divider">
-        <div style="font-size:13px;color:var(--muted)">
-          Revenue is calculated from paid orders containing your products. Analytics update each time you visit this tab.
+        <!-- Order status breakdown -->
+        <div class="analytics-section-title">Orders by Status</div>
+        <div class="status-breakdown">
+          <div class="sb-card paid">
+            <div class="sb-val" id="statPaid">—</div>
+            <div class="sb-lbl">Paid</div>
+          </div>
+          <div class="sb-card pending">
+            <div class="sb-val" id="statUnpaid">—</div>
+            <div class="sb-lbl">Pending</div>
+          </div>
+          <div class="sb-card other">
+            <div class="sb-val" id="statOtherOrders">—</div>
+            <div class="sb-lbl">Other</div>
+          </div>
+        </div>
+
+        <!-- Product status breakdown -->
+        <div class="analytics-section-title">Products by Status</div>
+        <div class="status-breakdown">
+          <div class="sb-card paid">
+            <div class="sb-val" id="statApprovedProds">—</div>
+            <div class="sb-lbl">Approved</div>
+          </div>
+          <div class="sb-card pending">
+            <div class="sb-val" id="statPendingProds">—</div>
+            <div class="sb-lbl">Pending</div>
+          </div>
+          <div class="sb-card other">
+            <div class="sb-val" id="statRejectedProds">—</div>
+            <div class="sb-lbl">Rejected</div>
+          </div>
+        </div>
+
+        <!-- Top products by revenue -->
+        <div class="analytics-section-title">Top Products by Revenue</div>
+        <div class="top-products-list" id="topProductsList">
+          <div style="color:var(--muted);font-size:13px">Loading...</div>
+        </div>
+
+        <hr class="divider" style="margin-top:20px">
+        <div style="font-size:12px;color:var(--muted)">
+          Revenue calculated from all orders containing your products. Updates each time you visit this tab.
         </div>
       </div>
     </div>
@@ -665,11 +777,57 @@
        AUTH
     ───────────────────────────────────────── */
     async function checkAuth() {
-      var { data, error } = await SD.sb.auth.getSession();
+      var { data } = await SD.sb.auth.getSession();
       var user = data && data.session && data.session.user;
       if (!user) { showState('login'); return; }
       SD.user = user;
+
+      // Role gate: profiles.role must be 'seller'
+      var profileRes = await SD.sb.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+      var role = profileRes.data && profileRes.data.role;
+      if (role !== 'seller') {
+        await SD.sb.auth.signOut();
+        SD.user = null;
+        showState('login');
+        var msgEl = document.getElementById('loginMsg');
+        if (msgEl) {
+          msgEl.className = 'msg error';
+          msgEl.innerHTML = "You don\u2019t have seller access. <a href=\"index.html\" style=\"color:var(--accent-2)\">Apply on Umzila</a>.";
+          msgEl.style.display = 'block';
+        }
+        return;
+      }
+
       await loadSellerRow();
+    }
+
+    /* First-login linking: find a sellers row with matching shop_name and null user_id
+       (created by admin approval) and claim it for this user.                          */
+    async function linkSellerIfNeeded(user) {
+      // Find approved application for this email
+      var appRes = await SD.sb
+        .from('seller_applications')
+        .select('shop_name')
+        .eq('email', user.email)
+        .eq('status', 'approved')
+        .maybeSingle();
+      if (!appRes.data || !appRes.data.shop_name) return false;
+
+      // Find the unlinked sellers row for that shop
+      var unlinkedRes = await SD.sb
+        .from('sellers')
+        .select('id')
+        .eq('shop_name', appRes.data.shop_name)
+        .is('user_id', null)
+        .maybeSingle();
+      if (!unlinkedRes.data) return false;
+
+      // Claim it
+      var { error: linkErr } = await SD.sb
+        .from('sellers')
+        .update({ user_id: user.id })
+        .eq('id', unlinkedRes.data.id);
+      return !linkErr;
     }
 
     async function loadSellerRow() {
@@ -680,6 +838,16 @@
         .limit(1);
 
       if (error || !data || !data.length) {
+        // First login: try to link an admin-approved shop
+        var linked = await linkSellerIfNeeded(SD.user);
+        if (linked) {
+          var reRes = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).limit(1);
+          if (reRes.data && reRes.data.length) {
+            SD.seller = reRes.data[0];
+            showDashboard();
+            return;
+          }
+        }
         showState('setup');
         return;
       }
@@ -695,6 +863,8 @@
       if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name);
       // Populate My Shop tab
       populateShopForm();
+      // Wire image upload inputs
+      initUploadBindings();
       showState('dashboard');
       switchTab('shop');
     }
@@ -710,6 +880,20 @@
       setBtnLoading('loginSubmitBtn', false, 'Sign In');
       if (error) { setMsg('loginMsg', error.message); return; }
       SD.user = data.user;
+
+      // Role gate: must be an approved seller
+      var profileRes = await SD.sb.from('profiles').select('role').eq('user_id', SD.user.id).maybeSingle();
+      var role = profileRes.data && profileRes.data.role;
+      if (role !== 'seller') {
+        await SD.sb.auth.signOut();
+        SD.user = null;
+        var msgEl = document.getElementById('loginMsg');
+        msgEl.className = 'msg error';
+        msgEl.innerHTML = "You don\u2019t have seller access. <a href=\"index.html\" style=\"color:var(--accent-2)\">Apply on Umzila</a>.";
+        msgEl.style.display = 'block';
+        return;
+      }
+
       await loadSellerRow();
     });
 
@@ -760,6 +944,11 @@
       document.getElementById('editLogo').value      = s.logo_url         || '';
       document.getElementById('editBanner').value    = s.banner_url       || '';
       document.getElementById('editWhatsApp').value  = s.whatsapp_number  || '';
+      // Show image previews if URLs exist
+      var logoPrev = document.getElementById('editLogoPreview');
+      if (logoPrev && s.logo_url) { logoPrev.src = s.logo_url; logoPrev.style.display = ''; }
+      var bannerPrev = document.getElementById('editBannerPreview');
+      if (bannerPrev && s.banner_url) { bannerPrev.src = s.banner_url; bannerPrev.style.display = ''; }
     }
 
     document.getElementById('saveShopBtn').addEventListener('click', async function() {
@@ -908,6 +1097,9 @@
       document.getElementById('editProdImage').value    = p.image || '';
       document.getElementById('editProdCategory').value = p.category || 'All';
       document.getElementById('editProdBadge').value    = p.badge || '';
+      // Show image preview
+      var epPrev = document.getElementById('editProdImagePreview');
+      if (epPrev) { if (p.image) { epPrev.src = p.image; epPrev.style.display = ''; } else { epPrev.style.display = 'none'; } }
       setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
       bindSizeChips('editProdSizes');
       setMsg('editProdMsg', '');
@@ -1061,16 +1253,143 @@
       }
 
       var totalOrders  = SD.orders.length;
-      var totalRevenue = SD.orders.reduce(function(sum, order) {
-        var items = Array.isArray(order.items) ? order.items : [];
-        return sum + items.filter(function(i) { return myProductIds.includes(i.id); })
-          .reduce(function(s, i) { return s + (Number(i.price || 0) * Number(i.qty || 1)); }, 0);
-      }, 0);
 
+      // Per-order revenue + status breakdown
+      var paidCount = 0, unpaidCount = 0, otherCount = 0;
+      var totalRevenue = 0;
+
+      // Per-product revenue map: { productId: { revenue, qty, name, price } }
+      var prodRevMap = {};
+      SD.products.forEach(function(p) {
+        prodRevMap[p.id] = { id: p.id, name: p.name || 'Untitled', revenue: 0, qty: 0 };
+      });
+
+      SD.orders.forEach(function(order) {
+        var items = Array.isArray(order.items) ? order.items : [];
+        var myItems = items.filter(function(i) { return myProductIds.includes(i.id); });
+        var orderRevenue = myItems.reduce(function(s, i) { return s + (Number(i.price || 0) * Number(i.qty || 1)); }, 0);
+        totalRevenue += orderRevenue;
+
+        var st = (order.order_status || '').toLowerCase();
+        if (st === 'paid') paidCount++;
+        else if (st === 'pending' || st === 'payment_pending') unpaidCount++;
+        else otherCount++;
+
+        myItems.forEach(function(i) {
+          if (prodRevMap[i.id]) {
+            prodRevMap[i.id].revenue += Number(i.price || 0) * Number(i.qty || 1);
+            prodRevMap[i.id].qty     += Number(i.qty || 1);
+          }
+        });
+      });
+
+      // Product status breakdown
+      var approvedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'approved'; }).length;
+      var rejectedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
+
+      // Update overview
       document.getElementById('statProducts').textContent = totalProducts;
       document.getElementById('statOrders').textContent   = totalOrders;
       document.getElementById('statRevenue').textContent  = fmt(totalRevenue);
       document.getElementById('statPending').textContent  = pendingCount;
+
+      // Update order status
+      document.getElementById('statPaid').textContent        = paidCount;
+      document.getElementById('statUnpaid').textContent      = unpaidCount;
+      document.getElementById('statOtherOrders').textContent = otherCount;
+
+      // Update product status
+      document.getElementById('statApprovedProds').textContent = approvedProds;
+      document.getElementById('statPendingProds').textContent  = pendingCount;
+      document.getElementById('statRejectedProds').textContent = rejectedProds;
+
+      // Top products
+      var topProds = Object.values(prodRevMap)
+        .filter(function(p) { return p.qty > 0; })
+        .sort(function(a, b) { return b.revenue - a.revenue; })
+        .slice(0, 5);
+
+      var topList = document.getElementById('topProductsList');
+      if (!topProds.length) {
+        topList.innerHTML = '<div style="color:var(--muted);font-size:13px">No orders yet — your top sellers will appear here.</div>';
+      } else {
+        topList.innerHTML = topProds.map(function(p, i) {
+          return '<div class="top-prod-row">' +
+            '<div class="top-prod-rank">' + (i + 1) + '</div>' +
+            '<div class="top-prod-info">' +
+              '<div class="top-prod-name">' + p.name + '</div>' +
+              '<div class="top-prod-meta">' + p.qty + ' sold</div>' +
+            '</div>' +
+            '<div class="top-prod-rev">' + fmt(p.revenue) + '</div>' +
+          '</div>';
+        }).join('');
+      }
+    }
+
+    /* ─────────────────────────────────────────
+       IMAGE UPLOAD — Supabase Storage
+       Bucket: "shop-assets" (create in Supabase dashboard if missing)
+    ───────────────────────────────────────── */
+    var STORAGE_BUCKET = 'shop-assets';
+
+    async function uploadImage(file, storagePath, progressId, urlInputId, previewId) {
+      var prog = document.getElementById(progressId);
+      var urlInput = document.getElementById(urlInputId);
+      var preview  = document.getElementById(previewId);
+      if (prog) prog.style.display = 'block';
+
+      var { data, error } = await SD.sb.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, file, { upsert: true, contentType: file.type });
+
+      if (prog) prog.style.display = 'none';
+
+      if (error) { toast('Upload failed: ' + error.message); return null; }
+
+      var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
+      var publicUrl = urlData && urlData.publicUrl;
+      if (publicUrl) {
+        if (urlInput) urlInput.value = publicUrl;
+        if (preview)  { preview.src = publicUrl; preview.style.display = ''; }
+      }
+      return publicUrl;
+    }
+
+    function bindImageUpload(fileInputId, progressId, urlInputId, previewId, pathFn) {
+      var fileInput = document.getElementById(fileInputId);
+      if (!fileInput) return;
+      fileInput.addEventListener('change', async function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        var path = pathFn(file);
+        // Show local preview immediately
+        var preview = document.getElementById(previewId);
+        if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = ''; }
+        await uploadImage(file, path, progressId, urlInputId, previewId);
+      });
+    }
+
+    function initUploadBindings() {
+      var sid = SD.seller.id;
+
+      // Shop logo
+      bindImageUpload('editLogoFile', 'editLogoProgress', 'editLogo', 'editLogoPreview',
+        function(f) { return 'sellers/' + sid + '/logo.' + f.name.split('.').pop(); });
+
+      // Shop banner
+      bindImageUpload('editBannerFile', 'editBannerProgress', 'editBanner', 'editBannerPreview',
+        function(f) { return 'sellers/' + sid + '/banner.' + f.name.split('.').pop(); });
+
+      // New product image
+      bindImageUpload('newProdImageFile', 'newProdImageProgress', 'newProdImage', 'newProdImagePreview',
+        function(f) { return 'sellers/' + sid + '/products/new_' + Date.now() + '.' + f.name.split('.').pop(); });
+
+      // Edit product image
+      bindImageUpload('editProdImageFile', 'editProdImageProgress', 'editProdImage', 'editProdImagePreview',
+        function(f) {
+          var editId = document.getElementById('editProdId').value || 'edit';
+          return 'sellers/' + sid + '/products/' + editId + '.' + f.name.split('.').pop();
+        });
     }
 
     /* ─────────────────────────────────────────

@@ -10,106 +10,44 @@
     /* ── Shop-specific styles ── */
     .shop-page-main { max-width: 1200px; margin: 0 auto; padding: 0 18px 40px; }
 
-    /* Banner */
-    .shop-banner-wrap {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      max-height: 420px;
-      overflow: hidden;
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
-    }
-    .shop-banner-img {
-      width: 100%; height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .shop-banner-overlay {
-      position: absolute; inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.10) 55%, transparent 100%);
-    }
-    /* Bottom-left seller info */
-    .shop-banner-info {
-      position: absolute;
-      bottom: 56px; left: 18px; right: 18px;
-      display: flex; align-items: flex-end; gap: 14px;
-      z-index: 2;
-    }
-    .shop-banner-logo {
-      width: 60px; height: 60px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      object-fit: cover;
-      flex-shrink: 0;
-      background: #ddd;
-    }
-    .shop-banner-logo-placeholder {
-      width: 60px; height: 60px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      background: var(--accent-2);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 700; color: #fff;
-      flex-shrink: 0;
-    }
-    .shop-banner-text { flex: 1; min-width: 0; }
-    .shop-banner-name {
-      font-size: 22px; font-weight: 800;
-      color: #fff; line-height: 1.2;
-      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .shop-banner-desc {
-      font-size: 13px; color: rgba(255,255,255,0.85);
-      margin-top: 3px; line-height: 1.4;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    /* Banner action buttons */
-    .shop-banner-btns {
-      position: absolute; bottom: 14px; left: 18px; right: 18px;
-      display: flex; justify-content: space-between; gap: 10px;
-      z-index: 2;
-    }
-    .shop-banner-btn {
-      padding: 7px 16px; border-radius: 999px; border: none;
-      font-size: 13px; font-weight: 700; cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .shop-banner-btn:hover { opacity: 0.88; }
-    .shop-banner-btn.primary { background: var(--cta); color: #fff; }
-    .shop-banner-btn.ghost   { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(4px); }
-
-    /* About toast */
-    .about-toast {
-      position: absolute; bottom: 52px; right: 18px;
-      background: rgba(0,0,0,0.88); color: #fff;
-      padding: 12px 16px; border-radius: 10px;
-      font-size: 13px; line-height: 1.5;
-      max-width: 280px; z-index: 10;
-      display: none; animation: fadeSlideUp 0.2s ease;
-    }
-    .about-toast.open { display: block; }
-    @keyframes fadeSlideUp {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* WhatsApp bar */
-    .shop-wa-bar {
-      padding: 12px 18px;
+    /* ── Compact Shopify-style store header ── */
+    .shopify-store-header {
       background: #fff;
-      border-bottom: 1px solid #f0f0f4;
-      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid #eaecf0;
+      padding: 20px 18px;
+      display: none;
     }
+    .shopify-store-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .shopify-store-logo {
+      width: 64px; height: 64px; border-radius: 50%;
+      object-fit: cover; border: 2px solid #eaecf0; flex-shrink: 0;
+    }
+    .shopify-store-logo-placeholder {
+      width: 64px; height: 64px; border-radius: 50%;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-size: 26px; font-weight: 800;
+      color: #fff; flex-shrink: 0;
+    }
+    .shopify-store-info { flex: 1; min-width: 0; }
+    .shopify-store-name { font-size: 22px; font-weight: 800; color: var(--accent); margin: 0 0 3px; }
+    .shopify-store-desc { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.5; }
+    .shopify-store-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
     .shop-wa-btn {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 9px 18px; border-radius: 999px;
       background: #25D366; color: #fff;
-      font-weight: 700; font-size: 14px;
+      font-weight: 700; font-size: 13px;
       text-decoration: none; transition: opacity 0.15s;
     }
     .shop-wa-btn:hover { opacity: 0.88; }
+    @media (max-width: 480px) {
+      .shopify-store-name { font-size: 18px; }
+      .shopify-store-header-inner { gap: 12px; }
+      .shopify-store-logo, .shopify-store-logo-placeholder { width: 52px; height: 52px; font-size: 20px; }
+    }
 
     /* Products section */
     .shop-products-section { margin-top: 20px; }
@@ -206,32 +144,18 @@
   </div>
 
   <!-- ═══════════════════════════════════════════
-       SHOP BANNER (full-width, populated by JS)
+       SHOP HEADER (compact Shopify-style)
   ════════════════════════════════════════════ -->
-  <div id="shopBannerWrap" style="display:none">
-    <div class="shop-banner-wrap" id="shopBanner">
-      <img class="shop-banner-img" id="shopBannerImg" src="" alt="" style="display:none">
-      <div class="shop-banner-overlay"></div>
-      <div class="shop-banner-info">
-        <img class="shop-banner-logo" id="shopLogo" src="" alt="" style="display:none">
-        <div class="shop-banner-logo-placeholder" id="shopLogoPlaceholder" style="display:none"></div>
-        <div class="shop-banner-text">
-          <div class="shop-banner-name" id="shopBannerName"></div>
-          <div class="shop-banner-desc" id="shopBannerDesc"></div>
-        </div>
+  <div class="shopify-store-header" id="shopifyHeader">
+    <div class="shopify-store-header-inner">
+      <div id="shopifyLogo"></div>
+      <div class="shopify-store-info">
+        <h1 class="shopify-store-name" id="shopifyName"></h1>
+        <p class="shopify-store-desc" id="shopifyDesc"></p>
       </div>
-      <div class="shop-banner-btns">
-        <button class="shop-banner-btn primary" id="viewItemsBtn">View Items</button>
-        <button class="shop-banner-btn ghost"   id="aboutBtn">About</button>
+      <div class="shopify-store-actions">
+        <a class="shop-wa-btn" id="shopifyWa" href="#" target="_blank" rel="noopener noreferrer" style="display:none">💬 Chat with seller</a>
       </div>
-      <div class="about-toast" id="aboutToast"></div>
-    </div>
-
-    <!-- WhatsApp bar -->
-    <div class="shop-wa-bar" id="shopWaBar" style="display:none">
-      <a class="shop-wa-btn" id="shopWaLink" href="#" target="_blank" rel="noopener noreferrer">
-        💬 Chat with seller
-      </a>
     </div>
   </div>
 
@@ -515,54 +439,25 @@
       /* update page title */
       document.title = seller.shop_name + ' — Umzila';
 
-      /* ── Render banner ── */
-      var bannerWrap = document.getElementById('shopBannerWrap');
-      var bannerEl   = document.getElementById('shopBanner');
-      var bannerImg  = document.getElementById('shopBannerImg');
-
-      if (seller.banner_url) {
-        bannerImg.src = seller.banner_url;
-        bannerImg.style.display = '';
-      } else {
-        bannerEl.style.background = 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)';
-      }
-
-      var logoImg  = document.getElementById('shopLogo');
-      var logoPlh  = document.getElementById('shopLogoPlaceholder');
+      /* ── Render compact store header ── */
+      var logoWrap = document.getElementById('shopifyLogo');
       if (seller.logo_url) {
-        logoImg.src = seller.logo_url;
-        logoImg.style.display = '';
+        logoWrap.innerHTML = '<img class="shopify-store-logo" src="' + seller.logo_url + '" alt="' + seller.shop_name + ' logo">';
       } else {
-        logoPlh.textContent = (seller.shop_name || '?').charAt(0).toUpperCase();
-        logoPlh.style.display = '';
+        logoWrap.innerHTML = '<div class="shopify-store-logo-placeholder">' + (seller.shop_name || '?').charAt(0).toUpperCase() + '</div>';
       }
 
-      document.getElementById('shopBannerName').textContent = seller.shop_name;
-      document.getElementById('shopBannerDesc').textContent = seller.description || '';
-
-      /* About button */
-      var aboutToast = document.getElementById('aboutToast');
-      aboutToast.textContent = seller.description || 'No description available.';
-      document.getElementById('aboutBtn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        aboutToast.classList.toggle('open');
-      });
-      document.addEventListener('click', function() { aboutToast.classList.remove('open'); });
-
-      /* View Items button */
-      document.getElementById('viewItemsBtn').addEventListener('click', function() {
-        var sec = document.getElementById('shopProductsSection');
-        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
+      document.getElementById('shopifyName').textContent = seller.shop_name;
+      document.getElementById('shopifyDesc').textContent = seller.description || '';
 
       /* WhatsApp */
       if (seller.whatsapp_number) {
-        var waLink = document.getElementById('shopWaLink');
+        var waLink = document.getElementById('shopifyWa');
         waLink.href = 'https://wa.me/' + seller.whatsapp_number.replace(/\D/g,'') + '?text=' + encodeURIComponent('Hi, I saw your shop on Umzila');
-        document.getElementById('shopWaBar').style.display = '';
+        waLink.style.display = '';
       }
 
-      bannerWrap.style.display = '';
+      document.getElementById('shopifyHeader').style.display = '';
       hideLoading();
 
       /* ── Fetch products ── */

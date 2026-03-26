@@ -229,7 +229,7 @@ async function checkUserPermission(email, password, selectedRole) {
     // Get user's roles from user_roles table
     const userRoles = await getUserRoles(user.id);
     
-    if (userRoles.length === 0) {
+    if (userRoles.length === 0 && selectedRole.toLowerCase() !== 'seller') {
       return {
         success: false,
         error: 'No assigned roles. Contact administrator.'
@@ -248,7 +248,7 @@ async function checkUserPermission(email, password, selectedRole) {
     // Check specific role permission
     const hasRole = userRoleNames.includes(selectedRoleLower);
     
-    if (!hasRole && !isAdmin) {
+    if (!hasRole && !isAdmin && selectedRoleLower !== 'seller') {
       return {
         success: false,
         error: `You don't have permission to access ${selectedRole} section.`
@@ -265,7 +265,21 @@ async function checkUserPermission(email, password, selectedRole) {
         };
       }
     }
-    
+
+    // Seller access: check profiles.role = 'seller' OR a row in sellers table
+    if (selectedRoleLower === 'seller') {
+      const { data: sellerProfile } = await window.supabase
+        .from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+      const { data: sellerRow } = await window.supabase
+        .from('sellers').select('id').eq('user_id', user.id).maybeSingle();
+      if (!sellerRow && (!sellerProfile || sellerProfile.role !== 'seller')) {
+        return {
+          success: false,
+          error: 'You do not have seller access. Apply to sell on Umzila from the homepage.'
+        };
+      }
+    }
+
     return {
       success: true,
       user: {
@@ -377,7 +391,10 @@ function redirectBasedOnRole(userRoles, selectedRole) {
   else if (!isAdmin && selectedRole.toLowerCase() === 'logistics') {
     redirectTo = 'logistics.html';
   }
-  
+  else if (selectedRole.toLowerCase() === 'seller') {
+    redirectTo = 'seller-dashboard.html';
+  }
+
   // Store last used role
   localStorage.setItem('last_role', selectedRole.toLowerCase());
   
@@ -516,6 +533,12 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Auto-focus email field on page load
   emailInput.focus();
+
+  // Handle error params from seller-dashboard redirect
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('error') === 'no-seller-access') {
+    showError("You don't have seller access. Apply to sell on Umzila from the homepage.");
+  }
 });
 
 window.addEventListener('beforeunload', () => {
@@ -536,7 +559,7 @@ document.addEventListener('submit', (e) => {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div>
           <div class="logo">Shop Control Panel</div>
-          <div class="small">Admin & Logistics Access</div>
+          <div class="small">Staff & Seller Access</div>
         </div>
       </div>
 
@@ -552,6 +575,7 @@ document.addEventListener('submit', (e) => {
       <select id="role" aria-label="Select role" required>
         <option value="Admin">Admin Dashboard</option>
         <option value="Logistics">Logistics Portal</option>
+        <option value="Seller">Seller Dashboard</option>
       </select>
 
       <div id="error" class="error" role="alert" aria-live="assertive"></div>
@@ -563,7 +587,8 @@ document.addEventListener('submit', (e) => {
         <div>Authentication protected. Contact administrator for access.</div>
         <div style="margin-top: 4px; font-size: 11px; color: #9ca3af;">
           • Admins can access all sections<br>
-          • Logistics users can only access logistics
+          • Logistics users can only access logistics<br>
+          • Sellers can only access their seller dashboard
         </div>
       </div>
       

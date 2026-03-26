@@ -147,6 +147,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="manage">Manage Products</li>
           <li data-section="analytics">Analytics</li>
           <li data-section="settings">Settings</li>
+          <li data-section="seller-applications">Seller Applications</li>
           <li id="lsLogout">Logout</li>
         </ul>
       </div>
@@ -278,6 +279,17 @@ const supabaseClient = supabase.createClient(
             <h4>Sales Chart Placeholder</h4>
             <div style="height:200px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Chart</div>
           </div>
+        </div>
+      </section>
+
+      <!-- Seller Applications -->
+      <section id="section-seller-applications" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="margin:0">Seller Applications</h3>
+          <button id="refreshApplicationsBtn" class="small-btn">↻ Refresh</button>
+        </div>
+        <div id="sellerAppsWrap">
+          <div style="color:var(--muted);padding:20px">Select this tab to load applications.</div>
         </div>
       </section>
 
@@ -1106,7 +1118,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     dashboard: document.getElementById('section-dashboard'),
     manage: document.getElementById('section-manage'),
     analytics: document.getElementById('section-analytics'),
-    settings: document.getElementById('section-settings')
+    settings: document.getElementById('section-settings'),
+    'seller-applications': document.getElementById('section-seller-applications')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -1121,8 +1134,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(sections[s]) sections[s].style.display = 'block';
     });
   });
+  // Lazy-load seller applications when that tab is first clicked
+  document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
+
   // Logout (top-right)
-  document.getElementById('logoutBtn').addEventListener('click', ()=>{ 
+  document.getElementById('logoutBtn').addEventListener('click', ()=>{
     if(supabaseClient && supabaseClient.auth){
       supabaseClient.auth.signOut().catch(e=>console.warn('supabase signOut failed', e));
     }
@@ -1375,6 +1391,121 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   };
 
   /* ------------------ end analytics/out-of-stock ------------------ */
+
+  /* ------------------ Seller Applications ------------------ */
+  async function fetchSellerApplications() {
+    const wrap = document.getElementById('sellerAppsWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading...</div>';
+    if (!supabaseClient) { wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Supabase not ready.</div>'; return; }
+    try {
+      const { data, error } = await supabaseClient
+        .from('seller_applications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
+      renderSellerApplications(data || []);
+    } catch (e) {
+      console.warn('fetchSellerApplications failed', e);
+      wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load applications.</div>';
+    }
+  }
+
+  function saStatusBadge(status) {
+    const map = { approved: '#059669', rejected: '#dc2626', pending: '#d97706' };
+    const color = map[status] || '#6b7280';
+    return `<span style="background:${color};color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase">${escapeHtml(status || 'pending')}</span>`;
+  }
+
+  function renderSellerApplications(apps) {
+    const wrap = document.getElementById('sellerAppsWrap');
+    if (!apps.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);padding:20px">No applications yet.</div>';
+      return;
+    }
+    wrap.innerHTML = apps.map(a => `
+      <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 4px 12px rgba(2,6,23,0.05)">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+          <div>
+            <div style="font-weight:700;font-size:16px">${escapeHtml(a.shop_name || '—')}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(a.full_name || '')} &bull; ${escapeHtml(a.email || '')} &bull; ${escapeHtml(a.phone || '')}</div>
+          </div>
+          ${saStatusBadge(a.status)}
+        </div>
+        <div style="font-size:13px;color:#374151;margin-bottom:5px"><strong>Plans to sell:</strong> ${escapeHtml(a.plan_to_sell || '—')}</div>
+        <div style="font-size:13px;color:#374151;margin-bottom:5px"><strong>Instagram:</strong> ${escapeHtml(a.instagram || '—')}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Applied: ${a.created_at ? new Date(a.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</div>
+        ${a.rejection_reason ? `<div style="font-size:13px;color:#dc2626;margin-bottom:10px"><strong>Rejection reason:</strong> ${escapeHtml(a.rejection_reason)}</div>` : ''}
+        <div style="display:flex;gap:10px">
+          <button class="small-btn sa-approve-btn" data-id="${escapeHtml(String(a.id))}" data-shop="${escapeHtml(a.shop_name || '')}" ${a.status === 'approved' ? 'disabled style="opacity:0.5;cursor:not-allowed;background:#059669"' : 'style="background:#059669"'}>Approve</button>
+          <button class="small-btn sa-reject-btn" data-id="${escapeHtml(String(a.id))}" ${a.status === 'rejected' ? 'disabled style="opacity:0.5;cursor:not-allowed;background:#dc2626"' : 'style="background:#dc2626"'}>Reject</button>
+        </div>
+      </div>
+    `).join('');
+
+    wrap.querySelectorAll('.sa-approve-btn').forEach(btn => {
+      btn.addEventListener('click', () => approveSellerApplication(btn.dataset.id, btn.dataset.shop, btn));
+    });
+    wrap.querySelectorAll('.sa-reject-btn').forEach(btn => {
+      btn.addEventListener('click', () => rejectSellerApplication(btn.dataset.id, btn));
+    });
+  }
+
+  async function approveSellerApplication(appId, shopName, btn) {
+    if (!appId || !shopName) { showToast('Missing application data'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Approving...';
+    try {
+      const res = await fetch('/.netlify/functions/approve-seller', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId: appId, shopName })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast('Approve failed: ' + (json.error || res.status));
+        btn.disabled = false;
+        btn.textContent = 'Approve';
+        return;
+      }
+      showToast('Approved — seller shop created');
+      await fetchSellerApplications();
+    } catch (e) {
+      console.warn('approveSellerApplication failed', e);
+      showToast('Approve failed');
+      btn.disabled = false;
+      btn.textContent = 'Approve';
+    }
+  }
+
+  async function rejectSellerApplication(appId, btn) {
+    const reason = prompt('Enter rejection reason (required):');
+    if (!reason || !reason.trim()) { showToast('Rejection cancelled — reason is required'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Rejecting...';
+    try {
+      const { error } = await supabaseClient
+        .from('seller_applications')
+        .update({ status: 'rejected', rejection_reason: reason.trim() })
+        .eq('id', appId);
+      if (error) {
+        showToast('Reject failed: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Reject';
+        return;
+      }
+      showToast('Application rejected');
+      await fetchSellerApplications();
+    } catch (e) {
+      console.warn('rejectSellerApplication failed', e);
+      showToast('Reject failed');
+      btn.disabled = false;
+      btn.textContent = 'Reject';
+    }
+  }
+
+  document.getElementById('refreshApplicationsBtn').addEventListener('click', fetchSellerApplications);
+  /* ------------------ end Seller Applications ------------------ */
 
   // initial load: fetch categories then products
   await fetchCategories();

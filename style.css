@@ -1389,6 +1389,11 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:24px;border-r
 @media (max-width: 768px) {
   .hero .slide { height: auto !important; }
 }
+/* ── Hero: reduce footprint on laptop/desktop ── */
+@media (min-width: 1024px) {
+  .hero { max-height: 340px !important; overflow: hidden !important; }
+  .hero .slide { max-height: 340px !important; aspect-ratio: unset !important; min-height: unset !important; height: 340px !important; }
+}
 
 /* ── Category Bubbles Row ── */
 .cat-bubbles-row {
