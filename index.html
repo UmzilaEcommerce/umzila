@@ -208,6 +208,66 @@
         </div>
       </div>
       
+      <!-- CATEGORY BUBBLES -->
+      <div class="cat-bubbles-row" id="catBubblesRow">
+        <a class="cat-bubble" href="#hotSection">
+          <div class="cat-bubble-icon">🔥</div>
+          <div class="cat-bubble-label">Student Deals</div>
+        </a>
+        <a class="cat-bubble" href="#mysterySection">
+          <div class="cat-bubble-icon">🎁</div>
+          <div class="cat-bubble-label">Mystery Boxes</div>
+        </a>
+        <a class="cat-bubble" href="#trendingSection">
+          <div class="cat-bubble-icon">📈</div>
+          <div class="cat-bubble-label">Trending</div>
+        </a>
+        <a class="cat-bubble" href="#trendingSection">
+          <div class="cat-bubble-icon">👕</div>
+          <div class="cat-bubble-label">Streetwear</div>
+        </a>
+        <a class="cat-bubble" href="#bundlesSection">
+          <div class="cat-bubble-icon">📦</div>
+          <div class="cat-bubble-label">Bundles</div>
+        </a>
+        <a class="cat-bubble" href="#recSection">
+          <div class="cat-bubble-icon">⭐</div>
+          <div class="cat-bubble-label">For You</div>
+        </a>
+      </div>
+
+      <!-- FEATURED SHOPS -->
+      <section class="featured-shops-section fade-up" id="featuredShopsSection">
+        <h2>🧑‍🎨 Featured Shops <a href="#" class="see-all-shops" style="font-size:14px;color:var(--accent-2);margin-left:auto">See all</a></h2>
+        <div class="shops-hscroll" id="shopsScroll">
+          <div class="shop-card">
+            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop1/320/100')"></div>
+            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo1/60/60')"></div>
+            <div class="shop-card-name">Skhanda World</div>
+          </div>
+          <div class="shop-card">
+            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop2/320/100')"></div>
+            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo2/60/60')"></div>
+            <div class="shop-card-name">Campus Drip</div>
+          </div>
+          <div class="shop-card">
+            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop3/320/100')"></div>
+            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo3/60/60')"></div>
+            <div class="shop-card-name">Township Threads</div>
+          </div>
+          <div class="shop-card">
+            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop4/320/100')"></div>
+            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo4/60/60')"></div>
+            <div class="shop-card-name">Varsity Vault</div>
+          </div>
+          <div class="shop-card">
+            <div class="shop-card-banner" style="background-image:url('https://picsum.photos/seed/shop5/320/100')"></div>
+            <div class="shop-card-logo" style="background-image:url('https://picsum.photos/seed/logo5/60/60')"></div>
+            <div class="shop-card-name">Street Kulture</div>
+          </div>
+        </div>
+      </section>
+
       <!-- MOBILE FILTERS SECTION -->
       <div class="mobile-filters-container">
         <div class="mobile-filters-header">
@@ -284,6 +344,15 @@
         <h2> Hot Deals <a href="#" class="see-more" data-section="hot" style="font-size:14px;color:var(--accent-2)">See all →</a></h2>
         <div class="hscroll" id="hotGrid"></div>
       </section>
+
+      <!-- PROMO BANNER -->
+      <div class="promo-banner fade-up">
+        <div class="promo-banner-text">
+          <strong>New sellers joining every week</strong>
+          <span>— find your next favourite brand.</span>
+        </div>
+        <button class="promo-banner-cta" id="promoBannerSellBtn">Start Selling</button>
+      </div>
 
       <!-- Mystery Boxes (now scrollable like trending) -->
       <section class="fade-up" id="mysterySection">
@@ -368,6 +437,11 @@
             </div>
 
             <div>
+              <h4 style="margin-bottom:6px">Sell</h4>
+              <button id="sellOnUmzilaBtn" class="btn" style="background:var(--cta);border:none;cursor:pointer;font-size:13px;padding:8px 14px">Sell on Umzila</button>
+            </div>
+
+            <div>
               <h4 style="margin-bottom:6px">Follow</h4>
               <div class="socials">
                 <a href="#" aria-label="instagram">📸</a>
@@ -425,6 +499,53 @@
       <div><button id="panelClose" class="btn ghost">✕ Close</button></div>
     </div>
     <div id="panelContent" class="panel-grid"></div>
+  </div>
+
+  <!-- ===== SELL ON UMZILA MODAL ===== -->
+  <div id="sellModal" class="modal">
+    <div class="modal-card" style="max-width:500px">
+      <div class="modal-header">
+        <h3>Sell on Umzila</h3>
+        <button class="modal-close" id="sellModalClose">&times;</button>
+      </div>
+      <div class="modal-body" id="sellModalBody">
+        <div class="form-group">
+          <label for="sellFullName">Full Name</label>
+          <input type="text" id="sellFullName" placeholder="Your full name">
+          <div class="error-message" id="sellFullNameError">Please enter your full name.</div>
+        </div>
+        <div class="form-group">
+          <label for="sellEmail">Email</label>
+          <input type="email" id="sellEmail" placeholder="your@email.com">
+          <div class="error-message" id="sellEmailError">Please enter a valid email.</div>
+        </div>
+        <div class="form-group">
+          <label for="sellPhone">Phone Number</label>
+          <input type="tel" id="sellPhone" placeholder="+27 00 000 0000">
+          <div class="error-message" id="sellPhoneError">Please enter your phone number.</div>
+        </div>
+        <div class="form-group">
+          <label for="sellShopName">Shop Name</label>
+          <input type="text" id="sellShopName" placeholder="Your shop name">
+          <div class="error-message" id="sellShopNameError">Please enter your shop name.</div>
+        </div>
+        <div class="form-group">
+          <label for="sellPlanToSell">What do you plan to sell?</label>
+          <textarea id="sellPlanToSell" class="sell-textarea" placeholder="Describe what you plan to sell on Umzila..." rows="3"></textarea>
+          <div class="error-message" id="sellPlanToSellError">Please describe what you plan to sell.</div>
+        </div>
+        <div class="form-group">
+          <label for="sellInstagram">Instagram handle <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <input type="text" id="sellInstagram" placeholder="@yourhandle">
+        </div>
+        <div class="error-message" id="sellSubmitError"></div>
+        <div class="success-message" id="sellSubmitSuccess">Application submitted! We'll be in touch soon.</div>
+      </div>
+      <div class="modal-footer" id="sellModalFooter">
+        <button class="btn ghost" id="sellModalCancelBtn">Cancel</button>
+        <button class="btn" id="sellModalSubmitBtn">Submit Application</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== AUTH MODALS ===== -->
@@ -521,5 +642,173 @@
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <script src="script.js"></script>
+  <script>
+  (function() {
+    /* ── Smooth-scroll category bubbles ── */
+    document.querySelectorAll('.cat-bubble').forEach(function(a) {
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var target = document.querySelector(a.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    /* ── Sell on Umzila modal ── */
+    var SUPABASE_URL = 'https://ojwnjtcxbitwmtlsbjnx.supabase.co';
+    var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9qd25qdGN4Yml0d210bHNiam54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2MDMxNzksImV4cCI6MjA4MDE3OTE3OX0.OixLdTUF2ypuLbWs5S3QKwowJ-nGzpG8U7CE_Kic93o';
+
+    function openSellModal() {
+      document.getElementById('sellModal').classList.add('open');
+      document.getElementById('sellSubmitSuccess').style.display = 'none';
+      document.getElementById('sellSubmitError').style.display = 'none';
+    }
+    function closeSellModal() {
+      document.getElementById('sellModal').classList.remove('open');
+    }
+
+    var sellBtn = document.getElementById('sellOnUmzilaBtn');
+    var promoBannerBtn = document.getElementById('promoBannerSellBtn');
+    if (sellBtn) sellBtn.addEventListener('click', openSellModal);
+    if (promoBannerBtn) promoBannerBtn.addEventListener('click', openSellModal);
+    document.getElementById('sellModalClose').addEventListener('click', closeSellModal);
+    document.getElementById('sellModalCancelBtn').addEventListener('click', closeSellModal);
+    document.getElementById('sellModal').addEventListener('click', function(e) {
+      if (e.target === this) closeSellModal();
+    });
+
+    document.getElementById('sellModalSubmitBtn').addEventListener('click', async function() {
+      var fullName = document.getElementById('sellFullName').value.trim();
+      var email = document.getElementById('sellEmail').value.trim();
+      var phone = document.getElementById('sellPhone').value.trim();
+      var shopName = document.getElementById('sellShopName').value.trim();
+      var planToSell = document.getElementById('sellPlanToSell').value.trim();
+      var instagram = document.getElementById('sellInstagram').value.trim();
+
+      /* clear errors */
+      ['sellFullNameError','sellEmailError','sellPhoneError','sellShopNameError','sellPlanToSellError','sellSubmitError','sellSubmitSuccess'].forEach(function(id) {
+        document.getElementById(id).style.display = 'none';
+      });
+
+      var valid = true;
+      if (!fullName) { document.getElementById('sellFullNameError').style.display = 'block'; valid = false; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { document.getElementById('sellEmailError').style.display = 'block'; valid = false; }
+      if (!phone) { document.getElementById('sellPhoneError').style.display = 'block'; valid = false; }
+      if (!shopName) { document.getElementById('sellShopNameError').style.display = 'block'; valid = false; }
+      if (!planToSell) { document.getElementById('sellPlanToSellError').style.display = 'block'; valid = false; }
+      if (!valid) return;
+
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try {
+        var res = await fetch(SUPABASE_URL + '/rest/v1/seller_applications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON,
+            'Authorization': 'Bearer ' + SUPABASE_ANON,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            full_name: fullName,
+            email: email,
+            phone: phone,
+            shop_name: shopName,
+            plan_to_sell: planToSell,
+            instagram: instagram || null
+          })
+        });
+        if (!res.ok) throw new Error('Submission failed');
+        document.getElementById('sellSubmitSuccess').style.display = 'block';
+        document.getElementById('sellModalFooter').style.display = 'none';
+        ['sellFullName','sellEmail','sellPhone','sellShopName','sellPlanToSell','sellInstagram'].forEach(function(id) {
+          document.getElementById(id).value = '';
+        });
+      } catch(err) {
+        var errEl = document.getElementById('sellSubmitError');
+        errEl.textContent = 'Something went wrong. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Submit Application';
+      }
+    });
+
+    /* ── Inline See-more expand (override panel behaviour) ── */
+    document.addEventListener('DOMContentLoaded', function() {
+      var PAGE_SIZE = 8;
+      var sectionMap = {
+        hot:         { el: document.getElementById('hotSection') },
+        mystery:     { el: document.getElementById('mysterySection') },
+        trending:    { el: document.getElementById('trendingSection') },
+        bundles:     { el: document.getElementById('bundlesSection') },
+        recommended: { el: document.getElementById('recSection') }
+      };
+      var defaultLabels = {
+        hot: 'See all \u2192',
+        mystery: 'See more \u2192',
+        trending: 'See more \u2192',
+        bundles: 'See more \u2192',
+        recommended: 'Refresh \u2192'
+      };
+
+      function getProducts(sec) {
+        var all = (typeof state !== 'undefined' && state.products) ? state.products.slice() : [];
+        if (sec === 'hot')      return all.filter(function(p){ return (p.badge||'').toString().toLowerCase()==='hot' || p.price<200; });
+        if (sec === 'mystery')  return all.filter(function(p){ return p.category==='Mystery Boxes'; });
+        if (sec === 'trending') return all.slice().sort(function(a,b){ return (b.popularity||0)-(a.popularity||0); });
+        if (sec === 'bundles')  return all.filter(function(p){ return p.category==='Bundles'; });
+        return all;
+      }
+
+      document.querySelectorAll('.see-more').forEach(function(a) {
+        var clone = a.cloneNode(true);
+        a.parentNode.replaceChild(clone, a);
+
+        clone.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          var sec = clone.dataset.section;
+          var secEl = sectionMap[sec] && sectionMap[sec].el;
+          if (!secEl) return;
+
+          var existing = secEl.querySelector('.section-expand');
+          if (existing) {
+            var hidden = existing.style.display === 'none';
+            existing.style.display = hidden ? '' : 'none';
+            clone.textContent = hidden ? 'See less \u2191' : (defaultLabels[sec] || 'See more \u2192');
+            if (hidden && typeof attachProductListeners === 'function') attachProductListeners();
+            return;
+          }
+
+          var products = getProducts(sec);
+          var page = 1;
+          var expand = document.createElement('div');
+          expand.className = 'section-expand';
+
+          var grid = document.createElement('div');
+          grid.className = 'section-expand-grid';
+          expand.appendChild(grid);
+
+          var loadBtn = document.createElement('button');
+          loadBtn.className = 'load-more-btn';
+          loadBtn.textContent = 'Load more';
+          expand.appendChild(loadBtn);
+
+          function render() {
+            grid.innerHTML = products.slice(0, page * PAGE_SIZE).map(function(p){ return makeCardHTML(p); }).join('');
+            loadBtn.style.display = (page * PAGE_SIZE >= products.length) ? 'none' : '';
+            if (typeof attachProductListeners === 'function') attachProductListeners();
+          }
+
+          loadBtn.addEventListener('click', function() { page++; render(); });
+          render();
+          secEl.appendChild(expand);
+          clone.textContent = 'See less \u2191';
+        });
+      });
+    });
+  })();
+  </script>
 </body>
 </html>
