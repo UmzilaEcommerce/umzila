@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Seller Dashboard — Umzila</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <style>
+    /* ── CSS Variables (mirrors style.css) ── */
+    :root {
+      --bg:       #f7f7f9;
+      --card:     #ffffff;
+      --muted:    #6b6b74;
+      --accent:   #0a2f66;
+      --accent-2: #00a0ff;
+      --cta:      #ff6b2c;
+      --success:  #28a745;
+      --error:    #dc3545;
+      --shadow:   0 6px 18px rgba(11,13,20,0.08);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: #111; font-family: Inter,"Segoe UI",Roboto,system-ui,sans-serif; }
+    body { overflow-x: hidden; }
+    a { color: inherit; text-decoration: none; }
+    img { display: block; max-width: 100%; }
+    button, input, select, textarea { font-family: inherit; }
+
+    /* ── Top Bar ── */
+    .topbar {
+      background: var(--accent);
+      color: #fff;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: var(--shadow);
+    }
+    .topbar-logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
+    .topbar-logo img { height: 36px; border-radius: 6px; }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-seller-name { font-size: 13px; opacity: 0.85; }
+    .topbar-logout { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .topbar-logout:hover { background: rgba(255,255,255,0.25); }
+
+    /* ── Container ── */
+    .page-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+
+    /* ── Cards / Panels ── */
+    .panel { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 28px 24px; margin-bottom: 20px; }
+    .panel-title { font-size: 20px; font-weight: 800; color: var(--accent); margin-bottom: 20px; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+    .form-label .opt { font-weight: 400; color: var(--muted); }
+    .form-control {
+      width: 100%; padding: 11px 14px;
+      border: 1px solid #dde1ea; border-radius: 9px;
+      font-size: 14px; background: #fff;
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10,47,102,0.08); }
+    textarea.form-control { resize: vertical; min-height: 80px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* ── Buttons ── */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: 999px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn.primary  { background: var(--accent); color: #fff; }
+    .btn.success  { background: var(--success); color: #fff; }
+    .btn.cta      { background: var(--cta); color: #fff; }
+    .btn.ghost    { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+    .btn.danger   { background: var(--error); color: #fff; }
+    .btn.sm       { padding: 6px 14px; font-size: 12px; }
+    .btn-row      { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+    /* ── State messages ── */
+    .msg { padding: 12px 16px; border-radius: 9px; font-size: 14px; margin-top: 10px; display: none; }
+    .msg.error   { background: rgba(220,53,69,0.1);  color: var(--error);   border: 1px solid var(--error);   display: block; }
+    .msg.success { background: rgba(40,167,69,0.1);  color: var(--success); border: 1px solid var(--success); display: block; }
+    .msg.info    { background: rgba(0,160,255,0.08); color: var(--accent);  border: 1px solid var(--accent-2); display: block; }
+
+    /* ── Loading spinner ── */
+    .spinner-wrap { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .spinner { width: 36px; height: 36px; border: 4px solid #eee; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Login page ── */
+    .login-wrap { max-width: 400px; margin: 60px auto 0; }
+    .login-wrap .panel-title { text-align: center; }
+    .login-subtitle { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .login-footer-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--muted); }
+    .login-footer-link a { color: var(--accent-2); font-weight: 600; }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      display: flex; gap: 0; background: var(--card);
+      border-radius: 12px; box-shadow: var(--shadow);
+      overflow-x: auto; scrollbar-width: none; margin-bottom: 20px;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      flex: 1; min-width: 100px; padding: 14px 10px;
+      background: none; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      border-bottom: 3px solid transparent;
+      white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--accent-2); }
+
+    /* ── Setup shop ── */
+    .setup-wrap { max-width: 560px; margin: 0 auto; }
+
+    /* ── Product list ── */
+    .product-list { display: flex; flex-direction: column; gap: 12px; }
+    .product-row {
+      display: flex; gap: 14px; align-items: center;
+      padding: 12px 14px; background: #f9f9fb;
+      border-radius: 10px; border: 1px solid #ebebf0;
+    }
+    .product-row-img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #eee; }
+    .product-row-info { flex: 1; min-width: 0; }
+    .product-row-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .product-row-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .product-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .status-badge.pending  { background: #fff3cd; color: #856404; }
+    .status-badge.approved { background: #d1f0da; color: #155724; }
+    .status-badge.rejected { background: #f8d7da; color: #721c24; }
+
+    /* ── Add / Edit product form ── */
+    .product-form-wrap { background: #f2f4f8; border-radius: 12px; padding: 20px; margin-top: 14px; }
+    .product-form-title { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 16px; }
+    .sizes-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .size-chip { padding: 6px 14px; border-radius: 999px; border: 1.5px solid #dde1ea; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .size-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Orders table ── */
+    .orders-list { display: flex; flex-direction: column; gap: 10px; }
+    .order-row {
+      padding: 14px 16px; background: #f9f9fb;
+      border-radius: 10px; border: 1px solid #ebebf0;
+    }
+    .order-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .order-row-id { font-size: 12px; color: var(--muted); }
+    .order-row-date { font-size: 12px; color: var(--muted); }
+    .order-items-list { display: flex; flex-direction: column; gap: 4px; }
+    .order-item-line { font-size: 13px; display: flex; justify-content: space-between; }
+    .order-buyer { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Analytics cards ── */
+    .analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    @media (min-width: 600px) { .analytics-grid { grid-template-columns: repeat(4, 1fr); } }
+    .stat-card { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: #fff; border-radius: 12px; padding: 20px 16px; text-align: center; }
+    .stat-card.alt { background: linear-gradient(135deg, var(--cta) 0%, #ff9f5b 100%); }
+    .stat-value { font-size: 28px; font-weight: 800; line-height: 1; }
+    .stat-label { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid #eee; margin: 18px 0; }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state-icon { font-size: 40px; margin-bottom: 10px; }
+
+    /* ── Toast ── */
+    #sdToast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #fff; padding: 10px 22px;
+      border-radius: 999px; font-size: 14px; font-weight: 600;
+      z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none;
+    }
+    #sdToast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-logo">
+      <a href="index.html"><img src="umzila.webp" alt="Umzila"></a>
+      Seller Dashboard
+    </div>
+    <div class="topbar-right" id="topbarRight" style="display:none">
+      <span class="topbar-seller-name" id="topbarShopName"></span>
+      <button class="topbar-logout" id="logoutBtn">Log out</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STATE: Loading
+  ════════════════════════════════════════════ -->
+  <div class="page-wrap" id="stateLoading">
+    <div class="spinner-wrap"><div class="spinner"></div><div>Loading...</div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STATE: Login
+  ════════════════════════════════════════════ -->
+  <div class="page-wrap" id="stateLogin" style="display:none">
+    <div class="login-wrap">
+      <div class="panel">
+        <div class="panel-title">🏪 Seller Login</div>
+        <p class="login-subtitle">Sign in to manage your Umzila shop.</p>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="loginEmail" class="form-control" placeholder="you@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="loginPassword" class="form-control" placeholder="Your password">
+        </div>
+        <div id="loginMsg" class="msg"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="loginSubmitBtn" style="width:100%">Sign In</button>
+        </div>
+        <div class="login-footer-link">
+          Don't have a seller account? <a href="index.html">Apply on Umzila</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STATE: Setup Shop
+  ════════════════════════════════════════════ -->
+  <div class="page-wrap" id="stateSetup" style="display:none">
+    <div class="setup-wrap">
+      <div class="panel">
+        <div class="panel-title">🛍️ Set Up Your Shop</div>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:22px">Welcome! Fill in your shop details to get started.</p>
+
+        <div class="form-group">
+          <label class="form-label">Shop Name <span style="color:var(--error)">*</span></label>
+          <input type="text" id="setupShopName" class="form-control" placeholder="e.g. Skhanda World">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="setupDesc" class="form-control" placeholder="Tell buyers about your shop..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Logo URL <span class="opt">(optional)</span></label>
+            <input type="url" id="setupLogo" class="form-control" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Banner URL <span class="opt">(optional)</span></label>
+            <input type="url" id="setupBanner" class="form-control" placeholder="https://...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp Number <span class="opt">(optional)</span></label>
+          <input type="tel" id="setupWhatsApp" class="form-control" placeholder="+27 82 000 0000">
+        </div>
+        <div id="setupMsg" class="msg"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="setupSubmitBtn">Create My Shop →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       STATE: Dashboard
+  ════════════════════════════════════════════ -->
+  <div class="page-wrap" id="stateDashboard" style="display:none">
+
+    <!-- Tab nav -->
+    <nav class="tab-nav" role="tablist">
+      <button class="tab-btn active" data-tab="shop"     role="tab">🏪 My Shop</button>
+      <button class="tab-btn"        data-tab="products" role="tab">📦 Products</button>
+      <button class="tab-btn"        data-tab="orders"   role="tab">🧾 Orders</button>
+      <button class="tab-btn"        data-tab="analytics"role="tab">📊 Analytics</button>
+    </nav>
+
+    <!-- ── TAB 1: My Shop ── -->
+    <div id="tabShop" class="tab-panel">
+      <div class="panel">
+        <div class="panel-title">My Shop Details</div>
+        <div class="form-group">
+          <label class="form-label">Shop Name <span style="color:var(--error)">*</span></label>
+          <input type="text" id="editShopName" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="editDesc" class="form-control"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Logo URL</label>
+            <input type="url" id="editLogo" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Banner URL</label>
+            <input type="url" id="editBanner" class="form-control">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp Number</label>
+          <input type="tel" id="editWhatsApp" class="form-control">
+        </div>
+        <div id="shopSaveMsg" class="msg"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="saveShopBtn">Save Changes</button>
+          <a class="btn ghost" id="viewShopLink" href="#" target="_blank">View My Shop ↗</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB 2: My Products ── -->
+    <div id="tabProducts" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+          <div class="panel-title" style="margin-bottom:0">My Products</div>
+          <button class="btn cta" id="addProductToggleBtn">+ Add Product</button>
+        </div>
+
+        <!-- Add product form (hidden by default) -->
+        <div id="addProductForm" class="product-form-wrap" style="display:none">
+          <div class="product-form-title">New Product</div>
+          <div class="form-group">
+            <label class="form-label">Product Name <span style="color:var(--error)">*</span></label>
+            <input type="text" id="newProdName" class="form-control" placeholder="e.g. Oversized Hoodie">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="newProdDesc" class="form-control" placeholder="Describe the product..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Price (ZAR) <span style="color:var(--error)">*</span></label>
+              <input type="number" id="newProdPrice" class="form-control" placeholder="299" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Stock</label>
+              <input type="number" id="newProdStock" class="form-control" placeholder="10" min="0">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select id="newProdCategory" class="form-control">
+                <option value="All">All</option>
+                <option value="Streetwear">Streetwear</option>
+                <option value="Hoodies">Hoodies</option>
+                <option value="T-Shirts">T-Shirts</option>
+                <option value="Accessories">Accessories</option>
+                <option value="Mystery Boxes">Mystery Boxes</option>
+                <option value="Bundles">Bundles</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Badge <span class="opt">(optional)</span></label>
+              <select id="newProdBadge" class="form-control">
+                <option value="">None</option>
+                <option value="New">New</option>
+                <option value="Hot">Hot</option>
+                <option value="Sale">Sale</option>
+                <option value="Limited">Limited</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Image URL <span class="opt">(optional)</span></label>
+            <input type="url" id="newProdImage" class="form-control" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Available Sizes</label>
+            <div class="sizes-grid" id="newProdSizes">
+              <span class="size-chip" data-size="XS">XS</span>
+              <span class="size-chip selected" data-size="S">S</span>
+              <span class="size-chip selected" data-size="M">M</span>
+              <span class="size-chip selected" data-size="L">L</span>
+              <span class="size-chip selected" data-size="XL">XL</span>
+              <span class="size-chip" data-size="2XL">2XL</span>
+              <span class="size-chip" data-size="One Size">One Size</span>
+            </div>
+          </div>
+          <div id="addProdMsg" class="msg"></div>
+          <div class="btn-row">
+            <button class="btn success" id="submitProductBtn">Submit for Review</button>
+            <button class="btn ghost" id="cancelAddProductBtn">Cancel</button>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- Product list -->
+        <div id="productListWrap">
+          <div class="spinner-wrap" id="prodListLoading"><div class="spinner"></div></div>
+          <div class="product-list" id="productList"></div>
+          <div class="empty-state" id="prodEmpty" style="display:none">
+            <div class="empty-state-icon">📦</div>
+            <div>No products yet. Add your first product above.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Edit product form (inline, hidden) -->
+      <div class="panel" id="editProductPanel" style="display:none">
+        <div class="product-form-title">Edit Product</div>
+        <input type="hidden" id="editProdId">
+        <div class="form-group">
+          <label class="form-label">Product Name</label>
+          <input type="text" id="editProdName" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <textarea id="editProdDesc" class="form-control"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Price (ZAR)</label>
+            <input type="number" id="editProdPrice" class="form-control" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stock</label>
+            <input type="number" id="editProdStock" class="form-control" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select id="editProdCategory" class="form-control">
+              <option value="All">All</option>
+              <option value="Streetwear">Streetwear</option>
+              <option value="Hoodies">Hoodies</option>
+              <option value="T-Shirts">T-Shirts</option>
+              <option value="Accessories">Accessories</option>
+              <option value="Mystery Boxes">Mystery Boxes</option>
+              <option value="Bundles">Bundles</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Badge</label>
+            <select id="editProdBadge" class="form-control">
+              <option value="">None</option>
+              <option value="New">New</option>
+              <option value="Hot">Hot</option>
+              <option value="Sale">Sale</option>
+              <option value="Limited">Limited</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Image URL</label>
+          <input type="url" id="editProdImage" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Available Sizes</label>
+          <div class="sizes-grid" id="editProdSizes">
+            <span class="size-chip" data-size="XS">XS</span>
+            <span class="size-chip" data-size="S">S</span>
+            <span class="size-chip" data-size="M">M</span>
+            <span class="size-chip" data-size="L">L</span>
+            <span class="size-chip" data-size="XL">XL</span>
+            <span class="size-chip" data-size="2XL">2XL</span>
+            <span class="size-chip" data-size="One Size">One Size</span>
+          </div>
+        </div>
+        <div id="editProdMsg" class="msg"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="saveEditProdBtn">Save Changes</button>
+          <button class="btn ghost"   id="cancelEditProdBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB 3: Orders ── -->
+    <div id="tabOrders" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Orders</div>
+        <div class="spinner-wrap" id="ordersLoading"><div class="spinner"></div></div>
+        <div class="orders-list" id="ordersList"></div>
+        <div class="empty-state" id="ordersEmpty" style="display:none">
+          <div class="empty-state-icon">🧾</div>
+          <div>No orders yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB 4: Analytics ── -->
+    <div id="tabAnalytics" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Analytics</div>
+        <div class="analytics-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="statProducts">—</div>
+            <div class="stat-label">Products Listed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statOrders">—</div>
+            <div class="stat-label">Total Orders</div>
+          </div>
+          <div class="stat-card alt">
+            <div class="stat-value" id="statRevenue">—</div>
+            <div class="stat-label">Revenue (ZAR)</div>
+          </div>
+          <div class="stat-card alt">
+            <div class="stat-value" id="statPending">—</div>
+            <div class="stat-label">Pending Review</div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div style="font-size:13px;color:var(--muted)">
+          Revenue is calculated from paid orders containing your products. Analytics update each time you visit this tab.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /stateDashboard -->
+
+  <!-- Toast -->
+  <div id="sdToast"></div>
+
+  <!-- ═══════════════════════════════════════════
+       INLINE SCRIPT
+  ════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    'use strict';
+
+    /* ─────────────────────────────────────────
+       Supabase init — same pattern as script.js
+    ───────────────────────────────────────── */
+    (async function initSupabaseClient() {
+      try {
+        var res = await fetch('/.netlify/functions/get-client-config');
+        if (!res.ok) { console.error('Supabase config fetch failed', res.status); showState('login'); return; }
+        var cfg = await res.json();
+        var url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.supabase_url || '';
+        var key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.supabase_anon_key || '';
+        if (!url || !key) { console.error('Missing Supabase config'); showState('login'); return; }
+        var client = supabase.createClient(url, key);
+        window.supabase = client;
+        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } }));
+      } catch (err) { console.error('Supabase init error', err); showState('login'); }
+    })();
+
+    /* ─────────────────────────────────────────
+       Global state
+    ───────────────────────────────────────── */
+    var SD = {
+      sb:        null,   // supabase client
+      user:      null,   // auth user
+      seller:    null,   // sellers row
+      products:  [],     // seller's products
+      orders:    []      // seller-related orders
+    };
+
+    /* ─────────────────────────────────────────
+       UI helpers
+    ───────────────────────────────────────── */
+    function showState(name) {
+      ['loading','login','setup','dashboard'].forEach(function(s) {
+        var el = document.getElementById('state' + s.charAt(0).toUpperCase() + s.slice(1));
+        if (el) el.style.display = (s === name) ? '' : 'none';
+      });
+      var tr = document.getElementById('topbarRight');
+      if (tr) tr.style.display = (name === 'dashboard') ? '' : 'none';
+    }
+
+    function toast(msg) {
+      var t = document.getElementById('sdToast');
+      t.textContent = msg; t.classList.add('show');
+      setTimeout(function() { t.classList.remove('show'); }, 2500);
+    }
+
+    function setMsg(id, text, type) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent  = text;
+      el.className    = 'msg ' + (type || 'error');
+      el.style.display = text ? 'block' : 'none';
+    }
+
+    function setBtnLoading(id, loading, label) {
+      var btn = document.getElementById(id);
+      if (!btn) return;
+      btn.disabled     = loading;
+      btn.textContent  = loading ? '...' : label;
+    }
+
+    function fmt(n) { return 'R' + Number(n || 0).toFixed(2); }
+
+    function formatDate(str) {
+      if (!str) return '—';
+      return new Date(str).toLocaleDateString('en-ZA', { day:'2-digit', month:'short', year:'numeric' });
+    }
+
+    /* ─────────────────────────────────────────
+       Size chips
+    ───────────────────────────────────────── */
+    function bindSizeChips(containerId) {
+      document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+          chip.classList.toggle('selected');
+        });
+      });
+    }
+
+    function getSelectedSizes(containerId) {
+      var sizes = [];
+      document.querySelectorAll('#' + containerId + ' .size-chip.selected').forEach(function(c) {
+        sizes.push(c.dataset.size);
+      });
+      return sizes;
+    }
+
+    function setSelectedSizes(containerId, sizes) {
+      document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(c) {
+        c.classList.toggle('selected', sizes.includes(c.dataset.size));
+      });
+    }
+
+    /* ─────────────────────────────────────────
+       Product status helper
+    ───────────────────────────────────────── */
+    function getProductStatus(p) {
+      var rs = p.metadata && p.metadata.review_status;
+      if (rs) return rs;
+      return p.visible ? 'approved' : 'pending_review';
+    }
+
+    function statusBadgeHtml(status) {
+      var map = {
+        pending_review: ['pending',  'Pending Review'],
+        approved:       ['approved', 'Approved'],
+        rejected:       ['rejected', 'Rejected']
+      };
+      var s = map[status] || ['pending', status];
+      return '<span class="status-badge ' + s[0] + '">' + s[1] + '</span>';
+    }
+
+    /* ─────────────────────────────────────────
+       Tab switching
+    ───────────────────────────────────────── */
+    function switchTab(name) {
+      document.querySelectorAll('.tab-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.tab === name);
+      });
+      document.querySelectorAll('.tab-panel').forEach(function(p) {
+        p.style.display = 'none';
+      });
+      var panel = document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1));
+      if (panel) panel.style.display = '';
+
+      if (name === 'products')  loadProducts();
+      if (name === 'orders')    loadOrders();
+      if (name === 'analytics') loadAnalytics();
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
+    });
+
+    /* ─────────────────────────────────────────
+       AUTH
+    ───────────────────────────────────────── */
+    async function checkAuth() {
+      var { data, error } = await SD.sb.auth.getSession();
+      var user = data && data.session && data.session.user;
+      if (!user) { showState('login'); return; }
+      SD.user = user;
+      await loadSellerRow();
+    }
+
+    async function loadSellerRow() {
+      var { data, error } = await SD.sb
+        .from('sellers')
+        .select('*')
+        .eq('user_id', SD.user.id)
+        .limit(1);
+
+      if (error || !data || !data.length) {
+        showState('setup');
+        return;
+      }
+      SD.seller = data[0];
+      showDashboard();
+    }
+
+    function showDashboard() {
+      var el = document.getElementById('topbarShopName');
+      if (el) el.textContent = SD.seller.shop_name;
+      // Update shop link
+      var link = document.getElementById('viewShopLink');
+      if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name);
+      // Populate My Shop tab
+      populateShopForm();
+      showState('dashboard');
+      switchTab('shop');
+    }
+
+    /* ── Login ── */
+    document.getElementById('loginSubmitBtn').addEventListener('click', async function() {
+      var email = document.getElementById('loginEmail').value.trim();
+      var pass  = document.getElementById('loginPassword').value;
+      setMsg('loginMsg', '');
+      if (!email || !pass) { setMsg('loginMsg', 'Please enter your email and password.'); return; }
+      setBtnLoading('loginSubmitBtn', true, 'Sign In');
+      var { data, error } = await SD.sb.auth.signInWithPassword({ email: email, password: pass });
+      setBtnLoading('loginSubmitBtn', false, 'Sign In');
+      if (error) { setMsg('loginMsg', error.message); return; }
+      SD.user = data.user;
+      await loadSellerRow();
+    });
+
+    /* ── Logout ── */
+    document.getElementById('logoutBtn').addEventListener('click', async function() {
+      await SD.sb.auth.signOut();
+      SD.user = SD.seller = null;
+      SD.products = SD.orders = [];
+      showState('login');
+    });
+
+    /* ─────────────────────────────────────────
+       SETUP SHOP
+    ───────────────────────────────────────── */
+    document.getElementById('setupSubmitBtn').addEventListener('click', async function() {
+      var shopName  = document.getElementById('setupShopName').value.trim();
+      var desc      = document.getElementById('setupDesc').value.trim();
+      var logo      = document.getElementById('setupLogo').value.trim();
+      var banner    = document.getElementById('setupBanner').value.trim();
+      var whatsapp  = document.getElementById('setupWhatsApp').value.trim();
+
+      setMsg('setupMsg', '');
+      if (!shopName) { setMsg('setupMsg', 'Shop name is required.'); return; }
+
+      setBtnLoading('setupSubmitBtn', true, 'Create My Shop →');
+      var { data, error } = await SD.sb.from('sellers').insert({
+        user_id:          SD.user.id,
+        shop_name:        shopName,
+        description:      desc     || null,
+        logo_url:         logo     || null,
+        banner_url:       banner   || null,
+        whatsapp_number:  whatsapp || null
+      }).select().single();
+
+      setBtnLoading('setupSubmitBtn', false, 'Create My Shop →');
+      if (error) { setMsg('setupMsg', error.message); return; }
+      SD.seller = data;
+      showDashboard();
+    });
+
+    /* ─────────────────────────────────────────
+       TAB 1 — MY SHOP
+    ───────────────────────────────────────── */
+    function populateShopForm() {
+      var s = SD.seller;
+      document.getElementById('editShopName').value  = s.shop_name        || '';
+      document.getElementById('editDesc').value      = s.description      || '';
+      document.getElementById('editLogo').value      = s.logo_url         || '';
+      document.getElementById('editBanner').value    = s.banner_url       || '';
+      document.getElementById('editWhatsApp').value  = s.whatsapp_number  || '';
+    }
+
+    document.getElementById('saveShopBtn').addEventListener('click', async function() {
+      var shopName  = document.getElementById('editShopName').value.trim();
+      setMsg('shopSaveMsg', '');
+      if (!shopName) { setMsg('shopSaveMsg', 'Shop name is required.'); return; }
+
+      setBtnLoading('saveShopBtn', true, 'Save Changes');
+      var { data, error } = await SD.sb.from('sellers').update({
+        shop_name:        shopName,
+        description:      document.getElementById('editDesc').value.trim()     || null,
+        logo_url:         document.getElementById('editLogo').value.trim()     || null,
+        banner_url:       document.getElementById('editBanner').value.trim()   || null,
+        whatsapp_number:  document.getElementById('editWhatsApp').value.trim() || null
+      }).eq('id', SD.seller.id).select().single();
+
+      setBtnLoading('saveShopBtn', false, 'Save Changes');
+      if (error) { setMsg('shopSaveMsg', error.message); return; }
+      SD.seller = data;
+      document.getElementById('topbarShopName').textContent = data.shop_name;
+      document.getElementById('viewShopLink').href = 'shop.html?shop=' + encodeURIComponent(data.shop_name);
+      setMsg('shopSaveMsg', 'Shop updated!', 'success');
+      toast('Shop saved ✓');
+    });
+
+    /* ─────────────────────────────────────────
+       TAB 2 — PRODUCTS
+    ───────────────────────────────────────── */
+    var productsLoaded = false;
+
+    async function loadProducts() {
+      if (productsLoaded) return;
+      document.getElementById('prodListLoading').style.display = '';
+      document.getElementById('prodEmpty').style.display = 'none';
+
+      var { data, error } = await SD.sb
+        .from('products')
+        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at')
+        .eq('seller_id', SD.seller.id)
+        .order('created_at', { ascending: false });
+
+      document.getElementById('prodListLoading').style.display = 'none';
+      if (error) { toast('Failed to load products: ' + error.message); return; }
+
+      SD.products = data || [];
+      productsLoaded = true;
+      renderProductList();
+    }
+
+    function renderProductList() {
+      var list = document.getElementById('productList');
+      var empty = document.getElementById('prodEmpty');
+      if (!SD.products.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+
+      list.innerHTML = SD.products.map(function(p) {
+        var img      = p.image || 'https://picsum.photos/seed/' + p.id + '/80/80';
+        var status   = getProductStatus(p);
+        var price    = p.sale && p.sale_price ? fmt(p.sale_price) : fmt(p.price);
+        return '<div class="product-row" data-id="' + p.id + '">' +
+          '<img class="product-row-img" src="' + img + '" alt="' + (p.name||'') + '" onerror="this.src=\'https://picsum.photos/seed/' + p.id + '/80/80\'">' +
+          '<div class="product-row-info">' +
+            '<div class="product-row-name">' + (p.name || 'Untitled') + '</div>' +
+            '<div class="product-row-meta">' + price + ' · ' + (p.category || '') + ' · ' + statusBadgeHtml(status) + '</div>' +
+          '</div>' +
+          '<div class="product-row-actions">' +
+            '<button class="btn ghost sm edit-prod-btn" data-id="' + p.id + '">Edit</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+      /* bind edit buttons */
+      document.querySelectorAll('.edit-prod-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { openEditProduct(btn.dataset.id); });
+      });
+    }
+
+    /* Add product */
+    document.getElementById('addProductToggleBtn').addEventListener('click', function() {
+      var form = document.getElementById('addProductForm');
+      var open = form.style.display !== 'none';
+      form.style.display = open ? 'none' : '';
+      this.textContent = open ? '+ Add Product' : '× Cancel';
+      if (!open) bindSizeChips('newProdSizes');
+    });
+
+    document.getElementById('cancelAddProductBtn').addEventListener('click', function() {
+      document.getElementById('addProductForm').style.display = 'none';
+      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
+    });
+
+    document.getElementById('submitProductBtn').addEventListener('click', async function() {
+      var name     = document.getElementById('newProdName').value.trim();
+      var desc     = document.getElementById('newProdDesc').value.trim();
+      var price    = parseFloat(document.getElementById('newProdPrice').value);
+      var stock    = parseInt(document.getElementById('newProdStock').value, 10) || 0;
+      var category = document.getElementById('newProdCategory').value;
+      var badge    = document.getElementById('newProdBadge').value;
+      var image    = document.getElementById('newProdImage').value.trim();
+      var sizes    = getSelectedSizes('newProdSizes');
+
+      setMsg('addProdMsg', '');
+      if (!name)        { setMsg('addProdMsg', 'Product name is required.');    return; }
+      if (isNaN(price)) { setMsg('addProdMsg', 'Please enter a valid price.');  return; }
+
+      setBtnLoading('submitProductBtn', true, 'Submit for Review');
+
+      var { data, error } = await SD.sb.from('products').insert({
+        seller_id:   SD.seller.id,
+        name:        name,
+        description: desc     || null,
+        price:       price,
+        stock:       stock,
+        category:    category,
+        badge:       badge    || null,
+        image:       image    || null,
+        sizes:       sizes.length ? sizes : ['S','M','L','XL'],
+        visible:     false,
+        metadata:    { review_status: 'pending_review' }
+      }).select().single();
+
+      setBtnLoading('submitProductBtn', false, 'Submit for Review');
+      if (error) { setMsg('addProdMsg', error.message); return; }
+
+      SD.products.unshift(data);
+      renderProductList();
+      document.getElementById('addProductForm').style.display = 'none';
+      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
+      /* reset form */
+      ['newProdName','newProdDesc','newProdPrice','newProdStock','newProdImage'].forEach(function(id) {
+        document.getElementById(id).value = '';
+      });
+      setMsg('addProdMsg', '', '');
+      toast('Product submitted for review ✓');
+    });
+
+    /* Edit product */
+    function openEditProduct(id) {
+      var p = SD.products.find(function(x) { return x.id === id; });
+      if (!p) return;
+      document.getElementById('editProdId').value       = p.id;
+      document.getElementById('editProdName').value     = p.name || '';
+      document.getElementById('editProdDesc').value     = p.description || '';
+      document.getElementById('editProdPrice').value    = p.price || '';
+      document.getElementById('editProdStock').value    = p.stock || '';
+      document.getElementById('editProdImage').value    = p.image || '';
+      document.getElementById('editProdCategory').value = p.category || 'All';
+      document.getElementById('editProdBadge').value    = p.badge || '';
+      setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
+      bindSizeChips('editProdSizes');
+      setMsg('editProdMsg', '');
+      var panel = document.getElementById('editProductPanel');
+      panel.style.display = '';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    document.getElementById('cancelEditProdBtn').addEventListener('click', function() {
+      document.getElementById('editProductPanel').style.display = 'none';
+    });
+
+    document.getElementById('saveEditProdBtn').addEventListener('click', async function() {
+      var id       = document.getElementById('editProdId').value;
+      var name     = document.getElementById('editProdName').value.trim();
+      var desc     = document.getElementById('editProdDesc').value.trim();
+      var price    = parseFloat(document.getElementById('editProdPrice').value);
+      var stock    = parseInt(document.getElementById('editProdStock').value, 10) || 0;
+      var category = document.getElementById('editProdCategory').value;
+      var badge    = document.getElementById('editProdBadge').value;
+      var image    = document.getElementById('editProdImage').value.trim();
+      var sizes    = getSelectedSizes('editProdSizes');
+
+      setMsg('editProdMsg', '');
+      if (!name)        { setMsg('editProdMsg', 'Product name is required.');   return; }
+      if (isNaN(price)) { setMsg('editProdMsg', 'Please enter a valid price.'); return; }
+
+      setBtnLoading('saveEditProdBtn', true, 'Save Changes');
+      var { data, error } = await SD.sb.from('products').update({
+        name:        name,
+        description: desc     || null,
+        price:       price,
+        stock:       stock,
+        category:    category,
+        badge:       badge    || null,
+        image:       image    || null,
+        sizes:       sizes.length ? sizes : ['S','M','L','XL']
+      }).eq('id', id).select().single();
+
+      setBtnLoading('saveEditProdBtn', false, 'Save Changes');
+      if (error) { setMsg('editProdMsg', error.message); return; }
+
+      /* update local cache */
+      var idx = SD.products.findIndex(function(x) { return x.id === id; });
+      if (idx > -1) SD.products[idx] = Object.assign(SD.products[idx], data);
+      renderProductList();
+      document.getElementById('editProductPanel').style.display = 'none';
+      toast('Product updated ✓');
+    });
+
+    /* ─────────────────────────────────────────
+       TAB 3 — ORDERS
+    ───────────────────────────────────────── */
+    var ordersLoaded = false;
+
+    async function loadOrders() {
+      if (ordersLoaded) return;
+      document.getElementById('ordersLoading').style.display = '';
+      document.getElementById('ordersEmpty').style.display = 'none';
+
+      /* Get seller's product IDs */
+      if (!SD.products.length) {
+        var { data: prodData } = await SD.sb
+          .from('products').select('id').eq('seller_id', SD.seller.id);
+        SD.products = prodData || [];
+      }
+      var myProductIds = SD.products.map(function(p) { return p.id; });
+
+      if (!myProductIds.length) {
+        document.getElementById('ordersLoading').style.display = 'none';
+        document.getElementById('ordersEmpty').style.display = '';
+        ordersLoaded = true;
+        return;
+      }
+
+      /* Fetch recent orders — RLS now allows sellers to read relevant orders */
+      var { data, error } = await SD.sb
+        .from('orders')
+        .select('id, order_number, created_at, order_status, customer_name, customer_email, items, total')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      document.getElementById('ordersLoading').style.display = 'none';
+
+      if (error) { toast('Failed to load orders: ' + error.message); return; }
+
+      /* Filter orders that contain at least one of seller's products */
+      var myOrders = (data || []).filter(function(order) {
+        var items = Array.isArray(order.items) ? order.items : [];
+        return items.some(function(item) { return myProductIds.includes(item.id); });
+      });
+
+      SD.orders   = myOrders;
+      ordersLoaded = true;
+      renderOrders(myOrders, myProductIds);
+    }
+
+    function renderOrders(orders, myProductIds) {
+      var list  = document.getElementById('ordersList');
+      var empty = document.getElementById('ordersEmpty');
+
+      if (!orders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+
+      list.innerHTML = orders.map(function(order) {
+        var items = (Array.isArray(order.items) ? order.items : [])
+          .filter(function(i) { return myProductIds.includes(i.id); });
+
+        var itemLines = items.map(function(i) {
+          return '<div class="order-item-line">' +
+            '<span>' + (i.title || 'Product') + ' × ' + (i.qty || 1) + ' (' + (i.size || '') + ')</span>' +
+            '<span>' + fmt((i.price || 0) * (i.qty || 1)) + '</span>' +
+          '</div>';
+        }).join('');
+
+        var statusColor = order.order_status === 'paid' ? 'var(--success)' : 'var(--muted)';
+
+        return '<div class="order-row">' +
+          '<div class="order-row-header">' +
+            '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
+            '<span style="font-size:12px;font-weight:700;color:' + statusColor + '">' + (order.order_status || 'unknown') + '</span>' +
+            '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
+          '</div>' +
+          '<div class="order-items-list">' + itemLines + '</div>' +
+          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_email ? ' · ' + order.customer_email : '') + '</div>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    /* ─────────────────────────────────────────
+       TAB 4 — ANALYTICS
+    ───────────────────────────────────────── */
+    async function loadAnalytics() {
+      /* Ensure products loaded */
+      if (!SD.products.length) {
+        var { data } = await SD.sb.from('products').select('id,visible,metadata').eq('seller_id', SD.seller.id);
+        SD.products = data || [];
+      }
+      var myProductIds = SD.products.map(function(p) { return p.id; });
+
+      var totalProducts = SD.products.length;
+      var pendingCount  = SD.products.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
+
+      /* Ensure orders loaded */
+      if (!SD.orders.length && myProductIds.length) {
+        var { data: ordData } = await SD.sb
+          .from('orders').select('id, items, order_status').order('created_at', { ascending: false }).limit(200);
+        SD.orders = (ordData || []).filter(function(o) {
+          return (Array.isArray(o.items) ? o.items : []).some(function(i) { return myProductIds.includes(i.id); });
+        });
+      }
+
+      var totalOrders  = SD.orders.length;
+      var totalRevenue = SD.orders.reduce(function(sum, order) {
+        var items = Array.isArray(order.items) ? order.items : [];
+        return sum + items.filter(function(i) { return myProductIds.includes(i.id); })
+          .reduce(function(s, i) { return s + (Number(i.price || 0) * Number(i.qty || 1)); }, 0);
+      }, 0);
+
+      document.getElementById('statProducts').textContent = totalProducts;
+      document.getElementById('statOrders').textContent   = totalOrders;
+      document.getElementById('statRevenue').textContent  = fmt(totalRevenue);
+      document.getElementById('statPending').textContent  = pendingCount;
+    }
+
+    /* ─────────────────────────────────────────
+       Entry point — wait for supabase-ready
+    ───────────────────────────────────────── */
+    document.addEventListener('supabase-ready', function(ev) {
+      SD.sb = ev.detail && ev.detail.supabase;
+      if (!SD.sb) { showState('login'); return; }
+      checkAuth();
+    });
+
+    /* Auth state change listener (handles session expiry / external sign-out) */
+    document.addEventListener('supabase-ready', function(ev) {
+      var sb = ev.detail && ev.detail.supabase;
+      if (!sb) return;
+      sb.auth.onAuthStateChange(function(event) {
+        if (event === 'SIGNED_OUT') {
+          SD.user = SD.seller = null;
+          showState('login');
+        }
+      });
+    });
+
+  })();
+  </script>
+
+</body>
+</html>

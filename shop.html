@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shop — Umzila</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <style>
+    /* ── Shop-specific styles ── */
+    .shop-page-main { max-width: 1200px; margin: 0 auto; padding: 0 18px 40px; }
+
+    /* Banner */
+    .shop-banner-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      max-height: 420px;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    }
+    .shop-banner-img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .shop-banner-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.10) 55%, transparent 100%);
+    }
+    /* Bottom-left seller info */
+    .shop-banner-info {
+      position: absolute;
+      bottom: 56px; left: 18px; right: 18px;
+      display: flex; align-items: flex-end; gap: 14px;
+      z-index: 2;
+    }
+    .shop-banner-logo {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #ddd;
+    }
+    .shop-banner-logo-placeholder {
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      background: var(--accent-2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+    .shop-banner-text { flex: 1; min-width: 0; }
+    .shop-banner-name {
+      font-size: 22px; font-weight: 800;
+      color: #fff; line-height: 1.2;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .shop-banner-desc {
+      font-size: 13px; color: rgba(255,255,255,0.85);
+      margin-top: 3px; line-height: 1.4;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* Banner action buttons */
+    .shop-banner-btns {
+      position: absolute; bottom: 14px; left: 18px; right: 18px;
+      display: flex; justify-content: space-between; gap: 10px;
+      z-index: 2;
+    }
+    .shop-banner-btn {
+      padding: 7px 16px; border-radius: 999px; border: none;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .shop-banner-btn:hover { opacity: 0.88; }
+    .shop-banner-btn.primary { background: var(--cta); color: #fff; }
+    .shop-banner-btn.ghost   { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.5); backdrop-filter: blur(4px); }
+
+    /* About toast */
+    .about-toast {
+      position: absolute; bottom: 52px; right: 18px;
+      background: rgba(0,0,0,0.88); color: #fff;
+      padding: 12px 16px; border-radius: 10px;
+      font-size: 13px; line-height: 1.5;
+      max-width: 280px; z-index: 10;
+      display: none; animation: fadeSlideUp 0.2s ease;
+    }
+    .about-toast.open { display: block; }
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* WhatsApp bar */
+    .shop-wa-bar {
+      padding: 12px 18px;
+      background: #fff;
+      border-bottom: 1px solid #f0f0f4;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .shop-wa-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 18px; border-radius: 999px;
+      background: #25D366; color: #fff;
+      font-weight: 700; font-size: 14px;
+      text-decoration: none; transition: opacity 0.15s;
+    }
+    .shop-wa-btn:hover { opacity: 0.88; }
+
+    /* Products section */
+    .shop-products-section { margin-top: 20px; }
+    .shop-products-section h2 {
+      font-size: 20px; font-weight: 800;
+      color: var(--accent); margin-bottom: 14px;
+    }
+    .shop-products-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      width: 100%;
+    }
+    @media (min-width: 600px) {
+      .shop-products-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 960px) {
+      .shop-products-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* State messages */
+    .shop-state {
+      text-align: center; padding: 60px 20px;
+      color: var(--muted); font-size: 16px;
+    }
+    .shop-state .shop-state-icon { font-size: 48px; margin-bottom: 12px; }
+    .shop-state a { color: var(--accent-2); }
+
+    /* Added-to-cart toast */
+    .cart-toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--accent); color: #fff;
+      padding: 10px 22px; border-radius: 999px;
+      font-size: 14px; font-weight: 600;
+      z-index: 9999; opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+    .cart-toast.show { opacity: 1; }
+
+    @media (max-width: 480px) {
+      .shop-banner-name { font-size: 17px; }
+      .shop-banner-desc { font-size: 12px; }
+      .shop-banner-info { bottom: 50px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       HEADER — exact copy from index.html
+  ════════════════════════════════════════════ -->
+  <header>
+    <div class="container header-inner" style="align-items:center">
+      <button class="mobile-menu-icon" id="mobileMenuIcon" style="display:none">☰</button>
+      <button id="leftHamburger" class="left-hamburger" aria-label="Toggle categories (left)" style="display:none">☰</button>
+      <div class="logo" aria-hidden="false">
+        <a href="index.html"><img id="logoImg" src="umzila.webp" alt="Umzila logo"></a>
+        <a class="about-link" href="about.html">About</a>
+      </div>
+      <div class="search-bar" style="margin-left:6px" id="mainSearchBar">
+        <input id="searchInput" class="search-input" placeholder="Search streetwear, hoodies, mystery boxes..." aria-label="Search products" />
+        <button id="searchClear" class="search-clear" aria-label="Clear search">✕</button>
+        <div id="suggestions" class="search-suggestions" role="listbox"></div>
+        <button class="mobile-search-close" id="mobileSearchClose" style="display:none">✕</button>
+      </div>
+      <div class="header-right">
+        <button class="mobile-search-icon" id="mobileSearchIcon" aria-label="Search">🔍</button>
+        <button class="btn ghost" id="signBtn">Sign In / Sign Up</button>
+        <button id="profileBtnHeader" class="btn ghost" style="display:none;margin-left:6px">Profile</button>
+        <span id="orderUpdatesBadge" style="display:none;background:#ff6b2c;color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
+        <div class="cart" id="cartBtn" aria-haspopup="false">
+          🛒 <span class="cart-count" id="cartCount">0</span>
+        </div>
+        <button class="icon-btn sidebar-toggle" id="sidebarToggleBtn" title="Toggle categories" style="display:none">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Menu Overlay -->
+  <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobileMenu">
+    <div class="mobile-menu-header">
+      <h3>Menu</h3>
+      <button class="mobile-menu-close" id="mobileMenuClose">✕</button>
+    </div>
+    <div class="mobile-menu-nav">
+      <div class="mobile-menu-item"><a href="index.html">Shop</a></div>
+      <div class="mobile-menu-item"><a href="about.html">About</a></div>
+      <div class="mobile-menu-item"><a href="#" id="mobileSignIn">Sign In / Sign Up</a></div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SHOP BANNER (full-width, populated by JS)
+  ════════════════════════════════════════════ -->
+  <div id="shopBannerWrap" style="display:none">
+    <div class="shop-banner-wrap" id="shopBanner">
+      <img class="shop-banner-img" id="shopBannerImg" src="" alt="" style="display:none">
+      <div class="shop-banner-overlay"></div>
+      <div class="shop-banner-info">
+        <img class="shop-banner-logo" id="shopLogo" src="" alt="" style="display:none">
+        <div class="shop-banner-logo-placeholder" id="shopLogoPlaceholder" style="display:none"></div>
+        <div class="shop-banner-text">
+          <div class="shop-banner-name" id="shopBannerName"></div>
+          <div class="shop-banner-desc" id="shopBannerDesc"></div>
+        </div>
+      </div>
+      <div class="shop-banner-btns">
+        <button class="shop-banner-btn primary" id="viewItemsBtn">View Items</button>
+        <button class="shop-banner-btn ghost"   id="aboutBtn">About</button>
+      </div>
+      <div class="about-toast" id="aboutToast"></div>
+    </div>
+
+    <!-- WhatsApp bar -->
+    <div class="shop-wa-bar" id="shopWaBar" style="display:none">
+      <a class="shop-wa-btn" id="shopWaLink" href="#" target="_blank" rel="noopener noreferrer">
+        💬 Chat with seller
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       MAIN CONTENT
+  ════════════════════════════════════════════ -->
+  <div class="shop-page-main">
+
+    <!-- Loading state -->
+    <div class="shop-state" id="shopLoading">
+      <div class="shop-state-icon">⏳</div>
+      <div>Loading shop...</div>
+    </div>
+
+    <!-- Not found state -->
+    <div class="shop-state" id="shopNotFound" style="display:none">
+      <div class="shop-state-icon">🔍</div>
+      <div><strong>Shop not found.</strong></div>
+      <div style="margin-top:8px;font-size:14px">
+        <a href="index.html">← Back to Umzila</a>
+      </div>
+    </div>
+
+    <!-- Products section -->
+    <section class="shop-products-section" id="shopProductsSection" style="display:none">
+      <h2 id="shopProductsHeading">Products</h2>
+      <div class="shop-products-grid" id="shopProductsGrid"></div>
+      <div class="shop-state" id="shopNoProducts" style="display:none">
+        <div class="shop-state-icon">📦</div>
+        <div>No products listed yet.</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Added-to-cart toast -->
+  <div class="cart-toast" id="cartToast">Added to cart ✓</div>
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER — exact copy from index.html
+  ════════════════════════════════════════════ -->
+  <footer style="margin-top:18px;margin-left:18px;margin-right:18px">
+    <div class="footer-grid">
+      <div style="min-width:220px">
+        <img id="footerLogo" src="umzila.webp" alt="logo" style="margin-bottom:10px">
+        <p style="color:rgba(255,255,255,0.9)">Affordable, trendy streetwear for students & fashion lovers.</p>
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap">
+        <div>
+          <h4 style="margin-bottom:6px">Quick links</h4>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <a href="about.html">About</a>
+            <a href="#">Contact</a>
+            <a href="#">FAQ</a>
+            <a href="#">Returns &amp; Exchanges</a>
+          </div>
+        </div>
+        <div>
+          <h4 style="margin-bottom:6px">Payments</h4>
+          <div style="display:flex;gap:8px;align-items:center">
+            <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#3cc" rx="3"></rect></svg>
+            <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#111" rx="3"></rect></svg>
+            <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#f79" rx="3"></rect></svg>
+          </div>
+        </div>
+        <div>
+          <h4 style="margin-bottom:6px">Follow</h4>
+          <div class="socials">
+            <a href="#" aria-label="instagram">📸</a>
+            <a href="#" aria-label="tiktok">🎵</a>
+            <a href="#" aria-label="facebook">📘</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════
+       INLINE SCRIPT
+  ════════════════════════════════════════════ -->
+  <script>
+  (function () {
+    'use strict';
+
+    /* ─────────────────────────────────────────
+       1. Supabase init — same pattern as script.js
+    ───────────────────────────────────────── */
+    (async function initSupabaseClient() {
+      try {
+        const res = await fetch('/.netlify/functions/get-client-config');
+        if (!res.ok) { console.error('Failed to load Supabase config', res.status); return; }
+        const cfg = await res.json();
+        const supabaseUrl     = cfg.supabaseUrl     || cfg.SUPABASE_URL     || cfg.supabase_url     || '';
+        const supabaseAnonKey = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.supabase_anon_key || '';
+        if (!supabaseUrl || !supabaseAnonKey) { console.error('Missing Supabase config'); return; }
+        const client = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        window.supabase = client;
+        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } }));
+      } catch (err) { console.error('Supabase init error', err); }
+    })();
+
+    /* ─────────────────────────────────────────
+       2. Helpers
+    ───────────────────────────────────────── */
+    const fmt = n => 'R' + Number(n).toFixed(2);
+
+    function svgPlaceholder(text, w, h, bg, fg) {
+      w = w || 400; h = h || 300; bg = bg || '#ddd'; fg = fg || '#222';
+      var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='" + w + "' height='" + h + "' viewBox='0 0 " + w + " " + h + "'>" +
+        "<rect width='100%' height='100%' fill='" + bg + "' />" +
+        "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='" + fg + "' font-family='Arial' font-weight='700' font-size='" + Math.round(Math.min(w,h)/10) + "'>" + text + "</text>" +
+        "</svg>";
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    /* ─────────────────────────────────────────
+       3. Cart helpers (shared localStorage key with index.html)
+    ───────────────────────────────────────── */
+    function getCart()        { return JSON.parse(localStorage.getItem('ss_cart') || '[]'); }
+    function saveCart(cart)   { localStorage.setItem('ss_cart', JSON.stringify(cart)); }
+
+    function updateCartCount() {
+      var cart = getCart();
+      var total = cart.reduce(function(s, i) { return s + (i.qty || 1); }, 0);
+      var el = document.getElementById('cartCount');
+      if (el) el.textContent = total;
+    }
+
+    function addToCart(product, size, qty) {
+      var cart = getCart();
+      var existing = cart.find(function(i) { return i.id === product.id && i.size === size; });
+      if (existing) {
+        existing.qty = Math.min(existing.qty + qty, existing.stock || 99);
+      } else {
+        cart.push({
+          id:          product.id,
+          title:       product.title,
+          price:       product.displayPrice,
+          qty:         qty,
+          size:        size,
+          img:         product.primary_image || '',
+          stock:       product.stock || 0,
+          maxQuantity: product.stock || 0
+        });
+      }
+      saveCart(cart);
+      updateCartCount();
+      showCartToast();
+    }
+
+    function showCartToast() {
+      var t = document.getElementById('cartToast');
+      t.classList.add('show');
+      setTimeout(function() { t.classList.remove('show'); }, 2000);
+    }
+
+    /* ─────────────────────────────────────────
+       4. Product card renderer (mirrors index.html card)
+    ───────────────────────────────────────── */
+    function makeShopCard(p) {
+      var isOnSale    = p.sale || false;
+      var displayPrice = isOnSale ? (p.salePrice || p.price) : p.price;
+      p.displayPrice  = displayPrice;
+      var primaryImg  = p.primary_image || svgPlaceholder(p.title, 400, 300);
+      var secondaryImg = p.secondary_image || null;
+      var sizes = (p.size && p.size.length) ? p.size : ['S','M','L','XL'];
+      var stockLabel = p.stock > 0 ? p.stock + ' left' : 'Out of stock';
+
+      var sizeOpts = sizes.map(function(s) { return '<option>' + s + '</option>'; }).join('');
+      var badgeHtml = p.badge ? '<span class="badge' + (p.badge === 'Sale' ? ' sale' : '') + '">' + p.badge + '</span>' : '';
+      if (isOnSale && !p.badge) badgeHtml = '<span class="badge sale">Sale</span>';
+      var origHtml  = (isOnSale && p.price) ? '<span class="original">' + fmt(p.price) + '</span>' : '';
+      var secHtml   = secondaryImg ? '<img class="secondary" src="' + svgPlaceholder(p.title,400,300,'#f0f0f0','#999') + '" data-src="' + secondaryImg + '" loading="lazy" alt="' + p.title + ' back">' : '';
+
+      return '<div class="product-card shop-card-item" data-product=\'' + JSON.stringify({id:p.id,title:p.title,price:p.price,salePrice:p.salePrice||0,sale:p.sale||false,primary_image:primaryImg,stock:p.stock||0,displayPrice:displayPrice}).replace(/'/g,"&#39;") + '\'>' +
+        '<div class="product-media">' +
+          '<div class="badges">' + badgeHtml + '</div>' +
+          '<img src="' + svgPlaceholder(p.title,400,300,'#f0f0f0','#999') + '" data-src="' + primaryImg + '" loading="lazy" alt="' + p.title + '">' +
+          secHtml +
+        '</div>' +
+        '<div class="card-body">' +
+          '<div class="title">' + p.title + '</div>' +
+          '<div class="meta">' +
+            '<div style="font-size:13px">' + (p.color || '') + (p.color ? ' • ' : '') + stockLabel + '</div>' +
+            '<div class="price">' + origHtml + fmt(displayPrice) + '</div>' +
+          '</div>' +
+          '<div class="controls">' +
+            '<select class="size-select shop-size-sel">' + sizeOpts + '</select>' +
+            '<select class="qty shop-qty-sel"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>' +
+            '<button class="add-btn shop-add-btn"' + (p.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    /* ─────────────────────────────────────────
+       5. Attach card interactions
+    ───────────────────────────────────────── */
+    function attachCardListeners() {
+      document.querySelectorAll('.shop-card-item').forEach(function(card) {
+        if (card._shopBound) return;
+        card._shopBound = true;
+
+        /* lazy-load images */
+        card.querySelectorAll('img[data-src]').forEach(function(img) {
+          img.src = img.dataset.src;
+          img.removeAttribute('data-src');
+        });
+
+        /* add to cart */
+        var addBtn  = card.querySelector('.shop-add-btn');
+        var sizeEl  = card.querySelector('.shop-size-sel');
+        var qtyEl   = card.querySelector('.shop-qty-sel');
+        var rawData = card.dataset.product;
+        if (!addBtn || !rawData) return;
+        var product;
+        try { product = JSON.parse(rawData); } catch(e) { return; }
+
+        addBtn.addEventListener('click', function() {
+          var size = sizeEl ? sizeEl.value : 'M';
+          var qty  = qtyEl  ? parseInt(qtyEl.value, 10) : 1;
+          addToCart(product, size, qty);
+        });
+      });
+    }
+
+    /* ─────────────────────────────────────────
+       6. Map Supabase product row → card-ready object
+    ───────────────────────────────────────── */
+    function mapProduct(row) {
+      var images = [];
+      if (row.product_images && row.product_images.length) {
+        images = row.product_images.slice().sort(function(a,b){ return (a.image_order||0)-(b.image_order||0); }).map(function(i){ return i.url; });
+      } else if (row.image) {
+        images = [row.image];
+      } else {
+        var seed = encodeURIComponent((row.name||'product') + '_' + row.id);
+        images = ['https://picsum.photos/seed/' + seed + '/400/300', 'https://picsum.photos/seed/' + seed + '_back/400/300'];
+      }
+      var sizes = row.sizes && row.sizes.length ? row.sizes : ['S','M','L','XL'];
+      return {
+        id:             row.id,
+        title:          row.name || 'Product',
+        price:          Number(row.price) || 0,
+        sale:           row.sale || false,
+        salePrice:      Number(row.sale_price) || 0,
+        category:       row.category || 'All',
+        badge:          row.badge || (row.sale ? 'Sale' : ''),
+        stock:          row.stock || 0,
+        size:           sizes,
+        primary_image:  images[0] || null,
+        secondary_image:images[1] || null,
+        color:          (row.metadata && row.metadata.color) || ''
+      };
+    }
+
+    /* ─────────────────────────────────────────
+       7. UI state helpers
+    ───────────────────────────────────────── */
+    function showLoading()  { document.getElementById('shopLoading').style.display = ''; }
+    function hideLoading()  { document.getElementById('shopLoading').style.display = 'none'; }
+    function showNotFound() { document.getElementById('shopNotFound').style.display = ''; }
+
+    /* ─────────────────────────────────────────
+       8. Main data fetch (runs after supabase-ready)
+    ───────────────────────────────────────── */
+    async function loadShop(sb) {
+      var param = new URLSearchParams(window.location.search).get('shop');
+      if (!param) { hideLoading(); showNotFound(); return; }
+
+      /* decode in case it's URL-encoded */
+      var shopParam = decodeURIComponent(param);
+
+      /* fetch seller */
+      var sellerRes = await sb.from('sellers').select('*').ilike('shop_name', shopParam).limit(1);
+      if (sellerRes.error || !sellerRes.data || !sellerRes.data.length) {
+        hideLoading(); showNotFound(); return;
+      }
+      var seller = sellerRes.data[0];
+
+      /* update page title */
+      document.title = seller.shop_name + ' — Umzila';
+
+      /* ── Render banner ── */
+      var bannerWrap = document.getElementById('shopBannerWrap');
+      var bannerEl   = document.getElementById('shopBanner');
+      var bannerImg  = document.getElementById('shopBannerImg');
+
+      if (seller.banner_url) {
+        bannerImg.src = seller.banner_url;
+        bannerImg.style.display = '';
+      } else {
+        bannerEl.style.background = 'linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%)';
+      }
+
+      var logoImg  = document.getElementById('shopLogo');
+      var logoPlh  = document.getElementById('shopLogoPlaceholder');
+      if (seller.logo_url) {
+        logoImg.src = seller.logo_url;
+        logoImg.style.display = '';
+      } else {
+        logoPlh.textContent = (seller.shop_name || '?').charAt(0).toUpperCase();
+        logoPlh.style.display = '';
+      }
+
+      document.getElementById('shopBannerName').textContent = seller.shop_name;
+      document.getElementById('shopBannerDesc').textContent = seller.description || '';
+
+      /* About button */
+      var aboutToast = document.getElementById('aboutToast');
+      aboutToast.textContent = seller.description || 'No description available.';
+      document.getElementById('aboutBtn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        aboutToast.classList.toggle('open');
+      });
+      document.addEventListener('click', function() { aboutToast.classList.remove('open'); });
+
+      /* View Items button */
+      document.getElementById('viewItemsBtn').addEventListener('click', function() {
+        var sec = document.getElementById('shopProductsSection');
+        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+
+      /* WhatsApp */
+      if (seller.whatsapp_number) {
+        var waLink = document.getElementById('shopWaLink');
+        waLink.href = 'https://wa.me/' + seller.whatsapp_number.replace(/\D/g,'') + '?text=' + encodeURIComponent('Hi, I saw your shop on Umzila');
+        document.getElementById('shopWaBar').style.display = '';
+      }
+
+      bannerWrap.style.display = '';
+      hideLoading();
+
+      /* ── Fetch products ── */
+      var prodRes = await sb
+        .from('products')
+        .select('*, product_images!fk_product_images_product(*), sellers(shop_name, logo_url)')
+        .eq('seller_id', seller.id)
+        .eq('visible', true)
+        .order('created_at', { ascending: false });
+
+      var section = document.getElementById('shopProductsSection');
+      var grid    = document.getElementById('shopProductsGrid');
+      var noProds = document.getElementById('shopNoProducts');
+
+      section.style.display = '';
+
+      if (prodRes.error || !prodRes.data || !prodRes.data.length) {
+        noProds.style.display = '';
+        return;
+      }
+
+      var products = prodRes.data.map(mapProduct);
+      document.getElementById('shopProductsHeading').textContent = 'Products (' + products.length + ')';
+      grid.innerHTML = products.map(makeShopCard).join('');
+      attachCardListeners();
+    }
+
+    /* ─────────────────────────────────────────
+       9. Header interactions (mobile menu, cart, search)
+    ───────────────────────────────────────── */
+    document.addEventListener('DOMContentLoaded', function() {
+      updateCartCount();
+
+      /* Mobile menu toggle */
+      var mobileMenuIcon    = document.getElementById('mobileMenuIcon');
+      var mobileMenuClose   = document.getElementById('mobileMenuClose');
+      var mobileMenuOverlay = document.getElementById('mobileMenuOverlay');
+      var mobileMenu        = document.getElementById('mobileMenu');
+
+      function openMobileMenu()  { mobileMenu && mobileMenu.classList.add('active');    mobileMenuOverlay && mobileMenuOverlay.classList.add('active'); }
+      function closeMobileMenu() { mobileMenu && mobileMenu.classList.remove('active'); mobileMenuOverlay && mobileMenuOverlay.classList.remove('active'); }
+
+      if (mobileMenuIcon)    mobileMenuIcon.addEventListener('click', openMobileMenu);
+      if (mobileMenuClose)   mobileMenuClose.addEventListener('click', closeMobileMenu);
+      if (mobileMenuOverlay) mobileMenuOverlay.addEventListener('click', closeMobileMenu);
+
+      /* Show hamburger on mobile */
+      if (window.innerWidth <= 768) {
+        var mmi = document.getElementById('mobileMenuIcon');
+        if (mmi) mmi.style.display = 'block';
+      }
+
+      /* Cart → checkout */
+      var cartBtn = document.getElementById('cartBtn');
+      if (cartBtn) cartBtn.addEventListener('click', function() { window.location.href = 'checkout.html'; });
+
+      /* Sign In button */
+      var signBtn = document.getElementById('signBtn');
+      if (signBtn) signBtn.addEventListener('click', function() { window.location.href = 'index.html'; });
+
+      /* Search → redirect to index with query */
+      var searchInput = document.getElementById('searchInput');
+      var searchClear = document.getElementById('searchClear');
+      if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' && searchInput.value.trim()) {
+            window.location.href = 'index.html?q=' + encodeURIComponent(searchInput.value.trim());
+          }
+          searchClear && (searchClear.style.display = searchInput.value ? 'block' : 'none');
+        });
+        searchInput.addEventListener('input', function() {
+          searchClear && (searchClear.style.display = searchInput.value ? 'block' : 'none');
+        });
+      }
+      if (searchClear) searchClear.addEventListener('click', function() { searchInput.value = ''; searchClear.style.display = 'none'; });
+
+      /* Mobile search toggle */
+      var mobileSearchIcon  = document.getElementById('mobileSearchIcon');
+      var mobileSearchClose = document.getElementById('mobileSearchClose');
+      var mainSearchBar     = document.getElementById('mainSearchBar');
+      if (mobileSearchIcon) mobileSearchIcon.addEventListener('click', function() {
+        mainSearchBar && mainSearchBar.classList.add('mobile-active');
+        mobileSearchClose && (mobileSearchClose.style.display = 'block');
+      });
+      if (mobileSearchClose) mobileSearchClose.addEventListener('click', function() {
+        mainSearchBar && mainSearchBar.classList.remove('mobile-active');
+        mobileSearchClose.style.display = 'none';
+      });
+
+      /* Auth state display via supabase-ready */
+      document.addEventListener('supabase-ready', async function(ev) {
+        var sb = ev.detail && ev.detail.supabase;
+        if (!sb) return;
+        var session = await sb.auth.getSession();
+        var user = session && session.data && session.data.session && session.data.session.user;
+        if (user) {
+          var signBtnEl   = document.getElementById('signBtn');
+          var profileBtn  = document.getElementById('profileBtnHeader');
+          if (signBtnEl)  signBtnEl.style.display = 'none';
+          if (profileBtn) { profileBtn.style.display = ''; profileBtn.addEventListener('click', function() { window.location.href = 'index.html#profile'; }); }
+        }
+      });
+    });
+
+    /* ─────────────────────────────────────────
+       10. Kick off shop data load on supabase-ready
+    ───────────────────────────────────────── */
+    document.addEventListener('supabase-ready', function(ev) {
+      var sb = ev.detail && ev.detail.supabase;
+      if (sb) loadShop(sb);
+    });
+
+  })();
+  </script>
+
+</body>
+</html>
