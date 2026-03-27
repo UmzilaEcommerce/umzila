@@ -3,7 +3,14 @@
     "allow": [
       "mcp__supabase__list_tables",
       "mcp__supabase__execute_sql",
-      "mcp__supabase__list_projects"
+      "mcp__supabase__list_projects",
+      "Bash(grep -E \"\\\\.\\(html|js|css|json\\)$\")",
+      "Bash(git -C /c/Users/ntand/Downloads/umzila-remote log --oneline)",
+      "Bash(xargs ls:*)",
+      "Bash(git -C /c/Users/ntand/Downloads/umzila-remote show 4132369:netlify/functions/initiate-payfast.js)",
+      "Bash(grep -oE .from\\\\\\(''[^'']+''\\\\\\) /c/Users/ntand/Downloads/umzila-remote/script.js /c/Users/ntand/Downloads/umzila-remote/netlify/functions/*.js)",
+      "Bash(grep:*)",
+      "mcp__supabase__apply_migration"
     ]
   }
 }

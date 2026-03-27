@@ -438,12 +438,13 @@ section h2{display:flex;justify-content:space-between;align-items:center;font-si
 
 .product-card{background:var(--card);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(12,16,25,0.04);overflow:hidden;position:relative;transition:transform .18s,box-shadow .18s}
 .product-card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(12,16,25,0.07)}
-.product-media{position:relative;border-radius:8px;overflow:hidden;height:180px}
+.product-media{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:4/5;height:auto}
 
-/* Mobile product media */
+/* Mobile product media — keep aspect ratio, no fixed height */
 @media (max-width: 768px) {
   .product-media {
-    height: 160px;
+    aspect-ratio: 4/5;
+    height: auto;
   }
 }
 
@@ -1389,10 +1390,10 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:24px;border-r
 @media (max-width: 768px) {
   .hero .slide { height: auto !important; }
 }
-/* ── Hero: reduce footprint on laptop/desktop ── */
+/* ── Hero: desktop — keep 16:9, cap width so it doesn't dominate large screens ── */
 @media (min-width: 1024px) {
-  .hero { max-height: 340px !important; overflow: hidden !important; }
-  .hero .slide { max-height: 340px !important; aspect-ratio: unset !important; min-height: unset !important; height: 340px !important; }
+  .hero { max-width: 100%; }
+  .hero .slide { aspect-ratio: 16 / 9 !important; height: auto !important; max-height: none !important; }
 }
 
 /* ── Category Bubbles Row ── */

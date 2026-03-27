@@ -148,6 +148,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="analytics">Analytics</li>
           <li data-section="settings">Settings</li>
           <li data-section="seller-applications">Seller Applications</li>
+          <li data-section="product-reviews">Product Reviews</li>
           <li id="lsLogout">Logout</li>
         </ul>
       </div>
@@ -290,6 +291,17 @@ const supabaseClient = supabase.createClient(
         </div>
         <div id="sellerAppsWrap">
           <div style="color:var(--muted);padding:20px">Select this tab to load applications.</div>
+        </div>
+      </section>
+
+      <!-- Product Reviews -->
+      <section id="section-product-reviews" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="margin:0">Products Under Review</h3>
+          <button id="refreshProductReviewsBtn" class="small-btn">↻ Refresh</button>
+        </div>
+        <div id="productReviewsWrap">
+          <div style="color:var(--muted);padding:20px">Select this tab to load pending products.</div>
         </div>
       </section>
 
@@ -1119,7 +1131,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     manage: document.getElementById('section-manage'),
     analytics: document.getElementById('section-analytics'),
     settings: document.getElementById('section-settings'),
-    'seller-applications': document.getElementById('section-seller-applications')
+    'seller-applications': document.getElementById('section-seller-applications'),
+    'product-reviews': document.getElementById('section-product-reviews')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -1136,6 +1149,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   });
   // Lazy-load seller applications when that tab is first clicked
   document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
+
+  // Lazy-load product reviews when that tab is first clicked
+  document.querySelector('[data-section="product-reviews"]').addEventListener('click', fetchProductReviews);
+  document.getElementById('refreshProductReviewsBtn').addEventListener('click', fetchProductReviews);
 
   // Logout (top-right)
   document.getElementById('logoutBtn').addEventListener('click', ()=>{
@@ -1506,6 +1523,95 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   document.getElementById('refreshApplicationsBtn').addEventListener('click', fetchSellerApplications);
   /* ------------------ end Seller Applications ------------------ */
+
+  /* ------------------ Product Reviews ------------------ */
+  async function fetchProductReviews() {
+    const wrap = document.getElementById('productReviewsWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading...</div>';
+    if (!supabaseClient) { wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Supabase not ready.</div>'; return; }
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('id, name, price, category, image, metadata, seller_id, sellers(shop_name)')
+        .eq('visible', false)
+        .order('created_at', { ascending: false });
+      if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
+      const pending = (data || []).filter(p => {
+        const rs = p.metadata && p.metadata.review_status;
+        return rs === 'pending_review' || rs === 'pending';
+      });
+      renderProductReviews(pending);
+    } catch (e) {
+      console.warn('fetchProductReviews failed', e);
+      wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load products.</div>';
+    }
+  }
+
+  function renderProductReviews(products) {
+    const wrap = document.getElementById('productReviewsWrap');
+    if (!products.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);padding:20px">No products pending review.</div>';
+      return;
+    }
+    wrap.innerHTML = products.map(p => {
+      const sellerName = (p.sellers && p.sellers.shop_name) ? escapeHtml(p.sellers.shop_name) : '—';
+      const imgSrc = p.image || '';
+      const imgHtml = imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(p.name||'')}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:20px">📦</div>`;
+      return `
+        <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 4px 12px rgba(2,6,23,0.05);display:flex;gap:14px;align-items:flex-start">
+          ${imgHtml}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:15px;margin-bottom:2px">${escapeHtml(p.name||'Unnamed product')}</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Seller: ${sellerName} &bull; Category: ${escapeHtml(p.category||'—')} &bull; R${Number(p.price||0).toFixed(2)}</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="small-btn pr-approve-btn" data-id="${escapeHtml(String(p.id))}" style="background:#059669">Approve</button>
+              <button class="small-btn pr-reject-btn" data-id="${escapeHtml(String(p.id))}" style="background:#dc2626">Reject</button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    wrap.querySelectorAll('.pr-approve-btn').forEach(btn => {
+      btn.addEventListener('click', () => approveProductReview(btn.dataset.id, btn));
+    });
+    wrap.querySelectorAll('.pr-reject-btn').forEach(btn => {
+      btn.addEventListener('click', () => rejectProductReview(btn.dataset.id, btn));
+    });
+  }
+
+  async function approveProductReview(productId, btn) {
+    btn.disabled = true; btn.textContent = 'Approving...';
+    try {
+      const { error } = await supabaseClient
+        .from('products')
+        .update({ visible: true, metadata: { review_status: 'approved' } })
+        .eq('id', productId);
+      if (error) { showToast('Error: ' + error.message); btn.disabled=false; btn.textContent='Approve'; return; }
+      showToast('Product approved and now visible');
+      await fetchProductReviews();
+    } catch(e) {
+      showToast('Approve failed'); btn.disabled=false; btn.textContent='Approve';
+    }
+  }
+
+  async function rejectProductReview(productId, btn) {
+    const reason = prompt('Reason for rejection (required):');
+    if (!reason || !reason.trim()) { showToast('Rejection cancelled'); return; }
+    btn.disabled = true; btn.textContent = 'Rejecting...';
+    try {
+      const { error } = await supabaseClient
+        .from('products')
+        .update({ visible: false, metadata: { review_status: 'rejected', reject_reason: reason.trim() } })
+        .eq('id', productId);
+      if (error) { showToast('Error: ' + error.message); btn.disabled=false; btn.textContent='Reject'; return; }
+      showToast('Product rejected');
+      await fetchProductReviews();
+    } catch(e) {
+      showToast('Reject failed'); btn.disabled=false; btn.textContent='Reject';
+    }
+  }
+  /* ------------------ end Product Reviews ------------------ */
 
   // initial load: fetch categories then products
   await fetchCategories();

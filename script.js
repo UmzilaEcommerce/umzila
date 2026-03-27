@@ -773,7 +773,7 @@ let supabaseClient = null;
 document.addEventListener('supabase-ready', function(e) {
   supabaseClient = e.detail.supabase;
   console.log('Supabase client received via event');
-  
+
   // Now that Supabase is ready, load products and check auth state
   if (typeof loadProducts === 'function') {
     loadProducts();
@@ -783,6 +783,9 @@ document.addEventListener('supabase-ready', function(e) {
   }
   if (typeof loadFilterOptions === 'function') {
     loadFilterOptions();
+  }
+  if (typeof loadFeaturedShops === 'function') {
+    loadFeaturedShops();
   }
 });
 
@@ -967,7 +970,8 @@ async function loadProducts() {
       .from('products')
       .select(`
         *,
-        product_images!fk_product_images_product(*)
+        product_images!fk_product_images_product(*),
+        sellers(id, shop_name, logo_url, whatsapp_number)
       `)
       .order('created_at', { ascending: false });
     
@@ -1041,7 +1045,8 @@ async function loadProducts() {
         tags: tags,
         popularity: Number(row.popularity || 50),
         desc: row.description || '',
-        metadata: row.metadata || {}
+        metadata: row.metadata || {},
+        seller: row.sellers || null
       };
     });
     
@@ -2052,9 +2057,24 @@ function setupLazyLoading() {
 }
 
 /********************
+ * Media helpers
+ ********************/
+function isVideoUrl(url) {
+  if (!url) return false;
+  return /\.(mp4|webm|mov|ogg)(\?|$)/i.test(url);
+}
+
+function mediaTagForCard(url, title) {
+  if (isVideoUrl(url)) {
+    return `<video src="${url}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" aria-label="${title}"></video>`;
+  }
+  return `<img src="${svgPlaceholder(title,400,300,'#f0f0f0','#999')}" data-src="${url}" loading="lazy" alt="${title}" onerror="this.src='${svgPlaceholder(title,400,300)}'; this.removeAttribute('data-src')">`;
+}
+
+/********************
  * Rendering helpers (updated with lazy loading)
  ********************/
-function makeCardHTML(p){ 
+function makeCardHTML(p){
   // Check if product is on sale
   const isOnSale = p.sale || false;
   const salePrice = p.salePrice || 0;
@@ -2077,8 +2097,8 @@ function makeCardHTML(p){
         ${p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:''}
         ${isOnSale && !p.badge ? '<span class="badge sale">Sale</span>' : ''}
       </div>
-      <img src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${primaryImage}" loading="lazy" alt="${p.title}" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">
-      ${secondaryImage ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
+      ${mediaTagForCard(primaryImage, p.title)}
+      ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
       <div class="quick-add" data-id="${p.id}">+ Quick add</div>
     </div>
     <div class="card-body">
@@ -2301,8 +2321,11 @@ async function openProductModal(id) {
     const modalContent = document.getElementById('productModalContent');
     modalContent.innerHTML = `
       <div class="product-modal-images">
-        <div class="product-modal-main-image">
-          <img src="${images[0] || svgPlaceholder(currentModalProduct.title,400,300)}" alt="${currentModalProduct.title}" id="main-product-image" loading="lazy">
+        <div class="product-modal-main-image" id="main-product-image-wrap">
+          ${isVideoUrl(images[0])
+            ? `<video src="${images[0]}" autoplay muted loop playsinline id="main-product-image" style="width:100%;height:100%;object-fit:contain;border-radius:8px"></video>`
+            : `<img src="${images[0] || svgPlaceholder(currentModalProduct.title,400,300)}" alt="${currentModalProduct.title}" id="main-product-image" loading="lazy">`
+          }
         </div>
         <div class="product-modal-thumbnails">
           ${thumbnails}
@@ -2310,6 +2333,12 @@ async function openProductModal(id) {
       </div>
       <div class="product-modal-details">
         <h1 class="product-modal-title">${currentModalProduct.title}</h1>
+        ${currentModalProduct.seller ? `
+        <div class="product-modal-seller" style="display:flex;align-items:center;gap:10px;margin:6px 0 10px;flex-wrap:wrap">
+          <span style="font-size:13px;color:#6b7280">Sold by</span>
+          <a href="shop.html?shop=${encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${currentModalProduct.seller.shop_name} ↗</a>
+          ${currentModalProduct.seller.whatsapp_number ? `<a href="https://wa.me/${currentModalProduct.seller.whatsapp_number.replace(/\D/g,'')}?text=Hi%20I%20saw%20your%20product%20on%20Umzila" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#fff;background:#25D366;padding:5px 12px;border-radius:999px;text-decoration:none">💬 WhatsApp</a>` : ''}
+        </div>` : ''}
         <div class="product-modal-rating">
           <div class="stars" style="color: #ffd700; font-size: 16px;">
             ${'★'.repeat(5)}
@@ -2372,10 +2401,15 @@ function setupProductModalEvents(bundleProduct) {
   // Thumbnail click
   document.querySelectorAll('.product-thumbnail').forEach(thumb => {
     thumb.addEventListener('click', function() {
-      const imageUrl = this.dataset.image;
-      document.getElementById('main-product-image').src = imageUrl;
-      
-      // Update active thumbnail
+      const mediaUrl = this.dataset.image;
+      const wrap = document.getElementById('main-product-image-wrap');
+      if (wrap) {
+        if (isVideoUrl(mediaUrl)) {
+          wrap.innerHTML = `<video src="${mediaUrl}" autoplay muted loop playsinline id="main-product-image" style="width:100%;height:100%;object-fit:contain;border-radius:8px"></video>`;
+        } else {
+          wrap.innerHTML = `<img src="${mediaUrl}" alt="product" id="main-product-image" loading="lazy">`;
+        }
+      }
       document.querySelectorAll('.product-thumbnail').forEach(t => t.classList.remove('active'));
       this.classList.add('active');
     });
@@ -2553,22 +2587,54 @@ window.addEventListener('resize', ()=>{
 /********************
  * Full-screen "See more" panel
  ********************/
-function openSectionView(key){ 
-  panelContent.innerHTML=''; 
-  panelTitle.textContent = key.title||'Items'; 
-  let items=[]; 
-  if(key.type==='mystery') items=state.products.filter(p=>p.category==='Mystery Boxes'); 
-  else if(key.type==='hot') items=state.products.filter(p=> (p.badge||'').toString().toLowerCase()==='hot' || p.price<200); 
-  else if(key.type==='trending') items=state.products.slice().sort((a,b)=> (b.popularity||0)-(a.popularity||0)); 
-  else if(key.type==='bundles') items=state.products.filter(p=>p.category==='Bundles'); 
-  else if(key.type==='recommended') items = state.products.slice(); 
-  else items=state.products.slice(); 
-  items = items.slice(0,24); 
-  panelContent.className='panel-grid'; 
-  panelContent.innerHTML = items.map(p=>makeCardHTML(p)).join(''); 
-  sectionPanel.classList.add('open'); 
-  sectionPanel.setAttribute('aria-hidden','false'); 
-  attachProductListeners(); 
+function openSectionView(key){
+  panelContent.innerHTML='';
+  panelTitle.textContent = key.title||'Items';
+  let items=[];
+  if(key.type==='mystery') items=state.products.filter(p=>p.category==='Mystery Boxes');
+  else if(key.type==='hot') items=state.products.filter(p=> (p.badge||'').toString().toLowerCase()==='hot' || p.price<200);
+  else if(key.type==='trending') items=state.products.slice().sort((a,b)=> (b.popularity||0)-(a.popularity||0));
+  else if(key.type==='bundles') items=state.products.filter(p=>p.category==='Bundles');
+  else if(key.type==='recommended') items = state.products.slice();
+  else items=state.products.slice();
+
+  const BATCH = 24;
+  let rendered = 0;
+  panelContent.className='panel-grid';
+
+  function renderBatch() {
+    const batch = items.slice(rendered, rendered + BATCH);
+    if(!batch.length) return;
+    const frag = document.createDocumentFragment();
+    batch.forEach(p => {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = makeCardHTML(p);
+      while(tmp.firstChild) frag.appendChild(tmp.firstChild);
+    });
+    panelContent.appendChild(frag);
+    rendered += batch.length;
+    attachProductListeners();
+    if(rendered < items.length) observeSentinel();
+  }
+
+  let sentinelObserver = null;
+  function observeSentinel() {
+    const old = panelContent.querySelector('.section-sentinel');
+    if(old) old.remove();
+    if(sentinelObserver) sentinelObserver.disconnect();
+    const sentinel = document.createElement('div');
+    sentinel.className = 'section-sentinel';
+    sentinel.style.cssText = 'height:1px;width:100%;grid-column:1/-1';
+    panelContent.appendChild(sentinel);
+    sentinelObserver = new IntersectionObserver(entries => {
+      if(entries[0].isIntersecting){ sentinelObserver.disconnect(); renderBatch(); }
+    }, { rootMargin: '200px' });
+    sentinelObserver.observe(sentinel);
+  }
+
+  renderBatch();
+  sectionPanel.classList.add('open');
+  sectionPanel.setAttribute('aria-hidden','false');
 }
 
 document.querySelectorAll('.see-more').forEach(a=>a.addEventListener('click',e=>{ 
@@ -2589,6 +2655,48 @@ panelClose.addEventListener('click', ()=>{
   sectionPanel.setAttribute('aria-hidden','true'); 
   panelContent.innerHTML=''; 
 });
+
+/********************
+ * Featured Shops
+ ********************/
+async function loadFeaturedShops() {
+  if(!supabaseClient) return;
+  const shopsScroll = document.getElementById('shopsScroll');
+  const shopsSection = document.getElementById('featuredShopsSection');
+  const seeAllBtn = document.getElementById('seeAllShopsBtn');
+  if(!shopsScroll || !shopsSection) return;
+
+  try {
+    const { data: sellers, error } = await supabaseClient
+      .from('sellers')
+      .select('id, shop_name, description, logo_url')
+      .not('user_id', 'is', null)
+      .limit(20);
+    if(error || !sellers || !sellers.length) return;
+
+    shopsScroll.innerHTML = sellers.map(s => {
+      const initials = (s.shop_name||'S').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+      const logoHtml = s.logo_url
+        ? `<img src="${s.logo_url}" alt="${s.shop_name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+        : `<div style="width:100%;height:100%;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:18px">${initials}</div>`;
+      return `<a href="shop.html?shop=${encodeURIComponent(s.shop_name)}" class="shop-card" style="display:flex;flex-direction:column;align-items:center;gap:8px;text-decoration:none;flex-shrink:0;width:110px">
+        <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:2px solid #eaecf0;flex-shrink:0">${logoHtml}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--accent);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px">${s.shop_name}</div>
+        ${s.description ? `<div style="font-size:11px;color:var(--muted);text-align:center;line-height:1.3;max-width:100px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${s.description}</div>` : ''}
+      </a>`;
+    }).join('');
+
+    shopsSection.style.display = 'block';
+
+    if(seeAllBtn) {
+      seeAllBtn.addEventListener('click', () => {
+        openSectionView({ type:'all', title:'All Shops', isShops:true, sellers });
+      });
+    }
+  } catch(e) {
+    console.warn('loadFeaturedShops error', e);
+  }
+}
 
 /********************
  * Subscribe function
@@ -3057,3 +3165,81 @@ style.textContent = `
   }
 `;
 document.head.appendChild(style);
+
+/********************
+ * Sell on Umzila modal
+ ********************/
+(function() {
+  const openBtn  = document.getElementById('sellOnUmzilaBtn');
+  const modal    = document.getElementById('sellModal');
+  const closeBtn = document.getElementById('sellModalClose');
+  const cancelBtn= document.getElementById('sellModalCancelBtn');
+  const submitBtn= document.getElementById('sellModalSubmitBtn');
+  if(!openBtn || !modal) return;
+
+  function openSellModal() { modal.classList.add('active'); }
+  function closeSellModal() {
+    modal.classList.remove('active');
+    const errEl = document.getElementById('sellSubmitError');
+    const sucEl = document.getElementById('sellSubmitSuccess');
+    if(errEl) { errEl.textContent=''; errEl.style.display='none'; }
+    if(sucEl) sucEl.style.display='none';
+  }
+
+  openBtn.addEventListener('click', openSellModal);
+  if(closeBtn) closeBtn.addEventListener('click', closeSellModal);
+  if(cancelBtn) cancelBtn.addEventListener('click', closeSellModal);
+  modal.addEventListener('click', e => { if(e.target === modal) closeSellModal(); });
+
+  if(submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      const fullName   = (document.getElementById('sellFullName')   ||{}).value?.trim();
+      const email      = (document.getElementById('sellEmail')      ||{}).value?.trim();
+      const phone      = (document.getElementById('sellPhone')      ||{}).value?.trim();
+      const shopName   = (document.getElementById('sellShopName')   ||{}).value?.trim();
+      const planToSell = (document.getElementById('sellPlanToSell') ||{}).value?.trim();
+      const description= (document.getElementById('sellDescription')||{}).value?.trim();
+      const instagram  = (document.getElementById('sellInstagram')  ||{}).value?.trim();
+      const errEl      = document.getElementById('sellSubmitError');
+      const sucEl      = document.getElementById('sellSubmitSuccess');
+
+      if(!fullName || !email || !phone || !shopName || !planToSell) {
+        if(errEl) { errEl.textContent = 'Please fill in all required fields.'; errEl.style.display='block'; }
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+      if(errEl) { errEl.textContent=''; errEl.style.display='none'; }
+
+      try {
+        if(!supabaseClient) throw new Error('Not connected');
+        const { error } = await supabaseClient.from('seller_applications').insert([{
+          full_name: fullName,
+          email,
+          phone,
+          shop_name: shopName,
+          plan_to_sell: planToSell,
+          description: description || null,
+          instagram: instagram || null,
+          status: 'pending'
+        }]);
+        if(error) throw error;
+        if(sucEl) { sucEl.style.display='block'; }
+        submitBtn.textContent = 'Submitted!';
+        // Reset form after 2s
+        setTimeout(() => {
+          ['sellFullName','sellEmail','sellPhone','sellShopName','sellPlanToSell','sellDescription','sellInstagram'].forEach(id => {
+            const el = document.getElementById(id); if(el) el.value='';
+          });
+          closeSellModal();
+          submitBtn.disabled=false; submitBtn.textContent='Submit Application';
+        }, 2000);
+      } catch(e) {
+        console.error('Sell application error:', e);
+        if(errEl) { errEl.textContent = 'Something went wrong. Please try again.'; errEl.style.display='block'; }
+        submitBtn.disabled=false; submitBtn.textContent='Submit Application';
+      }
+    });
+  }
+})();
