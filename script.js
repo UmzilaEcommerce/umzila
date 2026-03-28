@@ -3090,10 +3090,10 @@ async function loadFeaturedShops() {
     shopsSection.style.display = 'block';
     shopsSection.dataset.hasData = 'true';
 
+    // "All Shops" button is handled by index.html inline script (uses allShopsModal)
+    // Store sellers for the modal to use
     if(seeAllBtn) {
-      seeAllBtn.addEventListener('click', () => {
-        openSectionView({ type:'all', title:'All Shops', isShops:true, sellers });
-      });
+      window._allSellers = sellers;
     }
   } catch(e) {
     console.warn('loadFeaturedShops error', e);

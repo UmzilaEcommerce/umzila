@@ -1881,7 +1881,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         .from('products')
         .select(`id,name,description,price,sale_price,sale,category,category_id,sizes,tags,stock,sku,badge,featured,visible,metadata,image,seller_id,created_at,updated_at,
           sellers(id,shop_name,logo_url),
-          product_images!fk_product_images_product(id,url,alt_text,sort_order),
+          product_images!fk_product_images_product(id,url,alt_text,image_order),
           product_variants!product_variants_product_id_fkey(id,sku,size,stock)`)
         .eq('id', productId)
         .single();
@@ -1893,7 +1893,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
       title.textContent = prod.name || 'Product Review';
 
-      const images   = (prod.product_images || []).sort((a,b) => (a.sort_order||0)-(b.sort_order||0));
+      const images   = (prod.product_images || []).sort((a,b) => (a.image_order||0)-(b.image_order||0));
       const variants = prod.product_variants || [];
       const sellerName = prod.sellers ? (prod.sellers.shop_name || '—') : '—';
       const rs  = (prod.metadata && prod.metadata.review_status) || (prod.visible ? 'approved' : 'pending_review');
