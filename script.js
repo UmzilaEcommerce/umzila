@@ -1822,10 +1822,55 @@ async function checkInitialAuthState() {
 
 // Listen for auth state changes
 if (supabaseClient && supabaseClient.auth) {
-  supabaseClient.auth.onAuthStateChange((event, session) => {
+  supabaseClient.auth.onAuthStateChange(async (event, session) => {
     const user = session?.user || null;
     updateAuthUI(user);
+    if (event === 'SIGNED_IN' && user) {
+      mergeAnonFavourites(user.id).catch(() => {});
+    }
   });
+}
+
+/********************
+ * Merge anonymous favourites into user account on login
+ ********************/
+async function mergeAnonFavourites(userId) {
+  if (!userId || !window.supabase) return;
+  const anonId = getAnonId();
+  if (!anonId) return;
+  try {
+    // Find all favourites from this anonymous session that have no owner yet
+    const { data: anonFavs } = await window.supabase
+      .from('product_favourites')
+      .select('id, product_id')
+      .eq('anonymous_id', anonId)
+      .is('user_id', null);
+
+    if (!anonFavs || !anonFavs.length) return;
+
+    for (const fav of anonFavs) {
+      // Check if the user already owns this product favourite
+      const { data: existing } = await window.supabase
+        .from('product_favourites')
+        .select('id')
+        .eq('product_id', fav.product_id)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        // Duplicate — delete the anon record
+        await window.supabase.from('product_favourites').delete().eq('id', fav.id);
+      } else {
+        // Claim it for the user
+        await window.supabase
+          .from('product_favourites')
+          .update({ user_id: userId })
+          .eq('id', fav.id);
+      }
+    }
+  } catch (e) {
+    console.warn('mergeAnonFavourites error', e);
+  }
 }
 
 /********************
@@ -2124,6 +2169,13 @@ function showFilteredView(products, label){
   } else {
     if(empty) empty.style.display='none';
     grid.innerHTML = products.map(p=>makeCardHTML(p)).join('');
+    // Immediately resolve all lazy-load images in the filtered grid —
+    // the IntersectionObserver wraps renderAll but not showFilteredView,
+    // so images with data-src would never load without this.
+    grid.querySelectorAll('img[data-src]').forEach(img => {
+      img.src = img.dataset.src;
+      img.removeAttribute('data-src');
+    });
     attachProductListeners();
     runReveal();
   }
@@ -3689,3 +3741,12 @@ document.head.appendChild(style);
     });
   }
 })();
+
+// Force a fresh load when the user navigates back to this page via the
+// browser back button (bfcache restore). This ensures category/filter state
+// and product data are always current.
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) {
+    window.location.reload();
+  }
+});
