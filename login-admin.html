@@ -381,24 +381,16 @@ function showTOTPModal() {
 
 // Redirect based on role
 function redirectBasedOnRole(userRoles, selectedRole) {
-  const userRoleNames = userRoles.map(r => r.role.toLowerCase());
-  const isAdmin = userRoleNames.includes('admin') || 
-                  userRoleNames.includes('administrator');
-  
-  if (!isAdmin && selectedRole.toLowerCase() === 'admin') {
-  redirectTo = 'admin.html';
-  }
-  else if (!isAdmin && selectedRole.toLowerCase() === 'logistics') {
-    redirectTo = 'logistics.html';
-  }
-  else if (selectedRole.toLowerCase() === 'seller') {
+  const role = selectedRole.toLowerCase();
+  let redirectTo;
+  if (role === 'seller') {
     redirectTo = 'seller-dashboard.html';
+  } else if (role === 'logistics') {
+    redirectTo = 'logistics.html';
+  } else {
+    redirectTo = 'admin.html';
   }
-
-  // Store last used role
   localStorage.setItem('last_role', selectedRole.toLowerCase());
-  
-  // Redirect
   window.location.href = redirectTo;
 }
 
@@ -534,10 +526,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Auto-focus email field on page load
   emailInput.focus();
 
-  // Handle error params from seller-dashboard redirect
+  // Handle URL params from redirects
   var urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('error') === 'no-seller-access') {
     showError("You don't have seller access. Apply to sell on Umzila from the homepage.");
+  }
+  // Pre-select Seller in the dropdown when redirected from seller-dashboard
+  if (urlParams.get('redirect') === 'seller') {
+    if (roleSelect) roleSelect.value = 'Seller';
   }
 });
 

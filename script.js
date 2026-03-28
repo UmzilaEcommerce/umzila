@@ -806,7 +806,8 @@ let state = {
     tag: 'Any'
   }, 
   cart: [],
-  productVariants: {} // Store variants by product_id
+  productVariants: {}, // Store variants by product_id
+  userFavourites: new Set() // product IDs the logged-in user has favourited
 };
 
 // Store current user referral info
@@ -1046,7 +1047,8 @@ async function loadProducts() {
         popularity: Number(row.popularity || 50),
         desc: row.description || '',
         metadata: row.metadata || {},
-        seller: row.sellers || null
+        seller: row.sellers || null,
+        favourite_count: Number(row.favourite_count || 0)
       };
     });
     
@@ -1273,11 +1275,16 @@ function updateAuthUI(user) {
     
     // Sync cart on login
     syncCartOnLogin(user);
+    // Restore favourite hearts for logged-in user
+    loadUserFavourites();
   } else {
     if (signBtn) signBtn.style.display = 'inline-flex';
     if (mobileSignIn) mobileSignIn.textContent = 'Sign In / Sign Up';
     if (profileBtnHeader) profileBtnHeader.style.display = 'none';
     updateReferralBanner(null);
+    // Clear favourite state on sign-out
+    state.userFavourites = new Set();
+    markFavourites();
   }
 }
 
@@ -2072,6 +2079,85 @@ function mediaTagForCard(url, title) {
 }
 
 /********************
+ * Favourites helper
+ ********************/
+function getAnonId() {
+  let id = localStorage.getItem('ss_anon_id');
+  if (!id) {
+    id = 'anon-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem('ss_anon_id', id);
+  }
+  return id;
+}
+
+async function loadUserFavourites() {
+  if (!supabaseClient || !currentUser) return;
+  try {
+    const { data } = await supabaseClient
+      .from('product_favourites')
+      .select('product_id')
+      .eq('user_id', currentUser.id);
+    state.userFavourites = new Set((data || []).map(r => String(r.product_id)));
+    markFavourites();
+  } catch (e) {
+    console.warn('loadUserFavourites failed', e);
+  }
+}
+
+function markFavourites() {
+  document.querySelectorAll('.fav-btn').forEach(btn => {
+    const active = state.userFavourites.has(String(btn.dataset.productId));
+    btn.classList.toggle('active', active);
+    btn.querySelector('.fav-icon').textContent = active ? '❤️' : '🤍';
+  });
+}
+
+async function toggleFavourite(btn) {
+  if (!btn || btn.dataset.pending === 'true') return;
+  btn.dataset.pending = 'true';
+
+  const productId = btn.dataset.productId;
+  const isFaved = btn.classList.contains('active');
+
+  // Optimistic UI update
+  btn.classList.toggle('active', !isFaved);
+  btn.querySelector('.fav-icon').textContent = isFaved ? '🤍' : '❤️';
+  let count = parseInt(btn.dataset.favCount || '0', 10);
+  count = isFaved ? Math.max(0, count - 1) : count + 1;
+  btn.dataset.favCount = count;
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    // Attach JWT if user is logged in
+    if (window.supabase) {
+      const { data: { session } } = await window.supabase.auth.getSession().catch(() => ({ data: {} }));
+      if (session && session.access_token) headers['Authorization'] = 'Bearer ' + session.access_token;
+    }
+    const res = await fetch('/.netlify/functions/toggle-favourite', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ product_id: productId, anonymous_id: getAnonId() })
+    });
+    const data = await res.json();
+    if (data.success) {
+      btn.classList.toggle('active', data.action === 'added');
+      btn.querySelector('.fav-icon').textContent = data.action === 'added' ? '❤️' : '🤍';
+      btn.dataset.favCount = data.favourite_count;
+    } else {
+      // Revert on error
+      btn.classList.toggle('active', isFaved);
+      btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
+      btn.dataset.favCount = isFaved ? count + 1 : Math.max(0, count - 1);
+    }
+  } catch (_) {
+    // Revert on network error
+    btn.classList.toggle('active', isFaved);
+    btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
+  }
+  btn.dataset.pending = 'false';
+}
+
+/********************
  * Rendering helpers (updated with lazy loading)
  ********************/
 function makeCardHTML(p){
@@ -2091,6 +2177,7 @@ function makeCardHTML(p){
   // Determine loading attribute - lazy load all except first few items
   const shouldLazyLoad = true; // We'll use Intersection Observer for all
   
+  const favCount = Number(p.favourite_count || 0);
   return `<div class="product-card fade-up" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${p.title}">
       <div class="badges">
@@ -2099,6 +2186,7 @@ function makeCardHTML(p){
       </div>
       ${mediaTagForCard(primaryImage, p.title)}
       ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
+      <button class="fav-btn" data-product-id="${p.id}" data-fav-count="${favCount}" aria-label="Add to favourites" onclick="event.stopPropagation();toggleFavourite(this)"><span class="fav-icon">🤍</span></button>
       <div class="quick-add" data-id="${p.id}">+ Quick add</div>
     </div>
     <div class="card-body">
@@ -2193,16 +2281,17 @@ function attachProductListeners(){
       addToCart(product.id, qty, size);
     })); 
     
-    const q = card.querySelector('.quick-add'); 
-    if (q) q.addEventListener('click',(ev)=>{ 
-      ev.stopPropagation(); 
+    const q = card.querySelector('.quick-add');
+    if (q) q.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
       const id = Number(q.dataset.id);
       const product = state.products.find(x=>x.id===id);
       if (product) {
         openQuickAddModal(product);
       }
-    }); 
-  }); 
+    });
+  });
+  markFavourites();
 }
 
 /********************

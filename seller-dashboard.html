@@ -6,7 +6,7 @@
   <title>Seller Dashboard — Umzila</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <style>
-    /* ── CSS Variables (mirrors style.css) ── */
+    /* ── CSS Variables ── */
     :root {
       --bg:       #f7f7f9;
       --card:     #ffffff;
@@ -16,6 +16,7 @@
       --cta:      #ff6b2c;
       --success:  #28a745;
       --error:    #dc3545;
+      --warn:     #ffc107;
       --shadow:   0 6px 18px rgba(11,13,20,0.08);
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,22 +27,18 @@
     button, input, select, textarea { font-family: inherit; }
 
     /* ── Top Bar ── */
-    .topbar {
-      background: var(--accent);
-      color: #fff;
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky; top: 0; z-index: 100;
-      box-shadow: var(--shadow);
-    }
+    .topbar { background: var(--accent); color: #fff; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow); }
     .topbar-logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; }
     .topbar-logo img { height: 36px; border-radius: 6px; }
     .topbar-right { display: flex; align-items: center; gap: 10px; }
     .topbar-seller-name { font-size: 13px; opacity: 0.85; }
     .topbar-logout { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; }
     .topbar-logout:hover { background: rgba(255,255,255,0.25); }
+    /* Notification bell */
+    .notif-bell { position: relative; cursor: pointer; padding: 6px; background: rgba(255,255,255,0.15); border-radius: 50%; border: 1px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; }
+    .notif-bell svg { width: 18px; height: 18px; fill: #fff; }
+    .notif-badge { position: absolute; top: -4px; right: -4px; background: var(--cta); color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; display: none; }
+    .notif-badge.visible { display: flex; }
 
     /* ── Container ── */
     .page-wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
@@ -49,32 +46,55 @@
     /* ── Cards / Panels ── */
     .panel { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 28px 24px; margin-bottom: 20px; }
     .panel-title { font-size: 20px; font-weight: 800; color: var(--accent); margin-bottom: 20px; }
+    .panel-subtitle { font-size: 14px; color: var(--muted); margin-bottom: 20px; margin-top: -12px; }
+
+    /* ── Progress Bar ── */
+    .progress-panel { background: linear-gradient(135deg, var(--accent) 0%, #1a4a8a 100%); border-radius: 14px; box-shadow: var(--shadow); padding: 20px 24px; margin-bottom: 20px; color: #fff; }
+    .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .progress-title { font-size: 15px; font-weight: 700; }
+    .progress-pct { font-size: 22px; font-weight: 800; }
+    .progress-bar-track { background: rgba(255,255,255,0.25); border-radius: 999px; height: 10px; overflow: hidden; }
+    .progress-bar-fill { background: #fff; border-radius: 999px; height: 100%; transition: width 0.6s ease; }
+    .progress-copy { font-size: 13px; opacity: 0.85; margin-top: 10px; }
+    .progress-checklist { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .progress-item { display: flex; align-items: center; gap: 5px; font-size: 12px; background: rgba(255,255,255,0.15); border-radius: 999px; padding: 4px 10px; }
+    .progress-item.done { background: rgba(255,255,255,0.3); }
+    .progress-item.done::before { content: '✓'; font-weight: 800; }
+    .progress-item:not(.done)::before { content: '○'; opacity: 0.6; }
 
     /* ── Forms ── */
     .form-group { margin-bottom: 16px; }
     .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 6px; }
     .form-label .opt { font-weight: 400; color: var(--muted); }
-    .form-control {
-      width: 100%; padding: 11px 14px;
-      border: 1px solid #dde1ea; border-radius: 9px;
-      font-size: 14px; background: #fff;
-      transition: border-color 0.15s;
-    }
+    .form-control { width: 100%; padding: 11px 14px; border: 1px solid #dde1ea; border-radius: 9px; font-size: 14px; background: #fff; transition: border-color 0.15s; }
     .form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10,47,102,0.08); }
     textarea.form-control { resize: vertical; min-height: 80px; }
+    textarea.form-control.tall { min-height: 120px; }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    @media (max-width: 480px) { .form-row { grid-template-columns: 1fr; } }
+    .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 540px) { .form-row, .form-row-3 { grid-template-columns: 1fr; } }
+    .section-divider { border: none; border-top: 1px solid #eee; margin: 24px 0 20px; }
+    .section-heading { font-size: 15px; font-weight: 800; color: var(--accent); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+
+    /* Sale toggle row */
+    .sale-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fffbf0; border: 1px solid #ffe58c; border-radius: 9px; margin-bottom: 10px; }
+    .sale-row label { font-size: 13px; font-weight: 600; color: #7a5c00; margin: 0; cursor: pointer; }
+    input[type=checkbox].sale-toggle { width: 18px; height: 18px; accent-color: var(--cta); cursor: pointer; }
+    .sale-fields { display: none; }
+    .sale-fields.visible { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 480px) { .sale-fields.visible { grid-template-columns: 1fr; } }
 
     /* ── Buttons ── */
     .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 20px; border-radius: 999px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
     .btn:active { transform: scale(0.97); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn.primary  { background: var(--accent); color: #fff; }
-    .btn.success  { background: var(--success); color: #fff; }
-    .btn.cta      { background: var(--cta); color: #fff; }
-    .btn.ghost    { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
-    .btn.danger   { background: var(--error); color: #fff; }
+    .btn.primary  { background: var(--accent);   color: #fff; }
+    .btn.success  { background: var(--success);  color: #fff; }
+    .btn.cta      { background: var(--cta);      color: #fff; }
+    .btn.ghost    { background: transparent;     color: var(--accent); border: 1.5px solid var(--accent); }
+    .btn.danger   { background: var(--error);    color: #fff; }
     .btn.sm       { padding: 6px 14px; font-size: 12px; }
+    .btn.xs       { padding: 4px 10px; font-size: 11px; }
     .btn-row      { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
 
     /* ── State messages ── */
@@ -88,40 +108,21 @@
     .spinner { width: 36px; height: 36px; border: 4px solid #eee; border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 14px; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Login page ── */
-    .login-wrap { max-width: 400px; margin: 60px auto 0; }
-    .login-wrap .panel-title { text-align: center; }
-    .login-subtitle { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
-    .login-footer-link { text-align: center; margin-top: 16px; font-size: 13px; color: var(--muted); }
-    .login-footer-link a { color: var(--accent-2); font-weight: 600; }
-
     /* ── Tab nav ── */
-    .tab-nav {
-      display: flex; gap: 0; background: var(--card);
-      border-radius: 12px; box-shadow: var(--shadow);
-      overflow-x: auto; scrollbar-width: none; margin-bottom: 20px;
-    }
+    .tab-nav { display: flex; gap: 0; background: var(--card); border-radius: 12px; box-shadow: var(--shadow); overflow-x: auto; scrollbar-width: none; margin-bottom: 20px; }
     .tab-nav::-webkit-scrollbar { display: none; }
-    .tab-btn {
-      flex: 1; min-width: 100px; padding: 14px 10px;
-      background: none; border: none; cursor: pointer;
-      font-size: 13px; font-weight: 600; color: var(--muted);
-      border-bottom: 3px solid transparent;
-      white-space: nowrap; transition: color 0.15s, border-color 0.15s;
-    }
+    .tab-btn { flex: 1; min-width: 80px; padding: 14px 10px; background: none; border: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); border-bottom: 3px solid transparent; white-space: nowrap; transition: color 0.15s, border-color 0.15s; position: relative; }
     .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
     .tab-btn:hover:not(.active) { color: var(--accent-2); }
+    .tab-notif-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; background: var(--cta); border-radius: 50%; display: none; }
+    .tab-notif-dot.visible { display: block; }
 
     /* ── Setup shop ── */
     .setup-wrap { max-width: 560px; margin: 0 auto; }
 
     /* ── Product list ── */
     .product-list { display: flex; flex-direction: column; gap: 12px; }
-    .product-row {
-      display: flex; gap: 14px; align-items: center;
-      padding: 12px 14px; background: #f9f9fb;
-      border-radius: 10px; border: 1px solid #ebebf0;
-    }
+    .product-row { display: flex; gap: 14px; align-items: center; padding: 12px 14px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
     .product-row-img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #eee; }
     .product-row-info { flex: 1; min-width: 0; }
     .product-row-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -133,38 +134,87 @@
     .status-badge.approved { background: #d1f0da; color: #155724; }
     .status-badge.rejected { background: #f8d7da; color: #721c24; }
 
-    /* ── Add / Edit product form ── */
+    /* ── Product form ── */
     .product-form-wrap { background: #f2f4f8; border-radius: 12px; padding: 20px; margin-top: 14px; }
     .product-form-title { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 16px; }
     .sizes-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
     .size-chip { padding: 6px 14px; border-radius: 999px; border: 1.5px solid #dde1ea; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
     .size-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-    /* ── Orders table ── */
+    /* Multi-image grid */
+    .multi-img-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+    .multi-img-item { position: relative; width: 80px; height: 80px; border-radius: 9px; overflow: hidden; border: 2px solid #dde1ea; background: #f5f5f7; }
+    .multi-img-item img { width: 100%; height: 100%; object-fit: cover; }
+    .multi-img-item.cover { border-color: var(--success); }
+    .multi-img-cover-tag { position: absolute; bottom: 2px; left: 2px; right: 2px; background: var(--success); color: #fff; font-size: 9px; font-weight: 800; text-align: center; border-radius: 4px; padding: 1px; }
+    .multi-img-actions { position: absolute; top: 2px; right: 2px; display: flex; flex-direction: column; gap: 2px; opacity: 0; transition: opacity 0.15s; }
+    .multi-img-item:hover .multi-img-actions { opacity: 1; }
+    .multi-img-btn { width: 20px; height: 20px; border-radius: 4px; border: none; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; }
+    .multi-img-btn.del  { background: var(--error); color: #fff; }
+    .multi-img-btn.cover-btn { background: var(--success); color: #fff; }
+    .multi-img-add { width: 80px; height: 80px; border-radius: 9px; border: 2px dashed #aab0c0; background: #f5f5f7; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; color: var(--muted); gap: 2px; }
+    .multi-img-add span { font-size: 10px; font-weight: 600; }
+    .multi-img-add input { display: none; }
+
+    /* ── Orders ── */
     .orders-list { display: flex; flex-direction: column; gap: 10px; }
-    .order-row {
-      padding: 14px 16px; background: #f9f9fb;
-      border-radius: 10px; border: 1px solid #ebebf0;
-    }
-    .order-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .order-row-id { font-size: 12px; color: var(--muted); }
+    .order-row { padding: 14px 16px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
+    .order-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
+    .order-row-id { font-size: 12px; color: var(--muted); font-weight: 600; }
     .order-row-date { font-size: 12px; color: var(--muted); }
     .order-items-list { display: flex; flex-direction: column; gap: 4px; }
     .order-item-line { font-size: 13px; display: flex; justify-content: space-between; }
     .order-buyer { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .order-status-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .fulfillment-select { padding: 5px 10px; border-radius: 7px; border: 1px solid #dde1ea; font-size: 12px; font-weight: 600; background: #fff; cursor: pointer; }
+    .payment-pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .payment-pill.paid      { background: rgba(40,167,69,0.12);  color: var(--success); }
+    .payment-pill.pending   { background: rgba(255,193,7,0.15);  color: #856404; }
+    .payment-pill.cancelled { background: rgba(220,53,69,0.1);   color: var(--error); }
 
     /* ── Analytics cards ── */
     .analytics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
     @media (min-width: 600px) { .analytics-grid { grid-template-columns: repeat(4, 1fr); } }
     .stat-card { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: #fff; border-radius: 12px; padding: 20px 16px; text-align: center; }
     .stat-card.alt { background: linear-gradient(135deg, var(--cta) 0%, #ff9f5b 100%); }
+    .stat-card.green { background: linear-gradient(135deg, var(--success) 0%, #4cd080 100%); }
     .stat-value { font-size: 28px; font-weight: 800; line-height: 1; }
     .stat-label { font-size: 12px; opacity: 0.85; margin-top: 6px; }
+    .analytics-section-title { font-size: 14px; font-weight: 700; color: var(--accent); margin: 20px 0 10px; }
+    .status-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+    @media (max-width: 400px) { .status-breakdown { grid-template-columns: 1fr 1fr; } }
+    .sb-card { padding: 14px 10px; border-radius: 10px; text-align: center; }
+    .sb-card.paid    { background: rgba(40,167,69,0.1);   color: var(--success); border: 1px solid rgba(40,167,69,0.3); }
+    .sb-card.pending { background: rgba(255,193,7,0.1);   color: #856404;        border: 1px solid rgba(255,193,7,0.3); }
+    .sb-card.other   { background: rgba(108,117,125,0.1); color: #495057;        border: 1px solid rgba(108,117,125,0.3); }
+    .sb-val { font-size: 22px; font-weight: 800; }
+    .sb-lbl { font-size: 11px; margin-top: 4px; }
+    .top-products-list { display: flex; flex-direction: column; gap: 8px; }
+    .top-prod-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
+    .top-prod-rank { font-size: 18px; font-weight: 800; color: var(--accent-2); min-width: 28px; text-align: center; }
+    .top-prod-info { flex: 1; min-width: 0; }
+    .top-prod-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-prod-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .top-prod-rev { font-weight: 700; font-size: 13px; color: var(--success); white-space: nowrap; }
 
-    /* ── Divider ── */
+    /* ── Notifications ── */
+    .notif-list { display: flex; flex-direction: column; gap: 10px; }
+    .notif-item { display: flex; gap: 12px; padding: 14px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; cursor: pointer; transition: background 0.15s; }
+    .notif-item.unread { background: #f0f6ff; border-color: rgba(10,47,102,0.2); }
+    .notif-item:hover { background: #edf2ff; }
+    .notif-img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; background: #e8ecf4; }
+    .notif-body { flex: 1; min-width: 0; }
+    .notif-title { font-size: 13px; font-weight: 700; color: #111; margin-bottom: 2px; }
+    .notif-text  { font-size: 12px; color: var(--muted); }
+    .notif-time  { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .notif-type-badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+    .notif-type-badge.favourite { background: #ffe4ec; color: #a8003f; }
+    .notif-type-badge.order     { background: #d1f0da; color: #155724; }
+    .notif-type-badge.system    { background: #e8ecf4; color: var(--accent); }
+    .notif-unread-dot { width: 8px; height: 8px; background: var(--accent-2); border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+
+    /* ── Divider / Empty ── */
     .divider { border: none; border-top: 1px solid #eee; margin: 18px 0; }
-
-    /* ── Empty state ── */
     .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
     .empty-state-icon { font-size: 40px; margin-bottom: 10px; }
 
@@ -180,31 +230,12 @@
     .upload-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
     .upload-progress { font-size: 12px; color: var(--accent-2); display: none; }
 
-    /* ── Analytics extras ── */
-    .analytics-section-title { font-size: 14px; font-weight: 700; color: var(--accent); margin: 20px 0 10px; }
-    .top-products-list { display: flex; flex-direction: column; gap: 8px; }
-    .top-prod-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
-    .top-prod-rank { font-size: 18px; font-weight: 800; color: var(--accent-2); min-width: 28px; text-align: center; }
-    .top-prod-info { flex: 1; min-width: 0; }
-    .top-prod-name { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .top-prod-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .top-prod-rev { font-weight: 700; font-size: 13px; color: var(--success); white-space: nowrap; }
-    .status-breakdown { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
-    @media (max-width: 400px) { .status-breakdown { grid-template-columns: 1fr 1fr; } }
-    .sb-card { padding: 14px 10px; border-radius: 10px; text-align: center; }
-    .sb-card.paid    { background: rgba(40,167,69,0.1);  color: var(--success); border: 1px solid rgba(40,167,69,0.3); }
-    .sb-card.pending { background: rgba(255,193,7,0.1);  color: #856404;        border: 1px solid rgba(255,193,7,0.3); }
-    .sb-card.other   { background: rgba(108,117,125,0.1);color: #495057;        border: 1px solid rgba(108,117,125,0.3); }
-    .sb-val { font-size: 22px; font-weight: 800; }
-    .sb-lbl { font-size: 11px; margin-top: 4px; }
+    /* ── About section ── */
+    .about-section { background: linear-gradient(135deg, #f8f9fc 0%, #edf2ff 100%); border-radius: 12px; padding: 20px; border: 1px solid #dde4f5; margin-top: 10px; }
+    .about-intro { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
 
     /* ── Toast ── */
-    #sdToast {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: var(--accent); color: #fff; padding: 10px 22px;
-      border-radius: 999px; font-size: 14px; font-weight: 600;
-      z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none;
-    }
+    #sdToast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
     #sdToast.show { opacity: 1; }
   </style>
 </head>
@@ -213,66 +244,37 @@
   <!-- Top Bar -->
   <div class="topbar">
     <div class="topbar-logo">
-      <a href="index.html"><img src="umzila.webp" alt="Umzila"></a>
+      <a href="index.html"><img src="umzila.webp" alt="Umzila" onerror="this.style.display='none'"></a>
       Seller Dashboard
     </div>
     <div class="topbar-right" id="topbarRight" style="display:none">
+      <div class="notif-bell" id="notifBell" onclick="switchTab('notifications')" title="Notifications">
+        <svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+        <div class="notif-badge" id="notifBadge"></div>
+      </div>
       <span class="topbar-seller-name" id="topbarShopName"></span>
       <button class="topbar-logout" id="logoutBtn">Log out</button>
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-       STATE: Loading
-  ════════════════════════════════════════════ -->
+  <!-- STATE: Loading -->
   <div class="page-wrap" id="stateLoading">
     <div class="spinner-wrap"><div class="spinner"></div><div>Loading...</div></div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-       STATE: Login
-  ════════════════════════════════════════════ -->
-  <div class="page-wrap" id="stateLogin" style="display:none">
-    <div class="login-wrap">
-      <div class="panel">
-        <div class="panel-title">🏪 Seller Login</div>
-        <p class="login-subtitle">Only approved Umzila sellers can access this page.</p>
-
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input type="email" id="loginEmail" class="form-control" placeholder="you@email.com">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="loginPassword" class="form-control" placeholder="Your password">
-        </div>
-        <div id="loginMsg" class="msg"></div>
-        <div class="btn-row">
-          <button class="btn primary" id="loginSubmitBtn" style="width:100%">Sign In</button>
-        </div>
-        <div class="login-footer-link">
-          Don't have a seller account? <a href="index.html">Apply on Umzila</a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════
-       STATE: Setup Shop
-  ════════════════════════════════════════════ -->
+  <!-- STATE: Setup Shop (first-time setup) -->
   <div class="page-wrap" id="stateSetup" style="display:none">
     <div class="setup-wrap">
       <div class="panel">
         <div class="panel-title">🛍️ Set Up Your Shop</div>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:22px">Welcome! Fill in your shop details to get started.</p>
-
+        <p style="color:var(--muted);font-size:14px;margin-bottom:22px">Welcome! Fill in your shop details to get started selling on Umzila.</p>
         <div class="form-group">
           <label class="form-label">Shop Name <span style="color:var(--error)">*</span></label>
           <input type="text" id="setupShopName" class="form-control" placeholder="e.g. Skhanda World">
         </div>
         <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea id="setupDesc" class="form-control" placeholder="Tell buyers about your shop..."></textarea>
+          <label class="form-label">Short Description</label>
+          <textarea id="setupDesc" class="form-control" placeholder="Tell buyers what you sell..."></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -296,30 +298,44 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-       STATE: Dashboard
-  ════════════════════════════════════════════ -->
+  <!-- STATE: Dashboard -->
   <div class="page-wrap" id="stateDashboard" style="display:none">
+
+    <!-- Progress bar -->
+    <div class="progress-panel" id="progressPanel">
+      <div class="progress-header">
+        <div class="progress-title">Shop Completion</div>
+        <div class="progress-pct" id="progressPct">0%</div>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div class="progress-copy" id="progressCopy">Complete your profile to start attracting buyers.</div>
+      <div class="progress-checklist" id="progressChecklist"></div>
+    </div>
 
     <!-- Tab nav -->
     <nav class="tab-nav" role="tablist">
-      <button class="tab-btn active" data-tab="shop"     role="tab">🏪 My Shop</button>
-      <button class="tab-btn"        data-tab="products" role="tab">📦 Products</button>
-      <button class="tab-btn"        data-tab="orders"   role="tab">🧾 Orders</button>
-      <button class="tab-btn"        data-tab="analytics"role="tab">📊 Analytics</button>
+      <button class="tab-btn active"  data-tab="shop"          role="tab">🏪 My Shop</button>
+      <button class="tab-btn"         data-tab="products"      role="tab">📦 Products</button>
+      <button class="tab-btn"         data-tab="orders"        role="tab">🧾 Orders</button>
+      <button class="tab-btn"         data-tab="notifications" role="tab">🔔 Alerts<div class="tab-notif-dot" id="tabNotifDot"></div></button>
+      <button class="tab-btn"         data-tab="analytics"     role="tab">📊 Analytics</button>
     </nav>
 
-    <!-- ── TAB 1: My Shop ── -->
+    <!-- ── TAB: My Shop ── -->
     <div id="tabShop" class="tab-panel">
       <div class="panel">
         <div class="panel-title">My Shop Details</div>
+
+        <!-- Basic info -->
         <div class="form-group">
           <label class="form-label">Shop Name <span style="color:var(--error)">*</span></label>
           <input type="text" id="editShopName" class="form-control">
         </div>
         <div class="form-group">
-          <label class="form-label">Description</label>
-          <textarea id="editDesc" class="form-control"></textarea>
+          <label class="form-label">Short Description</label>
+          <textarea id="editDesc" class="form-control" placeholder="A brief tagline for your shop..."></textarea>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -327,10 +343,7 @@
             <div class="upload-group">
               <div class="upload-preview-wrap">
                 <img id="editLogoPreview" class="upload-preview circle" alt="Logo preview">
-                <label class="upload-file-btn">
-                  📷 Upload Logo
-                  <input type="file" id="editLogoFile" accept="image/*">
-                </label>
+                <label class="upload-file-btn">📷 Upload Logo<input type="file" id="editLogoFile" accept="image/*"></label>
               </div>
               <div class="upload-progress" id="editLogoProgress">Uploading...</div>
               <input type="url" id="editLogo" class="form-control upload-hint" placeholder="Logo URL (auto-filled on upload)">
@@ -341,29 +354,88 @@
             <div class="upload-group">
               <div class="upload-preview-wrap">
                 <img id="editBannerPreview" class="upload-preview wide" alt="Banner preview">
-                <label class="upload-file-btn">
-                  🖼️ Upload Banner
-                  <input type="file" id="editBannerFile" accept="image/*">
-                </label>
+                <label class="upload-file-btn">🖼️ Upload Banner<input type="file" id="editBannerFile" accept="image/*"></label>
               </div>
               <div class="upload-progress" id="editBannerProgress">Uploading...</div>
               <input type="url" id="editBanner" class="form-control upload-hint" placeholder="Banner URL (auto-filled on upload)">
             </div>
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">WhatsApp Number</label>
-          <input type="tel" id="editWhatsApp" class="form-control">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">WhatsApp Number</label>
+            <input type="tel" id="editWhatsApp" class="form-control" placeholder="+27 82 000 0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Support Email <span class="opt">(optional)</span></label>
+            <input type="email" id="editSupportEmail" class="form-control" placeholder="support@yourshop.co.za">
+          </div>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Location / City <span class="opt">(optional)</span></label>
+            <input type="text" id="editLocation" class="form-control" placeholder="e.g. Johannesburg, Gauteng">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Delivery Method <span class="opt">(optional)</span></label>
+            <select id="editDeliveryMethod" class="form-control">
+              <option value="">Select...</option>
+              <option value="courier">Courier</option>
+              <option value="self_delivery">Self Delivery</option>
+              <option value="collection">Collection Only</option>
+              <option value="digital">Digital / No Shipping</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Processing Time <span class="opt">(optional)</span></label>
+            <input type="text" id="editTurnaround" class="form-control" placeholder="e.g. 3–5 business days">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Years in Business <span class="opt">(optional)</span></label>
+            <input type="number" id="editYearsOp" class="form-control" placeholder="e.g. 2" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Instagram <span class="opt">(optional)</span></label>
+            <input type="text" id="editInstagram" class="form-control" placeholder="@yourshop">
+          </div>
+          <div class="form-group">
+            <label class="form-label">TikTok <span class="opt">(optional)</span></label>
+            <input type="text" id="editTiktok" class="form-control" placeholder="@yourshop">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Return / Refund Policy <span class="opt">(optional)</span></label>
+          <textarea id="editReturnPolicy" class="form-control" placeholder="e.g. We accept returns within 7 days of delivery..."></textarea>
+        </div>
+
+        <hr class="section-divider">
+        <!-- About / Story section -->
+        <div class="section-heading">✨ About Your Shop</div>
+        <div class="about-section">
+          <p class="about-intro">Tell your story! Buyers love knowing who they're buying from. Complete this section to build trust and increase conversions.</p>
+          <div class="form-group">
+            <label class="form-label">Brand / Shop Story <span class="opt">(optional)</span></label>
+            <textarea id="editAboutStory" class="form-control tall" placeholder="Tell buyers about your shop: what you sell, what makes it special, and why they should trust you..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Owner Story <span class="opt">(optional)</span></label>
+            <textarea id="editOwnerStory" class="form-control" placeholder="Who are you? What inspired you to start this shop? Share your journey..."></textarea>
+          </div>
+        </div>
+
         <div id="shopSaveMsg" class="msg"></div>
-        <div class="btn-row">
+        <div class="btn-row" style="margin-top:20px">
           <button class="btn primary" id="saveShopBtn">Save Changes</button>
           <a class="btn ghost" id="viewShopLink" href="#" target="_blank">View My Shop ↗</a>
         </div>
       </div>
     </div>
 
-    <!-- ── TAB 2: My Products ── -->
+    <!-- ── TAB: My Products ── -->
     <div id="tabProducts" class="tab-panel" style="display:none">
       <div class="panel">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
@@ -371,7 +443,7 @@
           <button class="btn cta" id="addProductToggleBtn">+ Add Product</button>
         </div>
 
-        <!-- Add product form (hidden by default) -->
+        <!-- Add product form -->
         <div id="addProductForm" class="product-form-wrap" style="display:none">
           <div class="product-form-title">New Product</div>
           <div class="form-group">
@@ -384,12 +456,27 @@
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Price (ZAR) <span style="color:var(--error)">*</span></label>
+              <label class="form-label">Regular Price (ZAR) <span style="color:var(--error)">*</span></label>
               <input type="number" id="newProdPrice" class="form-control" placeholder="299" min="0" step="0.01">
             </div>
             <div class="form-group">
               <label class="form-label">Stock</label>
               <input type="number" id="newProdStock" class="form-control" placeholder="10" min="0">
+            </div>
+          </div>
+          <!-- Sale toggle -->
+          <div class="sale-row">
+            <input type="checkbox" class="sale-toggle" id="newProdSale">
+            <label for="newProdSale">This product is on sale</label>
+          </div>
+          <div class="sale-fields" id="newSaleFields">
+            <div class="form-group">
+              <label class="form-label">Original Price (ZAR)</label>
+              <input type="number" id="newProdOrigPrice" class="form-control" placeholder="399" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Sale Price (ZAR)</label>
+              <input type="number" id="newProdSalePrice" class="form-control" placeholder="249" min="0" step="0.01">
             </div>
           </div>
           <div class="form-row">
@@ -416,19 +503,19 @@
               </select>
             </div>
           </div>
+          <!-- Multi-image upload -->
           <div class="form-group">
-            <label class="form-label">Product Image <span class="opt">(optional)</span></label>
-            <div class="upload-group">
-              <div class="upload-preview-wrap">
-                <img id="newProdImagePreview" class="upload-preview" alt="Image preview">
-                <label class="upload-file-btn">
-                  📷 Upload Image
-                  <input type="file" id="newProdImageFile" accept="image/*,video/*">
-                </label>
-              </div>
-              <div class="upload-progress" id="newProdImageProgress">Uploading...</div>
-              <input type="url" id="newProdImage" class="form-control upload-hint" placeholder="Image URL (auto-filled on upload)">
+            <label class="form-label">Product Images <span class="opt">(multiple allowed)</span></label>
+            <div class="multi-img-grid" id="newProdImgGrid">
+              <label class="multi-img-add" id="newProdImgAddBtn">
+                <span style="font-size:28px">+</span>
+                <span>Add Image</span>
+                <input type="file" id="newProdImageFile" accept="image/*" multiple>
+              </label>
             </div>
+            <div class="upload-progress" id="newProdImageProgress">Uploading...</div>
+            <!-- Hidden fallback URL -->
+            <input type="hidden" id="newProdImage">
           </div>
           <div class="form-group">
             <label class="form-label">Available Sizes</label>
@@ -462,7 +549,7 @@
         </div>
       </div>
 
-      <!-- Edit product form (inline, hidden) -->
+      <!-- Edit product form -->
       <div class="panel" id="editProductPanel" style="display:none">
         <div class="product-form-title">Edit Product</div>
         <input type="hidden" id="editProdId">
@@ -476,12 +563,27 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Price (ZAR)</label>
+            <label class="form-label">Regular Price (ZAR)</label>
             <input type="number" id="editProdPrice" class="form-control" min="0" step="0.01">
           </div>
           <div class="form-group">
             <label class="form-label">Stock</label>
             <input type="number" id="editProdStock" class="form-control" min="0">
+          </div>
+        </div>
+        <!-- Sale toggle -->
+        <div class="sale-row">
+          <input type="checkbox" class="sale-toggle" id="editProdSale">
+          <label for="editProdSale">This product is on sale</label>
+        </div>
+        <div class="sale-fields" id="editSaleFields">
+          <div class="form-group">
+            <label class="form-label">Original Price (ZAR)</label>
+            <input type="number" id="editProdOrigPrice" class="form-control" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Sale Price (ZAR)</label>
+            <input type="number" id="editProdSalePrice" class="form-control" min="0" step="0.01">
           </div>
         </div>
         <div class="form-row">
@@ -508,19 +610,14 @@
             </select>
           </div>
         </div>
+        <!-- Multi-image upload (edit mode) -->
         <div class="form-group">
-          <label class="form-label">Product Image</label>
-          <div class="upload-group">
-            <div class="upload-preview-wrap">
-              <img id="editProdImagePreview" class="upload-preview" alt="Image preview">
-              <label class="upload-file-btn">
-                📷 Upload Image
-                <input type="file" id="editProdImageFile" accept="image/*,video/*">
-              </label>
-            </div>
-            <div class="upload-progress" id="editProdImageProgress">Uploading...</div>
-            <input type="url" id="editProdImage" class="form-control upload-hint" placeholder="Image URL (auto-filled on upload)">
+          <label class="form-label">Product Images</label>
+          <div class="multi-img-grid" id="editProdImgGrid">
+            <div class="spinner-wrap" id="editImgLoading" style="padding:20px"><div class="spinner" style="width:24px;height:24px;border-width:3px"></div></div>
           </div>
+          <div class="upload-progress" id="editProdImageProgress">Uploading...</div>
+          <input type="hidden" id="editProdImage">
         </div>
         <div class="form-group">
           <label class="form-label">Available Sizes</label>
@@ -537,12 +634,12 @@
         <div id="editProdMsg" class="msg"></div>
         <div class="btn-row">
           <button class="btn primary" id="saveEditProdBtn">Save Changes</button>
-          <button class="btn ghost"   id="cancelEditProdBtn">Cancel</button>
+          <button class="btn ghost" id="cancelEditProdBtn">Cancel</button>
         </div>
       </div>
     </div>
 
-    <!-- ── TAB 3: Orders ── -->
+    <!-- ── TAB: Orders ── -->
     <div id="tabOrders" class="tab-panel" style="display:none">
       <div class="panel">
         <div class="panel-title">Orders</div>
@@ -550,68 +647,54 @@
         <div class="orders-list" id="ordersList"></div>
         <div class="empty-state" id="ordersEmpty" style="display:none">
           <div class="empty-state-icon">🧾</div>
-          <div>No orders yet.</div>
+          <div>No orders containing your products yet.</div>
         </div>
       </div>
     </div>
 
-    <!-- ── TAB 4: Analytics ── -->
+    <!-- ── TAB: Notifications ── -->
+    <div id="tabNotifications" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px">
+          <div class="panel-title" style="margin-bottom:0">🔔 Notifications</div>
+          <button class="btn ghost sm" id="markAllReadBtn">Mark all read</button>
+        </div>
+        <div class="spinner-wrap" id="notifLoading"><div class="spinner"></div></div>
+        <div class="notif-list" id="notifList"></div>
+        <div class="empty-state" id="notifEmpty" style="display:none">
+          <div class="empty-state-icon">🔔</div>
+          <div>No notifications yet. You'll see favourite alerts and order updates here.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Analytics ── -->
     <div id="tabAnalytics" class="tab-panel" style="display:none">
       <div class="panel">
         <div class="panel-title">Analytics</div>
 
         <!-- Overview stats -->
         <div class="analytics-grid">
-          <div class="stat-card">
-            <div class="stat-value" id="statProducts">—</div>
-            <div class="stat-label">Products Listed</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="statOrders">—</div>
-            <div class="stat-label">Total Orders</div>
-          </div>
-          <div class="stat-card alt">
-            <div class="stat-value" id="statRevenue">—</div>
-            <div class="stat-label">Revenue (ZAR)</div>
-          </div>
-          <div class="stat-card alt">
-            <div class="stat-value" id="statPending">—</div>
-            <div class="stat-label">Pending Review</div>
-          </div>
+          <div class="stat-card"><div class="stat-value" id="statProducts">—</div><div class="stat-label">Products Listed</div></div>
+          <div class="stat-card"><div class="stat-value" id="statOrders">—</div><div class="stat-label">Total Orders</div></div>
+          <div class="stat-card alt"><div class="stat-value" id="statRevenue">—</div><div class="stat-label">Revenue (ZAR)</div></div>
+          <div class="stat-card green"><div class="stat-value" id="statFavourites">—</div><div class="stat-label">Total Favourites</div></div>
         </div>
 
-        <!-- Order status breakdown -->
-        <div class="analytics-section-title">Orders by Status</div>
+        <!-- Payment status breakdown -->
+        <div class="analytics-section-title">Orders by Payment Status</div>
         <div class="status-breakdown">
-          <div class="sb-card paid">
-            <div class="sb-val" id="statPaid">—</div>
-            <div class="sb-lbl">Paid</div>
-          </div>
-          <div class="sb-card pending">
-            <div class="sb-val" id="statUnpaid">—</div>
-            <div class="sb-lbl">Pending</div>
-          </div>
-          <div class="sb-card other">
-            <div class="sb-val" id="statOtherOrders">—</div>
-            <div class="sb-lbl">Other</div>
-          </div>
+          <div class="sb-card paid">   <div class="sb-val" id="statPaid">—</div>   <div class="sb-lbl">Paid</div></div>
+          <div class="sb-card pending"><div class="sb-val" id="statUnpaid">—</div>  <div class="sb-lbl">Pending</div></div>
+          <div class="sb-card other">  <div class="sb-val" id="statOtherOrders">—</div><div class="sb-lbl">Other</div></div>
         </div>
 
         <!-- Product status breakdown -->
         <div class="analytics-section-title">Products by Status</div>
         <div class="status-breakdown">
-          <div class="sb-card paid">
-            <div class="sb-val" id="statApprovedProds">—</div>
-            <div class="sb-lbl">Approved</div>
-          </div>
-          <div class="sb-card pending">
-            <div class="sb-val" id="statPendingProds">—</div>
-            <div class="sb-lbl">Pending</div>
-          </div>
-          <div class="sb-card other">
-            <div class="sb-val" id="statRejectedProds">—</div>
-            <div class="sb-lbl">Rejected</div>
-          </div>
+          <div class="sb-card paid">   <div class="sb-val" id="statApprovedProds">—</div><div class="sb-lbl">Approved</div></div>
+          <div class="sb-card pending"><div class="sb-val" id="statPendingProds">—</div> <div class="sb-lbl">Pending Review</div></div>
+          <div class="sb-card other">  <div class="sb-val" id="statRejectedProds">—</div><div class="sb-lbl">Rejected</div></div>
         </div>
 
         <!-- Top products by revenue -->
@@ -620,58 +703,59 @@
           <div style="color:var(--muted);font-size:13px">Loading...</div>
         </div>
 
-        <hr class="divider" style="margin-top:20px">
-        <div style="font-size:12px;color:var(--muted)">
-          Revenue calculated from all orders containing your products. Updates each time you visit this tab.
+        <!-- Most favourited products -->
+        <div class="analytics-section-title">Most Favourited Products</div>
+        <div class="top-products-list" id="topFavList">
+          <div style="color:var(--muted);font-size:13px">Loading...</div>
         </div>
+
+        <hr class="divider" style="margin-top:20px">
+        <div style="font-size:12px;color:var(--muted)">Revenue calculated from paid orders containing your products.</div>
       </div>
     </div>
 
   </div><!-- /stateDashboard -->
 
-  <!-- Toast -->
   <div id="sdToast"></div>
 
-  <!-- ═══════════════════════════════════════════
-       INLINE SCRIPT
-  ════════════════════════════════════════════ -->
   <script>
   (function () {
     'use strict';
 
-    /* ─────────────────────────────────────────
-       Supabase init — same pattern as script.js
-    ───────────────────────────────────────── */
+    /* ── Supabase init ── */
     (async function initSupabaseClient() {
       try {
         var res = await fetch('/.netlify/functions/get-client-config');
-        if (!res.ok) { console.error('Supabase config fetch failed', res.status); showState('login'); return; }
+        if (!res.ok) { redirectToLogin(); return; }
         var cfg = await res.json();
         var url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.supabase_url || '';
         var key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.supabase_anon_key || '';
-        if (!url || !key) { console.error('Missing Supabase config'); showState('login'); return; }
+        if (!url || !key) { redirectToLogin(); return; }
         var client = supabase.createClient(url, key);
         window.supabase = client;
         document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } }));
-      } catch (err) { console.error('Supabase init error', err); showState('login'); }
+      } catch (err) { console.error('Supabase init error', err); redirectToLogin(); }
     })();
 
-    /* ─────────────────────────────────────────
-       Global state
-    ───────────────────────────────────────── */
+    /* ── Global state ── */
     var SD = {
-      sb:        null,   // supabase client
-      user:      null,   // auth user
-      seller:    null,   // sellers row
-      products:  [],     // seller's products
-      orders:    []      // seller-related orders
+      sb:            null,
+      user:          null,
+      seller:        null,
+      products:      [],
+      orders:        [],
+      notifications: [],
+      pendingImages:  []   // images staged for a new product before insert
     };
 
-    /* ─────────────────────────────────────────
-       UI helpers
-    ───────────────────────────────────────── */
+    /* ── Redirect helpers ── */
+    function redirectToLogin() {
+      window.location.href = 'login-admin.html?error=no-seller-access&redirect=seller';
+    }
+
+    /* ── UI helpers ── */
     function showState(name) {
-      ['loading','login','setup','dashboard'].forEach(function(s) {
+      ['loading','setup','dashboard'].forEach(function(s) {
         var el = document.getElementById('state' + s.charAt(0).toUpperCase() + s.slice(1));
         if (el) el.style.display = (s === name) ? '' : 'none';
       });
@@ -696,160 +780,126 @@
     function setBtnLoading(id, loading, label) {
       var btn = document.getElementById(id);
       if (!btn) return;
-      btn.disabled     = loading;
-      btn.textContent  = loading ? '...' : label;
+      btn.disabled    = loading;
+      btn.textContent = loading ? '...' : label;
     }
 
     function fmt(n) { return 'R' + Number(n || 0).toFixed(2); }
-
     function formatDate(str) {
       if (!str) return '—';
       return new Date(str).toLocaleDateString('en-ZA', { day:'2-digit', month:'short', year:'numeric' });
     }
+    function timeAgo(str) {
+      if (!str) return '';
+      var diff = (Date.now() - new Date(str).getTime()) / 1000;
+      if (diff < 60)   return 'just now';
+      if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+      if (diff < 86400)return Math.floor(diff/3600) + 'h ago';
+      return Math.floor(diff/86400) + 'd ago';
+    }
 
-    /* ─────────────────────────────────────────
-       Size chips
-    ───────────────────────────────────────── */
+    /* ── Size chips ── */
     function bindSizeChips(containerId) {
       document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(chip) {
-        chip.addEventListener('click', function() {
-          chip.classList.toggle('selected');
-        });
+        chip.addEventListener('click', function() { chip.classList.toggle('selected'); });
       });
     }
-
     function getSelectedSizes(containerId) {
       var sizes = [];
-      document.querySelectorAll('#' + containerId + ' .size-chip.selected').forEach(function(c) {
-        sizes.push(c.dataset.size);
-      });
+      document.querySelectorAll('#' + containerId + ' .size-chip.selected').forEach(function(c) { sizes.push(c.dataset.size); });
       return sizes;
     }
-
     function setSelectedSizes(containerId, sizes) {
+      var arr = Array.isArray(sizes) ? sizes : [];
       document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(c) {
-        c.classList.toggle('selected', sizes.includes(c.dataset.size));
+        c.classList.toggle('selected', arr.includes(c.dataset.size));
       });
     }
 
-    /* ─────────────────────────────────────────
-       Product status helper
-    ───────────────────────────────────────── */
+    /* ── Product status ── */
     function getProductStatus(p) {
-      var rs = p.metadata && p.metadata.review_status;
+      var rs = p && p.metadata && p.metadata.review_status;
       if (rs) return rs;
-      return p.visible ? 'approved' : 'pending_review';
+      return (p && p.visible) ? 'approved' : 'pending_review';
     }
-
     function statusBadgeHtml(status) {
-      var map = {
-        pending_review: ['pending',  'Pending Review'],
-        approved:       ['approved', 'Approved'],
-        rejected:       ['rejected', 'Rejected']
-      };
+      var map = { pending_review: ['pending','Pending Review'], approved: ['approved','Approved'], rejected: ['rejected','Rejected'] };
       var s = map[status] || ['pending', status];
       return '<span class="status-badge ' + s[0] + '">' + s[1] + '</span>';
     }
 
-    /* ─────────────────────────────────────────
-       Tab switching
-    ───────────────────────────────────────── */
+    /* ── Sale toggle wiring ── */
+    function wireSaleToggle(checkId, fieldsId) {
+      var chk = document.getElementById(checkId);
+      var flds = document.getElementById(fieldsId);
+      if (!chk || !flds) return;
+      chk.addEventListener('change', function() {
+        flds.classList.toggle('visible', chk.checked);
+      });
+    }
+
+    /* ── Tab switching ── */
     function switchTab(name) {
       document.querySelectorAll('.tab-btn').forEach(function(b) {
         b.classList.toggle('active', b.dataset.tab === name);
       });
-      document.querySelectorAll('.tab-panel').forEach(function(p) {
-        p.style.display = 'none';
-      });
+      document.querySelectorAll('.tab-panel').forEach(function(p) { p.style.display = 'none'; });
       var panel = document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1));
       if (panel) panel.style.display = '';
 
-      if (name === 'products')  loadProducts();
-      if (name === 'orders')    loadOrders();
-      if (name === 'analytics') loadAnalytics();
+      if (name === 'products')      loadProducts();
+      if (name === 'orders')        loadOrders();
+      if (name === 'analytics')     loadAnalytics();
+      if (name === 'notifications') loadNotifications();
     }
-
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
     });
 
-    /* ─────────────────────────────────────────
-       AUTH
-    ───────────────────────────────────────── */
+    /* ── AUTH (silent guard — login is on login-admin.html) ── */
     async function checkAuth() {
       var { data } = await SD.sb.auth.getSession();
       var user = data && data.session && data.session.user;
-      if (!user) { showState('login'); return; }
+      if (!user) { redirectToLogin(); return; }
       SD.user = user;
 
-      // Role gate: profiles.role must be 'seller'
+      // Role gate
       var profileRes = await SD.sb.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
       var role = profileRes.data && profileRes.data.role;
       if (role !== 'seller') {
         await SD.sb.auth.signOut();
         SD.user = null;
-        showState('login');
-        var msgEl = document.getElementById('loginMsg');
-        if (msgEl) {
-          msgEl.className = 'msg error';
-          msgEl.innerHTML = "You don\u2019t have seller access. <a href=\"index.html\" style=\"color:var(--accent-2)\">Apply on Umzila</a>.";
-          msgEl.style.display = 'block';
-        }
+        window.location.href = 'login-admin.html?error=no-seller-access&redirect=seller';
         return;
       }
 
       await loadSellerRow();
     }
 
-    /* First-login linking: find a sellers row with matching shop_name and null user_id
-       (created by admin approval) and claim it for this user.                          */
+    /* ── First-login linking ── */
     async function linkSellerIfNeeded(user) {
-      // Find approved application for this email
-      var appRes = await SD.sb
-        .from('seller_applications')
-        .select('shop_name')
-        .eq('email', user.email)
-        .eq('status', 'approved')
-        .maybeSingle();
+      var appRes = await SD.sb.from('seller_applications').select('shop_name')
+        .eq('email', user.email).in('status', ['approved', 'completed']).maybeSingle();
       if (!appRes.data || !appRes.data.shop_name) return false;
 
-      // Find the unlinked sellers row for that shop
-      var unlinkedRes = await SD.sb
-        .from('sellers')
-        .select('id')
-        .eq('shop_name', appRes.data.shop_name)
-        .is('user_id', null)
-        .maybeSingle();
+      var unlinkedRes = await SD.sb.from('sellers').select('id')
+        .eq('shop_name', appRes.data.shop_name).is('user_id', null).maybeSingle();
       if (!unlinkedRes.data) return false;
 
-      // Claim it
-      var { error: linkErr } = await SD.sb
-        .from('sellers')
-        .update({ user_id: user.id })
-        .eq('id', unlinkedRes.data.id);
+      var { error: linkErr } = await SD.sb.from('sellers')
+        .update({ user_id: user.id }).eq('id', unlinkedRes.data.id);
       return !linkErr;
     }
 
     async function loadSellerRow() {
-      var { data, error } = await SD.sb
-        .from('sellers')
-        .select('*')
-        .eq('user_id', SD.user.id)
-        .limit(1);
-
+      var { data, error } = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).limit(1);
       if (error || !data || !data.length) {
-        // First login: try to link an admin-approved shop
         var linked = await linkSellerIfNeeded(SD.user);
         if (linked) {
           var reRes = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).limit(1);
-          if (reRes.data && reRes.data.length) {
-            SD.seller = reRes.data[0];
-            showDashboard();
-            return;
-          }
+          if (reRes.data && reRes.data.length) { SD.seller = reRes.data[0]; showDashboard(); return; }
         }
-        showState('setup');
-        return;
+        showState('setup'); return;
       }
       SD.seller = data[0];
       showDashboard();
@@ -857,75 +907,41 @@
 
     function showDashboard() {
       var el = document.getElementById('topbarShopName');
-      if (el) el.textContent = SD.seller.shop_name;
-      // Update shop link
+      if (el) el.textContent = SD.seller.shop_name || '';
       var link = document.getElementById('viewShopLink');
-      if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name);
-      // Populate My Shop tab
+      if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name || '');
       populateShopForm();
-      // Wire image upload inputs
       initUploadBindings();
+      wireSaleToggle('newProdSale', 'newSaleFields');
+      wireSaleToggle('editProdSale', 'editSaleFields');
       showState('dashboard');
       switchTab('shop');
+      loadProgressBar();
+      loadUnreadNotifCount();
     }
-
-    /* ── Login ── */
-    document.getElementById('loginSubmitBtn').addEventListener('click', async function() {
-      var email = document.getElementById('loginEmail').value.trim();
-      var pass  = document.getElementById('loginPassword').value;
-      setMsg('loginMsg', '');
-      if (!email || !pass) { setMsg('loginMsg', 'Please enter your email and password.'); return; }
-      setBtnLoading('loginSubmitBtn', true, 'Sign In');
-      var { data, error } = await SD.sb.auth.signInWithPassword({ email: email, password: pass });
-      setBtnLoading('loginSubmitBtn', false, 'Sign In');
-      if (error) { setMsg('loginMsg', error.message); return; }
-      SD.user = data.user;
-
-      // Role gate: must be an approved seller
-      var profileRes = await SD.sb.from('profiles').select('role').eq('user_id', SD.user.id).maybeSingle();
-      var role = profileRes.data && profileRes.data.role;
-      if (role !== 'seller') {
-        await SD.sb.auth.signOut();
-        SD.user = null;
-        var msgEl = document.getElementById('loginMsg');
-        msgEl.className = 'msg error';
-        msgEl.innerHTML = "You don\u2019t have seller access. <a href=\"index.html\" style=\"color:var(--accent-2)\">Apply on Umzila</a>.";
-        msgEl.style.display = 'block';
-        return;
-      }
-
-      await loadSellerRow();
-    });
 
     /* ── Logout ── */
     document.getElementById('logoutBtn').addEventListener('click', async function() {
       await SD.sb.auth.signOut();
-      SD.user = SD.seller = null;
-      SD.products = SD.orders = [];
-      showState('login');
+      window.location.href = 'login-admin.html';
     });
 
     /* ─────────────────────────────────────────
        SETUP SHOP
     ───────────────────────────────────────── */
     document.getElementById('setupSubmitBtn').addEventListener('click', async function() {
-      var shopName  = document.getElementById('setupShopName').value.trim();
-      var desc      = document.getElementById('setupDesc').value.trim();
-      var logo      = document.getElementById('setupLogo').value.trim();
-      var banner    = document.getElementById('setupBanner').value.trim();
-      var whatsapp  = document.getElementById('setupWhatsApp').value.trim();
-
+      var shopName = document.getElementById('setupShopName').value.trim();
       setMsg('setupMsg', '');
       if (!shopName) { setMsg('setupMsg', 'Shop name is required.'); return; }
 
       setBtnLoading('setupSubmitBtn', true, 'Create My Shop →');
       var { data, error } = await SD.sb.from('sellers').insert({
-        user_id:          SD.user.id,
-        shop_name:        shopName,
-        description:      desc     || null,
-        logo_url:         logo     || null,
-        banner_url:       banner   || null,
-        whatsapp_number:  whatsapp || null
+        user_id:         SD.user.id,
+        shop_name:       shopName,
+        description:     document.getElementById('setupDesc').value.trim()    || null,
+        logo_url:        document.getElementById('setupLogo').value.trim()    || null,
+        banner_url:      document.getElementById('setupBanner').value.trim()  || null,
+        whatsapp_number: document.getElementById('setupWhatsApp').value.trim()|| null
       }).select().single();
 
       setBtnLoading('setupSubmitBtn', false, 'Create My Shop →');
@@ -935,400 +951,124 @@
     });
 
     /* ─────────────────────────────────────────
+       PROGRESS BAR
+    ───────────────────────────────────────── */
+    async function loadProgressBar() {
+      var s = SD.seller || {};
+      var items = [
+        { label: 'Shop name',       done: !!(s.shop_name),         weight: 10 },
+        { label: 'Description',     done: !!(s.description),       weight: 8  },
+        { label: 'Logo uploaded',   done: !!(s.logo_url),          weight: 10 },
+        { label: 'Banner uploaded', done: !!(s.banner_url),        weight: 8  },
+        { label: 'WhatsApp / contact', done: !!(s.whatsapp_number||s.support_email), weight: 6 },
+        { label: 'Location',        done: !!(s.location),          weight: 5  },
+        { label: 'Delivery method', done: !!(s.delivery_method),   weight: 5  },
+        { label: 'About story',     done: !!(s.about_story),       weight: 8  },
+      ];
+
+      // Product readiness
+      if (!SD.products.length) {
+        var { data: pData } = await SD.sb.from('products').select('id,name,description,price,stock,category,image,metadata').eq('seller_id', s.id);
+        SD.products = pData || [];
+      }
+      var hasProduct = SD.products.length > 0;
+      var approvedProduct = SD.products.some(function(p) { return getProductStatus(p) === 'approved'; });
+      var hasFullProduct = SD.products.some(function(p) {
+        return p.name && p.description && p.price > 0 && p.stock > 0 && p.category && (p.image || p.metadata);
+      });
+      items.push({ label: 'First product added',    done: hasProduct,      weight: 12 });
+      items.push({ label: 'Complete product listing',done: hasFullProduct,  weight: 10 });
+      items.push({ label: 'Product approved',       done: approvedProduct, weight: 8  });
+
+      var total = items.reduce(function(s, i) { return s + i.weight; }, 0);
+      var earned = items.filter(function(i) { return i.done; }).reduce(function(s, i) { return s + i.weight; }, 0);
+      var pct = Math.round((earned / total) * 100);
+
+      document.getElementById('progressPct').textContent = pct + '%';
+      document.getElementById('progressFill').style.width = pct + '%';
+
+      var copy = pct === 100 ? '🎉 Your shop is fully set up and ready to sell!' :
+                 pct >= 80  ? "You're almost ready! Just a few more details to add." :
+                 pct >= 50  ? 'Good progress! Complete your profile to build buyer trust.' :
+                              'Complete your shop profile to start attracting buyers.';
+      document.getElementById('progressCopy').textContent = copy;
+
+      var list = document.getElementById('progressChecklist');
+      list.innerHTML = items.filter(function(i) { return i.weight >= 8; }).map(function(i) {
+        return '<div class="progress-item' + (i.done ? ' done' : '') + '">' + i.label + '</div>';
+      }).join('');
+    }
+
+    /* ─────────────────────────────────────────
        TAB 1 — MY SHOP
     ───────────────────────────────────────── */
     function populateShopForm() {
-      var s = SD.seller;
-      document.getElementById('editShopName').value  = s.shop_name        || '';
-      document.getElementById('editDesc').value      = s.description      || '';
-      document.getElementById('editLogo').value      = s.logo_url         || '';
-      document.getElementById('editBanner').value    = s.banner_url       || '';
-      document.getElementById('editWhatsApp').value  = s.whatsapp_number  || '';
-      // Show image previews if URLs exist
-      var logoPrev = document.getElementById('editLogoPreview');
-      if (logoPrev && s.logo_url) { logoPrev.src = s.logo_url; logoPrev.style.display = ''; }
-      var bannerPrev = document.getElementById('editBannerPreview');
-      if (bannerPrev && s.banner_url) { bannerPrev.src = s.banner_url; bannerPrev.style.display = ''; }
+      var s = SD.seller || {};
+      function val(id, v) { var el = document.getElementById(id); if (el) el.value = v || ''; }
+      val('editShopName',      s.shop_name);
+      val('editDesc',          s.description);
+      val('editLogo',          s.logo_url);
+      val('editBanner',        s.banner_url);
+      val('editWhatsApp',      s.whatsapp_number);
+      val('editSupportEmail',  s.support_email);
+      val('editLocation',      s.location);
+      val('editReturnPolicy',  s.return_policy);
+      val('editTurnaround',    s.turnaround_time);
+      val('editInstagram',     s.social_instagram);
+      val('editTiktok',        s.social_tiktok);
+      val('editAboutStory',    s.about_story);
+      val('editOwnerStory',    s.owner_story);
+      var yrs = document.getElementById('editYearsOp');
+      if (yrs) yrs.value = s.years_operating != null ? s.years_operating : '';
+      var dm = document.getElementById('editDeliveryMethod');
+      if (dm) dm.value = s.delivery_method || '';
+      // Previews
+      var lp = document.getElementById('editLogoPreview');
+      if (lp && s.logo_url) { lp.src = s.logo_url; lp.style.display = ''; }
+      var bp = document.getElementById('editBannerPreview');
+      if (bp && s.banner_url) { bp.src = s.banner_url; bp.style.display = ''; }
     }
 
     document.getElementById('saveShopBtn').addEventListener('click', async function() {
-      var shopName  = document.getElementById('editShopName').value.trim();
+      var shopName = (document.getElementById('editShopName').value || '').trim();
       setMsg('shopSaveMsg', '');
       if (!shopName) { setMsg('shopSaveMsg', 'Shop name is required.'); return; }
+
+      function gv(id) { var el = document.getElementById(id); return el ? (el.value || '').trim() || null : null; }
+      var yrsEl = document.getElementById('editYearsOp');
+      var yrs = yrsEl && yrsEl.value ? parseInt(yrsEl.value, 10) : null;
 
       setBtnLoading('saveShopBtn', true, 'Save Changes');
       var { data, error } = await SD.sb.from('sellers').update({
         shop_name:        shopName,
-        description:      document.getElementById('editDesc').value.trim()     || null,
-        logo_url:         document.getElementById('editLogo').value.trim()     || null,
-        banner_url:       document.getElementById('editBanner').value.trim()   || null,
-        whatsapp_number:  document.getElementById('editWhatsApp').value.trim() || null
+        description:      gv('editDesc'),
+        logo_url:         gv('editLogo'),
+        banner_url:       gv('editBanner'),
+        whatsapp_number:  gv('editWhatsApp'),
+        support_email:    gv('editSupportEmail'),
+        location:         gv('editLocation'),
+        delivery_method:  gv('editDeliveryMethod'),
+        return_policy:    gv('editReturnPolicy'),
+        turnaround_time:  gv('editTurnaround'),
+        years_operating:  isNaN(yrs) ? null : yrs,
+        social_instagram: gv('editInstagram'),
+        social_tiktok:    gv('editTiktok'),
+        about_story:      gv('editAboutStory'),
+        owner_story:      gv('editOwnerStory')
       }).eq('id', SD.seller.id).select().single();
 
       setBtnLoading('saveShopBtn', false, 'Save Changes');
       if (error) { setMsg('shopSaveMsg', error.message); return; }
       SD.seller = data;
-      document.getElementById('topbarShopName').textContent = data.shop_name;
-      document.getElementById('viewShopLink').href = 'shop.html?shop=' + encodeURIComponent(data.shop_name);
+      document.getElementById('topbarShopName').textContent = data.shop_name || '';
+      document.getElementById('viewShopLink').href = 'shop.html?shop=' + encodeURIComponent(data.shop_name || '');
       setMsg('shopSaveMsg', 'Shop updated!', 'success');
       toast('Shop saved ✓');
+      loadProgressBar();
     });
-
-    /* ─────────────────────────────────────────
-       TAB 2 — PRODUCTS
-    ───────────────────────────────────────── */
-    var productsLoaded = false;
-
-    async function loadProducts() {
-      if (productsLoaded) return;
-      document.getElementById('prodListLoading').style.display = '';
-      document.getElementById('prodEmpty').style.display = 'none';
-
-      var { data, error } = await SD.sb
-        .from('products')
-        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at')
-        .eq('seller_id', SD.seller.id)
-        .order('created_at', { ascending: false });
-
-      document.getElementById('prodListLoading').style.display = 'none';
-      if (error) { toast('Failed to load products: ' + error.message); return; }
-
-      SD.products = data || [];
-      productsLoaded = true;
-      renderProductList();
-    }
-
-    function renderProductList() {
-      var list = document.getElementById('productList');
-      var empty = document.getElementById('prodEmpty');
-      if (!SD.products.length) { list.innerHTML = ''; empty.style.display = ''; return; }
-      empty.style.display = 'none';
-
-      list.innerHTML = SD.products.map(function(p) {
-        var img      = p.image || 'https://picsum.photos/seed/' + p.id + '/80/80';
-        var status   = getProductStatus(p);
-        var price    = p.sale && p.sale_price ? fmt(p.sale_price) : fmt(p.price);
-        return '<div class="product-row" data-id="' + p.id + '">' +
-          '<img class="product-row-img" src="' + img + '" alt="' + (p.name||'') + '" onerror="this.src=\'https://picsum.photos/seed/' + p.id + '/80/80\'">' +
-          '<div class="product-row-info">' +
-            '<div class="product-row-name">' + (p.name || 'Untitled') + '</div>' +
-            '<div class="product-row-meta">' + price + ' · ' + (p.category || '') + ' · ' + statusBadgeHtml(status) + '</div>' +
-          '</div>' +
-          '<div class="product-row-actions">' +
-            '<button class="btn ghost sm edit-prod-btn" data-id="' + p.id + '">Edit</button>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-
-      /* bind edit buttons */
-      document.querySelectorAll('.edit-prod-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() { openEditProduct(btn.dataset.id); });
-      });
-    }
-
-    /* Add product */
-    document.getElementById('addProductToggleBtn').addEventListener('click', function() {
-      var form = document.getElementById('addProductForm');
-      var open = form.style.display !== 'none';
-      form.style.display = open ? 'none' : '';
-      this.textContent = open ? '+ Add Product' : '× Cancel';
-      if (!open) bindSizeChips('newProdSizes');
-    });
-
-    document.getElementById('cancelAddProductBtn').addEventListener('click', function() {
-      document.getElementById('addProductForm').style.display = 'none';
-      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
-    });
-
-    document.getElementById('submitProductBtn').addEventListener('click', async function() {
-      var name     = document.getElementById('newProdName').value.trim();
-      var desc     = document.getElementById('newProdDesc').value.trim();
-      var price    = parseFloat(document.getElementById('newProdPrice').value);
-      var stock    = parseInt(document.getElementById('newProdStock').value, 10) || 0;
-      var category = document.getElementById('newProdCategory').value;
-      var badge    = document.getElementById('newProdBadge').value;
-      var image    = document.getElementById('newProdImage').value.trim();
-      var sizes    = getSelectedSizes('newProdSizes');
-
-      setMsg('addProdMsg', '');
-      if (!name)        { setMsg('addProdMsg', 'Product name is required.');    return; }
-      if (isNaN(price)) { setMsg('addProdMsg', 'Please enter a valid price.');  return; }
-
-      setBtnLoading('submitProductBtn', true, 'Submit for Review');
-
-      var { data, error } = await SD.sb.from('products').insert({
-        seller_id:   SD.seller.id,
-        name:        name,
-        description: desc     || null,
-        price:       price,
-        stock:       stock,
-        category:    category,
-        badge:       badge    || null,
-        image:       image    || null,
-        sizes:       sizes.length ? sizes : ['S','M','L','XL'],
-        visible:     false,
-        metadata:    { review_status: 'pending_review' }
-      }).select().single();
-
-      setBtnLoading('submitProductBtn', false, 'Submit for Review');
-      if (error) { setMsg('addProdMsg', error.message); return; }
-
-      SD.products.unshift(data);
-      renderProductList();
-      document.getElementById('addProductForm').style.display = 'none';
-      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
-      /* reset form */
-      ['newProdName','newProdDesc','newProdPrice','newProdStock','newProdImage'].forEach(function(id) {
-        document.getElementById(id).value = '';
-      });
-      setMsg('addProdMsg', '', '');
-      toast('Product submitted for review ✓');
-    });
-
-    /* Edit product */
-    function openEditProduct(id) {
-      var p = SD.products.find(function(x) { return x.id === id; });
-      if (!p) return;
-      document.getElementById('editProdId').value       = p.id;
-      document.getElementById('editProdName').value     = p.name || '';
-      document.getElementById('editProdDesc').value     = p.description || '';
-      document.getElementById('editProdPrice').value    = p.price || '';
-      document.getElementById('editProdStock').value    = p.stock || '';
-      document.getElementById('editProdImage').value    = p.image || '';
-      document.getElementById('editProdCategory').value = p.category || 'All';
-      document.getElementById('editProdBadge').value    = p.badge || '';
-      // Show image preview
-      var epPrev = document.getElementById('editProdImagePreview');
-      if (epPrev) { if (p.image) { epPrev.src = p.image; epPrev.style.display = ''; } else { epPrev.style.display = 'none'; } }
-      setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
-      bindSizeChips('editProdSizes');
-      setMsg('editProdMsg', '');
-      var panel = document.getElementById('editProductPanel');
-      panel.style.display = '';
-      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    document.getElementById('cancelEditProdBtn').addEventListener('click', function() {
-      document.getElementById('editProductPanel').style.display = 'none';
-    });
-
-    document.getElementById('saveEditProdBtn').addEventListener('click', async function() {
-      var id       = document.getElementById('editProdId').value;
-      var name     = document.getElementById('editProdName').value.trim();
-      var desc     = document.getElementById('editProdDesc').value.trim();
-      var price    = parseFloat(document.getElementById('editProdPrice').value);
-      var stock    = parseInt(document.getElementById('editProdStock').value, 10) || 0;
-      var category = document.getElementById('editProdCategory').value;
-      var badge    = document.getElementById('editProdBadge').value;
-      var image    = document.getElementById('editProdImage').value.trim();
-      var sizes    = getSelectedSizes('editProdSizes');
-
-      setMsg('editProdMsg', '');
-      if (!name)        { setMsg('editProdMsg', 'Product name is required.');   return; }
-      if (isNaN(price)) { setMsg('editProdMsg', 'Please enter a valid price.'); return; }
-
-      setBtnLoading('saveEditProdBtn', true, 'Save Changes');
-      var { data, error } = await SD.sb.from('products').update({
-        name:        name,
-        description: desc     || null,
-        price:       price,
-        stock:       stock,
-        category:    category,
-        badge:       badge    || null,
-        image:       image    || null,
-        sizes:       sizes.length ? sizes : ['S','M','L','XL']
-      }).eq('id', id).select().single();
-
-      setBtnLoading('saveEditProdBtn', false, 'Save Changes');
-      if (error) { setMsg('editProdMsg', error.message); return; }
-
-      /* update local cache */
-      var idx = SD.products.findIndex(function(x) { return x.id === id; });
-      if (idx > -1) SD.products[idx] = Object.assign(SD.products[idx], data);
-      renderProductList();
-      document.getElementById('editProductPanel').style.display = 'none';
-      toast('Product updated ✓');
-    });
-
-    /* ─────────────────────────────────────────
-       TAB 3 — ORDERS
-    ───────────────────────────────────────── */
-    var ordersLoaded = false;
-
-    async function loadOrders() {
-      if (ordersLoaded) return;
-      document.getElementById('ordersLoading').style.display = '';
-      document.getElementById('ordersEmpty').style.display = 'none';
-
-      /* Get seller's product IDs */
-      if (!SD.products.length) {
-        var { data: prodData } = await SD.sb
-          .from('products').select('id').eq('seller_id', SD.seller.id);
-        SD.products = prodData || [];
-      }
-      var myProductIds = SD.products.map(function(p) { return p.id; });
-
-      if (!myProductIds.length) {
-        document.getElementById('ordersLoading').style.display = 'none';
-        document.getElementById('ordersEmpty').style.display = '';
-        ordersLoaded = true;
-        return;
-      }
-
-      /* Fetch recent orders — RLS now allows sellers to read relevant orders */
-      var { data, error } = await SD.sb
-        .from('orders')
-        .select('id, order_number, created_at, order_status, customer_name, customer_email, items, total')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      document.getElementById('ordersLoading').style.display = 'none';
-
-      if (error) { toast('Failed to load orders: ' + error.message); return; }
-
-      /* Filter orders that contain at least one of seller's products */
-      var myOrders = (data || []).filter(function(order) {
-        var items = Array.isArray(order.items) ? order.items : [];
-        return items.some(function(item) { return myProductIds.includes(item.id); });
-      });
-
-      SD.orders   = myOrders;
-      ordersLoaded = true;
-      renderOrders(myOrders, myProductIds);
-    }
-
-    function renderOrders(orders, myProductIds) {
-      var list  = document.getElementById('ordersList');
-      var empty = document.getElementById('ordersEmpty');
-
-      if (!orders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
-      empty.style.display = 'none';
-
-      list.innerHTML = orders.map(function(order) {
-        var items = (Array.isArray(order.items) ? order.items : [])
-          .filter(function(i) { return myProductIds.includes(i.id); });
-
-        var itemLines = items.map(function(i) {
-          return '<div class="order-item-line">' +
-            '<span>' + (i.title || 'Product') + ' × ' + (i.qty || 1) + ' (' + (i.size || '') + ')</span>' +
-            '<span>' + fmt((i.price || 0) * (i.qty || 1)) + '</span>' +
-          '</div>';
-        }).join('');
-
-        var statusColor = order.order_status === 'paid' ? 'var(--success)' : 'var(--muted)';
-
-        return '<div class="order-row">' +
-          '<div class="order-row-header">' +
-            '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
-            '<span style="font-size:12px;font-weight:700;color:' + statusColor + '">' + (order.order_status || 'unknown') + '</span>' +
-            '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
-          '</div>' +
-          '<div class="order-items-list">' + itemLines + '</div>' +
-          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_email ? ' · ' + order.customer_email : '') + '</div>' : '') +
-        '</div>';
-      }).join('');
-    }
-
-    /* ─────────────────────────────────────────
-       TAB 4 — ANALYTICS
-    ───────────────────────────────────────── */
-    async function loadAnalytics() {
-      /* Ensure products loaded */
-      if (!SD.products.length) {
-        var { data } = await SD.sb.from('products').select('id,visible,metadata').eq('seller_id', SD.seller.id);
-        SD.products = data || [];
-      }
-      var myProductIds = SD.products.map(function(p) { return p.id; });
-
-      var totalProducts = SD.products.length;
-      var pendingCount  = SD.products.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
-
-      /* Ensure orders loaded */
-      if (!SD.orders.length && myProductIds.length) {
-        var { data: ordData } = await SD.sb
-          .from('orders').select('id, items, order_status').order('created_at', { ascending: false }).limit(200);
-        SD.orders = (ordData || []).filter(function(o) {
-          return (Array.isArray(o.items) ? o.items : []).some(function(i) { return myProductIds.includes(i.id); });
-        });
-      }
-
-      var totalOrders  = SD.orders.length;
-
-      // Per-order revenue + status breakdown
-      var paidCount = 0, unpaidCount = 0, otherCount = 0;
-      var totalRevenue = 0;
-
-      // Per-product revenue map: { productId: { revenue, qty, name, price } }
-      var prodRevMap = {};
-      SD.products.forEach(function(p) {
-        prodRevMap[p.id] = { id: p.id, name: p.name || 'Untitled', revenue: 0, qty: 0 };
-      });
-
-      SD.orders.forEach(function(order) {
-        var items = Array.isArray(order.items) ? order.items : [];
-        var myItems = items.filter(function(i) { return myProductIds.includes(i.id); });
-        var orderRevenue = myItems.reduce(function(s, i) { return s + (Number(i.price || 0) * Number(i.qty || 1)); }, 0);
-        totalRevenue += orderRevenue;
-
-        var st = (order.order_status || '').toLowerCase();
-        if (st === 'paid') paidCount++;
-        else if (st === 'pending' || st === 'payment_pending') unpaidCount++;
-        else otherCount++;
-
-        myItems.forEach(function(i) {
-          if (prodRevMap[i.id]) {
-            prodRevMap[i.id].revenue += Number(i.price || 0) * Number(i.qty || 1);
-            prodRevMap[i.id].qty     += Number(i.qty || 1);
-          }
-        });
-      });
-
-      // Product status breakdown
-      var approvedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'approved'; }).length;
-      var rejectedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
-
-      // Update overview
-      document.getElementById('statProducts').textContent = totalProducts;
-      document.getElementById('statOrders').textContent   = totalOrders;
-      document.getElementById('statRevenue').textContent  = fmt(totalRevenue);
-      document.getElementById('statPending').textContent  = pendingCount;
-
-      // Update order status
-      document.getElementById('statPaid').textContent        = paidCount;
-      document.getElementById('statUnpaid').textContent      = unpaidCount;
-      document.getElementById('statOtherOrders').textContent = otherCount;
-
-      // Update product status
-      document.getElementById('statApprovedProds').textContent = approvedProds;
-      document.getElementById('statPendingProds').textContent  = pendingCount;
-      document.getElementById('statRejectedProds').textContent = rejectedProds;
-
-      // Top products
-      var topProds = Object.values(prodRevMap)
-        .filter(function(p) { return p.qty > 0; })
-        .sort(function(a, b) { return b.revenue - a.revenue; })
-        .slice(0, 5);
-
-      var topList = document.getElementById('topProductsList');
-      if (!topProds.length) {
-        topList.innerHTML = '<div style="color:var(--muted);font-size:13px">No orders yet — your top sellers will appear here.</div>';
-      } else {
-        topList.innerHTML = topProds.map(function(p, i) {
-          return '<div class="top-prod-row">' +
-            '<div class="top-prod-rank">' + (i + 1) + '</div>' +
-            '<div class="top-prod-info">' +
-              '<div class="top-prod-name">' + p.name + '</div>' +
-              '<div class="top-prod-meta">' + p.qty + ' sold</div>' +
-            '</div>' +
-            '<div class="top-prod-rev">' + fmt(p.revenue) + '</div>' +
-          '</div>';
-        }).join('');
-      }
-    }
 
     /* ─────────────────────────────────────────
        IMAGE UPLOAD — Supabase Storage
-       Bucket: "shop-assets" (create in Supabase dashboard if missing)
     ───────────────────────────────────────── */
     var STORAGE_BUCKET = 'shop-assets';
 
@@ -1339,11 +1079,8 @@
       if (prog) prog.style.display = 'block';
 
       var { data, error } = await SD.sb.storage
-        .from(STORAGE_BUCKET)
-        .upload(storagePath, file, { upsert: true, contentType: file.type });
-
+        .from(STORAGE_BUCKET).upload(storagePath, file, { upsert: true, contentType: file.type });
       if (prog) prog.style.display = 'none';
-
       if (error) { toast('Upload failed: ' + error.message); return null; }
 
       var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
@@ -1361,55 +1098,704 @@
       fileInput.addEventListener('change', async function() {
         var file = fileInput.files && fileInput.files[0];
         if (!file) return;
-        var path = pathFn(file);
-        // Show local preview immediately
         var preview = document.getElementById(previewId);
         if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = ''; }
-        await uploadImage(file, path, progressId, urlInputId, previewId);
+        await uploadImage(file, pathFn(file), progressId, urlInputId, previewId);
       });
     }
 
     function initUploadBindings() {
       var sid = SD.seller.id;
-
-      // Shop logo
-      bindImageUpload('editLogoFile', 'editLogoProgress', 'editLogo', 'editLogoPreview',
-        function(f) { return 'sellers/' + sid + '/logo.' + f.name.split('.').pop(); });
-
-      // Shop banner
-      bindImageUpload('editBannerFile', 'editBannerProgress', 'editBanner', 'editBannerPreview',
+      bindImageUpload('editLogoFile',  'editLogoProgress',  'editLogo',   'editLogoPreview',
+        function(f) { return 'sellers/' + sid + '/logo.'   + f.name.split('.').pop(); });
+      bindImageUpload('editBannerFile','editBannerProgress','editBanner', 'editBannerPreview',
         function(f) { return 'sellers/' + sid + '/banner.' + f.name.split('.').pop(); });
-
-      // New product image
-      bindImageUpload('newProdImageFile', 'newProdImageProgress', 'newProdImage', 'newProdImagePreview',
-        function(f) { return 'sellers/' + sid + '/products/new_' + Date.now() + '.' + f.name.split('.').pop(); });
-
-      // Edit product image
-      bindImageUpload('editProdImageFile', 'editProdImageProgress', 'editProdImage', 'editProdImagePreview',
-        function(f) {
-          var editId = document.getElementById('editProdId').value || 'edit';
-          return 'sellers/' + sid + '/products/' + editId + '.' + f.name.split('.').pop();
-        });
     }
 
     /* ─────────────────────────────────────────
-       Entry point — wait for supabase-ready
+       MULTI-IMAGE SYSTEM (product_images table)
+    ───────────────────────────────────────── */
+
+    // State: images pending insertion for a new product
+    var newProdPendingImages = [];   // [{ url, sort_order }]
+    var editProdImages = [];         // [{ id, url, sort_order }] for current edit
+
+    // Render the image grid for the "add product" form
+    function renderNewProdImages() {
+      var grid = document.getElementById('newProdImgGrid');
+      if (!grid) return;
+      var addBtn = '<label class="multi-img-add" id="newProdImgAddBtn"><span style="font-size:28px">+</span><span>Add Image</span><input type="file" id="newProdImageFile" accept="image/*" multiple></label>';
+      grid.innerHTML = newProdPendingImages.map(function(img, idx) {
+        return '<div class="multi-img-item' + (img.sort_order === 0 ? ' cover' : '') + '">' +
+          '<img src="' + img.url + '" alt="">' +
+          (img.sort_order === 0 ? '<div class="multi-img-cover-tag">Cover</div>' : '') +
+          '<div class="multi-img-actions">' +
+            '<button class="multi-img-btn del"       onclick="removeNewProdImg(' + idx + ')">✕</button>' +
+            (img.sort_order !== 0 ? '<button class="multi-img-btn cover-btn" onclick="setNewProdCover(' + idx + ')">★</button>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('') + addBtn;
+      // Re-bind file input
+      var fi = document.getElementById('newProdImageFile');
+      if (fi) fi.addEventListener('change', handleNewProdImgUpload);
+      // Update hidden URL field with cover image
+      var coverImg = newProdPendingImages.find(function(i) { return i.sort_order === 0; });
+      var hiddenUrl = document.getElementById('newProdImage');
+      if (hiddenUrl) hiddenUrl.value = coverImg ? coverImg.url : '';
+    }
+
+    window.removeNewProdImg = function(idx) {
+      newProdPendingImages.splice(idx, 1);
+      // Renumber sort_orders
+      newProdPendingImages.forEach(function(img, i) { img.sort_order = i; });
+      renderNewProdImages();
+    };
+    window.setNewProdCover = function(idx) {
+      var prev = newProdPendingImages.findIndex(function(i) { return i.sort_order === 0; });
+      if (prev > -1) newProdPendingImages[prev].sort_order = idx;  // swap
+      newProdPendingImages[idx].sort_order = 0;
+      renderNewProdImages();
+    };
+
+    async function handleNewProdImgUpload() {
+      var files = this.files;
+      if (!files || !files.length) return;
+      var prog = document.getElementById('newProdImageProgress');
+      if (prog) prog.style.display = 'block';
+      for (var fi = 0; fi < files.length; fi++) {
+        var file = files[fi];
+        var ext = file.name.split('.').pop();
+        var path = 'sellers/' + SD.seller.id + '/products/new_' + Date.now() + '_' + fi + '.' + ext;
+        var { data, error } = await SD.sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+        if (!error) {
+          var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
+          if (urlData && urlData.publicUrl) {
+            var nextOrder = newProdPendingImages.length; // 0 = first = cover
+            newProdPendingImages.push({ url: urlData.publicUrl, sort_order: nextOrder });
+          }
+        } else {
+          toast('Upload failed: ' + error.message);
+        }
+      }
+      if (prog) prog.style.display = 'none';
+      renderNewProdImages();
+    }
+
+    // Load images for a product being edited
+    async function loadEditProductImages(productId) {
+      var grid = document.getElementById('editProdImgGrid');
+      var loading = document.getElementById('editImgLoading');
+      if (loading) loading.style.display = '';
+      editProdImages = [];
+
+      var { data, error } = await SD.sb.from('product_images')
+        .select('id, url, image_order')
+        .eq('product_id', productId)
+        .order('image_order', { ascending: true });
+
+      if (loading) loading.style.display = 'none';
+      editProdImages = (data || []).map(function(r) {
+        return { id: r.id, url: r.url, sort_order: r.image_order };
+      });
+      renderEditProdImages(productId);
+    }
+
+    function renderEditProdImages(productId) {
+      var grid = document.getElementById('editProdImgGrid');
+      if (!grid) return;
+      var addHtml = '<label class="multi-img-add"><span style="font-size:28px">+</span><span>Add Image</span><input type="file" id="editProdImageFile" accept="image/*" multiple></label>';
+
+      grid.innerHTML = editProdImages.map(function(img, idx) {
+        return '<div class="multi-img-item' + (img.sort_order === 0 ? ' cover' : '') + '">' +
+          '<img src="' + img.url + '" alt="">' +
+          (img.sort_order === 0 ? '<div class="multi-img-cover-tag">Cover</div>' : '') +
+          '<div class="multi-img-actions">' +
+            '<button class="multi-img-btn del" onclick="removeEditProdImg(\'' + img.id + '\',' + idx + ',\'' + productId + '\')">✕</button>' +
+            (img.sort_order !== 0 ? '<button class="multi-img-btn cover-btn" onclick="setEditProdCover(\'' + img.id + '\',' + idx + ',\'' + productId + '\')">★</button>' : '') +
+          '</div>' +
+        '</div>';
+      }).join('') + addHtml;
+
+      var fi = document.getElementById('editProdImageFile');
+      if (fi) fi.addEventListener('change', function() { handleEditProdImgUpload(this.files, productId); });
+
+      // Update products.image to match cover
+      var cover = editProdImages.find(function(i) { return i.sort_order === 0; });
+      var hiddenImg = document.getElementById('editProdImage');
+      if (hiddenImg) hiddenImg.value = cover ? cover.url : '';
+    }
+
+    window.removeEditProdImg = async function(imgId, idx, productId) {
+      await SD.sb.from('product_images').delete().eq('id', imgId);
+      editProdImages.splice(idx, 1);
+      editProdImages.forEach(function(img, i) { img.sort_order = i; });
+      renderEditProdImages(productId);
+      // Update cover in products table
+      var cover = editProdImages[0];
+      if (cover) await SD.sb.from('products').update({ image: cover.url }).eq('id', productId);
+    };
+
+    window.setEditProdCover = async function(imgId, idx, productId) {
+      // Update sort_orders
+      var updates = editProdImages.map(function(img, i) {
+        return { id: img.id, image_order: i === idx ? 0 : (img.sort_order === 0 ? idx : i) };
+      });
+      for (var u = 0; u < updates.length; u++) {
+        await SD.sb.from('product_images').update({ image_order: updates[u].image_order }).eq('id', updates[u].id);
+        var found = editProdImages.find(function(e) { return e.id === updates[u].id; });
+        if (found) found.sort_order = updates[u].image_order;
+      }
+      // Update products.image to new cover
+      var newCover = editProdImages.find(function(i) { return i.sort_order === 0; });
+      if (newCover) await SD.sb.from('products').update({ image: newCover.url }).eq('id', productId);
+      renderEditProdImages(productId);
+    };
+
+    async function handleEditProdImgUpload(files, productId) {
+      if (!files || !files.length) return;
+      var prog = document.getElementById('editProdImageProgress');
+      if (prog) prog.style.display = 'block';
+      var nextOrder = editProdImages.length;
+      for (var fi = 0; fi < files.length; fi++) {
+        var file = files[fi];
+        var ext = file.name.split('.').pop();
+        var path = 'sellers/' + SD.seller.id + '/products/' + productId + '_' + Date.now() + '_' + fi + '.' + ext;
+        var { data: upData, error: upErr } = await SD.sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+        if (upErr) { toast('Upload failed: ' + upErr.message); continue; }
+        var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(upData.path);
+        var publicUrl = urlData && urlData.publicUrl;
+        if (publicUrl) {
+          var { data: insRow } = await SD.sb.from('product_images').insert({
+            product_id:  productId,
+            url:         publicUrl,
+            image_order: nextOrder
+          }).select().single();
+          if (insRow) {
+            editProdImages.push({ id: insRow.id, url: publicUrl, sort_order: nextOrder });
+            nextOrder++;
+          }
+          // Update products.image if this is the first image
+          if (nextOrder === 1) {
+            await SD.sb.from('products').update({ image: publicUrl }).eq('id', productId);
+          }
+        }
+      }
+      if (prog) prog.style.display = 'none';
+      renderEditProdImages(productId);
+    }
+
+    /* ─────────────────────────────────────────
+       TAB 2 — PRODUCTS
+    ───────────────────────────────────────── */
+    var productsLoaded = false;
+
+    async function loadProducts() {
+      if (productsLoaded) return;
+      document.getElementById('prodListLoading').style.display = '';
+      document.getElementById('prodEmpty').style.display = 'none';
+
+      var { data, error } = await SD.sb
+        .from('products')
+        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at, favourite_count')
+        .eq('seller_id', SD.seller.id)
+        .order('created_at', { ascending: false });
+
+      document.getElementById('prodListLoading').style.display = 'none';
+      if (error) { toast('Failed to load products: ' + error.message); return; }
+      SD.products = data || [];
+      productsLoaded = true;
+      renderProductList();
+    }
+
+    function renderProductList() {
+      var list  = document.getElementById('productList');
+      var empty = document.getElementById('prodEmpty');
+      if (!SD.products.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+      list.innerHTML = SD.products.map(function(p) {
+        var img    = p.image || 'https://picsum.photos/seed/' + p.id + '/80/80';
+        var status = getProductStatus(p);
+        var price  = p.sale && p.sale_price ? '<s style="font-size:11px;opacity:.6">' + fmt(p.price) + '</s> ' + fmt(p.sale_price) : fmt(p.price);
+        var favs   = (p.favourite_count || 0) > 0 ? ' · ❤️ ' + p.favourite_count : '';
+        return '<div class="product-row" data-id="' + p.id + '">' +
+          '<img class="product-row-img" src="' + img + '" alt="' + (p.name||'') + '" onerror="this.src=\'https://picsum.photos/seed/' + p.id + '/80/80\'">' +
+          '<div class="product-row-info">' +
+            '<div class="product-row-name">' + (p.name || 'Untitled') + '</div>' +
+            '<div class="product-row-meta">' + price + ' · ' + (p.category||'') + favs + ' · ' + statusBadgeHtml(status) + '</div>' +
+          '</div>' +
+          '<div class="product-row-actions"><button class="btn ghost sm edit-prod-btn" data-id="' + p.id + '">Edit</button></div>' +
+        '</div>';
+      }).join('');
+      document.querySelectorAll('.edit-prod-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { openEditProduct(btn.dataset.id); });
+      });
+    }
+
+    /* Add product */
+    document.getElementById('addProductToggleBtn').addEventListener('click', function() {
+      var form = document.getElementById('addProductForm');
+      var open = form.style.display !== 'none';
+      form.style.display = open ? 'none' : '';
+      this.textContent = open ? '+ Add Product' : '× Cancel';
+      if (!open) {
+        bindSizeChips('newProdSizes');
+        newProdPendingImages = [];
+        renderNewProdImages();
+        // Initial bind for file input
+        var fi = document.getElementById('newProdImageFile');
+        if (fi) fi.addEventListener('change', handleNewProdImgUpload);
+      }
+    });
+
+    document.getElementById('cancelAddProductBtn').addEventListener('click', function() {
+      document.getElementById('addProductForm').style.display = 'none';
+      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
+    });
+
+    document.getElementById('submitProductBtn').addEventListener('click', async function() {
+      var name     = (document.getElementById('newProdName').value || '').trim();
+      var desc     = (document.getElementById('newProdDesc').value || '').trim();
+      var price    = parseFloat(document.getElementById('newProdPrice').value);
+      var stock    = parseInt(document.getElementById('newProdStock').value, 10) || 0;
+      var category = document.getElementById('newProdCategory').value;
+      var badge    = document.getElementById('newProdBadge').value;
+      var sizes    = getSelectedSizes('newProdSizes');
+      var onSale   = document.getElementById('newProdSale').checked;
+      var salePrice= onSale ? parseFloat(document.getElementById('newProdSalePrice').value) : null;
+      var origPrice= onSale ? parseFloat(document.getElementById('newProdOrigPrice').value) : null;
+      var coverImg = (document.getElementById('newProdImage').value || '').trim();
+
+      setMsg('addProdMsg', '');
+      if (!name)         { setMsg('addProdMsg', 'Product name is required.');   return; }
+      if (isNaN(price))  { setMsg('addProdMsg', 'Please enter a valid price.');  return; }
+      if (onSale) {
+        if (isNaN(salePrice) || salePrice <= 0) { setMsg('addProdMsg', 'Enter a valid sale price.'); return; }
+        if (!isNaN(origPrice) && origPrice > 0 && salePrice >= origPrice) { setMsg('addProdMsg', 'Sale price must be less than original price.'); return; }
+      }
+
+      setBtnLoading('submitProductBtn', true, 'Submit for Review');
+      var { data, error } = await SD.sb.from('products').insert({
+        seller_id:   SD.seller.id,
+        name:        name,
+        description: desc    || null,
+        price:       onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
+        sale_price:  salePrice || null,
+        sale:        onSale,
+        stock:       stock,
+        category:    category,
+        badge:       badge   || null,
+        image:       coverImg|| null,
+        sizes:       sizes.length ? sizes : ['S','M','L','XL'],
+        visible:     false,
+        metadata:    { review_status: 'pending_review' }
+      }).select().single();
+
+      setBtnLoading('submitProductBtn', false, 'Submit for Review');
+      if (error) { setMsg('addProdMsg', error.message); return; }
+
+      // Insert product_images rows for pending images
+      if (newProdPendingImages.length && data) {
+        var imgRows = newProdPendingImages.map(function(img) {
+          return { product_id: data.id, url: img.url, image_order: img.sort_order };
+        });
+        await SD.sb.from('product_images').insert(imgRows);
+        // Update products.image with cover
+        var cover = newProdPendingImages.find(function(i) { return i.sort_order === 0; });
+        if (cover) await SD.sb.from('products').update({ image: cover.url }).eq('id', data.id);
+      }
+
+      newProdPendingImages = [];
+      SD.products.unshift(Object.assign({}, data));
+      renderProductList();
+      document.getElementById('addProductForm').style.display = 'none';
+      document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
+      ['newProdName','newProdDesc','newProdPrice','newProdStock','newProdImage'].forEach(function(id) {
+        var el = document.getElementById(id); if (el) el.value = '';
+      });
+      var saleCb = document.getElementById('newProdSale');
+      if (saleCb) { saleCb.checked = false; document.getElementById('newSaleFields').classList.remove('visible'); }
+      setMsg('addProdMsg', '', '');
+      toast('Product submitted for review ✓');
+      loadProgressBar();
+    });
+
+    /* Edit product */
+    function openEditProduct(id) {
+      var p = SD.products.find(function(x) { return x.id === id; });
+      if (!p) return;
+      document.getElementById('editProdId').value       = p.id;
+      document.getElementById('editProdName').value     = p.name || '';
+      document.getElementById('editProdDesc').value     = p.description || '';
+      document.getElementById('editProdPrice').value    = p.price || '';
+      document.getElementById('editProdStock').value    = p.stock || '';
+      document.getElementById('editProdImage').value    = p.image || '';
+      document.getElementById('editProdCategory').value = p.category || 'All';
+      document.getElementById('editProdBadge').value    = p.badge || '';
+
+      // Sale fields
+      var saleCb = document.getElementById('editProdSale');
+      if (saleCb) {
+        saleCb.checked = !!(p.sale);
+        document.getElementById('editSaleFields').classList.toggle('visible', !!(p.sale));
+        var sp = document.getElementById('editProdSalePrice');
+        var op = document.getElementById('editProdOrigPrice');
+        if (sp) sp.value = p.sale_price || '';
+        if (op) op.value = p.sale ? p.price : '';
+      }
+
+      setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
+      bindSizeChips('editProdSizes');
+      setMsg('editProdMsg', '');
+      var panel = document.getElementById('editProductPanel');
+      panel.style.display = '';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Load multi-images
+      loadEditProductImages(p.id);
+    }
+
+    document.getElementById('cancelEditProdBtn').addEventListener('click', function() {
+      document.getElementById('editProductPanel').style.display = 'none';
+    });
+
+    document.getElementById('saveEditProdBtn').addEventListener('click', async function() {
+      var id       = document.getElementById('editProdId').value;
+      var name     = (document.getElementById('editProdName').value || '').trim();
+      var desc     = (document.getElementById('editProdDesc').value || '').trim();
+      var price    = parseFloat(document.getElementById('editProdPrice').value);
+      var stock    = parseInt(document.getElementById('editProdStock').value, 10) || 0;
+      var category = document.getElementById('editProdCategory').value;
+      var badge    = document.getElementById('editProdBadge').value;
+      var image    = (document.getElementById('editProdImage').value || '').trim();
+      var sizes    = getSelectedSizes('editProdSizes');
+      var onSale   = document.getElementById('editProdSale').checked;
+      var salePrice= onSale ? parseFloat(document.getElementById('editProdSalePrice').value) : null;
+      var origPrice= onSale ? parseFloat(document.getElementById('editProdOrigPrice').value) : null;
+
+      setMsg('editProdMsg', '');
+      if (!name)        { setMsg('editProdMsg', 'Product name is required.');   return; }
+      if (isNaN(price)) { setMsg('editProdMsg', 'Please enter a valid price.'); return; }
+      if (onSale && !isNaN(salePrice) && !isNaN(origPrice) && salePrice >= origPrice) {
+        setMsg('editProdMsg', 'Sale price must be less than original price.'); return;
+      }
+
+      setBtnLoading('saveEditProdBtn', true, 'Save Changes');
+      var { data, error } = await SD.sb.from('products').update({
+        name:        name,
+        description: desc    || null,
+        price:       onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
+        sale_price:  salePrice || null,
+        sale:        onSale,
+        stock:       stock,
+        category:    category,
+        badge:       badge   || null,
+        image:       image   || null,
+        sizes:       sizes.length ? sizes : ['S','M','L','XL']
+      }).eq('id', id).select().single();
+
+      setBtnLoading('saveEditProdBtn', false, 'Save Changes');
+      if (error) { setMsg('editProdMsg', error.message); return; }
+
+      var idx = SD.products.findIndex(function(x) { return x.id === id; });
+      if (idx > -1) SD.products[idx] = Object.assign(SD.products[idx], data);
+      renderProductList();
+      document.getElementById('editProductPanel').style.display = 'none';
+      toast('Product updated ✓');
+    });
+
+    /* ─────────────────────────────────────────
+       TAB 3 — ORDERS
+    ───────────────────────────────────────── */
+    var ordersLoaded = false;
+
+    async function loadOrders() {
+      if (ordersLoaded) return;
+      document.getElementById('ordersLoading').style.display = '';
+      document.getElementById('ordersEmpty').style.display = 'none';
+
+      // Get seller's product IDs
+      if (!SD.products.length) {
+        var { data: pd } = await SD.sb.from('products').select('id').eq('seller_id', SD.seller.id);
+        SD.products = pd || [];
+      }
+      var myProductIds = SD.products.map(function(p) { return p.id; });
+      if (!myProductIds.length) {
+        document.getElementById('ordersLoading').style.display = 'none';
+        document.getElementById('ordersEmpty').style.display = '';
+        ordersLoaded = true; return;
+      }
+
+      // Fetch recent orders (RLS allows sellers to read relevant orders)
+      var { data, error } = await SD.sb
+        .from('orders')
+        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, raw_cart, total')
+        .order('created_at', { ascending: false })
+        .limit(150);
+
+      document.getElementById('ordersLoading').style.display = 'none';
+      if (error) { toast('Failed to load orders: ' + error.message); return; }
+
+      // Filter to orders containing this seller's products
+      var allOrders = data || [];
+      var myOrders = allOrders.filter(function(o) {
+        var items = Array.isArray(o.items) ? o.items : (Array.isArray(o.raw_cart) ? o.raw_cart : []);
+        return items.some(function(i) {
+          return myProductIds.includes(i.id || i.product_id);
+        });
+      });
+
+      SD.orders   = myOrders;
+      ordersLoaded = true;
+      renderOrders(myOrders, myProductIds);
+    }
+
+    function renderOrders(orders, myProductIds) {
+      var list  = document.getElementById('ordersList');
+      var empty = document.getElementById('ordersEmpty');
+      if (!orders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+
+      list.innerHTML = orders.map(function(order) {
+        var rawItems = Array.isArray(order.items) ? order.items : (Array.isArray(order.raw_cart) ? order.raw_cart : []);
+        var items = rawItems.filter(function(i) {
+          return myProductIds.includes(i.id || i.product_id);
+        });
+
+        var itemLines = items.map(function(i) {
+          var iName = i.title || i.name || i.product_name || 'Product';
+          var qty   = i.qty || i.quantity || 1;
+          var price = i.price || i.unit_price || 0;
+          return '<div class="order-item-line">' +
+            '<span>' + iName + (i.size ? ' / ' + i.size : '') + ' × ' + qty + '</span>' +
+            '<span>' + fmt(price * qty) + '</span>' +
+          '</div>';
+        }).join('');
+
+        var payStatus = (order.payment_status || order.order_status || 'pending').toLowerCase();
+        var payPillClass = payStatus === 'paid' ? 'paid' : (payStatus === 'cancelled' ? 'cancelled' : 'pending');
+        var payLabel = payStatus === 'paid' ? '✓ Paid' : (payStatus === 'cancelled' ? '✗ Cancelled' : '⏳ Pending');
+
+        var fulfillStatus = ['Pending','Packaging','Fulfilled','Delivered','Returned'].includes(order.order_status)
+          ? order.order_status : 'Pending';
+
+        return '<div class="order-row" id="order-' + order.id + '">' +
+          '<div class="order-row-header">' +
+            '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
+            '<span class="payment-pill ' + payPillClass + '">' + payLabel + '</span>' +
+            '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
+          '</div>' +
+          '<div class="order-items-list">' + itemLines + '</div>' +
+          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_phone ? ' · ' + order.customer_phone : '') + (order.city ? ' · ' + order.city : '') + '</div>' : '') +
+          '<div class="order-status-row">' +
+            '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
+            '<select class="fulfillment-select" data-order-id="' + order.id + '" onchange="updateOrderFulfillment(this)">' +
+              ['Pending','Packaging','Fulfilled','Delivered','Returned'].map(function(s) {
+                return '<option' + (s === fulfillStatus ? ' selected' : '') + '>' + s + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    window.updateOrderFulfillment = async function(select) {
+      var orderId = select.dataset.orderId;
+      var newStatus = select.value;
+      var { error } = await SD.sb.from('orders').update({ order_status: newStatus }).eq('id', orderId);
+      if (error) { toast('Update failed: ' + error.message); return; }
+      toast('Order status updated to ' + newStatus + ' ✓');
+    };
+
+    /* ─────────────────────────────────────────
+       TAB 4 — NOTIFICATIONS
+    ───────────────────────────────────────── */
+    var notifsLoaded = false;
+
+    async function loadUnreadNotifCount() {
+      if (!SD.seller) return;
+      var { count } = await SD.sb.from('seller_notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('seller_id', SD.seller.id)
+        .eq('is_read', false);
+
+      var badge = document.getElementById('notifBadge');
+      var dot   = document.getElementById('tabNotifDot');
+      var n = count || 0;
+      if (badge) { badge.textContent = n > 9 ? '9+' : n; badge.classList.toggle('visible', n > 0); }
+      if (dot)   dot.classList.toggle('visible', n > 0);
+    }
+
+    async function loadNotifications() {
+      if (notifsLoaded) return;
+      document.getElementById('notifLoading').style.display = '';
+      document.getElementById('notifEmpty').style.display = 'none';
+
+      var { data, error } = await SD.sb
+        .from('seller_notifications')
+        .select('id, type, title, body, image_url, related_product_id, is_read, created_at')
+        .eq('seller_id', SD.seller.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      document.getElementById('notifLoading').style.display = 'none';
+      if (error) { toast('Failed to load notifications: ' + error.message); return; }
+
+      SD.notifications = data || [];
+      notifsLoaded = true;
+      renderNotifications();
+    }
+
+    function renderNotifications() {
+      var list  = document.getElementById('notifList');
+      var empty = document.getElementById('notifEmpty');
+      if (!SD.notifications.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+
+      list.innerHTML = SD.notifications.map(function(n) {
+        var typeBadge = n.type === 'favourite' ? '<span class="notif-type-badge favourite">❤️ Favourite</span>' :
+                        n.type === 'order'     ? '<span class="notif-type-badge order">🛒 Order</span>'         :
+                                                 '<span class="notif-type-badge system">💬 System</span>';
+        var imgHtml = n.image_url
+          ? '<img class="notif-img" src="' + n.image_url + '" alt="" onerror="this.style.display=\'none\'">'
+          : '<div class="notif-img" style="display:flex;align-items:center;justify-content:center;font-size:22px">' + (n.type === 'favourite' ? '❤️' : n.type === 'order' ? '🛒' : '🔔') + '</div>';
+        return '<div class="notif-item' + (n.is_read ? '' : ' unread') + '" data-id="' + n.id + '" onclick="markNotifRead(\'' + n.id + '\')">' +
+          imgHtml +
+          '<div class="notif-body">' +
+            typeBadge +
+            '<div class="notif-title">' + (n.title || '') + '</div>' +
+            (n.body ? '<div class="notif-text">' + n.body + '</div>' : '') +
+            '<div class="notif-time">' + timeAgo(n.created_at) + '</div>' +
+          '</div>' +
+          (!n.is_read ? '<div class="notif-unread-dot"></div>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    window.markNotifRead = async function(id) {
+      var n = SD.notifications.find(function(x) { return x.id === id; });
+      if (!n || n.is_read) return;
+      await SD.sb.from('seller_notifications').update({ is_read: true }).eq('id', id);
+      n.is_read = true;
+      renderNotifications();
+      loadUnreadNotifCount();
+    };
+
+    document.getElementById('markAllReadBtn').addEventListener('click', async function() {
+      await SD.sb.from('seller_notifications').update({ is_read: true }).eq('seller_id', SD.seller.id).eq('is_read', false);
+      SD.notifications.forEach(function(n) { n.is_read = true; });
+      renderNotifications();
+      loadUnreadNotifCount();
+      toast('All notifications marked as read ✓');
+    });
+
+    /* ─────────────────────────────────────────
+       TAB 5 — ANALYTICS
+    ───────────────────────────────────────── */
+    async function loadAnalytics() {
+      // Ensure products loaded
+      if (!SD.products.length) {
+        var { data: pd } = await SD.sb.from('products')
+          .select('id, name, visible, metadata, favourite_count')
+          .eq('seller_id', SD.seller.id);
+        SD.products = pd || [];
+      }
+      var myProductIds = SD.products.map(function(p) { return p.id; });
+      var totalProducts = SD.products.length;
+      var pendingCount  = SD.products.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
+      var approvedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'approved'; }).length;
+      var rejectedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
+      var totalFavs     = SD.products.reduce(function(s, p) { return s + (p.favourite_count || 0); }, 0);
+
+      // Ensure orders loaded
+      if (!SD.orders.length && myProductIds.length) {
+        var { data: od } = await SD.sb
+          .from('orders').select('id, items, raw_cart, order_status, payment_status')
+          .order('created_at', { ascending: false }).limit(200);
+        SD.orders = (od || []).filter(function(o) {
+          var items = Array.isArray(o.items) ? o.items : (Array.isArray(o.raw_cart) ? o.raw_cart : []);
+          return items.some(function(i) { return myProductIds.includes(i.id || i.product_id); });
+        });
+      }
+
+      var totalOrders = SD.orders.length;
+      var paidCount = 0, unpaidCount = 0, otherCount = 0, totalRevenue = 0;
+      var prodRevMap = {};
+      SD.products.forEach(function(p) { prodRevMap[p.id] = { id: p.id, name: p.name || 'Untitled', revenue: 0, qty: 0, favs: p.favourite_count || 0 }; });
+
+      SD.orders.forEach(function(order) {
+        var items = Array.isArray(order.items) ? order.items : (Array.isArray(order.raw_cart) ? order.raw_cart : []);
+        var myItems = items.filter(function(i) { return myProductIds.includes(i.id || i.product_id); });
+        var orderRevenue = myItems.reduce(function(s, i) { return s + (Number(i.price||i.unit_price||0) * Number(i.qty||i.quantity||1)); }, 0);
+        totalRevenue += orderRevenue;
+
+        // Use payment_status for payment tracking (falls back to order_status for backward compat)
+        var ps = (order.payment_status || order.order_status || '').toLowerCase();
+        if (ps === 'paid') paidCount++;
+        else if (ps === 'pending' || ps === 'pending_payment') unpaidCount++;
+        else otherCount++;
+
+        myItems.forEach(function(i) {
+          var pid = i.id || i.product_id;
+          if (prodRevMap[pid]) {
+            prodRevMap[pid].revenue += Number(i.price||i.unit_price||0) * Number(i.qty||i.quantity||1);
+            prodRevMap[pid].qty     += Number(i.qty||i.quantity||1);
+          }
+        });
+      });
+
+      // Update UI
+      document.getElementById('statProducts').textContent    = totalProducts;
+      document.getElementById('statOrders').textContent      = totalOrders;
+      document.getElementById('statRevenue').textContent     = fmt(totalRevenue);
+      document.getElementById('statFavourites').textContent  = totalFavs;
+      document.getElementById('statPaid').textContent        = paidCount;
+      document.getElementById('statUnpaid').textContent      = unpaidCount;
+      document.getElementById('statOtherOrders').textContent = otherCount;
+      document.getElementById('statApprovedProds').textContent= approvedProds;
+      document.getElementById('statPendingProds').textContent = pendingCount;
+      document.getElementById('statRejectedProds').textContent= rejectedProds;
+
+      // Top products by revenue
+      var topProds = Object.values(prodRevMap).filter(function(p) { return p.qty > 0; })
+        .sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 5);
+      var topList = document.getElementById('topProductsList');
+      topList.innerHTML = !topProds.length
+        ? '<div style="color:var(--muted);font-size:13px">No sales yet — your top sellers will appear here.</div>'
+        : topProds.map(function(p, i) {
+            return '<div class="top-prod-row">' +
+              '<div class="top-prod-rank">' + (i+1) + '</div>' +
+              '<div class="top-prod-info"><div class="top-prod-name">' + p.name + '</div><div class="top-prod-meta">' + p.qty + ' sold</div></div>' +
+              '<div class="top-prod-rev">' + fmt(p.revenue) + '</div>' +
+            '</div>';
+          }).join('');
+
+      // Most favourited products
+      var topFav = Object.values(prodRevMap).filter(function(p) { return p.favs > 0; })
+        .sort(function(a, b) { return b.favs - a.favs; }).slice(0, 5);
+      var favList = document.getElementById('topFavList');
+      favList.innerHTML = !topFav.length
+        ? '<div style="color:var(--muted);font-size:13px">No favourites yet — encourage buyers to save your products!</div>'
+        : topFav.map(function(p, i) {
+            return '<div class="top-prod-row">' +
+              '<div class="top-prod-rank">' + (i+1) + '</div>' +
+              '<div class="top-prod-info"><div class="top-prod-name">' + p.name + '</div><div class="top-prod-meta">❤️ ' + p.favs + ' favourites</div></div>' +
+            '</div>';
+          }).join('');
+    }
+
+    /* ─────────────────────────────────────────
+       Entry point
     ───────────────────────────────────────── */
     document.addEventListener('supabase-ready', function(ev) {
       SD.sb = ev.detail && ev.detail.supabase;
-      if (!SD.sb) { showState('login'); return; }
+      if (!SD.sb) { redirectToLogin(); return; }
       checkAuth();
     });
 
-    /* Auth state change listener (handles session expiry / external sign-out) */
     document.addEventListener('supabase-ready', function(ev) {
       var sb = ev.detail && ev.detail.supabase;
       if (!sb) return;
       sb.auth.onAuthStateChange(function(event) {
-        if (event === 'SIGNED_OUT') {
-          SD.user = SD.seller = null;
-          showState('login');
-        }
+        if (event === 'SIGNED_OUT') { window.location.href = 'login-admin.html'; }
       });
     });
 

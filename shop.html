@@ -348,11 +348,13 @@
       var origHtml  = (isOnSale && p.price) ? '<span class="original">' + fmt(p.price) + '</span>' : '';
       var secHtml   = secondaryImg ? '<img class="secondary" src="' + svgPlaceholder(p.title,400,300,'#f0f0f0','#999') + '" data-src="' + secondaryImg + '" loading="lazy" alt="' + p.title + ' back">' : '';
 
+      var favCount = Number(p.favourite_count || 0);
       return '<div class="product-card shop-card-item" data-product=\'' + JSON.stringify({id:p.id,title:p.title,price:p.price,salePrice:p.salePrice||0,sale:p.sale||false,primary_image:primaryImg,stock:p.stock||0,displayPrice:displayPrice}).replace(/'/g,"&#39;") + '\'>' +
         '<div class="product-media">' +
           '<div class="badges">' + badgeHtml + '</div>' +
           '<img src="' + svgPlaceholder(p.title,400,300,'#f0f0f0','#999') + '" data-src="' + primaryImg + '" loading="lazy" alt="' + p.title + '">' +
           secHtml +
+          '<button class="fav-btn" data-product-id="' + p.id + '" data-fav-count="' + favCount + '" aria-label="Add to favourites"><span class="fav-icon">🤍</span></button>' +
         '</div>' +
         '<div class="card-body">' +
           '<div class="title">' + p.title + '</div>' +
@@ -370,6 +372,52 @@
     }
 
     /* ─────────────────────────────────────────
+       4b. Favourites helpers
+    ───────────────────────────────────────── */
+    function getShopAnonId() {
+      var id = localStorage.getItem('ss_anon_id');
+      if (!id) {
+        id = 'anon-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('ss_anon_id', id);
+      }
+      return id;
+    }
+
+    async function shopToggleFav(btn) {
+      if (!btn || btn.dataset.pending === 'true') return;
+      btn.dataset.pending = 'true';
+      var productId = btn.dataset.productId;
+      var isFaved = btn.classList.contains('active');
+      btn.classList.toggle('active', !isFaved);
+      btn.querySelector('.fav-icon').textContent = isFaved ? '🤍' : '❤️';
+      try {
+        var headers = { 'Content-Type': 'application/json' };
+        if (window.supabase) {
+          var sess = await window.supabase.auth.getSession().catch(function(){ return { data: {} }; });
+          if (sess && sess.data && sess.data.session && sess.data.session.access_token) {
+            headers['Authorization'] = 'Bearer ' + sess.data.session.access_token;
+          }
+        }
+        var res = await fetch('/.netlify/functions/toggle-favourite', {
+          method: 'POST', headers: headers,
+          body: JSON.stringify({ product_id: productId, anonymous_id: getShopAnonId() })
+        });
+        var data = await res.json();
+        if (data.success) {
+          btn.classList.toggle('active', data.action === 'added');
+          btn.querySelector('.fav-icon').textContent = data.action === 'added' ? '❤️' : '🤍';
+        } else {
+          btn.classList.toggle('active', isFaved);
+          btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
+        }
+      } catch(_) {
+        btn.classList.toggle('active', isFaved);
+        btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
+      }
+      btn.dataset.pending = 'false';
+    }
+
+    /* ─────────────────────────────────────────
        5. Attach card interactions
     ───────────────────────────────────────── */
     function attachCardListeners() {
@@ -382,6 +430,15 @@
           img.src = img.dataset.src;
           img.removeAttribute('data-src');
         });
+
+        /* favourite button */
+        var favBtn = card.querySelector('.fav-btn');
+        if (favBtn) {
+          favBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            shopToggleFav(favBtn);
+          });
+        }
 
         /* add to cart */
         var addBtn  = card.querySelector('.shop-add-btn');
@@ -426,7 +483,8 @@
         size:           sizes,
         primary_image:  images[0] || null,
         secondary_image:images[1] || null,
-        color:          (row.metadata && row.metadata.color) || ''
+        color:          (row.metadata && row.metadata.color) || '',
+        favourite_count: Number(row.favourite_count || 0)
       };
     }
 

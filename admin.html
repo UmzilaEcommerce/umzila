@@ -281,6 +281,32 @@ const supabaseClient = supabase.createClient(
             <div style="height:200px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Chart</div>
           </div>
         </div>
+
+        <!-- Favourites Analytics -->
+        <div style="margin-top:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <h4 style="margin:0">❤️ Favourites Analytics</h4>
+            <button id="refreshFavAnalytics" class="small-btn">↻ Refresh</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card" style="min-height:200px">
+              <h4>Most Favourited Products</h4>
+              <div id="favTopProducts" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            </div>
+            <div class="card" style="min-height:200px">
+              <h4>Top Shops by Favourites</h4>
+              <div id="favTopShops" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            </div>
+            <div class="card" style="min-height:200px">
+              <h4>Most Favourited Categories</h4>
+              <div id="favTopCategories" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            </div>
+            <div class="card" style="min-height:200px">
+              <h4>High-Interest Products</h4>
+              <div id="favHighInterest" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <!-- Seller Applications -->
@@ -1147,6 +1173,15 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(sections[s]) sections[s].style.display = 'block';
     });
   });
+  // Lazy-load favourites analytics when analytics tab is first clicked
+  document.querySelector('[data-section="analytics"]').addEventListener('click', () => {
+    if (!favAnalyticsLoaded) loadFavouriteAnalytics();
+  });
+  document.getElementById('refreshFavAnalytics').addEventListener('click', () => {
+    favAnalyticsLoaded = false;
+    loadFavouriteAnalytics();
+  });
+
   // Lazy-load seller applications when that tab is first clicked
   document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
 
@@ -1351,6 +1386,91 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       modal.innerHTML = `<h3>Orders containing ${escapeHtml(t.name)}</h3><div style="max-height:400px;overflow:auto">${listHtml}</div><div style="margin-top:12px"><button id="closeOrdersList" class="small-btn">Close</button></div>`;
       document.getElementById('closeOrdersList').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
     });
+  }
+
+  // Favourites analytics
+  let favAnalyticsLoaded = false;
+  async function loadFavouriteAnalytics() {
+    if (!supabaseClient) return;
+    ['favTopProducts','favTopShops','favTopCategories','favHighInterest']
+      .forEach(id => { document.getElementById(id).innerHTML = '<span style="color:var(--muted)">Loading…</span>'; });
+
+    const { data: products, error } = await supabaseClient
+      .from('products')
+      .select('id, name, category, favourite_count, seller_id')
+      .gt('favourite_count', 0)
+      .order('favourite_count', { ascending: false })
+      .limit(60);
+
+    if (error || !products) {
+      ['favTopProducts','favTopShops','favTopCategories','favHighInterest']
+        .forEach(id => { document.getElementById(id).innerHTML = '<span style="color:var(--muted)">Failed to load data.</span>'; });
+      return;
+    }
+
+    // Fetch seller names for the seller_ids found
+    const sellerIds = [...new Set(products.map(p => p.seller_id).filter(Boolean))];
+    let sellerMap = {};
+    if (sellerIds.length) {
+      const { data: sellers } = await supabaseClient
+        .from('sellers').select('id, shop_name').in('id', sellerIds);
+      (sellers || []).forEach(s => { sellerMap[s.id] = s.shop_name || 'Unknown Shop'; });
+    }
+
+    // Most favourited products (top 10)
+    const topProds = products.slice(0, 10);
+    document.getElementById('favTopProducts').innerHTML = topProds.length
+      ? topProds.map((p, i) =>
+          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
+            <div><strong>${i+1}. ${escapeHtml(p.name || 'Untitled')}</strong>
+              <div class="muted" style="font-size:11px">${escapeHtml(p.category || '')} · ${escapeHtml(sellerMap[p.seller_id] || '')}</div>
+            </div>
+            <div style="font-weight:700;color:#a8003f">❤️ ${p.favourite_count}</div>
+          </div>`).join('')
+      : '<span class="muted">No favourited products yet.</span>';
+
+    // Top shops by total favourites
+    const shopMap = {};
+    products.forEach(p => {
+      const shop = sellerMap[p.seller_id] || 'Unknown Shop';
+      shopMap[shop] = (shopMap[shop] || 0) + (p.favourite_count || 0);
+    });
+    const topShops = Object.entries(shopMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+    document.getElementById('favTopShops').innerHTML = topShops.length
+      ? topShops.map((s, i) =>
+          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
+            <div>${i+1}. ${escapeHtml(s[0])}</div>
+            <div style="font-weight:700;color:#a8003f">❤️ ${s[1]}</div>
+          </div>`).join('')
+      : '<span class="muted">No data.</span>';
+
+    // Most favourited categories
+    const catMap = {};
+    products.forEach(p => {
+      const cat = p.category || 'Uncategorized';
+      catMap[cat] = (catMap[cat] || 0) + (p.favourite_count || 0);
+    });
+    const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+    document.getElementById('favTopCategories').innerHTML = topCats.length
+      ? topCats.map((c, i) =>
+          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
+            <div>${i+1}. ${escapeHtml(c[0])}</div>
+            <div style="font-weight:700;color:#a8003f">❤️ ${c[1]}</div>
+          </div>`).join('')
+      : '<span class="muted">No data.</span>';
+
+    // High-interest products: most favourited — useful to identify demand
+    const highInterest = products.filter(p => (p.favourite_count || 0) >= 3).slice(0, 8);
+    document.getElementById('favHighInterest').innerHTML = highInterest.length
+      ? `<div class="muted" style="font-size:11px;margin-bottom:6px">Products with strong buyer interest — review pricing &amp; stock.</div>` +
+        highInterest.map(p =>
+          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
+            <div>${escapeHtml(p.name || 'Untitled')}<div class="muted" style="font-size:11px">${escapeHtml(sellerMap[p.seller_id] || '')}</div></div>
+            <div style="font-weight:700;color:#a8003f">❤️ ${p.favourite_count}</div>
+          </div>`).join('')
+      : '<span class="muted">No products with 3+ favourites yet.</span>';
+
+    favAnalyticsLoaded = true;
   }
 
   // wire analytics controls
