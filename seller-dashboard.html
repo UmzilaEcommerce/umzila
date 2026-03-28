@@ -141,6 +141,9 @@
     .sizes-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
     .size-chip { padding: 6px 14px; border-radius: 999px; border: 1.5px solid #dde1ea; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
     .size-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .size-prices-grid { display: flex; flex-direction: column; gap: 6px; }
+    .size-price-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 8px; background: #f8f9ff; border-radius: 8px; }
+    .size-price-label { font-size: 13px; font-weight: 700; color: #0a2f66; min-width: 40px; }
 
     /* Multi-image grid */
     .multi-img-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
@@ -573,6 +576,8 @@
               <span class="size-chip" data-size="2XL">2XL</span>
               <span class="size-chip" data-size="One Size">One Size</span>
             </div>
+            <div id="newProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
+            <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
           </div>
           <div id="addProdMsg" class="msg"></div>
           <div class="btn-row">
@@ -719,6 +724,8 @@
             <span class="size-chip" data-size="2XL">2XL</span>
             <span class="size-chip" data-size="One Size">One Size</span>
           </div>
+          <div id="editProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
+          <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
         </div>
         <div id="editProdMsg" class="msg"></div>
         <div class="btn-row">
@@ -888,10 +895,46 @@
     }
 
     /* ── Size chips ── */
-    function bindSizeChips(containerId) {
-      document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(chip) {
-        chip.addEventListener('click', function() { chip.classList.toggle('selected'); });
+    function renderSizePriceInputs(priceGridId, sizesGridId, existingVariants) {
+      var priceGrid = document.getElementById(priceGridId);
+      if (!priceGrid) return;
+      var sizes = getSelectedSizes(sizesGridId);
+      if (!sizes.length) { priceGrid.innerHTML = ''; return; }
+      var existingMap = {};
+      if (Array.isArray(existingVariants)) {
+        existingVariants.forEach(function(v) { if (v.size) existingMap[v.size] = v.price_override; });
+      }
+      priceGrid.innerHTML = sizes.map(function(size) {
+        var val = existingMap[size] != null ? existingMap[size] : '';
+        return '<div class="size-price-row">' +
+          '<span class="size-price-label">' + size + '</span>' +
+          '<div style="display:flex;align-items:center;gap:4px">' +
+            '<span style="font-size:13px;color:#6b7280">R</span>' +
+            '<input type="number" class="form-control size-price-input" data-size="' + size + '" value="' + val + '" placeholder="Base price" min="0" step="0.01" style="width:100px;padding:6px 8px">' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    function getSizePriceOverrides(priceGridId) {
+      var overrides = [];
+      document.querySelectorAll('#' + priceGridId + ' .size-price-input').forEach(function(inp) {
+        var size = inp.dataset.size;
+        var val = inp.value.trim();
+        if (size) overrides.push({ size: size, price_override: val !== '' ? parseFloat(val) : null });
       });
+      return overrides;
+    }
+
+    function bindSizeChips(containerId, priceGridId, existingVariants) {
+      var priceGrid = priceGridId || (containerId === 'newProdSizes' ? 'newProdSizePrices' : 'editProdSizePrices');
+      document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+          chip.classList.toggle('selected');
+          renderSizePriceInputs(priceGrid, containerId, existingVariants);
+        });
+      });
+      renderSizePriceInputs(priceGrid, containerId, existingVariants);
     }
     function getSelectedSizes(containerId) {
       var sizes = [];
@@ -1427,7 +1470,7 @@
       form.style.display = open ? 'none' : '';
       this.textContent = open ? '+ Add Product' : '× Cancel';
       if (!open) {
-        bindSizeChips('newProdSizes');
+        bindSizeChips('newProdSizes', 'newProdSizePrices', []);
         newProdPendingImages = [];
         renderNewProdImages();
         // Initial bind for file input
@@ -1449,6 +1492,7 @@
       var category = document.getElementById('newProdCategory').value;
       var badge    = document.getElementById('newProdBadge').value;
       var sizes    = getSelectedSizes('newProdSizes');
+      var sizePrices = getSizePriceOverrides('newProdSizePrices');
       var onSale   = document.getElementById('newProdSale').checked;
       var salePrice= onSale ? parseFloat(document.getElementById('newProdSalePrice').value) : null;
       var origPrice= onSale ? parseFloat(document.getElementById('newProdOrigPrice').value) : null;
@@ -1481,6 +1525,14 @@
 
       setBtnLoading('submitProductBtn', false, 'Submit for Review');
       if (error) { setMsg('addProdMsg', error.message); return; }
+
+      // Upsert product_variants rows with per-size price overrides
+      if (data && sizePrices.length) {
+        var variantRows = sizePrices.map(function(sp) {
+          return { product_id: data.id, size: sp.size, price_override: sp.price_override, stock: stock };
+        });
+        await SD.sb.from('product_variants').insert(variantRows);
+      }
 
       // Insert product_images rows for pending images
       if (newProdPendingImages.length && data) {
@@ -1533,13 +1585,17 @@
       }
 
       setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
-      bindSizeChips('editProdSizes');
       setMsg('editProdMsg', '');
       var panel = document.getElementById('editProductPanel');
       panel.style.display = '';
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
       // Load multi-images
       loadEditProductImages(p.id);
+      // Load variants for per-size pricing
+      SD.sb.from('product_variants').select('size, price_override, stock').eq('product_id', p.id).then(function(res) {
+        var variants = (res && res.data) || [];
+        bindSizeChips('editProdSizes', 'editProdSizePrices', variants);
+      });
     }
 
     document.getElementById('cancelEditProdBtn').addEventListener('click', function() {
@@ -1556,6 +1612,7 @@
       var badge    = document.getElementById('editProdBadge').value;
       var image    = (document.getElementById('editProdImage').value || '').trim();
       var sizes    = getSelectedSizes('editProdSizes');
+      var sizePricesEdit = getSizePriceOverrides('editProdSizePrices');
       var onSale   = document.getElementById('editProdSale').checked;
       var salePrice= onSale ? parseFloat(document.getElementById('editProdSalePrice').value) : null;
       var origPrice= onSale ? parseFloat(document.getElementById('editProdOrigPrice').value) : null;
@@ -1583,6 +1640,16 @@
 
       setBtnLoading('saveEditProdBtn', false, 'Save Changes');
       if (error) { setMsg('editProdMsg', error.message); return; }
+
+      // Upsert product_variants with per-size price overrides
+      if (sizePricesEdit.length) {
+        // Delete old variants for this product, then re-insert
+        await SD.sb.from('product_variants').delete().eq('product_id', id);
+        var editVariantRows = sizePricesEdit.map(function(sp) {
+          return { product_id: id, size: sp.size, price_override: sp.price_override, stock: stock };
+        });
+        await SD.sb.from('product_variants').insert(editVariantRows);
+      }
 
       var idx = SD.products.findIndex(function(x) { return x.id === id; });
       if (idx > -1) SD.products[idx] = Object.assign(SD.products[idx], data);
@@ -1616,7 +1683,7 @@
       // Fetch recent orders (RLS allows sellers to read relevant orders)
       var { data, error } = await SD.sb
         .from('orders')
-        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, raw_cart, total, amount')
+        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, total, notes')
         .order('created_at', { ascending: false })
         .limit(150);
 
@@ -1644,7 +1711,7 @@
       empty.style.display = 'none';
 
       list.innerHTML = orders.map(function(order) {
-        var rawItems = Array.isArray(order.items) ? order.items : (Array.isArray(order.raw_cart) ? order.raw_cart : []);
+        var rawItems = Array.isArray(order.items) ? order.items : [];
         var items = rawItems.filter(function(i) {
           return myProductIds.includes(i.id || i.product_id);
         });
@@ -1673,7 +1740,8 @@
             '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
           '</div>' +
           '<div class="order-items-list">' + itemLines + '</div>' +
-          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_phone ? ' · ' + order.customer_phone : '') + (order.city ? ' · ' + order.city : '') + '</div>' : '') +
+          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') + (order.city ? ' · 📍 ' + order.city : '') + '</div>' : '') +
+          (order.notes ? '<div class="order-buyer" style="color:#0a2f66">🚚 Preferred delivery: ' + order.notes + '</div>' : '') +
           '<div class="order-status-row">' +
             '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
             '<select class="fulfillment-select" data-order-id="' + order.id + '" onchange="updateOrderFulfillment(this)">' +

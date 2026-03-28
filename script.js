@@ -295,7 +295,7 @@ async function validateCartPrices() {
 }
 
 // Enhanced add to cart function with validation - FIXED TO WORK PROPERLY
-async function addToCart(id, qty = 1, size = 'M') {
+async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '') {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
   
@@ -332,7 +332,8 @@ async function addToCart(id, qty = 1, size = 'M') {
       img: (p.primary_image || (p.imgs && p.imgs[0]) || svgPlaceholder(p.title)),
       variantId: variantId,
       stock: variantStock,
-      maxQuantity: variantStock
+      maxQuantity: variantStock,
+      preferred_delivery: preferred_delivery || ''
     });
   }
   
@@ -801,23 +802,24 @@ document.addEventListener('supabase-ready', function(e) {
 /********************
  * State & basic helpers
  ********************/
-let state = { 
-  products: [], 
-  filters: { 
-    category:'All', 
-    priceMin: null, 
-    priceMax: null, 
-    sizes:[], 
-    type:'All', 
-    color:'Any', 
-    search:'', 
+let state = {
+  products: [],
+  filters: {
+    category:'All',
+    priceMin: null,
+    priceMax: null,
+    sizes:[],
+    type:'All',
+    color:'Any',
+    search:'',
     sort:'popular',
     tag: 'Any'
-  }, 
+  },
   cart: [],
   productVariants: {}, // Store variants by product_id
   userFavourites: new Set() // product IDs the logged-in user has favourited
 };
+window.state = state; // expose for inline scripts (category bubbles, etc.)
 
 // ──────────────────────────────────────────────────────────────
 // NEW CATEGORY STRUCTURE — campus/general marketplace
@@ -1014,7 +1016,7 @@ async function loadProducts() {
       .select(`
         *,
         product_images!fk_product_images_product(*),
-        sellers(id, shop_name, logo_url, whatsapp_number)
+        sellers(id, shop_name, logo_url, whatsapp_number, delivery_method, turnaround_time)
       `)
       .order('created_at', { ascending: false });
     
@@ -2677,10 +2679,15 @@ async function openProductModal(id) {
       <div class="product-modal-details">
         <h1 class="product-modal-title">${currentModalProduct.title}</h1>
         ${currentModalProduct.seller ? `
-        <div class="product-modal-seller" style="display:flex;align-items:center;gap:10px;margin:6px 0 10px;flex-wrap:wrap">
-          <span style="font-size:13px;color:#6b7280">Sold by</span>
-          <a href="shop.html?shop=${encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${currentModalProduct.seller.shop_name} ↗</a>
-          ${currentModalProduct.seller.whatsapp_number ? `<a href="https://wa.me/${currentModalProduct.seller.whatsapp_number.replace(/\D/g,'')}?text=Hi%20I%20saw%20your%20product%20on%20Umzila" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#fff;background:#25D366;padding:5px 12px;border-radius:999px;text-decoration:none">💬 WhatsApp</a>` : ''}
+        <div class="product-modal-seller" style="display:flex;flex-direction:column;gap:6px;margin:6px 0 10px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:13px;color:#6b7280">Sold by</span>
+            <a href="shop.html?shop=${encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${currentModalProduct.seller.shop_name} ↗</a>
+          </div>
+          ${(currentModalProduct.seller.delivery_method || currentModalProduct.seller.turnaround_time) ? `
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px;flex-wrap:wrap">
+            🚚 <span><strong>Delivery:</strong> ${currentModalProduct.seller.delivery_method || ''}${currentModalProduct.seller.turnaround_time ? ' · ' + currentModalProduct.seller.turnaround_time : ''}</span>
+          </div>` : ''}
         </div>` : ''}
         <div class="product-modal-rating">
           <div class="stars" style="color: #ffd700; font-size: 16px;">
@@ -2702,7 +2709,18 @@ async function openProductModal(id) {
         </div>
         
         ${colorOptionsHTML}
-        
+
+        <div class="product-modal-delivery-pref" style="margin:12px 0">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>
+          <select id="modal-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">
+            <option value="">No preference</option>
+            <option value="Delivery to address">Delivery to address</option>
+            <option value="Campus pickup">Campus pickup</option>
+            <option value="Meet on campus">Meet on campus</option>
+            <option value="Hostel delivery">Hostel delivery</option>
+          </select>
+        </div>
+
         <div class="product-modal-quantity">
           <h3>Quantity</h3>
           <div class="quantity-selector">
@@ -2833,15 +2851,19 @@ function setupProductModalEvents(bundleProduct) {
     const productId = this.dataset.id;
     const quantity = parseInt(document.getElementById('quantity-value').textContent);
     const selectedSize = document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size[0];
-    
+    const preferredDelivery = (document.getElementById('modal-delivery-pref')?.value || '');
+
     // Check stock
     const variantStock = getVariantStock(currentModalProduct, selectedSize);
     if (variantStock < quantity) {
       alert(`Only ${variantStock} items available for size ${selectedSize}`);
       return;
     }
-    
-    addToCart(productId, quantity, selectedSize);
+
+    // Persist preferred delivery to localStorage so checkout-success can update order notes
+    if (preferredDelivery) localStorage.setItem('ss_preferred_delivery', preferredDelivery);
+
+    addToCart(productId, quantity, selectedSize, preferredDelivery);
     showNotification(`Added ${quantity} "${currentModalProduct.title}" to cart!`);
     modal.classList.remove('active');
   });

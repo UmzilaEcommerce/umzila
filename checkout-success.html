@@ -81,12 +81,37 @@
     <a href="profile.html" class="btn" style="background: #6c757d; margin-left: 10px;">View Orders</a>
   </div>
 
+  <!-- Supabase for updating order notes with preferred delivery -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <script>
     // Get order ID from URL
     const urlParams = new URLSearchParams(window.location.search);
     const orderId = urlParams.get('m_payment_id');
     if (orderId) {
       document.getElementById('orderId').textContent = orderId;
+
+      // Save buyer preferred delivery to order notes (non-seller payments only)
+      if (!orderId.startsWith('SELLER-')) {
+        const preferredDelivery = localStorage.getItem('ss_preferred_delivery');
+        if (preferredDelivery) {
+          (async function() {
+            try {
+              const res = await fetch('/.netlify/functions/get-client-config');
+              if (res.ok) {
+                const cfg = await res.json();
+                const url = cfg.SUPABASE_URL || cfg.supabaseUrl || '';
+                const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
+                if (url && key) {
+                  const sb = supabase.createClient(url, key);
+                  await sb.from('orders').update({ notes: preferredDelivery }).eq('m_payment_id', orderId);
+                }
+              }
+            } catch (_) {}
+            localStorage.removeItem('ss_preferred_delivery');
+          })();
+        }
+      }
+
       localStorage.removeItem('ss_cart'); // Clear cart
     }
 

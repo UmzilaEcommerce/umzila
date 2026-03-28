@@ -80,11 +80,31 @@ exports.handler = async function (event) {
       newCount += 1;
     }
   } else {
-    // Anonymous: only add (no dedup without identity)
+    // Anonymous: toggle using anonymous_id as identity (dedup if anonymous_id provided)
     const anonId = anonymous_id || null;
-    await admin.from('product_favourites').insert({ product_id, user_id: null, anonymous_id: anonId });
-    action = 'added';
-    newCount += 1;
+    if (anonId) {
+      const { data: anonExisting } = await admin
+        .from('product_favourites')
+        .select('id')
+        .eq('product_id', product_id)
+        .eq('anonymous_id', anonId)
+        .maybeSingle();
+
+      if (anonExisting) {
+        await admin.from('product_favourites').delete().eq('id', anonExisting.id);
+        action = 'removed';
+        newCount = Math.max(0, newCount - 1);
+      } else {
+        await admin.from('product_favourites').insert({ product_id, user_id: null, anonymous_id: anonId });
+        action = 'added';
+        newCount += 1;
+      }
+    } else {
+      // No identity at all — still add but cannot toggle
+      await admin.from('product_favourites').insert({ product_id, user_id: null, anonymous_id: null });
+      action = 'added';
+      newCount += 1;
+    }
   }
 
   // Create seller notification when a favourite is added
@@ -111,6 +131,9 @@ exports.handler = async function (event) {
       is_read:            false
     });
   }
+
+  // Persist updated count to products table
+  await admin.from('products').update({ favourite_count: newCount }).eq('id', product_id);
 
   return {
     statusCode: 200,
