@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shop — Umzila</title>
+  <link rel="icon" href="umzila.webp" type="image/webp">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <style>
@@ -650,32 +651,62 @@
     var _modalProduct = null;
 
     function openProductModal(product) {
-      _modalProduct = product;
+      // Look up full product data (has description, all_images, etc.)
+      var full = allProducts.find(function(p){ return p.id === product.id; }) || product;
+      _modalProduct = full;
       var overlay = document.getElementById('shProdModal');
-      document.getElementById('shModalTitle').textContent = product.title || '';
-      document.getElementById('shModalImg').src = product.primary_image || svgPlaceholder(product.title, 400, 400);
-      document.getElementById('shModalImg').alt = product.title || '';
+
+      // Title
+      document.getElementById('shModalTitle').textContent = full.title || '';
+
+      // Image — use primary from full product
+      var img = document.getElementById('shModalImg');
+      img.src = full.primary_image || svgPlaceholder(full.title, 400, 400);
+      img.alt = full.title || '';
+      img.onerror = function(){ this.src = svgPlaceholder(full.title, 400, 400); };
+
       // Price
       var priceEl = document.getElementById('shModalPrice');
-      if (product.sale && product.price) {
-        priceEl.innerHTML = '<span class="orig">' + fmt(product.price) + '</span><span class="sale">' + fmt(product.displayPrice) + '</span>';
+      var displayPrice = (full.sale && full.salePrice) ? full.salePrice : full.price || 0;
+      if (full.sale && full.price && full.salePrice) {
+        priceEl.innerHTML = '<span class="orig">' + fmt(full.price) + '</span><span class="sale">' + fmt(full.salePrice) + '</span>';
       } else {
-        priceEl.textContent = fmt(product.displayPrice || product.price || 0);
+        priceEl.textContent = fmt(displayPrice);
       }
+
       // Stock
       var stockEl = document.getElementById('shModalStock');
-      stockEl.textContent = product.stock > 0 ? product.stock + ' in stock' : 'Out of stock';
-      // Description (may not exist in card data, hide if absent)
+      if (full.stock > 0) {
+        stockEl.textContent = full.stock + ' in stock';
+        stockEl.style.color = full.stock < 5 ? 'var(--cta)' : 'var(--muted)';
+      } else {
+        stockEl.textContent = 'Out of stock';
+        stockEl.style.color = '#dc2626';
+      }
+
+      // Description
       var descEl = document.getElementById('shModalDesc');
-      descEl.textContent = product.description || '';
-      descEl.style.display = product.description ? '' : 'none';
-      // Sizes
+      if (full.desc || full.description) {
+        descEl.textContent = full.desc || full.description;
+        descEl.style.display = '';
+      } else {
+        descEl.style.display = 'none';
+      }
+
+      // Sizes — use size option buttons if multiple
       var sizeEl = document.getElementById('shModalSizeSel');
-      var sizes = product.size && product.size.length ? product.size : ['S','M','L','XL'];
-      sizeEl.innerHTML = sizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
+      var sizes = full.size && full.size.length ? full.size : ['One Size'];
+      sizeEl.innerHTML = sizes.map(function(s) {
+        return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>';
+      }).join('');
+
+      // Hide size select if only "One Size"
+      sizeEl.style.display = (sizes.length === 1 && sizes[0] === 'One Size') ? 'none' : '';
+
       // Add button
       var addBtn = document.getElementById('shModalAddBtn');
-      addBtn.disabled = product.stock < 1;
+      addBtn.disabled = full.stock < 1;
+
       overlay.classList.add('open');
       document.body.style.overflow = 'hidden';
     }

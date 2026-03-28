@@ -11,7 +11,14 @@
       "Bash(grep -oE .from\\\\\\(''[^'']+''\\\\\\) /c/Users/ntand/Downloads/umzila-remote/script.js /c/Users/ntand/Downloads/umzila-remote/netlify/functions/*.js)",
       "Bash(grep:*)",
       "mcp__supabase__apply_migration",
-      "Bash(C:/Users/ntand/Downloads/umzila-remote/style.css:*)"
+      "Bash(C:/Users/ntand/Downloads/umzila-remote/style.css:*)",
+      "Bash(ls:*)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(path=\"/c/Users/ntand/Downloads/umzila-remote/$f\")",
+      "Bash(if grep:*)",
+      "Bash(then)",
+      "Read(//c/Users/ntand/Downloads/umzila-remote/**)"
     ]
   }
 }

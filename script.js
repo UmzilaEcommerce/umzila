@@ -621,7 +621,8 @@ function initMobileFilters() {
         if (priceMin) priceMin.value = 'min';
         if (priceMax) priceMax.value = 'max';
         document.querySelectorAll('input[name="size"]').forEach(i=>i.checked=false);
-        document.querySelector('input[name="type"][value="All"]').checked=true;
+        const typeAllInput = document.querySelector('input[name="type"][value="All"]');
+        if(typeAllInput) typeAllInput.checked=true;
         if (colorSel) colorSel.value='Any';
         if (tagSel) tagSel.value='Any';
         if (document.getElementById('sortSel')) document.getElementById('sortSel').value='popular';
@@ -708,49 +709,57 @@ function populateMobileFilters() {
   }
 }
 
-// Populate mobile menu categories
+// Populate mobile menu categories — accordion style
 function populateMobileMenuCategories() {
-  const mobileCategoriesList = document.getElementById('mobileCategoriesList');
-  
-  if (mobileCategoriesList && filterOptions.categories) {
-    filterOptions.categories.forEach(category => {
-      if (category !== 'All') {
-        const categoryItem = document.createElement('div');
-        categoryItem.className = 'mobile-menu-item mobile-menu-subitem';
-        
-        const categoryLink = document.createElement('a');
-        categoryLink.href = '#';
-        categoryLink.textContent = category;
-        categoryLink.addEventListener('click', (e) => {
-          e.preventDefault();
-          mobileMenu.classList.remove('active');
-          mobileMenuOverlay.classList.remove('active');
-          document.body.style.overflow = '';
-          
-          // Set category filter
-          state.filters.category = category;
-          
-          // Update UI
-          if (catList) {
-            Array.from(catList.querySelectorAll('li')).forEach(li=>li.classList.remove('active'));
-            const catItem = catList.querySelector(`li[data-cat="${category}"]`);
-            if (catItem) catItem.classList.add('active');
-          }
-          
-          // Update mobile category select
-          const mobileCategorySelect = document.getElementById('mobileCategorySelect');
-          if (mobileCategorySelect) {
-            mobileCategorySelect.value = category;
-          }
-          
-          applyFilters();
-        });
-        
-        categoryItem.appendChild(categoryLink);
-        mobileCategoriesList.appendChild(categoryItem);
-      }
-    });
+  const accordion = document.getElementById('mobileCatAccordion');
+  if(!accordion) return;
+
+  // Helper: close menu and apply category filter
+  function applyMobileCat(cat) {
+    const mm = document.getElementById('mobileMenu');
+    const ov = document.getElementById('mobileMenuOverlay');
+    if(mm) mm.classList.remove('active');
+    if(ov) ov.classList.remove('active');
+    document.body.style.overflow = '';
+    state.filters.category = cat;
+    state.filters.search = '';
+    if(searchInput) searchInput.value = '';
+    applyFilters();
+    const fv = document.getElementById('filteredView');
+    if(fv && fv.classList.contains('active'))
+      fv.scrollIntoView({ behavior:'smooth', block:'start' });
   }
+
+  // "All Products" item
+  const allLi = accordion.querySelector('.mobile-cat-all');
+  if(allLi){
+    allLi.addEventListener('click', ()=>{ applyMobileCat('All'); });
+  }
+
+  // Category groups from CATEGORIES constant
+  CATEGORIES.forEach(group=>{
+    const emoji = CATEGORY_EMOJIS[group.label] || '';
+    const groupLi = document.createElement('li');
+    groupLi.className = 'mobile-cat-group';
+    groupLi.innerHTML = `
+      <div class="mobile-cat-group-header">
+        <span>${emoji} ${group.label}</span>
+        <span class="arrow">▼</span>
+      </div>
+      <ul class="mobile-cat-sub-list">
+        <li data-cat="${group.label}" style="font-weight:700;color:var(--accent)">All ${group.label}</li>
+        ${group.sub.map(s=>`<li data-cat="${s}">${s}</li>`).join('')}
+      </ul>`;
+    // Toggle open/close
+    groupLi.querySelector('.mobile-cat-group-header').addEventListener('click', ()=>{
+      groupLi.classList.toggle('open');
+    });
+    // Sub-item clicks
+    groupLi.querySelectorAll('.mobile-cat-sub-list li').forEach(li=>{
+      li.addEventListener('click', e=>{ e.stopPropagation(); applyMobileCat(li.dataset.cat); });
+    });
+    accordion.appendChild(groupLi);
+  });
 }
 
 /********************
@@ -1856,53 +1865,166 @@ let filterOptions = {
 };
 
 /********************
- * HERO init (unchanged behavior)
+ * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [
   `thumbnail1.webp`,
   `thumbnail2.webp`,
   `easterthumbnail.webp`,
-  `https://picsum.photos/seed/hero_flash/1200/400`
+  `thumbnail1.webp`  // 4th slide fallback
 ];
-Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{ el.style.backgroundImage = `url("${heroPlaceholders[idx]}")`; el.style.backgroundSize='cover'; el.style.backgroundPosition='center'; });
-
-let slideIndex = 0; const slideCount = slides.children.length;
-function makeDots(){ for(let i=0;i<slideCount;i++){ const d=document.createElement('div'); d.className='dot'; if(i===0) d.classList.add('active'); d.addEventListener('click',()=>goToSlide(i)); dots.appendChild(d);} }
-function goToSlide(i){ slideIndex = i; slides.style.transform = 'translateX('+(-i*100)+'%)'; Array.from(dots.children).forEach((d,idx)=>d.classList.toggle('active', idx===i)); }
-makeDots(); let heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4000);
-document.getElementById('hero').addEventListener('mouseenter',()=>clearInterval(heroTimer)); document.getElementById('hero').addEventListener('mouseleave',()=>heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4000));
-prevBtn.addEventListener('click',()=>goToSlide((slideIndex-1+slideCount)%slideCount)); nextBtn.addEventListener('click',()=>goToSlide((slideIndex+1)%slideCount));
-
-/********************
- * SEARCH predictive + clear/backspace behavior (as requested)
- ********************/
-function updateSuggestions(q){ suggestions.innerHTML=''; if(!q){ suggestions.style.display='none'; return;}
-  const termsLocal = Array.from(new Set(state.products.concat(fallbackProducts).flatMap(p=>[p.title,p.category,p.badge].map(t=>t))));
-  const found = termsLocal.filter(t=>t && t.toLowerCase().includes(q.toLowerCase())).slice(0,8);
-  found.forEach(f=>{ const d=document.createElement('div'); d.textContent=f; d.addEventListener('click',()=>{ searchInput.value=f; suggestions.style.display='none'; state.filters.search = f; applyFilters(); }); suggestions.appendChild(d); });
-  suggestions.style.display = found.length? 'block':'none';
-}
-
-searchInput.addEventListener('input',(e)=>{ const q=e.target.value; if(q && q.length>0) searchClear.style.display='block'; else searchClear.style.display='none'; updateSuggestions(q); });
-
-// Clear button: restore state before search (clear search filter and re-run filters)
-searchClear.addEventListener('click', ()=>{ searchInput.value=''; searchClear.style.display='none'; suggestions.style.display='none'; state.filters.search=''; applyFilters(); });
-
-// Backspace behavior
-searchInput.addEventListener('keydown',(e)=>{
-  if(e.key==='Backspace'){
-    setTimeout(()=>{
-      const q = searchInput.value;
-      if(!q){ searchClear.style.display='none'; suggestions.style.display='none'; state.filters.search=''; applyFilters(); }
-      else { updateSuggestions(q); }
-    },0);
-  }
-  if(e.key==='Enter'){
-    state.filters.search = searchInput.value.trim(); applyFilters(); suggestions.style.display='none';
-  }
+Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
+  el.style.backgroundImage = `url("${heroPlaceholders[idx]}")`;
+  el.style.backgroundSize='cover';
+  el.style.backgroundPosition='center';
+  // Make slide clickable
+  el.addEventListener('click', function(){
+    const filterCat = el.dataset.filterCat;
+    const section = el.dataset.href;
+    const sectionFilter = el.dataset.filter;
+    if(filterCat){
+      // trigger category filter
+      state.filters.category = filterCat;
+      state.filters.search = '';
+      if(searchInput) searchInput.value = '';
+      applyFilters();
+      // scroll to results
+      const fv = document.getElementById('filteredView');
+      if(fv) fv.scrollIntoView({ behavior:'smooth', block:'start' });
+    } else if(sectionFilter === 'new-drops'){
+      // scroll to new drops section
+      const nd = document.getElementById('newDropsSection');
+      if(nd) nd.scrollIntoView({ behavior:'smooth', block:'start' });
+    } else if(section && section.startsWith('#')){
+      const target = document.querySelector(section);
+      if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+  });
 });
 
-document.addEventListener('click',(e)=>{ if(!searchInput.contains(e.target) && !suggestions.contains(e.target)) suggestions.style.display='none'; });
+let slideIndex = 0; const slideCount = slides ? slides.children.length : 0;
+function makeDots(){ if(!dots) return; for(let i=0;i<slideCount;i++){ const d=document.createElement('div'); d.className='dot'; if(i===0) d.classList.add('active'); d.addEventListener('click',()=>goToSlide(i)); dots.appendChild(d);} }
+function goToSlide(i){ slideIndex = i; if(slides) slides.style.transform = 'translateX('+(-i*100)+'%)'; Array.from(dots ? dots.children : []).forEach((d,idx)=>d.classList.toggle('active', idx===i)); }
+makeDots(); let heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4500);
+const heroEl = document.getElementById('hero');
+if(heroEl){
+  heroEl.addEventListener('mouseenter',()=>clearInterval(heroTimer));
+  heroEl.addEventListener('mouseleave',()=>{ heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4500); });
+}
+if(prevBtn) prevBtn.addEventListener('click',()=>goToSlide((slideIndex-1+slideCount)%slideCount));
+if(nextBtn) nextBtn.addEventListener('click',()=>goToSlide((slideIndex+1)%slideCount));
+
+/********************
+ * SEARCH — smart suggestions (categories + products) + clear/backspace
+ ********************/
+const CATEGORY_EMOJIS = {
+  'Clothing':'👕','Food':'🍕','Accessories & Gadgets':'⌚',
+  'Beauty & Self-Care':'💄','Services':'🛠️','Home & Gifts':'🏠'
+};
+
+function updateSuggestions(q){
+  if(!suggestions) return;
+  suggestions.innerHTML = '';
+  if(!q){ suggestions.style.display='none'; return; }
+  const ql = q.toLowerCase();
+  const frag = document.createDocumentFragment();
+
+  // 1. Category group matches — show first (browse shortcuts)
+  CATEGORIES.forEach(group=>{
+    const matchParent = group.label.toLowerCase().includes(ql);
+    const matchSub = group.sub.some(s=>s.toLowerCase().includes(ql));
+    if(matchParent || matchSub){
+      const emoji = CATEGORY_EMOJIS[group.label] || '🏷️';
+      const label = matchSub && !matchParent
+        ? group.sub.find(s=>s.toLowerCase().includes(ql)) || group.label
+        : group.label;
+      const cat = matchSub && !matchParent
+        ? (group.sub.find(s=>s.toLowerCase().includes(ql)) || group.label)
+        : group.label;
+      const d = document.createElement('div');
+      d.className = 'suggestions-cat';
+      d.innerHTML = `<span class="cat-emoji">${emoji}</span> Browse: <strong style="margin-left:3px">${label}</strong>`;
+      d.addEventListener('click',()=>{
+        searchInput.value='';
+        searchClear.style.display='none';
+        suggestions.style.display='none';
+        state.filters.category = cat;
+        state.filters.search = '';
+        applyFilters();
+      });
+      frag.appendChild(d);
+    }
+  });
+
+  // 2. Product title matches
+  const products = state.products.length ? state.products : fallbackProducts;
+  const seen = new Set();
+  let prodCount = 0;
+  products.forEach(p=>{
+    if(prodCount >= 5) return;
+    const title = p.title || '';
+    if(!title.toLowerCase().includes(ql)) return;
+    if(seen.has(title.toLowerCase())) return;
+    seen.add(title.toLowerCase());
+    prodCount++;
+    const price = p.sale && p.salePrice ? p.salePrice : p.price;
+    const img = p.primary_image || (p.imgs && p.imgs[0]) || '';
+    const d = document.createElement('div');
+    d.className = 'suggestions-prod';
+    d.innerHTML = `${img ? `<img class="suggestions-prod-img" src="${img}" alt="" onerror="this.style.display='none'">` : ''}
+      <span class="suggestions-prod-name">${title}</span>
+      <span class="suggestions-prod-price">R${Number(price).toFixed(2)}</span>`;
+    d.addEventListener('click',()=>{
+      searchInput.value = title;
+      searchClear.style.display = 'block';
+      suggestions.style.display = 'none';
+      state.filters.search = title;
+      applyFilters();
+    });
+    frag.appendChild(d);
+  });
+
+  suggestions.appendChild(frag);
+  suggestions.style.display = suggestions.children.length ? 'block' : 'none';
+}
+
+if(searchInput){
+  searchInput.addEventListener('input',(e)=>{
+    const q=e.target.value;
+    if(q && q.length>0) searchClear.style.display='block'; else searchClear.style.display='none';
+    updateSuggestions(q);
+  });
+}
+
+// Clear button
+if(searchClear){
+  searchClear.addEventListener('click', ()=>{
+    searchInput.value=''; searchClear.style.display='none';
+    if(suggestions) suggestions.style.display='none';
+    state.filters.search=''; applyFilters();
+  });
+}
+
+// Backspace + Enter behavior
+if(searchInput){
+  searchInput.addEventListener('keydown',(e)=>{
+    if(e.key==='Backspace'){
+      setTimeout(()=>{
+        const q=searchInput.value;
+        if(!q){ searchClear.style.display='none'; if(suggestions) suggestions.style.display='none'; state.filters.search=''; applyFilters(); }
+        else { updateSuggestions(q); }
+      },0);
+    }
+    if(e.key==='Enter'){
+      state.filters.search=searchInput.value.trim(); applyFilters(); if(suggestions) suggestions.style.display='none';
+    }
+  });
+}
+
+document.addEventListener('click',(e)=>{
+  if(searchInput && suggestions && !searchInput.contains(e.target) && !suggestions.contains(e.target))
+    suggestions.style.display='none';
+});
 
 /********************
  * Filtering / Sorting (updated for new price filters)
@@ -1986,7 +2108,8 @@ function showFilteredView(products, label){
   if(!fv || !grid) return;
 
   // Hide homepage sections
-  ['hotSection','mysterySection','trendingSection','bundlesSection','recSection','featuredShopsSection']
+  ['hotSection','trendingSection','newDropsSection','studentSection','underR100Section',
+   'bestSellersSection','popularClothingSection','popularFoodSection','featuredShopsSection']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 
   fv.classList.add('active');
@@ -2009,11 +2132,9 @@ function hideFilteredView(){
   const fv = document.getElementById('filteredView');
   if(!fv) return;
   fv.classList.remove('active');
-  // Restore homepage sections
-  ['hotSection','mysterySection','trendingSection','bundlesSection','recSection']
-    .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=''; });
+  // Re-render sections (renderAll will show/hide sections based on content)
+  renderAll(state.products);
   const shops = document.getElementById('featuredShopsSection');
-  // featuredShopsSection visibility controlled by loadFeaturedShops — only show if it had data
   if(shops && shops.dataset.hasData==='true') shops.style.display='';
 }
 
@@ -2304,22 +2425,61 @@ function makeCardHTML(p){
 
 function renderAll(products){
   const visible = products || state.products;
-  resultCount.textContent = visible.length;
+  if(resultCount) resultCount.textContent = visible.length;
 
-  // hot (prioritise badge 'hot' case-insensitive)
-  hotGrid.innerHTML = visible.filter(p=> (p.badge||'').toString().toLowerCase()==='hot' || (p.popularity||0) > 85 ).slice(0,12).map(p=>`<div style="min-width:220px">${makeCardHTML(p)}</div>`).join('') || '<div style="padding:12px;color:var(--muted)">No hot deals</div>';
+  // helpers
+  function cards(list, minW){ return list.map(p=>`<div style="min-width:${minW||180}px;max-width:${minW||180}px">${makeCardHTML(p)}</div>`).join(''); }
+  function showSection(id, html){ const el=document.getElementById(id); if(el) el.style.display = html ? '' : 'none'; }
 
-  // mystery boxes as hscroll like trending
-  mysteryGrid.innerHTML = visible.filter(p=>p.category==='Mystery Boxes').slice(0,12).map(p=>`<div style="min-width:220px">${makeCardHTML(p)}</div>`).join('') || '<div style="padding:12px;color:var(--muted)">No mystery boxes</div>';
+  // HOT DEALS — badge=hot or popularity > 85
+  const hotItems = visible.filter(p=> (p.badge||'').toString().toLowerCase()==='hot' || (p.popularity||0)>85).slice(0,12);
+  if(hotGrid) hotGrid.innerHTML = cards(hotItems, 170) || '<div style="padding:12px;color:var(--muted)">No hot deals yet</div>';
+  showSection('hotSection', hotItems.length);
 
-  // trending scroll (sorted by popularity)
-  trendingScroll.innerHTML = visible.slice().sort((a,b)=> (b.popularity||0)-(a.popularity||0)).slice(0,12).map(p=>{ return `<div style="min-width:200px">${makeCardHTML(p)}</div>` }).join('');
+  // TRENDING ON CAMPUS — sorted by popularity
+  const trendingItems = visible.slice().sort((a,b)=>(b.popularity||0)-(a.popularity||0)).slice(0,12);
+  if(trendingScroll) trendingScroll.innerHTML = cards(trendingItems, 170);
+  showSection('trendingSection', trendingItems.length);
 
-  // bundles
-  bundlesScroll.innerHTML = visible.filter(p=>p.category==='Bundles').slice(0,12).map(p=>`<div style="min-width:240px">${makeCardHTML(p)}</div>`).join('') || '<div style="color:var(--muted);padding:12px">No bundles</div>';
+  // NEW DROPS — newest first
+  const newDropItems = visible.slice().sort((a,b)=>b.id-a.id).slice(0,12);
+  const ndScroll = document.getElementById('newDropsScroll');
+  if(ndScroll) ndScroll.innerHTML = cards(newDropItems, 170);
+  showSection('newDropsSection', newDropItems.length);
 
-  // recommended (use current filtered results)
-  recScroll.innerHTML = visible.slice(0,12).map(p=>`<div style="min-width:200px">${makeCardHTML(p)}</div>`).join('');
+  // STUDENT ESSENTIALS — affordable (≤ R200) across all categories
+  const studentItems = visible.filter(p=>{ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<=200; }).slice(0,12);
+  const stScroll = document.getElementById('studentScroll');
+  if(stScroll) stScroll.innerHTML = cards(studentItems, 170) || '<div style="padding:12px;color:var(--muted)">Loading...</div>';
+  showSection('studentSection', studentItems.length);
+
+  // UNDER R100
+  const underR100Items = visible.filter(p=>{ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<100; }).slice(0,12);
+  const ur100 = document.getElementById('underR100Scroll');
+  if(ur100) ur100.innerHTML = cards(underR100Items, 170) || '<div style="padding:12px;color:var(--muted)">No products under R100</div>';
+  showSection('underR100Section', underR100Items.length);
+
+  // BEST SELLERS — by favourite_count + popularity
+  const bestItems = visible.slice().sort((a,b)=>((b.favourite_count||0)+(b.popularity||0))-((a.favourite_count||0)+(a.popularity||0))).slice(0,12);
+  const bsScroll = document.getElementById('bestSellersScroll');
+  if(bsScroll) bsScroll.innerHTML = cards(bestItems, 170);
+  showSection('bestSellersSection', bestItems.length);
+
+  // POPULAR IN CLOTHING
+  const clothingGroup = CATEGORIES.find(g=>g.label==='Clothing');
+  const clothingSubs = clothingGroup ? [clothingGroup.label, ...clothingGroup.sub] : ['Clothing'];
+  const clothingItems = visible.filter(p=>clothingSubs.includes(p.category)).sort((a,b)=>(b.popularity||0)-(a.popularity||0)).slice(0,10);
+  const pcScroll = document.getElementById('popularClothingScroll');
+  if(pcScroll) pcScroll.innerHTML = cards(clothingItems, 170) || '<div style="padding:12px;color:var(--muted)">No clothing products yet</div>';
+  showSection('popularClothingSection', clothingItems.length);
+
+  // POPULAR IN FOOD
+  const foodGroup = CATEGORIES.find(g=>g.label==='Food');
+  const foodSubs = foodGroup ? [foodGroup.label, ...foodGroup.sub] : ['Food'];
+  const foodItems = visible.filter(p=>foodSubs.includes(p.category)).sort((a,b)=>(b.popularity||0)-(a.popularity||0)).slice(0,10);
+  const pfScroll = document.getElementById('popularFoodScroll');
+  if(pfScroll) pfScroll.innerHTML = cards(foodItems, 170) || '<div style="padding:12px;color:var(--muted)">No food products yet</div>';
+  showSection('popularFoodSection', foodItems.length);
 
   attachProductListeners();
   runReveal();
@@ -2771,15 +2931,34 @@ window.addEventListener('resize', ()=>{
  * Full-screen "See more" panel
  ********************/
 function openSectionView(key){
-  panelContent.innerHTML='';
-  panelTitle.textContent = key.title||'Items';
+  // If we have products in state, use showFilteredView for a cleaner page-like UX
   let items=[];
-  if(key.type==='mystery') items=state.products.filter(p=>p.category==='Mystery Boxes');
-  else if(key.type==='hot') items=state.products.filter(p=> (p.badge||'').toString().toLowerCase()==='hot' || p.price<200);
-  else if(key.type==='trending') items=state.products.slice().sort((a,b)=> (b.popularity||0)-(a.popularity||0));
-  else if(key.type==='bundles') items=state.products.filter(p=>p.category==='Bundles');
-  else if(key.type==='recommended') items = state.products.slice();
-  else items=state.products.slice();
+  if(key.isShops) {
+    // Shops — handled separately, fall through to panel
+  } else {
+    const prods = state.products;
+    const clothingGroup = CATEGORIES.find(g=>g.label==='Clothing');
+    const clothingSubs = clothingGroup ? [clothingGroup.label,...clothingGroup.sub] : [];
+    const foodGroup = CATEGORIES.find(g=>g.label==='Food');
+    const foodSubs = foodGroup ? [foodGroup.label,...foodGroup.sub] : [];
+    if(key.type==='hot') items=prods.filter(p=>(p.badge||'').toString().toLowerCase()==='hot'||(p.popularity||0)>85);
+    else if(key.type==='trending') items=prods.slice().sort((a,b)=>(b.popularity||0)-(a.popularity||0));
+    else if(key.type==='newDrops') items=prods.slice().sort((a,b)=>b.id-a.id);
+    else if(key.type==='student') items=prods.filter(p=>{ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<=200; });
+    else if(key.type==='underR100') items=prods.filter(p=>{ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<100; });
+    else if(key.type==='bestSellers') items=prods.slice().sort((a,b)=>((b.favourite_count||0)+(b.popularity||0))-((a.favourite_count||0)+(a.popularity||0)));
+    else if(key.type==='clothing') items=prods.filter(p=>clothingSubs.includes(p.category));
+    else if(key.type==='food') items=prods.filter(p=>foodSubs.includes(p.category));
+    else items=prods.slice();
+    // Use filteredView instead of panel for products
+    showFilteredView(items, key.title || 'Items');
+    return;
+  }
+
+  // Shops panel fallback
+  if(panelContent) panelContent.innerHTML='';
+  if(panelTitle) panelTitle.textContent = key.title||'Items';
+  items=state.products.slice();
 
   const BATCH = 24;
   let rendered = 0;
@@ -2820,17 +2999,34 @@ function openSectionView(key){
   sectionPanel.setAttribute('aria-hidden','false');
 }
 
-document.querySelectorAll('.see-more').forEach(a=>a.addEventListener('click',e=>{ 
-  e.preventDefault(); 
-  const sec=a.dataset.section; 
-  const map = { 
-    mystery:{type:'mystery',title:'Mystery Boxes'}, 
-    hot:{type:'hot',title:'Hot Deals'}, 
-    trending:{type:'trending',title:'Trending & New Arrivals'}, 
-    bundles:{type:'bundles',title:'Bundles & Combo Deals'}, 
-    recommended:{type:'recommended',title:'Recommended For You'} 
-  }; 
-  openSectionView(map[sec]||{type:'all',title:'All items'}); 
+// Wire up section "See more" buttons (new section-see-more class)
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('.section-see-more');
+  if(!btn) return;
+  e.preventDefault();
+  const sec = btn.dataset.section;
+  const map = {
+    hot:        { type:'hot',        title:'🔥 Hot Deals' },
+    trending:   { type:'trending',   title:'📈 Trending on Campus' },
+    newDrops:   { type:'newDrops',   title:'✨ New Drops' },
+    student:    { type:'student',    title:'🎓 Student Essentials' },
+    underR100:  { type:'underR100',  title:'💸 Under R100' },
+    bestSellers:{ type:'bestSellers',title:'⭐ Best Sellers' },
+    clothing:   { type:'clothing',   title:'👕 Popular in Clothing' },
+    food:       { type:'food',       title:'🍕 Popular in Food' }
+  };
+  openSectionView(map[sec] || { type:'all', title:'All Items' });
+});
+
+// Legacy .see-more links (in case any remain)
+document.querySelectorAll('.see-more').forEach(a=>a.addEventListener('click',e=>{
+  e.preventDefault();
+  const sec=a.dataset.section;
+  const map = {
+    hot:{type:'hot',title:'🔥 Hot Deals'},
+    trending:{type:'trending',title:'📈 Trending on Campus'}
+  };
+  openSectionView(map[sec]||{type:'all',title:'All items'});
 }));
 
 panelClose.addEventListener('click', ()=>{ 
@@ -2870,6 +3066,7 @@ async function loadFeaturedShops() {
     }).join('');
 
     shopsSection.style.display = 'block';
+    shopsSection.dataset.hasData = 'true';
 
     if(seeAllBtn) {
       seeAllBtn.addEventListener('click', () => {

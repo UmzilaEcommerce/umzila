@@ -354,8 +354,16 @@ main.full{
   }
 }
 
-.hero .slide .overlay{position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,10,0.04),rgba(8,8,10,0.15))}
-.hero .content{position:relative;z-index:2;color:#fff;padding:20px;text-align:left;max-width:700px}
+/* Hero slide is fully clickable — no text overlay */
+.hero .slide { cursor: pointer; }
+.hero .slide .overlay{ display:none; } /* text overlays removed per design */
+.hero .slide .content{ display:none; } /* text overlays removed per design */
+/* Subtle bottom gradient for aesthetic depth only */
+.hero .slide::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,0.18) 100%);
+  pointer-events:none;
+}
 
 /* Mobile hero content */
 @media (max-width: 768px) {
@@ -438,12 +446,12 @@ section h2{display:flex;justify-content:space-between;align-items:center;font-si
 
 .product-card{background:var(--card);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(12,16,25,0.04);overflow:hidden;position:relative;transition:transform .18s,box-shadow .18s}
 .product-card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(12,16,25,0.07)}
-.product-media{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1/1;height:auto}
+.product-media{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:3/4;height:auto}
 
 /* Mobile product media — keep aspect ratio, no fixed height */
 @media (max-width: 768px) {
   .product-media {
-    aspect-ratio: 1/1;
+    aspect-ratio: 3/4;
     height: auto;
   }
 }
@@ -1693,3 +1701,83 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:24px;border-r
 #catList li.cat-parent:hover {
   border-left-color: var(--accent);
 }
+
+/* ── Mobile Accordion Category Nav ── */
+.mobile-cat-accordion {
+  list-style: none; padding: 0; margin: 0;
+}
+.mobile-cat-group {
+  border-bottom: 1px solid #f0f0f5;
+}
+.mobile-cat-group-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 4px;
+  cursor: pointer; font-size: 15px; font-weight: 700; color: var(--accent);
+  user-select: none;
+}
+.mobile-cat-group-header .arrow {
+  font-size: 11px; color: var(--muted);
+  transition: transform 0.2s;
+}
+.mobile-cat-group.open .mobile-cat-group-header .arrow {
+  transform: rotate(180deg);
+}
+.mobile-cat-sub-list {
+  list-style: none; padding: 0; margin: 0;
+  max-height: 0; overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.mobile-cat-group.open .mobile-cat-sub-list {
+  max-height: 600px;
+}
+.mobile-cat-sub-list li {
+  padding: 9px 4px 9px 20px;
+  font-size: 14px; color: #333; cursor: pointer;
+  border-bottom: 1px solid #f7f7fa;
+}
+.mobile-cat-sub-list li:hover,
+.mobile-cat-sub-list li.active {
+  color: var(--accent-2); font-weight: 600;
+}
+/* "All" item at top of accordion */
+.mobile-cat-all {
+  padding: 13px 4px;
+  font-size: 15px; font-weight: 700; color: var(--accent);
+  cursor: pointer; border-bottom: 1px solid #f0f0f5;
+}
+.mobile-cat-all.active { color: var(--accent-2); }
+
+/* ── Section row headers ── */
+.section-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.section-header h2 { margin: 0; font-size: 18px; color: var(--accent); }
+.section-see-more {
+  margin-left: auto; font-size: 13px; font-weight: 700;
+  color: var(--accent-2); cursor: pointer; white-space: nowrap;
+  background: none; border: none; padding: 4px 10px;
+  border-radius: 999px; border: 1px solid var(--accent-2);
+  text-decoration: none;
+}
+.section-see-more:hover { background: var(--accent-2); color: #fff; }
+
+/* ── Search suggestion categories ── */
+.suggestions-cat {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; cursor: pointer; background: #f7f8ff;
+  border-bottom: 1px solid #eef0f8;
+  font-size: 13px; font-weight: 700; color: var(--accent);
+}
+.suggestions-cat:hover { background: #eef0ff; }
+.suggestions-cat .cat-emoji { font-size: 16px; }
+.suggestions-prod {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; cursor: pointer; font-size: 14px;
+}
+.suggestions-prod:hover { background: #f5f6fb; }
+.suggestions-prod-img {
+  width: 32px; height: 32px; border-radius: 4px;
+  object-fit: cover; flex-shrink: 0; background: #eee;
+}
+.suggestions-prod-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.suggestions-prod-price { font-size: 12px; font-weight: 700; color: var(--accent); flex-shrink: 0; }

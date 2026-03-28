@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Umzila — Student Streetwear Marketplace</title>
+  <title>Umzila — Campus Marketplace</title>
+  <meta name="description" content="Umzila — the student campus marketplace. Shop clothing, food, accessories, beauty, services and more from local sellers.">
+  <link rel="icon" href="umzila.webp" type="image/webp">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 </head>
@@ -24,7 +26,7 @@
       </div>
 
       <div class="search-bar" style="margin-left:6px" id="mainSearchBar">
-        <input id="searchInput" class="search-input" placeholder="Search streetwear, hoodies, mystery boxes..." aria-label="Search products" />
+        <input id="searchInput" class="search-input" placeholder="Search products, categories..." aria-label="Search products" />
         <button id="searchClear" class="search-clear" aria-label="Clear search">✕</button>
         <div id="suggestions" class="search-suggestions" role="listbox"></div>
         <button class="mobile-search-close" id="mobileSearchClose" style="display:none">✕</button>
@@ -55,18 +57,17 @@
   <!-- Mobile Menu -->
   <div class="mobile-menu" id="mobileMenu">
     <div class="mobile-menu-header">
-      <h3>Menu</h3>
+      <h3>Umzila</h3>
       <button class="mobile-menu-close" id="mobileMenuClose">✕</button>
     </div>
     <div class="mobile-menu-nav">
-      <div class="mobile-menu-item" id="mobileShopItem">
-        <a href="#">Shop</a>
-      </div>
-      <div class="mobile-menu-categories" id="mobileCategoriesList">
-        <!-- Categories will be populated dynamically -->
-      </div>
+      <!-- Category accordion -->
+      <ul class="mobile-cat-accordion" id="mobileCatAccordion">
+        <li class="mobile-cat-all" data-cat="All">🛒 All Products</li>
+        <!-- Groups populated by JS -->
+      </ul>
       <div class="mobile-menu-item">
-        <a href="about.html">About</a>
+        <a href="about.html">About Umzila</a>
       </div>
       <div class="mobile-menu-item">
         <a href="#" id="mobileSignIn">Sign In / Sign Up</a>
@@ -159,44 +160,13 @@
     <main id="mainContent">
       <div class="breadcrumb">Home › Streetwear</div>
 
-      <!-- HERO -->
+      <!-- HERO — clean clickable images, no text overlay -->
       <div class="hero fade-up" id="hero">
         <div class="slides" id="slides">
-          <div class="slide" data-slide="hotDeals">
-            <div class="overlay"></div>
-            <div class="content">
-              <h1>Weekly Hot Deals</h1>
-              <p>Up to 50% off selected hoodies & tees — limited stock.</p>
-              <div class="cta" data-action="shop">Shop Now</div>
-            </div>
-          </div>
-
-          <div class="slide" data-slide="mystery">
-            <div class="overlay"></div>
-            <div class="content">
-              <h1>Mystery Box Spotlight</h1>
-              <p>Student-friendly boxes from R120 — surprise drops every week.</p>
-              <div class="cta" data-action="mystery">Grab Yours</div>
-            </div>
-          </div>
-
-          <div class="slide" data-slide="newDrops">
-            <div class="overlay"></div>
-            <div class="content">
-              <h1>New Drops</h1>
-              <p>Fresh designs — stay ahead of the campus vibe.</p>
-              <div class="cta" data-action="new">Shop New</div>
-            </div>
-          </div>
-
-          <div class="slide" data-slide="flash">
-            <div class="overlay"></div>
-            <div class="content">
-              <h1>Flash Sale — 24 Hours</h1>
-              <p>Extra discounts on top-sellers — while stocks last.</p>
-              <div class="cta" data-action="flash">Shop Flash</div>
-            </div>
-          </div>
+          <div class="slide" data-slide="hotDeals" data-href="#hotSection" data-filter=""></div>
+          <div class="slide" data-slide="newDrops" data-href="" data-filter="new-drops"></div>
+          <div class="slide" data-slide="clothing" data-href="" data-filter-cat="Clothing"></div>
+          <div class="slide" data-slide="food" data-href="" data-filter-cat="Food"></div>
         </div>
 
         <div class="nav">
@@ -334,34 +304,76 @@
         </div>
       </div>
 
-      <!-- HOT DEALS (moved first under hero) -->
+      <!-- HOT DEALS -->
       <section class="fade-up" id="hotSection">
-        <h2> Hot Deals <a href="#" class="see-more" data-section="hot" style="font-size:14px;color:var(--accent-2)">See all →</a></h2>
+        <div class="section-header">
+          <h2>🔥 Hot Deals</h2>
+          <button class="section-see-more" data-section="hot">See all →</button>
+        </div>
         <div class="hscroll" id="hotGrid"></div>
       </section>
 
-      <!-- Mystery Boxes (now scrollable like trending) -->
-      <section class="fade-up" id="mysterySection">
-        <h2> Mystery Boxes <a href="#" class="see-more" data-section="mystery" style="font-size:14px;color:var(--accent-2)">See more →</a></h2>
-        <div class="hscroll" id="mysteryGrid"></div>
-      </section>
-
-      <!-- Trending / New Arrivals (horizontal) -->
+      <!-- TRENDING ON CAMPUS -->
       <section class="fade-up" id="trendingSection">
-        <h2> Trending & New Arrivals <a href="#" class="see-more" data-section="trending" style="font-size:14px;color:var(--accent-2)">See more →</a></h2>
+        <div class="section-header">
+          <h2>📈 Trending on Campus</h2>
+          <button class="section-see-more" data-section="trending">See more →</button>
+        </div>
         <div class="hscroll" id="trendingScroll"></div>
       </section>
 
-      <!-- Bundles -->
-      <section class="fade-up" id="bundlesSection">
-        <h2> Bundles & Combo Deals <a href="#" class="see-more" data-section="bundles" style="font-size:14px;color:var(--accent-2)">See more →</a></h2>
-        <div class="hscroll" id="bundlesScroll"></div>
+      <!-- NEW DROPS -->
+      <section class="fade-up" id="newDropsSection">
+        <div class="section-header">
+          <h2>✨ New Drops</h2>
+          <button class="section-see-more" data-section="newDrops">See more →</button>
+        </div>
+        <div class="hscroll" id="newDropsScroll"></div>
       </section>
 
-      <!-- Recommended -->
-      <section class="fade-up" id="recSection">
-        <h2> Recommended For You <a href="#" class="see-more" data-section="recommended" style="font-size:14px;color:var(--accent-2)">Refresh →</a></h2>
-        <div class="hscroll" id="recScroll"></div>
+      <!-- STUDENT ESSENTIALS -->
+      <section class="fade-up" id="studentSection">
+        <div class="section-header">
+          <h2>🎓 Student Essentials</h2>
+          <button class="section-see-more" data-section="student">See more →</button>
+        </div>
+        <div class="hscroll" id="studentScroll"></div>
+      </section>
+
+      <!-- UNDER R100 -->
+      <section class="fade-up" id="underR100Section">
+        <div class="section-header">
+          <h2>💸 Under R100</h2>
+          <button class="section-see-more" data-section="underR100">See more →</button>
+        </div>
+        <div class="hscroll" id="underR100Scroll"></div>
+      </section>
+
+      <!-- BEST SELLERS -->
+      <section class="fade-up" id="bestSellersSection">
+        <div class="section-header">
+          <h2>⭐ Best Sellers</h2>
+          <button class="section-see-more" data-section="bestSellers">See more →</button>
+        </div>
+        <div class="hscroll" id="bestSellersScroll"></div>
+      </section>
+
+      <!-- POPULAR IN CLOTHING -->
+      <section class="fade-up" id="popularClothingSection">
+        <div class="section-header">
+          <h2>👕 Popular in Clothing</h2>
+          <button class="section-see-more" data-section="clothing">See more →</button>
+        </div>
+        <div class="hscroll" id="popularClothingScroll"></div>
+      </section>
+
+      <!-- POPULAR IN FOOD -->
+      <section class="fade-up" id="popularFoodSection">
+        <div class="section-header">
+          <h2>🍕 Popular in Food</h2>
+          <button class="section-see-more" data-section="food">See more →</button>
+        </div>
+        <div class="hscroll" id="popularFoodScroll"></div>
       </section>
 
       <!-- CTA -->
