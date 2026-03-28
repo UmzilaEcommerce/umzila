@@ -1221,11 +1221,12 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   /* ------------------ Analytics functions ------------------ */
-  // parse orders.items safely (handles array or JSON string)
-  function parseOrderItems(items) {
-    if(!items) return [];
-    if (Array.isArray(items)) return items;
-    try { return JSON.parse(items); } catch(e) { return []; }
+  // parse order items safely — checks items then raw_cart (initiate-payfast uses raw_cart)
+  function parseOrderItems(o) {
+    const raw = o.items || o.raw_cart;
+    if(!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    try { return JSON.parse(raw); } catch(e) { return []; }
   }
 
   // fetch orders in date range and compute totals and top products
@@ -1234,7 +1235,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('orders')
-        .select('id, created_at, total, items, order_number, customer_name, order_status')
+        .select('id, created_at, total, amount, items, raw_cart, order_number, customer_name, order_status, status')
         .gte('created_at', fromIso)
         .lte('created_at', toIso)
         .order('created_at', { ascending: true });
@@ -1245,12 +1246,12 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         const st = (o.order_status || o.status || '').toString().trim().toLowerCase();
         return st !== 'returned';
       });
-      // compute total revenue only from valid orders
-      const total = validOrders.reduce((s,o) => s + (Number(o.total || 0)), 0);
+      // compute total revenue — initiate-payfast uses 'amount', payfast-itn uses 'total'
+      const total = validOrders.reduce((s,o) => s + (Number(o.total || o.amount || 0)), 0);
       // aggregate top products by name or product_id
       const agg = {};
       for(const o of validOrders){
-        const items = parseOrderItems(o.items);
+        const items = parseOrderItems(o);
         for(const it of items){
           // handle various shapes: { product_id, quantity, item } or { item, quantity }
           const qty = Number(it.quantity || it.qty || 0);
@@ -1379,10 +1380,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       // fetch orders in range and show filtered orders
       const res = await fetchOrdersInRange(fromIso, toIso);
       const ordersWith = res.orders.filter(o => {
-        const items = parseOrderItems(o.items);
+        const items = parseOrderItems(o);
         return items.some(it => (it.product_id && String(it.product_id) === String(t.pid)) || (String(it.item || it.product_name || it.name || '').toLowerCase() === String(t.name).toLowerCase()));
       });
-      const listHtml = ordersWith.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><div><strong>${o.order_number || o.id}</strong> • ${escapeHtml(o.customer_name || '')}</div><div class="muted">${new Date(o.created_at).toLocaleString()} • ${fmt(o.total)}</div></div>`).join('') || '<div class="muted">No orders found</div>';
+      const listHtml = ordersWith.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><div><strong>${o.order_number || o.id}</strong> • ${escapeHtml(o.customer_name || '')}</div><div class="muted">${new Date(o.created_at).toLocaleString()} • ${fmt(o.total || o.amount)}</div></div>`).join('') || '<div class="muted">No orders found</div>';
       modal.innerHTML = `<h3>Orders containing ${escapeHtml(t.name)}</h3><div style="max-height:400px;overflow:auto">${listHtml}</div><div style="margin-top:12px"><button id="closeOrdersList" class="small-btn">Close</button></div>`;
       document.getElementById('closeOrdersList').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
     });
@@ -1534,17 +1535,37 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const wrap = document.getElementById('sellerAppsWrap');
     if (!wrap) return;
     wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading...</div>';
-    if (!supabaseClient) { wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Supabase not ready.</div>'; return; }
+    // If supabase isn't ready yet, wait for it
+    if (!supabaseClient) {
+      document.addEventListener('supabase-ready', function onReady(ev) {
+        document.removeEventListener('supabase-ready', onReady);
+        supabaseClient = ev.detail.supabase;
+        fetchSellerApplications();
+      }, { once: true });
+      return;
+    }
     try {
       const { data, error } = await supabaseClient
         .from('seller_applications')
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
+      if (error) {
+        console.warn('fetchSellerApplications error', error);
+        wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">
+          <strong>Error loading applications</strong><br>
+          <span style="font-size:12px">${escapeHtml(error.message)}${error.details ? ' — ' + escapeHtml(error.details) : ''}</span><br>
+          <button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:10px">Retry</button>
+        </div>`;
+        return;
+      }
       renderSellerApplications(data || []);
     } catch (e) {
       console.warn('fetchSellerApplications failed', e);
-      wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load applications.</div>';
+      wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">
+        Failed to load applications.<br>
+        <span style="font-size:12px">${escapeHtml(String(e))}</span><br>
+        <button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:10px">Retry</button>
+      </div>`;
     }
   }
 

@@ -810,6 +810,39 @@ let state = {
   userFavourites: new Set() // product IDs the logged-in user has favourited
 };
 
+// ──────────────────────────────────────────────────────────────
+// NEW CATEGORY STRUCTURE — campus/general marketplace
+// ──────────────────────────────────────────────────────────────
+const CATEGORIES = [
+  {
+    label: 'Clothing',
+    sub: ['T-Shirts', 'Hoodies', 'Pants', 'Jackets', 'Dresses', 'Shoes', 'Hats & Caps', 'Activewear', 'Other Clothing']
+  },
+  {
+    label: 'Food',
+    sub: ['Baked Goods', 'Plates & Meals', 'Snacks', 'Drinks', 'Desserts', 'Other Food']
+  },
+  {
+    label: 'Accessories & Gadgets',
+    sub: ['Watches', 'Phone Accessories', 'Bags', 'Jewelry', 'Tech Accessories', 'Sunglasses', 'Other Accessories']
+  },
+  {
+    label: 'Beauty & Self-Care',
+    sub: ['Perfume', 'Skincare', 'Hair Products', 'Body Care', 'Makeup', 'Other Beauty']
+  },
+  {
+    label: 'Services',
+    sub: ['Tutoring', 'Photography', 'Graphic Design', 'Hair & Nails', 'Delivery', 'Other Services']
+  },
+  {
+    label: 'Home & Gifts',
+    sub: ['Home Decor', 'Custom Gifts', 'Art & Prints', 'Stationery', 'Other Home & Gifts']
+  }
+];
+
+// All flat category values (for filtering)
+const ALL_CAT_VALUES = ['All', ...CATEGORIES.flatMap(g => [g.label, ...g.sub])];
+
 // Store current user referral info
 let userReferralInfo = {
   code: null,
@@ -1053,6 +1086,7 @@ async function loadProducts() {
     });
     
     state.products = mapped;
+    window._allProducts = mapped; // expose for back button
     applyFilters();
     
   } catch (e) {
@@ -1873,40 +1907,56 @@ document.addEventListener('click',(e)=>{ if(!searchInput.contains(e.target) && !
 /********************
  * Filtering / Sorting (updated for new price filters)
  ********************/
-function applyFilters(){ 
-  const f = state.filters; 
-  let out = state.products.filter(p=>{ 
-    if(f.category!=='All' && p.category!==f.category) return false; 
-    
+function applyFilters(){
+  const f = state.filters;
+  let out = state.products.filter(p=>{
+    if(f.category!=='All'){
+      // Match exact category OR parent group (e.g. "Clothing" matches all sub-cats)
+      const group = CATEGORIES.find(g => g.label === f.category);
+      if(group){
+        // parent selected — match if product.category is the parent OR any sub
+        if(p.category !== f.category && !group.sub.includes(p.category)) return false;
+      } else {
+        if(p.category!==f.category) return false;
+      }
+    }
+
     // Price filtering with min and max
     const price = p.sale && p.salePrice ? p.salePrice : p.price;
     if(f.priceMin !== null && price < f.priceMin) return false;
     if(f.priceMax !== null && price > f.priceMax) return false;
-    
-    if(f.sizes.length && !f.sizes.some(s=>p.size && p.size.includes(s))) return false; 
-    if(f.type!=='All' && p.type!==f.type) return false; 
+
+    if(f.sizes.length && !f.sizes.some(s=>p.size && p.size.includes(s))) return false;
+    if(f.type!=='All' && p.type!==f.type) return false;
     if(f.color!=='Any' && p.color!==f.color) return false;
-    if(f.tag!=='Any' && p.tags && !p.tags.includes(f.tag)) return false; 
-    if(f.search && !((p.title+p.desc+p.category).toLowerCase().includes(f.search.toLowerCase()))) return false; 
-    return true; 
-  }); 
-  
+    if(f.tag!=='Any' && p.tags && !p.tags.includes(f.tag)) return false;
+    if(f.search && !((p.title+(p.desc||'')+(p.category||'')).toLowerCase().includes(f.search.toLowerCase()))) return false;
+    return true;
+  });
+
   // Sorting
   if(f.sort==='price-asc') out.sort((a,b)=> {
     const priceA = a.sale && a.salePrice ? a.salePrice : a.price;
     const priceB = b.sale && b.salePrice ? b.salePrice : b.price;
     return priceA - priceB;
-  }); 
+  });
   else if(f.sort==='price-desc') out.sort((a,b)=> {
     const priceA = a.sale && a.salePrice ? a.salePrice : a.price;
     const priceB = b.sale && b.salePrice ? b.salePrice : b.price;
     return priceB - priceA;
-  }); 
-  else if(f.sort==='new') out.sort((a,b)=>b.id - a.id); 
-  else out.sort((a,b)=> (b.popularity||0) - (a.popularity||0)); 
-  
-  renderAll(out); 
-  
+  });
+  else if(f.sort==='new') out.sort((a,b)=>b.id - a.id);
+  else out.sort((a,b)=> (b.popularity||0) - (a.popularity||0));
+
+  // Decide: active search OR non-All category → show filtered grid view
+  const isFiltered = f.search.trim() || f.category !== 'All';
+  if(isFiltered){
+    showFilteredView(out, f.search || f.category);
+  } else {
+    hideFilteredView();
+    renderAll(out);
+  }
+
   // Update filter summary
   let summaryParts = [];
   if(f.category !== 'All') summaryParts.push(f.category);
@@ -1919,9 +1969,52 @@ function applyFilters(){
   if(f.color !== 'Any') summaryParts.push(f.color);
   if(f.tag !== 'Any') summaryParts.push(f.tag);
   if(f.sizes.length) summaryParts.push(`Sizes: ${f.sizes.join(',')}`);
-  if(f.search) summaryParts.push(`Search: ${f.search}`);
-  
-  filterSummary.textContent = summaryParts.length > 0 ? summaryParts.join(' • ') : 'None';
+  if(f.search) summaryParts.push(`"${f.search}"`);
+
+  if(filterSummary) filterSummary.textContent = summaryParts.length > 0 ? summaryParts.join(' • ') : 'None';
+}
+
+/********************
+ * Filtered / search results view helpers
+ ********************/
+function showFilteredView(products, label){
+  const fv = document.getElementById('filteredView');
+  const grid = document.getElementById('filteredGrid');
+  const lbl = document.getElementById('filteredViewLabel');
+  const cnt = document.getElementById('filteredCountLabel');
+  const empty = document.getElementById('filteredEmpty');
+  if(!fv || !grid) return;
+
+  // Hide homepage sections
+  ['hotSection','mysterySection','trendingSection','bundlesSection','recSection','featuredShopsSection']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+
+  fv.classList.add('active');
+  if(lbl) lbl.textContent = label || 'Results';
+  if(cnt) cnt.textContent = `${products.length} item${products.length!==1?'s':''}`;
+
+  if(!products.length){
+    grid.innerHTML='';
+    if(empty) empty.style.display='';
+  } else {
+    if(empty) empty.style.display='none';
+    grid.innerHTML = products.map(p=>makeCardHTML(p)).join('');
+    attachProductListeners();
+    runReveal();
+  }
+  if(resultCount) resultCount.textContent = products.length;
+}
+
+function hideFilteredView(){
+  const fv = document.getElementById('filteredView');
+  if(!fv) return;
+  fv.classList.remove('active');
+  // Restore homepage sections
+  ['hotSection','mysterySection','trendingSection','bundlesSection','recSection']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display=''; });
+  const shops = document.getElementById('featuredShopsSection');
+  // featuredShopsSection visibility controlled by loadFeaturedShops — only show if it had data
+  if(shops && shops.dataset.hasData==='true') shops.style.display='';
 }
 
 /********************
@@ -1971,19 +2064,19 @@ topSort.addEventListener('change',(e)=>{
 /********************
  * Clear filters function (updated for new filters)
  ********************/
-clearFilters.addEventListener('click',()=>{ 
-  state.filters = { 
-    category:'All', 
-    priceMin: null, 
-    priceMax: null, 
-    sizes:[], 
-    type:'All', 
-    color:'Any', 
-    search:'', 
+clearFilters.addEventListener('click',()=>{
+  state.filters = {
+    category:'All',
+    priceMin: null,
+    priceMax: null,
+    sizes:[],
+    type:'All',
+    color:'Any',
+    search:'',
     sort:'popular',
     tag: 'Any'
-  }; 
-  
+  };
+
   // Reset UI elements
   priceMin.value = 'min';
   priceMax.value = 'max';
@@ -1996,12 +2089,13 @@ clearFilters.addEventListener('click',()=>{
   searchInput.value='';
   searchClear.style.display='none';
   suggestions.style.display='none';
-  
+
   // Reset active category
   Array.from(catList.querySelectorAll('li')).forEach(li=>li.classList.remove('active'));
   catList.querySelector('li[data-cat="All"]').classList.add('active');
-  
-  applyFilters(); 
+
+  hideFilteredView();
+  applyFilters();
 });
 
 /********************
@@ -2841,30 +2935,74 @@ async function loadFilterOptions() {
 
     if (categoriesError) {
       console.error('Error loading categories:', categoriesError);
-    } else if (categoriesData) {
-      const uniqueCategories = ['All', ...new Set(categoriesData.map(item => item.category).filter(Boolean))];
-      filterOptions.categories = uniqueCategories;
-      
-      // Populate categories list
-      if (catList) {
-        // Clear existing items (keep "All")
-        catList.innerHTML = '';
-        catList.innerHTML = '<li data-cat="All" class="active">All</li>';
-        
-        // Add other categories
-        uniqueCategories.forEach(cat => {
-          if (cat !== 'All') {
-            const li = document.createElement('li');
-            li.dataset.cat = cat;
-            li.textContent = cat;
-            li.addEventListener('click', () => {
-              Array.from(catList.querySelectorAll('li')).forEach(li=>li.classList.remove('active'));
-              li.classList.add('active');
-              state.filters.category = cat;
-              applyFilters();
-            });
-            catList.appendChild(li);
-          }
+    }
+
+    // Build hierarchical sidebar from CATEGORIES constant
+    // also include any DB categories not in the static list (backward compat)
+    const dbCats = categoriesData ? [...new Set(categoriesData.map(item => item.category).filter(Boolean))] : [];
+    const allKnown = new Set(ALL_CAT_VALUES);
+    const extraCats = dbCats.filter(c => !allKnown.has(c));
+    filterOptions.categories = ALL_CAT_VALUES;
+
+    if (catList) {
+      catList.innerHTML = '<li data-cat="All" class="active">All</li>';
+
+      CATEGORIES.forEach(group => {
+        // Group label (non-clickable divider)
+        const divider = document.createElement('li');
+        divider.className = 'cat-group-label';
+        divider.textContent = group.label;
+        divider.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 2px;cursor:default;pointer-events:none';
+        catList.appendChild(divider);
+
+        // Parent category
+        const parent = document.createElement('li');
+        parent.dataset.cat = group.label;
+        parent.className = 'cat-parent';
+        parent.textContent = group.label;
+        parent.addEventListener('click', () => {
+          Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
+          parent.classList.add('active');
+          state.filters.category = group.label;
+          applyFilters();
+        });
+        catList.appendChild(parent);
+
+        // Sub-categories
+        group.sub.forEach(sub => {
+          const li = document.createElement('li');
+          li.dataset.cat = sub;
+          li.className = 'cat-sub';
+          li.textContent = sub;
+          li.style.paddingLeft = '14px';
+          li.style.fontSize = '13px';
+          li.addEventListener('click', () => {
+            Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
+            li.classList.add('active');
+            state.filters.category = sub;
+            applyFilters();
+          });
+          catList.appendChild(li);
+        });
+      });
+
+      // Any extra DB categories not in the static list
+      if (extraCats.length) {
+        const divider2 = document.createElement('li');
+        divider2.textContent = 'Other';
+        divider2.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 2px;cursor:default;pointer-events:none';
+        catList.appendChild(divider2);
+        extraCats.forEach(cat => {
+          const li = document.createElement('li');
+          li.dataset.cat = cat;
+          li.textContent = cat;
+          li.addEventListener('click', () => {
+            Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
+            li.classList.add('active');
+            state.filters.category = cat;
+            applyFilters();
+          });
+          catList.appendChild(li);
         });
       }
     }

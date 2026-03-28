@@ -208,27 +208,35 @@
         </div>
       </div>
       
-      <!-- CATEGORY BUBBLES -->
+      <!-- CATEGORY BUBBLES — new campus marketplace categories -->
       <div class="cat-bubbles-row" id="catBubblesRow">
-        <a class="cat-bubble" href="#trendingSection">
+        <a class="cat-bubble" href="#" data-filter-cat="Clothing">
           <div class="cat-bubble-icon">👕</div>
-          <div class="cat-bubble-label">Streetwear</div>
+          <div class="cat-bubble-label">Clothing</div>
         </a>
-        <a class="cat-bubble" href="#mysterySection">
-          <div class="cat-bubble-icon">📦</div>
-          <div class="cat-bubble-label">Mystery Boxes</div>
+        <a class="cat-bubble" href="#" data-filter-cat="Food">
+          <div class="cat-bubble-icon">🍕</div>
+          <div class="cat-bubble-label">Food</div>
         </a>
-        <a class="cat-bubble" href="#trendingSection">
-          <div class="cat-bubble-icon">🔥</div>
-          <div class="cat-bubble-label">Trending</div>
+        <a class="cat-bubble" href="#" data-filter-cat="Accessories & Gadgets">
+          <div class="cat-bubble-icon">⌚</div>
+          <div class="cat-bubble-label">Accessories</div>
         </a>
-        <a class="cat-bubble" href="#bundlesSection">
-          <div class="cat-bubble-icon">🎁</div>
-          <div class="cat-bubble-label">Bundles</div>
+        <a class="cat-bubble" href="#" data-filter-cat="Beauty & Self-Care">
+          <div class="cat-bubble-icon">💄</div>
+          <div class="cat-bubble-label">Beauty</div>
+        </a>
+        <a class="cat-bubble" href="#" data-filter-cat="Services">
+          <div class="cat-bubble-icon">🛠️</div>
+          <div class="cat-bubble-label">Services</div>
+        </a>
+        <a class="cat-bubble" href="#" data-filter-cat="Home & Gifts">
+          <div class="cat-bubble-icon">🏠</div>
+          <div class="cat-bubble-label">Home & Gifts</div>
         </a>
         <a class="cat-bubble" href="#hotSection">
-          <div class="cat-bubble-icon">🎓</div>
-          <div class="cat-bubble-label">Student Deals</div>
+          <div class="cat-bubble-icon">🔥</div>
+          <div class="cat-bubble-label">Hot Deals</div>
         </a>
       </div>
 
@@ -309,6 +317,20 @@
             <option value="price-asc">Price: Low → High</option>
             <option value="price-desc">Price: High → Low</option>
           </select>
+        </div>
+      </div>
+
+      <!-- FILTERED / SEARCH RESULTS VIEW -->
+      <div id="filteredView">
+        <div class="filtered-view-header">
+          <button class="back-to-home-btn" id="backToHomeBtn">← Back</button>
+          <div class="filtered-view-label" id="filteredViewLabel">Results</div>
+          <div class="filtered-count" id="filteredCountLabel"></div>
+        </div>
+        <div class="filtered-grid" id="filteredGrid"></div>
+        <div id="filteredEmpty" style="display:none;text-align:center;padding:40px 20px;color:var(--muted)">
+          <div style="font-size:40px;margin-bottom:10px">🔍</div>
+          <div>No products found. Try a different search or category.</div>
         </div>
       </div>
 
@@ -626,14 +648,62 @@
   <script>
   (function() {
 
-    /* ── Smooth-scroll category bubbles ── */
+    /* ── Category bubbles — filter if data-filter-cat, else smooth-scroll ── */
     document.querySelectorAll('.cat-bubble').forEach(function(a) {
       a.addEventListener('click', function(e) {
         e.preventDefault();
-        var target = document.querySelector(a.getAttribute('href'));
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var filterCat = a.getAttribute('data-filter-cat');
+        if (filterCat) {
+          // trigger script.js filter system
+          if (window.state && window.state.filters) {
+            window.state.filters.category = filterCat;
+            window.state.filters.search = '';
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            var sc = document.getElementById('searchClear');
+            if (sc) sc.style.display = 'none';
+            // sync sidebar cat list
+            var catList = document.getElementById('catList');
+            if (catList) {
+              catList.querySelectorAll('li').forEach(function(li){ li.classList.remove('active'); });
+              var match = catList.querySelector('li[data-cat="' + filterCat + '"]');
+              if (match) match.classList.add('active');
+            }
+            if (typeof applyFilters === 'function') applyFilters();
+          }
+        } else {
+          var href = a.getAttribute('href');
+          var target = href && document.querySelector(href);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       });
     });
+
+    /* ── Back button from filtered view ── */
+    var backBtn = document.getElementById('backToHomeBtn');
+    if (backBtn) {
+      backBtn.addEventListener('click', function() {
+        if (typeof hideFilteredView === 'function') {
+          // reset filters
+          if (window.state && window.state.filters) {
+            window.state.filters.category = 'All';
+            window.state.filters.search = '';
+            var si = document.getElementById('searchInput');
+            if (si) si.value = '';
+            var sc = document.getElementById('searchClear');
+            if (sc) sc.style.display = 'none';
+            var catList = document.getElementById('catList');
+            if (catList) {
+              catList.querySelectorAll('li').forEach(function(li){ li.classList.remove('active'); });
+              var allLi = catList.querySelector('li[data-cat="All"]');
+              if (allLi) allLi.classList.add('active');
+            }
+          }
+          hideFilteredView();
+          if (typeof renderAll === 'function' && window._allProducts) renderAll(window._allProducts);
+        }
+      });
+    }
 
     /* ── Featured Shops — load top 3 by product count after supabase-ready ── */
     document.addEventListener('supabase-ready', async function(ev) {
@@ -657,17 +727,18 @@
         window._allSellers = sellers;
         window._sellerCountMap = countMap;
 
-        var top3 = sellers.slice(0, 3);
+        var top3 = sellers.slice(0, 6);
         var scroll = document.getElementById('shopsScroll');
         scroll.innerHTML = top3.map(function(s) {
-          var banner = s.banner_url ? 'url("' + s.banner_url + '")' : 'linear-gradient(135deg,var(--accent),var(--accent-2))';
-          var logo   = s.logo_url   ? 'url("' + s.logo_url   + '")' : '';
-          var cnt    = countMap[s.id] || 0;
-          return '<a class="shop-card" href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '" style="text-decoration:none;display:block;cursor:pointer">' +
-            '<div class="shop-card-banner" style="background-image:' + banner + '"></div>' +
-            '<div class="shop-card-logo" style="' + (logo ? 'background-image:' + logo + ';' : 'background:var(--accent-2);') + '"></div>' +
+          var cnt      = countMap[s.id] || 0;
+          var initials = (s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
+          var logoInner = s.logo_url
+            ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+            : '<span>' + initials + '</span>';
+          return '<a class="shop-card" href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '">' +
+            '<div class="shop-card-logo">' + logoInner + '</div>' +
             '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
-            '<div style="font-size:11px;color:var(--muted);padding:0 8px 8px">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
+            '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
           '</a>';
         }).join('');
         document.getElementById('featuredShopsSection').style.display = '';
@@ -684,13 +755,13 @@
         bodyEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px">No shops yet.</div>';
       } else {
         bodyEl.innerHTML = sellers.map(function(s) {
-          var logoStyle = s.logo_url
-            ? 'background-image:url("' + s.logo_url + '");background-size:cover;background-position:center'
-            : 'background:var(--accent-2)';
-          var initial = (s.shop_name || '?').charAt(0).toUpperCase();
-          var cnt = countMap[s.id] || 0;
+          var cnt      = countMap[s.id] || 0;
+          var initials = (s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
+          var logoInner = s.logo_url
+            ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+            : '<span style="font-weight:800;font-size:16px;color:#fff">' + initials + '</span>';
           return '<a href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f5;text-decoration:none;color:inherit;transition:background 0.12s" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">' +
-            '<div style="width:46px;height:46px;border-radius:50%;' + logoStyle + ';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;color:#fff">' + (s.logo_url ? '' : initial) + '</div>' +
+            '<div style="width:46px;height:46px;border-radius:50%;background:var(--accent);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid #eaecf0">' + logoInner + '</div>' +
             '<div style="flex:1;min-width:0">' +
               '<div style="font-weight:700;font-size:14px">' + (s.shop_name || '') + '</div>' +
               '<div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (s.description || 'Umzila seller') + '</div>' +

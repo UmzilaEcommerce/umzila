@@ -205,6 +205,18 @@
     .sh-state .sh-state-icon { font-size: 48px; margin-bottom: 12px; }
     .sh-state a { color: var(--accent-2); }
 
+    /* Back-to-home bar */
+    .sh-back-bar {
+      background: #fff; border-bottom: 1px solid #eaecf0;
+      padding: 8px 14px;
+    }
+    .sh-back-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 13px; font-weight: 600; color: var(--accent);
+      text-decoration: none; transition: opacity 0.15s;
+    }
+    .sh-back-link:hover { opacity: 0.7; }
+
     /* Cart toast */
     .cart-toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
@@ -214,6 +226,60 @@
       z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none;
     }
     .cart-toast.show { opacity: 1; }
+
+    /* Product detail modal */
+    .sh-prod-modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 2000;
+      align-items: flex-end; justify-content: center;
+    }
+    .sh-prod-modal-overlay.open { display: flex; }
+    @media (min-width: 600px) { .sh-prod-modal-overlay { align-items: center; } }
+
+    .sh-prod-modal {
+      background: #fff; width: 100%; max-width: 520px;
+      border-radius: 20px 20px 0 0; max-height: 92vh; overflow-y: auto;
+      animation: shSlideUp 0.22s ease;
+    }
+    @media (min-width: 600px) { .sh-prod-modal { border-radius: 16px; max-height: 88vh; } }
+    @keyframes shSlideUp {
+      from { transform: translateY(40px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    .sh-modal-close {
+      position: absolute; top: 12px; right: 14px;
+      background: rgba(0,0,0,0.35); border: none; color: #fff;
+      border-radius: 50%; width: 32px; height: 32px;
+      font-size: 17px; cursor: pointer; z-index: 3;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sh-modal-img-wrap {
+      position: relative; aspect-ratio: 1/1;
+      background: #f0f0f0; overflow: hidden;
+    }
+    .sh-modal-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sh-modal-body { padding: 18px 18px 28px; }
+    .sh-modal-title { font-size: 18px; font-weight: 800; color: var(--accent); margin: 0 0 6px; }
+    .sh-modal-price { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+    .sh-modal-price .orig { text-decoration: line-through; color: var(--muted); font-weight: 400; font-size: 13px; margin-right: 6px; }
+    .sh-modal-price .sale { color: var(--cta, #ff6b2c); }
+    .sh-modal-desc { font-size: 14px; color: #444; line-height: 1.65; margin-bottom: 16px; }
+    .sh-modal-row { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+    .sh-modal-size-sel {
+      flex: 1; padding: 10px 12px;
+      border: 1px solid #ddd; border-radius: 8px;
+      font-size: 14px; background: #fff;
+    }
+    .sh-modal-add-btn {
+      flex: 2; padding: 11px 16px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .sh-modal-add-btn:hover:not(:disabled) { background: var(--accent-2, #00a0ff); }
+    .sh-modal-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sh-modal-stock { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -261,6 +327,31 @@
       <div class="mobile-menu-item"><a href="index.html">Shop</a></div>
       <div class="mobile-menu-item"><a href="about.html">About</a></div>
       <div class="mobile-menu-item"><a href="#" id="mobileSignIn">Sign In / Sign Up</a></div>
+    </div>
+  </div>
+
+  <!-- Back to Umzila bar -->
+  <div class="sh-back-bar">
+    <a class="sh-back-link" href="index.html">← Back to Umzila</a>
+  </div>
+
+  <!-- Product detail modal -->
+  <div class="sh-prod-modal-overlay" id="shProdModal" role="dialog" aria-modal="true">
+    <div class="sh-prod-modal">
+      <div class="sh-modal-img-wrap" id="shModalImgWrap">
+        <button class="sh-modal-close" id="shModalClose" aria-label="Close">✕</button>
+        <img id="shModalImg" src="" alt="" />
+      </div>
+      <div class="sh-modal-body">
+        <h2 class="sh-modal-title" id="shModalTitle"></h2>
+        <div class="sh-modal-price" id="shModalPrice"></div>
+        <div class="sh-modal-stock" id="shModalStock"></div>
+        <div class="sh-modal-desc" id="shModalDesc"></div>
+        <div class="sh-modal-row">
+          <select class="sh-modal-size-sel" id="shModalSizeSel"></select>
+          <button class="sh-modal-add-btn" id="shModalAddBtn">+ Add to Cart</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -554,7 +645,61 @@
     }
 
     /* ─────────────────────────────────────────
-       5. Attach card interactions
+       5. Product detail modal
+    ───────────────────────────────────────── */
+    var _modalProduct = null;
+
+    function openProductModal(product) {
+      _modalProduct = product;
+      var overlay = document.getElementById('shProdModal');
+      document.getElementById('shModalTitle').textContent = product.title || '';
+      document.getElementById('shModalImg').src = product.primary_image || svgPlaceholder(product.title, 400, 400);
+      document.getElementById('shModalImg').alt = product.title || '';
+      // Price
+      var priceEl = document.getElementById('shModalPrice');
+      if (product.sale && product.price) {
+        priceEl.innerHTML = '<span class="orig">' + fmt(product.price) + '</span><span class="sale">' + fmt(product.displayPrice) + '</span>';
+      } else {
+        priceEl.textContent = fmt(product.displayPrice || product.price || 0);
+      }
+      // Stock
+      var stockEl = document.getElementById('shModalStock');
+      stockEl.textContent = product.stock > 0 ? product.stock + ' in stock' : 'Out of stock';
+      // Description (may not exist in card data, hide if absent)
+      var descEl = document.getElementById('shModalDesc');
+      descEl.textContent = product.description || '';
+      descEl.style.display = product.description ? '' : 'none';
+      // Sizes
+      var sizeEl = document.getElementById('shModalSizeSel');
+      var sizes = product.size && product.size.length ? product.size : ['S','M','L','XL'];
+      sizeEl.innerHTML = sizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
+      // Add button
+      var addBtn = document.getElementById('shModalAddBtn');
+      addBtn.disabled = product.stock < 1;
+      overlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeProductModal() {
+      document.getElementById('shProdModal').classList.remove('open');
+      document.body.style.overflow = '';
+      _modalProduct = null;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var overlay = document.getElementById('shProdModal');
+      document.getElementById('shModalClose').addEventListener('click', closeProductModal);
+      overlay.addEventListener('click', function(e) { if (e.target === overlay) closeProductModal(); });
+      document.getElementById('shModalAddBtn').addEventListener('click', function() {
+        if (!_modalProduct) return;
+        var size = document.getElementById('shModalSizeSel').value;
+        addToCart(_modalProduct, size, 1);
+        closeProductModal();
+      });
+    });
+
+    /* ─────────────────────────────────────────
+       6. Attach card interactions
     ───────────────────────────────────────── */
     function attachCardListeners() {
       document.querySelectorAll('.sh-card').forEach(function(card) {
@@ -577,14 +722,28 @@
         var addBtn  = card.querySelector('.shop-add-btn');
         var sizeEl  = card.querySelector('.shop-size-sel');
         var rawData = card.dataset.product;
-        if (!addBtn || !rawData) return;
+        if (!rawData) return;
         var product;
         try { product = JSON.parse(rawData); } catch(e) { return; }
 
-        addBtn.addEventListener('click', function() {
-          var size = sizeEl ? sizeEl.value : 'M';
-          addToCart(product, size, 1);
+        // Click on card body (not fav/add buttons) → open modal
+        var cardBody = card.querySelector('.sh-card-body');
+        var cardMedia = card.querySelector('.sh-card-media');
+        [cardBody, cardMedia].forEach(function(zone) {
+          if (!zone) return;
+          zone.addEventListener('click', function(e) {
+            if (e.target.closest('.sh-card-fav') || e.target.closest('.shop-add-btn') || e.target.closest('.shop-size-sel')) return;
+            openProductModal(product);
+          });
         });
+
+        if (addBtn) {
+          addBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var size = sizeEl ? sizeEl.value : 'M';
+            addToCart(product, size, 1);
+          });
+        }
       });
     }
 
