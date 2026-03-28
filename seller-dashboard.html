@@ -1616,7 +1616,7 @@
       // Fetch recent orders (RLS allows sellers to read relevant orders)
       var { data, error } = await SD.sb
         .from('orders')
-        .select('id, order_number, created_at, order_status, status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, raw_cart, total, amount')
+        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, raw_cart, total, amount')
         .order('created_at', { ascending: false })
         .limit(150);
 

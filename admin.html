@@ -62,6 +62,42 @@
   /* responsiveness for desktop sizes */
   @media (max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} .search-box input{max-width:60%} }
   @media (max-width:760px){ .grid{grid-template-columns:repeat(1,1fr)} .search-box input{max-width:80%} }
+
+  /* sub-tabs */
+  .sub-tab-bar { display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid #e5e7eb }
+  .sub-tab { padding:10px 20px;border:none;border-bottom:3px solid transparent;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:-2px;transition:color .15s,border-color .15s }
+  .sub-tab.active { border-bottom-color:var(--primary);color:var(--primary) }
+  .sub-tab:hover { color:var(--primary) }
+
+  /* large detail modals */
+  .detail-modal-backdrop { position:fixed;inset:0;background:rgba(2,6,23,0.5);display:none;align-items:flex-start;justify-content:center;z-index:80;padding:16px;overflow-y:auto }
+  .detail-modal-backdrop.open { display:flex }
+  .detail-modal { background:#fff;border-radius:14px;width:100%;max-width:960px;margin:auto;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(2,6,23,0.25);overflow:hidden }
+  .detail-modal-header { padding:18px 22px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0 }
+  .detail-modal-header h3 { margin:0;font-size:17px }
+  .detail-modal-body { flex:1;padding:22px;overflow-y:auto;max-height:calc(92vh - 130px) }
+  .detail-modal-footer { padding:14px 22px;border-top:1px solid #e5e7eb;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;background:#fafafa }
+  .dm-close-btn { border:none;background:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;padding:0 4px }
+  .dm-close-btn:hover { color:#374151 }
+
+  /* product review / app modal field groups */
+  .fg { margin-bottom:14px }
+  .fg label { display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px }
+  .fg input,.fg select,.fg textarea { width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit }
+  .fg textarea { resize:vertical }
+  .fg-row { display:flex;gap:12px }
+  .fg-row .fg { flex:1;min-width:0 }
+
+  /* image gallery in product modal */
+  .pr-gallery-main { width:100%;max-height:260px;object-fit:contain;border-radius:10px;background:#f3f4f6;display:block;margin-bottom:10px }
+  .pr-gallery-strip { display:flex;gap:8px;flex-wrap:wrap;align-items:center }
+  .pr-gallery-thumb { width:68px;height:68px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;cursor:pointer;flex-shrink:0 }
+  .pr-gallery-thumb.active { border-color:var(--primary) }
+  .pr-upload-btn { width:68px;height:68px;border-radius:8px;border:2px dashed #d1d5db;display:flex;align-items:center;justify-content:center;font-size:26px;color:#9ca3af;cursor:pointer;flex-shrink:0 }
+  .pr-upload-btn:hover { border-color:var(--primary);color:var(--primary) }
+
+  /* status badge */
+  .status-pill { display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em }
 </style>
 
 <!-- Supabase initialization via Netlify function -->
@@ -316,19 +352,33 @@ const supabaseClient = supabase.createClient(
           <h3 style="margin:0">Seller Applications</h3>
           <button id="refreshApplicationsBtn" class="small-btn">↻ Refresh</button>
         </div>
-        <div id="sellerAppsWrap">
-          <div style="color:var(--muted);padding:20px">Select this tab to load applications.</div>
+        <div class="sub-tab-bar">
+          <button class="sub-tab active" data-satab="pending">Pending</button>
+          <button class="sub-tab" data-satab="recent">Recent (30 days)</button>
+        </div>
+        <div id="saTabPending">
+          <div id="sellerAppsWrap"><div style="color:var(--muted);padding:20px">Select this tab to load applications.</div></div>
+        </div>
+        <div id="saTabRecent" style="display:none">
+          <div id="sellerAppsRecentWrap"><div style="color:var(--muted);padding:20px">Loading recent applications…</div></div>
         </div>
       </section>
 
       <!-- Product Reviews -->
       <section id="section-product-reviews" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h3 style="margin:0">Products Under Review</h3>
+          <h3 style="margin:0">Product Reviews</h3>
           <button id="refreshProductReviewsBtn" class="small-btn">↻ Refresh</button>
         </div>
-        <div id="productReviewsWrap">
-          <div style="color:var(--muted);padding:20px">Select this tab to load pending products.</div>
+        <div class="sub-tab-bar">
+          <button class="sub-tab active" data-prtab="pending">Pending Review</button>
+          <button class="sub-tab" data-prtab="recent">Recent (30 days)</button>
+        </div>
+        <div id="prTabPending">
+          <div id="productReviewsWrap"><div style="color:var(--muted);padding:20px">Select this tab to load pending products.</div></div>
+        </div>
+        <div id="prTabRecent" style="display:none">
+          <div id="productReviewsRecentWrap"><div style="color:var(--muted);padding:20px">Loading recent reviews…</div></div>
         </div>
       </section>
 
@@ -364,6 +414,30 @@ const supabaseClient = supabase.createClient(
         <button id="modalCancel">Cancel</button>
         <button id="modalConfirm" style="background:var(--primary);color:#fff;border:0;padding:8px 10px;border-radius:8px">Confirm</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Seller Application Detail Modal -->
+  <div id="saModalBackdrop" class="detail-modal-backdrop" role="dialog" aria-modal="true">
+    <div class="detail-modal">
+      <div class="detail-modal-header">
+        <h3 id="saModalTitle">Application Details</h3>
+        <button class="dm-close-btn" id="saModalClose">&times;</button>
+      </div>
+      <div class="detail-modal-body" id="saModalBody"></div>
+      <div class="detail-modal-footer" id="saModalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Product Review / Edit Modal -->
+  <div id="prModalBackdrop" class="detail-modal-backdrop" role="dialog" aria-modal="true">
+    <div class="detail-modal">
+      <div class="detail-modal-header">
+        <h3 id="prModalTitle">Product Review</h3>
+        <button class="dm-close-btn" id="prModalClose">&times;</button>
+      </div>
+      <div class="detail-modal-body" id="prModalBody"></div>
+      <div class="detail-modal-footer" id="prModalFooter"></div>
     </div>
   </div>
 
@@ -1531,15 +1605,21 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   /* ------------------ end analytics/out-of-stock ------------------ */
 
-  /* ------------------ Seller Applications ------------------ */
+  /* ============================================================
+     SELLER APPLICATIONS — tabs (Pending / Recent 30 days)
+     + full detail modal with approve / reject
+  ============================================================ */
+  let saAllApps = [];
+
   async function fetchSellerApplications() {
-    const wrap = document.getElementById('sellerAppsWrap');
-    if (!wrap) return;
-    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading...</div>';
-    // If supabase isn't ready yet, wait for it
+    const pendingWrap = document.getElementById('sellerAppsWrap');
+    const recentWrap  = document.getElementById('sellerAppsRecentWrap');
+    const loading = '<div style="color:var(--muted);padding:20px">Loading…</div>';
+    if (pendingWrap) pendingWrap.innerHTML = loading;
+    if (recentWrap)  recentWrap.innerHTML  = loading;
+
     if (!supabaseClient) {
       document.addEventListener('supabase-ready', function onReady(ev) {
-        document.removeEventListener('supabase-ready', onReady);
         supabaseClient = ev.detail.supabase;
         fetchSellerApplications();
       }, { once: true });
@@ -1551,209 +1631,497 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) {
-        console.warn('fetchSellerApplications error', error);
-        wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">
-          <strong>Error loading applications</strong><br>
-          <span style="font-size:12px">${escapeHtml(error.message)}${error.details ? ' — ' + escapeHtml(error.details) : ''}</span><br>
-          <button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:10px">Retry</button>
-        </div>`;
+        const errHtml = `<div style="color:#b91c1c;padding:20px"><strong>Error loading applications</strong><br><span style="font-size:12px">${escapeHtml(error.message)}</span><br><button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:10px">Retry</button></div>`;
+        if (pendingWrap) pendingWrap.innerHTML = errHtml;
+        if (recentWrap)  recentWrap.innerHTML  = errHtml;
         return;
       }
-      renderSellerApplications(data || []);
+      saAllApps = data || [];
+      const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const pending = saAllApps.filter(a => (a.status || 'pending') === 'pending');
+      const recent  = saAllApps.filter(a =>
+        (a.status === 'approved' || a.status === 'rejected') &&
+        a.created_at && new Date(a.created_at) >= thirtyAgo
+      );
+      renderSAList(pending, pendingWrap, 'pending');
+      renderSAList(recent,  recentWrap,  'recent');
     } catch (e) {
       console.warn('fetchSellerApplications failed', e);
-      wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">
-        Failed to load applications.<br>
-        <span style="font-size:12px">${escapeHtml(String(e))}</span><br>
-        <button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:10px">Retry</button>
-      </div>`;
+      const errHtml = `<div style="color:#b91c1c;padding:20px">Failed to load. <button onclick="fetchSellerApplications()" class="small-btn" style="margin-top:8px">Retry</button></div>`;
+      if (pendingWrap) pendingWrap.innerHTML = errHtml;
+      if (recentWrap)  recentWrap.innerHTML  = errHtml;
     }
   }
 
-  function saStatusBadge(status) {
-    const map = { approved: '#059669', rejected: '#dc2626', pending: '#d97706' };
-    const color = map[status] || '#6b7280';
-    return `<span style="background:${color};color:#fff;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase">${escapeHtml(status || 'pending')}</span>`;
+  function saColor(status) {
+    return { approved:'#059669', rejected:'#dc2626', pending:'#d97706' }[status] || '#6b7280';
   }
 
-  function renderSellerApplications(apps) {
-    const wrap = document.getElementById('sellerAppsWrap');
+  function renderSAList(apps, wrap, type) {
+    if (!wrap) return;
     if (!apps.length) {
-      wrap.innerHTML = '<div style="color:var(--muted);padding:20px">No applications yet.</div>';
+      wrap.innerHTML = `<div style="color:var(--muted);padding:20px">No ${type === 'pending' ? 'pending' : 'recently reviewed'} applications.</div>`;
       return;
     }
     wrap.innerHTML = apps.map(a => `
-      <div style="background:#fff;border-radius:12px;padding:18px 20px;margin-bottom:14px;box-shadow:0 4px 12px rgba(2,6,23,0.05)">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px">
+      <div class="sa-card" data-id="${escapeHtml(String(a.id))}" style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 4px 12px rgba(2,6,23,0.05);cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 8px 24px rgba(2,6,23,0.1)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(2,6,23,0.05)'">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div>
             <div style="font-weight:700;font-size:16px">${escapeHtml(a.shop_name || '—')}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(a.full_name || '')} &bull; ${escapeHtml(a.email || '')} &bull; ${escapeHtml(a.phone || '')}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:3px">${escapeHtml(a.full_name || '')} · ${escapeHtml(a.email || '')}</div>
+            <div style="font-size:12px;color:var(--muted)">${a.created_at ? new Date(a.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           </div>
-          ${saStatusBadge(a.status)}
+          <span class="status-pill" style="background:${saColor(a.status||'pending')};color:#fff">${escapeHtml(a.status || 'pending')}</span>
         </div>
-        <div style="font-size:13px;color:#374151;margin-bottom:5px"><strong>Plans to sell:</strong> ${escapeHtml(a.plan_to_sell || '—')}</div>
-        <div style="font-size:13px;color:#374151;margin-bottom:5px"><strong>Instagram:</strong> ${escapeHtml(a.instagram || '—')}</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Applied: ${a.created_at ? new Date(a.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</div>
-        ${a.rejection_reason ? `<div style="font-size:13px;color:#dc2626;margin-bottom:10px"><strong>Rejection reason:</strong> ${escapeHtml(a.rejection_reason)}</div>` : ''}
-        <div style="display:flex;gap:10px">
-          <button class="small-btn sa-approve-btn" data-id="${escapeHtml(String(a.id))}" data-shop="${escapeHtml(a.shop_name || '')}" ${a.status === 'approved' ? 'disabled style="opacity:0.5;cursor:not-allowed;background:#059669"' : 'style="background:#059669"'}>Approve</button>
-          <button class="small-btn sa-reject-btn" data-id="${escapeHtml(String(a.id))}" ${a.status === 'rejected' ? 'disabled style="opacity:0.5;cursor:not-allowed;background:#dc2626"' : 'style="background:#dc2626"'}>Reject</button>
-        </div>
-      </div>
-    `).join('');
-
-    wrap.querySelectorAll('.sa-approve-btn').forEach(btn => {
-      btn.addEventListener('click', () => approveSellerApplication(btn.dataset.id, btn.dataset.shop, btn));
-    });
-    wrap.querySelectorAll('.sa-reject-btn').forEach(btn => {
-      btn.addEventListener('click', () => rejectSellerApplication(btn.dataset.id, btn));
-    });
-  }
-
-  async function approveSellerApplication(appId, shopName, btn) {
-    if (!appId || !shopName) { showToast('Missing application data'); return; }
-    btn.disabled = true;
-    btn.textContent = 'Approving...';
-    try {
-      const res = await fetch('/.netlify/functions/approve-seller', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicationId: appId, shopName })
+        <div style="font-size:13px;color:#374151;margin-top:8px">${escapeHtml((a.plan_to_sell||'').slice(0,120))}${(a.plan_to_sell||'').length>120?'…':''}</div>
+        <div style="font-size:12px;color:var(--primary);margin-top:8px;font-weight:600">Click to view full details →</div>
+      </div>`).join('');
+    wrap.querySelectorAll('.sa-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const app = saAllApps.find(a => String(a.id) === String(card.dataset.id));
+        if (app) openApplicationModal(app);
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast('Approve failed: ' + (json.error || res.status));
-        btn.disabled = false;
-        btn.textContent = 'Approve';
-        return;
-      }
-      showToast('Approved — seller shop created');
-      await fetchSellerApplications();
-    } catch (e) {
-      console.warn('approveSellerApplication failed', e);
-      showToast('Approve failed');
-      btn.disabled = false;
-      btn.textContent = 'Approve';
-    }
+    });
   }
 
-  async function rejectSellerApplication(appId, btn) {
-    const reason = prompt('Enter rejection reason (required):');
-    if (!reason || !reason.trim()) { showToast('Rejection cancelled — reason is required'); return; }
-    btn.disabled = true;
-    btn.textContent = 'Rejecting...';
-    try {
-      const { error } = await supabaseClient
-        .from('seller_applications')
-        .update({ status: 'rejected', rejection_reason: reason.trim() })
-        .eq('id', appId);
-      if (error) {
-        showToast('Reject failed: ' + error.message);
-        btn.disabled = false;
-        btn.textContent = 'Reject';
-        return;
-      }
-      showToast('Application rejected');
-      await fetchSellerApplications();
-    } catch (e) {
-      console.warn('rejectSellerApplication failed', e);
-      showToast('Reject failed');
-      btn.disabled = false;
-      btn.textContent = 'Reject';
+  function openApplicationModal(app) {
+    const backdrop = document.getElementById('saModalBackdrop');
+    const title    = document.getElementById('saModalTitle');
+    const body     = document.getElementById('saModalBody');
+    const footer   = document.getElementById('saModalFooter');
+
+    title.textContent = app.shop_name || 'Application Details';
+    const c = saColor(app.status || 'pending');
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="fg"><label>Full Name</label><div style="font-size:15px;font-weight:600">${escapeHtml(app.full_name||'—')}</div></div>
+        <div class="fg"><label>Shop Name</label><div style="font-size:15px;font-weight:600">${escapeHtml(app.shop_name||'—')}</div></div>
+        <div class="fg"><label>Email</label><div style="font-size:14px">${escapeHtml(app.email||'—')}</div></div>
+        <div class="fg"><label>Phone</label><div style="font-size:14px">${escapeHtml(app.phone||'—')}</div></div>
+        <div class="fg"><label>Instagram</label><div style="font-size:14px">${app.instagram ? `<a href="https://instagram.com/${encodeURIComponent(app.instagram)}" target="_blank" rel="noopener">@${escapeHtml(app.instagram)}</a>` : '—'}</div></div>
+        <div class="fg"><label>Applied</label><div style="font-size:14px">${app.created_at ? new Date(app.created_at).toLocaleString('en-ZA') : '—'}</div></div>
+      </div>
+      <div class="fg"><label>Plans to Sell</label>
+        <div style="font-size:14px;line-height:1.7;white-space:pre-wrap;background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e5e7eb">${escapeHtml(app.plan_to_sell||'—')}</div>
+      </div>
+      ${app.description ? `<div class="fg"><label>Additional Notes</label><div style="font-size:14px;line-height:1.7;white-space:pre-wrap;background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e5e7eb">${escapeHtml(app.description)}</div></div>` : ''}
+      <div class="fg" style="margin-top:4px"><label>Current Status</label>
+        <span class="status-pill" style="background:${c};color:#fff">${escapeHtml(app.status||'pending')}</span>
+      </div>
+      ${app.rejection_reason ? `<div class="fg"><label>Rejection Reason</label><div style="background:#fef2f2;border-radius:8px;padding:12px;font-size:14px;color:#dc2626">${escapeHtml(app.rejection_reason)}</div></div>` : ''}
+    `;
+
+    const isPending  = (app.status || 'pending') === 'pending';
+    const isApproved = app.status === 'approved';
+    const isRejected = app.status === 'rejected';
+
+    footer.innerHTML = `
+      ${isPending || isRejected ? `<button id="saModalApprove" class="small-btn" style="background:#059669">✓ ${isRejected?'Re-approve':'Approve'}</button>` : ''}
+      ${isPending || isApproved ? `<button id="saModalReject"  class="small-btn" style="background:#dc2626">✗ ${isApproved?'Revoke & Reject':'Reject'}</button>` : ''}
+      <button id="saModalClose2" style="margin-left:auto;background:#fff;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;cursor:pointer">Close</button>
+    `;
+
+    const approveBtn = footer.querySelector('#saModalApprove');
+    const rejectBtn  = footer.querySelector('#saModalReject');
+    const closeBtn2  = footer.querySelector('#saModalClose2');
+
+    if (approveBtn) {
+      approveBtn.addEventListener('click', async () => {
+        approveBtn.disabled = true; approveBtn.textContent = 'Approving…';
+        try {
+          const res = await fetch('/.netlify/functions/approve-seller', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: app.id, shopName: app.shop_name })
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) { showToast('Approve failed: ' + (json.error || res.status)); approveBtn.disabled=false; approveBtn.textContent='✓ Approve'; return; }
+          showToast('Approved — seller shop created');
+          backdrop.classList.remove('open');
+          await fetchSellerApplications();
+        } catch (e) { showToast('Approve failed'); approveBtn.disabled=false; approveBtn.textContent='✓ Approve'; }
+      });
     }
+    if (rejectBtn) {
+      rejectBtn.addEventListener('click', async () => {
+        const reason = prompt('Enter rejection reason (required):');
+        if (!reason || !reason.trim()) { showToast('Rejection cancelled — reason required'); return; }
+        rejectBtn.disabled = true; rejectBtn.textContent = 'Rejecting…';
+        try {
+          const { error } = await supabaseClient.from('seller_applications')
+            .update({ status: 'rejected', rejection_reason: reason.trim() })
+            .eq('id', app.id);
+          if (error) { showToast('Reject failed: ' + error.message); rejectBtn.disabled=false; rejectBtn.textContent='✗ Reject'; return; }
+          showToast('Application rejected');
+          backdrop.classList.remove('open');
+          await fetchSellerApplications();
+        } catch (e) { showToast('Reject failed'); rejectBtn.disabled=false; rejectBtn.textContent='✗ Reject'; }
+      });
+    }
+    if (closeBtn2) closeBtn2.addEventListener('click', () => backdrop.classList.remove('open'));
+    backdrop.classList.add('open');
   }
+
+  // tab switching — seller applications
+  document.querySelectorAll('.sub-tab[data-satab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sub-tab[data-satab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const t = btn.dataset.satab;
+      document.getElementById('saTabPending').style.display = t === 'pending' ? '' : 'none';
+      document.getElementById('saTabRecent').style.display  = t === 'recent'  ? '' : 'none';
+    });
+  });
+  document.getElementById('saModalClose').addEventListener('click', () => document.getElementById('saModalBackdrop').classList.remove('open'));
+  document.getElementById('saModalBackdrop').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 
   document.getElementById('refreshApplicationsBtn').addEventListener('click', fetchSellerApplications);
-  /* ------------------ end Seller Applications ------------------ */
+  /* ============================================================ end Seller Applications */
 
-  /* ------------------ Product Reviews ------------------ */
+  /* ============================================================
+     PRODUCT REVIEWS — tabs (Pending / Recent 30 days)
+     + full edit/approve/reject modal
+  ============================================================ */
+  let prPendingProducts = [];
+  let prRecentProducts  = [];
+
   async function fetchProductReviews() {
-    const wrap = document.getElementById('productReviewsWrap');
-    if (!wrap) return;
-    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading...</div>';
-    if (!supabaseClient) { wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Supabase not ready.</div>'; return; }
+    const pendingWrap = document.getElementById('productReviewsWrap');
+    const recentWrap  = document.getElementById('productReviewsRecentWrap');
+    const loading = '<div style="color:var(--muted);padding:20px">Loading…</div>';
+    if (pendingWrap) pendingWrap.innerHTML = loading;
+    if (recentWrap)  recentWrap.innerHTML  = loading;
+    if (!supabaseClient) { if (pendingWrap) pendingWrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Supabase not ready.</div>'; return; }
+
+    const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const fields = 'id,name,price,sale_price,sale,category,image,metadata,seller_id,stock,created_at,updated_at,visible,badge,sizes,tags,description,sku,featured,sellers(id,shop_name)';
+
     try {
-      const { data, error } = await supabaseClient
-        .from('products')
-        .select('id, name, price, category, image, metadata, seller_id, sellers(shop_name)')
-        .eq('visible', false)
-        .order('created_at', { ascending: false });
-      if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
-      const pending = (data || []).filter(p => {
-        const rs = p.metadata && p.metadata.review_status;
-        return rs === 'pending_review' || rs === 'pending';
-      });
-      renderProductReviews(pending);
+      const [pendingRes, recentRes] = await Promise.all([
+        supabaseClient.from('products').select(fields).eq('visible', false).order('created_at', { ascending: false }),
+        supabaseClient.from('products').select(fields).gte('updated_at', thirtyAgo).order('updated_at', { ascending: false })
+      ]);
+
+      if (pendingRes.error) {
+        if (pendingWrap) pendingWrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(pendingRes.error.message)}</div>`;
+      } else {
+        prPendingProducts = (pendingRes.data || []).filter(p => {
+          const rs = p.metadata && p.metadata.review_status;
+          return !rs || rs === 'pending_review' || rs === 'pending' || rs === 'submitted';
+        });
+        renderPRList(prPendingProducts, pendingWrap, 'pending');
+      }
+
+      if (recentRes.error) {
+        if (recentWrap) recentWrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(recentRes.error.message)}</div>`;
+      } else {
+        prRecentProducts = (recentRes.data || []).filter(p => {
+          const rs = p.metadata && p.metadata.review_status;
+          return rs === 'approved' || rs === 'rejected' || p.visible === true;
+        });
+        renderPRList(prRecentProducts, recentWrap, 'recent');
+      }
     } catch (e) {
       console.warn('fetchProductReviews failed', e);
-      wrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load products.</div>';
+      if (pendingWrap) pendingWrap.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load.</div>';
     }
   }
 
-  function renderProductReviews(products) {
-    const wrap = document.getElementById('productReviewsWrap');
+  function prStatusColor(rs) {
+    return { approved:'#059669', rejected:'#dc2626', pending_review:'#d97706', pending:'#d97706', submitted:'#d97706', live:'#0073e6' }[rs] || '#6b7280';
+  }
+
+  function renderPRList(products, wrap, type) {
+    if (!wrap) return;
     if (!products.length) {
-      wrap.innerHTML = '<div style="color:var(--muted);padding:20px">No products pending review.</div>';
+      wrap.innerHTML = `<div style="color:var(--muted);padding:20px">No ${type === 'pending' ? 'pending' : 'recently reviewed'} products.</div>`;
       return;
     }
     wrap.innerHTML = products.map(p => {
-      const sellerName = (p.sellers && p.sellers.shop_name) ? escapeHtml(p.sellers.shop_name) : '—';
-      const imgSrc = p.image || '';
-      const imgHtml = imgSrc ? `<img src="${escapeHtml(imgSrc)}" alt="${escapeHtml(p.name||'')}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:56px;height:56px;background:#f3f4f6;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:20px">📦</div>`;
+      const sellerName = (p.sellers && p.sellers.shop_name) ? p.sellers.shop_name : '—';
+      const imgHtml = p.image
+        ? `<img src="${escapeHtml(p.image)}" alt="" style="width:68px;height:68px;object-fit:cover;border-radius:10px;flex-shrink:0">`
+        : `<div style="width:68px;height:68px;background:#f3f4f6;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:28px">📦</div>`;
+      const rs    = (p.metadata && p.metadata.review_status) || (p.visible ? 'approved' : 'pending_review');
+      const rsLbl = rs.replace(/_/g,' ');
       return `
-        <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 4px 12px rgba(2,6,23,0.05);display:flex;gap:14px;align-items:flex-start">
+        <div class="pr-card" data-id="${escapeHtml(String(p.id))}" style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:12px;box-shadow:0 4px 12px rgba(2,6,23,0.05);display:flex;gap:14px;align-items:flex-start;cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 8px 24px rgba(2,6,23,0.1)'" onmouseout="this.style.boxShadow='0 4px 12px rgba(2,6,23,0.05)'">
           ${imgHtml}
           <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px;margin-bottom:2px">${escapeHtml(p.name||'Unnamed product')}</div>
-            <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Seller: ${sellerName} &bull; Category: ${escapeHtml(p.category||'—')} &bull; R${Number(p.price||0).toFixed(2)}</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="small-btn pr-approve-btn" data-id="${escapeHtml(String(p.id))}" style="background:#059669">Approve</button>
-              <button class="small-btn pr-reject-btn" data-id="${escapeHtml(String(p.id))}" style="background:#dc2626">Reject</button>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+              <div style="font-weight:700;font-size:15px">${escapeHtml(p.name||'Unnamed')}</div>
+              <span class="status-pill" style="background:${prStatusColor(rs)};color:#fff">${escapeHtml(rsLbl)}</span>
             </div>
+            <div style="font-size:12px;color:var(--muted)">Seller: ${escapeHtml(sellerName)} · Category: ${escapeHtml(p.category||'—')} · R${Number(p.price||0).toFixed(2)}</div>
+            <div style="font-size:12px;color:var(--muted)">Stock: ${p.stock||0} · Sizes: ${Array.isArray(p.sizes)?p.sizes.join(', '):'—'} · Tags: ${Array.isArray(p.tags)?p.tags.slice(0,3).join(', '):'—'}</div>
+            <div style="font-size:12px;color:var(--muted)">${p.created_at ? 'Submitted '+new Date(p.created_at).toLocaleDateString('en-ZA') : ''}</div>
           </div>
+          <div style="flex-shrink:0;font-size:12px;color:var(--primary);font-weight:600;align-self:center">View →</div>
         </div>`;
     }).join('');
-
-    wrap.querySelectorAll('.pr-approve-btn').forEach(btn => {
-      btn.addEventListener('click', () => approveProductReview(btn.dataset.id, btn));
-    });
-    wrap.querySelectorAll('.pr-reject-btn').forEach(btn => {
-      btn.addEventListener('click', () => rejectProductReview(btn.dataset.id, btn));
+    wrap.querySelectorAll('.pr-card').forEach(card => {
+      card.addEventListener('click', () => openProductReviewModal(card.dataset.id));
     });
   }
 
-  async function approveProductReview(productId, btn) {
-    btn.disabled = true; btn.textContent = 'Approving...';
+  async function openProductReviewModal(productId) {
+    const backdrop = document.getElementById('prModalBackdrop');
+    const title    = document.getElementById('prModalTitle');
+    const body     = document.getElementById('prModalBody');
+    const footer   = document.getElementById('prModalFooter');
+
+    title.textContent = 'Loading…';
+    body.innerHTML = '<div style="text-align:center;padding:50px;color:var(--muted)">Loading product…</div>';
+    footer.innerHTML = '';
+    backdrop.classList.add('open');
+
     try {
-      const { error } = await supabaseClient
+      const { data: prod, error } = await supabaseClient
         .from('products')
-        .update({ visible: true, metadata: { review_status: 'approved' } })
-        .eq('id', productId);
-      if (error) { showToast('Error: ' + error.message); btn.disabled=false; btn.textContent='Approve'; return; }
-      showToast('Product approved and now visible');
-      await fetchProductReviews();
-    } catch(e) {
-      showToast('Approve failed'); btn.disabled=false; btn.textContent='Approve';
+        .select(`id,name,description,price,sale_price,sale,category,category_id,sizes,tags,stock,sku,badge,featured,visible,metadata,image,seller_id,created_at,updated_at,
+          sellers(id,shop_name,logo_url),
+          product_images!fk_product_images_product(id,url,alt_text,sort_order),
+          product_variants!product_variants_product_id_fkey(id,sku,size,stock)`)
+        .eq('id', productId)
+        .single();
+
+      if (error || !prod) {
+        body.innerHTML = `<div style="color:#b91c1c;padding:20px">Failed to load: ${escapeHtml(error ? error.message : 'Not found')}</div>`;
+        return;
+      }
+
+      title.textContent = prod.name || 'Product Review';
+
+      const images   = (prod.product_images || []).sort((a,b) => (a.sort_order||0)-(b.sort_order||0));
+      const variants = prod.product_variants || [];
+      const sellerName = prod.sellers ? (prod.sellers.shop_name || '—') : '—';
+      const rs  = (prod.metadata && prod.metadata.review_status) || (prod.visible ? 'approved' : 'pending_review');
+      const rsC = prStatusColor(rs);
+      const rejectReason = (prod.metadata && prod.metadata.reject_reason) || '';
+
+      // Build images list (primary image first, then product_images, dedup)
+      const imgList = [];
+      if (prod.image) imgList.push(prod.image);
+      images.forEach(i => { if (i.url && !imgList.includes(i.url)) imgList.push(i.url); });
+
+      const galleryHtml = `
+        <div style="margin-bottom:16px">
+          ${imgList.length
+            ? `<img id="prMainImg" src="${escapeHtml(imgList[0])}" alt="" class="pr-gallery-main" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23f3f4f6%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23aaa%22 font-size=%2240%22>📦</text></svg>'">`
+            : `<div class="pr-gallery-main" style="height:200px;display:flex;align-items:center;justify-content:center;font-size:60px;color:#d1d5db">📦</div>`
+          }
+          <div class="pr-gallery-strip">
+            ${imgList.map((u,i) => `<img src="${escapeHtml(u)}" alt="" class="pr-gallery-thumb${i===0?' active':''}" data-url="${escapeHtml(u)}" onerror="this.style.display='none'">`).join('')}
+            <label class="pr-upload-btn" title="Upload new image">+<input type="file" id="prNewImgInput" accept="image/*" style="display:none"></label>
+          </div>
+        </div>`;
+
+      // Sizes checkboxes
+      const sizesArr = Array.isArray(prod.sizes) ? prod.sizes : [];
+      const ALL_SIZES = ['XS','S','M','L','XL','XXL','One Size'];
+      const sizesHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">` +
+        ALL_SIZES.map(s => {
+          const variantRow = variants.find(v => v.size === s);
+          const checked = sizesArr.includes(s) || !!variantRow;
+          const stockNote = variantRow ? ` (${variantRow.stock})` : '';
+          return `<label style="display:flex;align-items:center;gap:4px;padding:5px 9px;border-radius:6px;border:1px solid ${checked?'var(--primary)':'#e5e7eb'};background:${checked?'#eff6ff':'#fff'};cursor:pointer;font-size:13px;font-weight:${checked?'700':'400'}">
+            <input type="checkbox" class="pr-size-cb" value="${s}" ${checked?'checked':''}>${s}${escapeHtml(stockNote)}
+          </label>`;
+        }).join('') + '</div>';
+
+      const tagsStr = Array.isArray(prod.tags) ? prod.tags.join(', ') : '';
+
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:24px">
+          <!-- Left: images + meta -->
+          <div>
+            ${galleryHtml}
+            <div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Seller Info</div>
+              <div style="font-weight:700;font-size:14px">${escapeHtml(sellerName)}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">ID: ${escapeHtml(prod.seller_id||'—')}</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Review Status</div>
+              <span class="status-pill" style="background:${rsC};color:#fff">${rs.replace(/_/g,' ')}</span>
+              ${rejectReason ? `<div style="font-size:12px;color:#dc2626;margin-top:8px"><strong>Reason:</strong> ${escapeHtml(rejectReason)}</div>` : ''}
+              <div style="font-size:11px;color:var(--muted);margin-top:6px">Submitted: ${prod.created_at ? new Date(prod.created_at).toLocaleString('en-ZA') : '—'}</div>
+              <div style="font-size:11px;color:var(--muted)">Updated: ${prod.updated_at ? new Date(prod.updated_at).toLocaleString('en-ZA') : '—'}</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:10px;padding:14px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Visibility & Flags</div>
+              <div style="display:flex;flex-wrap:wrap;gap:12px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="pr_visible" ${prod.visible?'checked':''}> Visible / Live</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="pr_featured" ${prod.featured?'checked':''}> Featured</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" id="pr_sale" ${prod.sale?'checked':''}> On Sale</label>
+              </div>
+            </div>
+          </div>
+          <!-- Right: editable fields -->
+          <div>
+            <div class="fg"><label>Product Name</label><input id="pr_name" type="text" value="${escapeHtml(prod.name||'')}"></div>
+            <div class="fg-row">
+              <div class="fg"><label>Price (R)</label><input id="pr_price" type="number" step="0.01" value="${prod.price||0}"></div>
+              <div class="fg"><label>Sale Price (R)</label><input id="pr_sale_price" type="number" step="0.01" value="${prod.sale_price||0}"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>Stock</label><input id="pr_stock" type="number" value="${prod.stock||0}"></div>
+              <div class="fg"><label>SKU</label><input id="pr_sku" type="text" value="${escapeHtml(prod.sku||'')}"></div>
+            </div>
+            <div class="fg-row">
+              <div class="fg"><label>Category</label><input id="pr_category" type="text" value="${escapeHtml(prod.category||'')}"></div>
+              <div class="fg"><label>Badge</label>
+                <select id="pr_badge">
+                  <option value="">None</option>
+                  ${['Hot','New','Sale','Featured'].map(b=>`<option value="${b}"${prod.badge===b?' selected':''}>${b}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="fg"><label>Sizes (check all that apply)</label>${sizesHtml}</div>
+            <div class="fg"><label>Tags (comma separated)</label><input id="pr_tags" type="text" value="${escapeHtml(tagsStr)}"></div>
+            <div class="fg"><label>Description</label><textarea id="pr_desc" rows="6">${escapeHtml(prod.description||'')}</textarea></div>
+          </div>
+        </div>`;
+
+      // Wire image thumbnail click
+      body.querySelectorAll('.pr-gallery-thumb').forEach(thumb => {
+        thumb.addEventListener('click', () => {
+          const main = body.querySelector('#prMainImg');
+          if (main) main.src = thumb.dataset.url;
+          body.querySelectorAll('.pr-gallery-thumb').forEach(t => t.classList.remove('active'));
+          thumb.classList.add('active');
+        });
+      });
+
+      // Wire image upload
+      const imgInput = body.querySelector('#prNewImgInput');
+      if (imgInput) {
+        imgInput.addEventListener('change', async () => {
+          const f = imgInput.files && imgInput.files[0];
+          if (!f) return;
+          showToast('Uploading image…');
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const url = await tryUploadImageToBucket(reader.result, `prod-${productId}`);
+            if (!url) { showToast('Upload failed'); return; }
+            // set as primary image on products row if none exists, else insert product_images row
+            if (!prod.image) {
+              await supabaseClient.from('products').update({ image: url }).eq('id', productId);
+            } else {
+              await supabaseClient.from('product_images').insert([{ product_id: productId, url, alt_text: prod.name||'' }]);
+            }
+            showToast('Image saved!');
+            await openProductReviewModal(productId); // refresh modal
+          };
+          reader.readAsDataURL(f);
+        });
+      }
+
+      // Build footer
+      footer.innerHTML = `
+        <button id="pr_save_btn"    class="small-btn">💾 Save Changes</button>
+        <button id="pr_approve_btn" class="small-btn" style="background:#059669">✓ Approve &amp; Go Live</button>
+        <button id="pr_reject_btn"  class="small-btn" style="background:#dc2626">✗ Reject</button>
+        <button id="pr_delete_btn"  class="small-btn" style="background:#7f1d1d">🗑 Delete Product</button>
+        <button id="pr_close_btn"   style="margin-left:auto;background:#fff;border:1px solid #d1d5db;padding:8px 16px;border-radius:8px;cursor:pointer">Close</button>`;
+
+      // Save changes
+      footer.querySelector('#pr_save_btn').addEventListener('click', async () => {
+        const btn = footer.querySelector('#pr_save_btn');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        const newSizes = Array.from(body.querySelectorAll('.pr-size-cb:checked')).map(cb => cb.value);
+        const newTags  = (body.querySelector('#pr_tags').value || '').split(',').map(s => s.trim()).filter(Boolean);
+        try {
+          const { error: upErr } = await supabaseClient.from('products').update({
+            name:       body.querySelector('#pr_name').value.trim(),
+            price:      parseFloat(body.querySelector('#pr_price').value) || 0,
+            sale_price: parseFloat(body.querySelector('#pr_sale_price').value) || 0,
+            stock:      parseInt(body.querySelector('#pr_stock').value) || 0,
+            sku:        body.querySelector('#pr_sku').value.trim(),
+            category:   body.querySelector('#pr_category').value.trim(),
+            badge:      body.querySelector('#pr_badge').value || null,
+            sale:       body.querySelector('#pr_sale').checked,
+            featured:   body.querySelector('#pr_featured').checked,
+            visible:    body.querySelector('#pr_visible').checked,
+            sizes:      newSizes,
+            tags:       newTags,
+            description: body.querySelector('#pr_desc').value.trim(),
+            updated_at: new Date().toISOString()
+          }).eq('id', productId);
+          if (upErr) { showToast('Save failed: ' + upErr.message); btn.disabled=false; btn.textContent='💾 Save Changes'; return; }
+          showToast('Product saved!');
+          btn.disabled = false; btn.textContent = '💾 Save Changes';
+          await fetchProductReviews();
+        } catch (e) { showToast('Save failed'); btn.disabled=false; btn.textContent='💾 Save Changes'; }
+      });
+
+      // Approve & Go Live
+      footer.querySelector('#pr_approve_btn').addEventListener('click', async () => {
+        const btn = footer.querySelector('#pr_approve_btn');
+        btn.disabled = true; btn.textContent = 'Approving…';
+        try {
+          const existingMeta = prod.metadata || {};
+          const { error: upErr } = await supabaseClient.from('products').update({
+            visible:    true,
+            metadata:   { ...existingMeta, review_status: 'approved' },
+            updated_at: new Date().toISOString()
+          }).eq('id', productId);
+          if (upErr) { showToast('Error: ' + upErr.message); btn.disabled=false; btn.textContent='✓ Approve & Go Live'; return; }
+          showToast('Product approved and now live!');
+          backdrop.classList.remove('open');
+          await fetchProductReviews();
+        } catch (e) { showToast('Approve failed'); btn.disabled=false; btn.textContent='✓ Approve & Go Live'; }
+      });
+
+      // Reject
+      footer.querySelector('#pr_reject_btn').addEventListener('click', async () => {
+        const reason = prompt('Reason for rejection (required):');
+        if (!reason || !reason.trim()) { showToast('Rejection cancelled'); return; }
+        const btn = footer.querySelector('#pr_reject_btn');
+        btn.disabled = true; btn.textContent = 'Rejecting…';
+        try {
+          const existingMeta = prod.metadata || {};
+          const { error: upErr } = await supabaseClient.from('products').update({
+            visible:    false,
+            metadata:   { ...existingMeta, review_status: 'rejected', reject_reason: reason.trim() },
+            updated_at: new Date().toISOString()
+          }).eq('id', productId);
+          if (upErr) { showToast('Error: ' + upErr.message); btn.disabled=false; btn.textContent='✗ Reject'; return; }
+          showToast('Product rejected');
+          backdrop.classList.remove('open');
+          await fetchProductReviews();
+        } catch (e) { showToast('Reject failed'); btn.disabled=false; btn.textContent='✗ Reject'; }
+      });
+
+      // Delete
+      footer.querySelector('#pr_delete_btn').addEventListener('click', () => {
+        if (!confirm(`Permanently delete "${prod.name}"? This cannot be undone.`)) return;
+        deleteProduct(productId).then(() => backdrop.classList.remove('open'));
+      });
+
+      // Close
+      footer.querySelector('#pr_close_btn').addEventListener('click', () => backdrop.classList.remove('open'));
+
+    } catch (e) {
+      console.warn('openProductReviewModal failed', e);
+      body.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load product details.</div>';
     }
   }
 
-  async function rejectProductReview(productId, btn) {
-    const reason = prompt('Reason for rejection (required):');
-    if (!reason || !reason.trim()) { showToast('Rejection cancelled'); return; }
-    btn.disabled = true; btn.textContent = 'Rejecting...';
-    try {
-      const { error } = await supabaseClient
-        .from('products')
-        .update({ visible: false, metadata: { review_status: 'rejected', reject_reason: reason.trim() } })
-        .eq('id', productId);
-      if (error) { showToast('Error: ' + error.message); btn.disabled=false; btn.textContent='Reject'; return; }
-      showToast('Product rejected');
-      await fetchProductReviews();
-    } catch(e) {
-      showToast('Reject failed'); btn.disabled=false; btn.textContent='Reject';
-    }
-  }
-  /* ------------------ end Product Reviews ------------------ */
+  // tab switching — product reviews
+  document.querySelectorAll('.sub-tab[data-prtab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sub-tab[data-prtab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const t = btn.dataset.prtab;
+      document.getElementById('prTabPending').style.display = t === 'pending' ? '' : 'none';
+      document.getElementById('prTabRecent').style.display  = t === 'recent'  ? '' : 'none';
+    });
+  });
+  document.getElementById('prModalClose').addEventListener('click', () => document.getElementById('prModalBackdrop').classList.remove('open'));
+  document.getElementById('prModalBackdrop').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+  /* ============================================================ end Product Reviews */
 
   // initial load: fetch categories then products
   await fetchCategories();

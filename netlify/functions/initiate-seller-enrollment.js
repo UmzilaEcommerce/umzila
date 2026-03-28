@@ -60,11 +60,11 @@ exports.handler = async function (event) {
   const { error: orderErr } = await admin.from('orders').insert({
     m_payment_id:    mPaymentId,
     customer_email:  email,
-    customer_first:  nameFirst,
-    customer_last:   nameLast,
-    amount:          100,
+    customer_name:   name.trim(),
+    total:           100,
     order_status:    'pending_payment',
-    raw_cart:        [{ item_name: 'Umzila Seller Enrollment Fee', quantity: 1, unit_price: 100, total: 100 }]
+    payment_status:  'pending',
+    items:           [{ item_name: 'Umzila Seller Enrollment Fee', quantity: 1, unit_price: 100, total: 100 }]
   });
 
   if (orderErr) {
