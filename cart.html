@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" href="umzila.webp" type="image/webp">
+  <title>Cart — Umzila</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <style>
+    :root{--bg:#f7f7f9;--card:#fff;--muted:#6b6b74;--accent:#0a2f66;--cta:#ff6b2c;--shadow:0 6px 18px rgba(11,13,20,0.08);}
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,"Segoe UI",Roboto,system-ui,sans-serif}
+    body{background:var(--bg);color:#111;min-height:100vh}
+    a{color:inherit;text-decoration:none}
+    img{display:block;max-width:100%}
+    header{background:#fff;padding:14px 20px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+    .logo{font-weight:800;font-size:18px;color:var(--accent)}
+    .header-back{padding:8px 14px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent);cursor:pointer;font-size:14px;font-weight:600}
+    .container{max-width:960px;margin:0 auto;padding:24px 18px 60px}
+    h2{color:var(--accent);font-size:22px;margin-bottom:4px}
+    .muted{color:var(--muted);font-size:13px}
+    .cart-wrap{display:grid;grid-template-columns:1fr 320px;gap:20px;margin-top:18px}
+    @media(max-width:700px){.cart-wrap{grid-template-columns:1fr}}
+    .panel{background:var(--card);border-radius:14px;box-shadow:var(--shadow);padding:20px}
+    .cart-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #f0f0f5;align-items:flex-start}
+    .cart-item:last-child{border-bottom:none}
+    .cart-item img{width:80px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0}
+    .cart-item-info{flex:1}
+    .cart-item-name{font-weight:700;font-size:15px}
+    .cart-item-sub{font-size:13px;color:var(--muted);margin-top:2px}
+    .cart-item-price{font-weight:800;font-size:16px;color:var(--accent);margin-top:6px}
+    .cart-item-controls{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+    .qty-btn{width:32px;height:32px;border:1px solid #e6e6ea;background:#fff;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .qty-display{font-weight:700;min-width:24px;text-align:center}
+    select.size-select{padding:6px 10px;border-radius:8px;border:1px solid #e6e6ea;font-size:13px;background:#fff;cursor:pointer}
+    .remove-btn{padding:6px 12px;border-radius:8px;border:1px solid #fcc;background:#fff;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer}
+    .summary-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0f0f5;font-size:14px}
+    .summary-row:last-of-type{border-bottom:none}
+    .summary-total{display:flex;justify-content:space-between;padding-top:12px;font-weight:800;font-size:18px}
+    .checkout-btn{display:block;width:100%;padding:14px;background:var(--cta);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;margin-top:16px;transition:opacity .15s}
+    .checkout-btn:hover{opacity:.9}
+    .checkout-btn:disabled{opacity:.5;cursor:not-allowed}
+    .empty-cart{text-align:center;padding:60px 20px;color:var(--muted)}
+    .empty-cart a{color:var(--cta);font-weight:700}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none}
+    .toast.show{opacity:1}
+    .item-editing{background:#f8fbff;border-radius:10px;padding:10px;margin-top:8px}
+    .loading-overlay{display:none;position:fixed;inset:0;background:rgba(255,255,255,.7);z-index:500;align-items:center;justify-content:center}
+    .loading-overlay.show{display:flex}
+    .spinner{width:40px;height:40px;border:4px solid #e6e6ea;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+
+  <script>
+  (async function initSupabase(){
+    try{
+      const res = await fetch('/.netlify/functions/get-client-config');
+      const cfg = await res.json().catch(()=>({}));
+      const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url || '';
+      const key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey || '';
+      if(url && key){
+        window.supabaseClient = supabase.createClient(url, key);
+        window.supabase = window.supabaseClient;
+      }
+      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } }));
+    }catch(e){ document.dispatchEvent(new CustomEvent('supabase-ready', { detail: {} })); }
+  })();
+  </script>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <header>
+    <button class="header-back" onclick="history.back()">← Back</button>
+    <div class="logo">Umzila</div>
+    <div style="margin-left:auto;font-size:14px;color:var(--muted)">Cart <span id="cartCountBadge" style="font-weight:700;color:var(--accent)">0</span> items</div>
+  </header>
+
+  <div class="container">
+    <h2>Your Cart</h2>
+    <div class="muted">Review and edit your items before checkout</div>
+
+    <div class="cart-wrap">
+      <div class="panel" id="cartPanel">
+        <div id="cartItemsContainer"></div>
+      </div>
+
+      <div>
+        <div class="panel" id="summaryPanel">
+          <h3 style="margin-bottom:12px;color:var(--accent)">Order Summary</h3>
+          <div id="summaryRows"></div>
+          <div class="summary-total">
+            <span>Total</span>
+            <span id="summaryTotal">R0.00</span>
+          </div>
+          <button class="checkout-btn" id="checkoutBtn" disabled>Proceed to Checkout</button>
+          <a href="index.html" style="display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--muted)">Continue shopping</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  await new Promise(resolve=>{
+    if(window.supabaseClient) return resolve();
+    document.addEventListener('supabase-ready', ()=>resolve());
+    setTimeout(resolve, 4000);
+  });
+
+  const sb = window.supabaseClient;
+  let cart = [];
+  let variantsCache = {}; // product_id → variants[]
+  let currentUser = null;
+
+  function esc(s){ return (s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmt(v){ return 'R' + Number(v||0).toFixed(2); }
+  function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2400); }
+  function setLoading(on){ document.getElementById('loadingOverlay').classList.toggle('show',on); }
+
+  // Get current user
+  if(sb){
+    try{ const { data } = await sb.auth.getSession(); currentUser = data?.session?.user || null; }catch(e){}
+  }
+
+  function readLocalCart(){
+    try{ return JSON.parse(localStorage.getItem('ss_cart') || '[]'); }catch(e){ return []; }
+  }
+
+  function writeLocalCart(items){
+    try{ localStorage.setItem('ss_cart', JSON.stringify(items)); }catch(e){}
+  }
+
+  async function writeSupabaseCart(items){
+    if(!sb || !currentUser) return;
+    try{
+      await sb.from('carts').upsert([{ user_id: currentUser.id, items }], { onConflict: ['user_id'] });
+    }catch(e){ console.warn('cart sync error',e); }
+  }
+
+  async function loadCart(){
+    cart = readLocalCart();
+    // If logged in, prefer Supabase cart
+    if(sb && currentUser){
+      try{
+        const { data } = await sb.from('carts').select('items').eq('user_id', currentUser.id).single();
+        if(data?.items && Array.isArray(data.items) && data.items.length > 0){
+          cart = data.items;
+          writeLocalCart(cart);
+        }
+      }catch(e){}
+    }
+    return cart;
+  }
+
+  async function fetchVariants(productId){
+    if(variantsCache[productId]) return variantsCache[productId];
+    if(!sb) return [];
+    try{
+      const { data } = await sb.from('product_variants').select('id,size,stock,price_override').eq('product_id', productId);
+      variantsCache[productId] = data || [];
+      return variantsCache[productId];
+    }catch(e){ return []; }
+  }
+
+  function calcTotal(){
+    return cart.reduce((s,item)=> s + (Number(item.price||0) * Number(item.quantity||item.qty||1)), 0);
+  }
+
+  function updateSummary(){
+    const total = calcTotal();
+    const badge = document.getElementById('cartCountBadge');
+    const sumRows = document.getElementById('summaryRows');
+    const sumTotal = document.getElementById('summaryTotal');
+    const checkBtn = document.getElementById('checkoutBtn');
+    if(badge) badge.textContent = cart.length;
+    if(sumRows){
+      sumRows.innerHTML = cart.map(item=>{
+        const qty = item.quantity || item.qty || 1;
+        return `<div class="summary-row"><div>${esc(item.name||item.title||'Item')} ${item.size?'× '+esc(item.size):''} ×${qty}</div><div>${fmt(Number(item.price||0)*qty)}</div></div>`;
+      }).join('');
+    }
+    if(sumTotal) sumTotal.textContent = fmt(total);
+    if(checkBtn) checkBtn.disabled = cart.length === 0;
+  }
+
+  async function renderCart(){
+    const container = document.getElementById('cartItemsContainer');
+    if(!container) return;
+    if(!cart.length){
+      container.innerHTML = `<div class="empty-cart"><div style="font-size:48px;margin-bottom:12px">🛒</div><div style="font-size:18px;font-weight:700;margin-bottom:8px">Your cart is empty</div><div><a href="index.html">Start shopping</a></div></div>`;
+      updateSummary();
+      return;
+    }
+
+    // Pre-fetch variants for all product ids
+    const productIds = [...new Set(cart.map(i=>i.product_id||i.id).filter(Boolean))];
+    await Promise.all(productIds.map(pid=>fetchVariants(pid)));
+
+    container.innerHTML = '';
+    cart.forEach((item, idx)=>{
+      const pid = item.product_id || item.id || '';
+      const variants = variantsCache[pid] || [];
+      const uniqueSizes = [...new Set(variants.filter(v=>v.stock>0).map(v=>v.size).filter(Boolean))];
+      const qty = item.quantity || item.qty || 1;
+      const imgSrc = item.image || item.thumbnail || 'https://placehold.co/80x80?text=Item';
+
+      const sizeOptions = uniqueSizes.length
+        ? `<select class="size-select" data-idx="${idx}">
+            ${uniqueSizes.map(s=>`<option value="${esc(s)}" ${s===(item.size||'')?'selected':''}>${esc(s)}</option>`).join('')}
+           </select>`
+        : (item.size ? `<span style="font-size:13px;color:var(--muted)">${esc(item.size)}</span>` : '');
+
+      const el = document.createElement('div');
+      el.className = 'cart-item';
+      el.dataset.idx = idx;
+      el.innerHTML = `
+        <img src="${esc(imgSrc)}" alt="${esc(item.name||item.title||'')}" onerror="this.src='https://placehold.co/80x80?text=Item'" />
+        <div class="cart-item-info">
+          <div class="cart-item-name">${esc(item.name||item.title||'Product')}</div>
+          <div class="cart-item-sub">${item.seller_name ? esc(item.seller_name) : ''}</div>
+          <div class="cart-item-price">${fmt(Number(item.price||0)*qty)}</div>
+          <div class="cart-item-controls">
+            <button class="qty-btn" data-action="minus" data-idx="${idx}">−</button>
+            <span class="qty-display">${qty}</span>
+            <button class="qty-btn" data-action="plus" data-idx="${idx}">+</button>
+            ${sizeOptions}
+            <button class="remove-btn" data-idx="${idx}">Remove</button>
+          </div>
+          ${item.preferred_delivery ? `<div class="muted" style="margin-top:6px;font-size:12px">🚚 Preferred: ${esc(item.preferred_delivery)}</div>` : ''}
+        </div>`;
+      container.appendChild(el);
+    });
+
+    // Bind controls
+    container.querySelectorAll('.qty-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const idx = Number(btn.dataset.idx);
+        const action = btn.dataset.action;
+        const currentQty = cart[idx].quantity || cart[idx].qty || 1;
+        if(action === 'minus'){
+          if(currentQty <= 1){ await removeItem(idx); return; }
+          cart[idx].quantity = currentQty - 1;
+          if('qty' in cart[idx]) cart[idx].qty = cart[idx].quantity;
+        } else {
+          cart[idx].quantity = currentQty + 1;
+          if('qty' in cart[idx]) cart[idx].qty = cart[idx].quantity;
+        }
+        await syncAndRender();
+      });
+    });
+
+    container.querySelectorAll('select.size-select').forEach(sel=>{
+      sel.addEventListener('change', async ()=>{
+        const idx = Number(sel.dataset.idx);
+        const newSize = sel.value;
+        const pid = cart[idx].product_id || cart[idx].id;
+        const variants = variantsCache[pid] || [];
+        const matchVariant = variants.find(v=>v.size===newSize);
+        cart[idx].size = newSize;
+        if(matchVariant && matchVariant.price_override){
+          cart[idx].price = Number(matchVariant.price_override);
+        }
+        if(matchVariant) cart[idx].variant_id = matchVariant.id;
+        await syncAndRender();
+      });
+    });
+
+    container.querySelectorAll('.remove-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const idx = Number(btn.dataset.idx);
+        await removeItem(idx);
+      });
+    });
+
+    updateSummary();
+  }
+
+  async function removeItem(idx){
+    cart.splice(idx, 1);
+    await syncAndRender();
+    toast('Item removed');
+  }
+
+  async function syncAndRender(){
+    writeLocalCart(cart);
+    if(sb && currentUser) await writeSupabaseCart(cart);
+    await renderCart();
+  }
+
+  // Checkout button
+  document.getElementById('checkoutBtn')?.addEventListener('click', ()=>{
+    if(!cart.length){ toast('Your cart is empty'); return; }
+    window.location.href = 'checkout.html';
+  });
+
+  // Init
+  setLoading(true);
+  await loadCart();
+  await renderCart();
+  setLoading(false);
+})();
+</script>
+</body>
+</html>

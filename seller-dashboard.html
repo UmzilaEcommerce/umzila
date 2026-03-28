@@ -738,12 +738,24 @@
     <!-- ── TAB: Orders ── -->
     <div id="tabOrders" class="tab-panel" style="display:none">
       <div class="panel">
-        <div class="panel-title">Orders</div>
-        <div class="spinner-wrap" id="ordersLoading"><div class="spinner"></div></div>
-        <div class="orders-list" id="ordersList"></div>
-        <div class="empty-state" id="ordersEmpty" style="display:none">
-          <div class="empty-state-icon">🧾</div>
-          <div>No orders containing your products yet.</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+          <button class="btn primary sm" id="ordersSubActive" onclick="switchOrdersSub('active')">Active Orders</button>
+          <button class="btn ghost sm" id="ordersSubPast" onclick="switchOrdersSub('past')">Past Orders</button>
+        </div>
+        <div id="ordersSubActivePanel">
+          <div class="spinner-wrap" id="ordersLoading"><div class="spinner"></div></div>
+          <div class="orders-list" id="ordersList"></div>
+          <div class="empty-state" id="ordersEmpty" style="display:none">
+            <div class="empty-state-icon">🧾</div>
+            <div>No active orders yet.</div>
+          </div>
+        </div>
+        <div id="ordersSubPastPanel" style="display:none">
+          <div class="orders-list" id="pastOrdersList"></div>
+          <div class="empty-state" id="pastOrdersEmpty" style="display:none">
+            <div class="empty-state-icon">📦</div>
+            <div>No past orders yet. Orders move here once the buyer confirms delivery.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1704,13 +1716,39 @@
       renderOrders(myOrders, myProductIds);
     }
 
+    window.switchOrdersSub = function(sub) {
+      var activeBtn = document.getElementById('ordersSubActive');
+      var pastBtn   = document.getElementById('ordersSubPast');
+      var activePanel = document.getElementById('ordersSubActivePanel');
+      var pastPanel   = document.getElementById('ordersSubPastPanel');
+      if (sub === 'active') {
+        activeBtn.className = 'btn primary sm';
+        pastBtn.className   = 'btn ghost sm';
+        activePanel.style.display = '';
+        pastPanel.style.display   = 'none';
+      } else {
+        activeBtn.className = 'btn ghost sm';
+        pastBtn.className   = 'btn primary sm';
+        activePanel.style.display = 'none';
+        pastPanel.style.display   = '';
+        renderPastOrders();
+      }
+    };
+
     function renderOrders(orders, myProductIds) {
       var list  = document.getElementById('ordersList');
       var empty = document.getElementById('ordersEmpty');
-      if (!orders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+
+      // Split: past = Delivered orders where buyer confirmed all items
+      // Active = everything else
+      var activeOrders = orders.filter(function(o) {
+        return o.order_status !== 'Delivered' || !o._buyerAllConfirmed;
+      });
+
+      if (!activeOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
 
-      list.innerHTML = orders.map(function(order) {
+      list.innerHTML = activeOrders.map(function(order) {
         var rawItems = Array.isArray(order.items) ? order.items : [];
         var items = rawItems.filter(function(i) {
           return myProductIds.includes(i.id || i.product_id);
@@ -1733,6 +1771,19 @@
         var fulfillStatus = ['Pending','Packaging','Fulfilled','Delivered','Returned'].includes(order.order_status)
           ? order.order_status : 'Pending';
 
+        // Buyer address — show full details until buyer confirms delivery
+        var buyerAddressHtml = '';
+        var deliveryAddr = order.delivery_address || '';
+        var city = order.city || '';
+        if (deliveryAddr || city) {
+          buyerAddressHtml = '<div class="order-buyer" style="margin-top:4px">📦 ' +
+            (order.customer_name || '') +
+            (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') +
+            (deliveryAddr ? ' · ' + deliveryAddr : '') +
+            (city ? ', ' + city : '') +
+          '</div>';
+        }
+
         return '<div class="order-row" id="order-' + order.id + '">' +
           '<div class="order-row-header">' +
             '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
@@ -1740,7 +1791,7 @@
             '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
           '</div>' +
           '<div class="order-items-list">' + itemLines + '</div>' +
-          (order.customer_name ? '<div class="order-buyer">Buyer: ' + order.customer_name + (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') + (order.city ? ' · 📍 ' + order.city : '') + '</div>' : '') +
+          buyerAddressHtml +
           (order.notes ? '<div class="order-buyer" style="color:#0a2f66">🚚 Preferred delivery: ' + order.notes + '</div>' : '') +
           '<div class="order-status-row">' +
             '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
@@ -1754,12 +1805,61 @@
       }).join('');
     }
 
+    // Render past orders (Delivered with buyer confirmation)
+    function renderPastOrders() {
+      var list  = document.getElementById('pastOrdersList');
+      var empty = document.getElementById('pastOrdersEmpty');
+      if (!list) return;
+      var pastOrders = (SD.orders || []).filter(function(o) { return o.order_status === 'Delivered'; });
+      if (!pastOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
+      empty.style.display = 'none';
+      var myProductIds = SD.products.map(function(p) { return p.id; });
+      list.innerHTML = pastOrders.map(function(order) {
+        var rawItems = Array.isArray(order.items) ? order.items : [];
+        var items = rawItems.filter(function(i) { return myProductIds.includes(i.id || i.product_id); });
+        var itemLines = items.map(function(i) {
+          var iName = i.title || i.name || i.product_name || 'Product';
+          var qty = i.qty || i.quantity || 1;
+          var price = i.price || i.unit_price || 0;
+          return '<div class="order-item-line"><span>' + iName + (i.size?' / '+i.size:'') + ' × ' + qty + '</span><span>' + fmt(price*qty) + '</span></div>';
+        }).join('');
+        var total = items.reduce(function(s,i){ return s + ((i.price||i.unit_price||0) * (i.qty||i.quantity||1)); }, 0);
+        return '<div class="order-row" style="opacity:0.85">' +
+          '<div class="order-row-header">' +
+            '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
+            '<span class="payment-pill paid">✓ Delivered</span>' +
+            '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
+          '</div>' +
+          '<div class="order-items-list">' + itemLines + '</div>' +
+          '<div class="order-buyer" style="color:var(--muted)">Total: ' + fmt(total) + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
     window.updateOrderFulfillment = async function(select) {
       var orderId = select.dataset.orderId;
       var newStatus = select.value;
       var { error } = await SD.sb.from('orders').update({ order_status: newStatus }).eq('id', orderId);
       if (error) { toast('Update failed: ' + error.message); return; }
       toast('Order status updated to ' + newStatus + ' ✓');
+      // If marking as Fulfilled or Delivered, create/update order_item_statuses for this seller's items
+      if (newStatus === 'Fulfilled' || newStatus === 'Delivered') {
+        var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
+        if (order) {
+          var myProductIds = SD.products.map(function(p){ return p.id; });
+          var myItems = (Array.isArray(order.items)?order.items:[]).filter(function(i){ return myProductIds.includes(i.id||i.product_id); });
+          for (var idx = 0; idx < myItems.length; idx++) {
+            var it = myItems[idx];
+            var itemIdx = (Array.isArray(order.items)?order.items:[]).indexOf(it);
+            var { data: existing } = await SD.sb.from('order_item_statuses').select('id').eq('order_id',orderId).eq('item_index',itemIdx).maybeSingle();
+            if (existing) {
+              await SD.sb.from('order_item_statuses').update({ status:'fulfilled', seller_confirmed_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id',existing.id);
+            } else {
+              await SD.sb.from('order_item_statuses').insert([{ order_id:orderId, item_index:itemIdx, product_id:it.product_id||it.id||null, seller_id:SD.seller.id, status:'fulfilled', seller_confirmed_at:new Date().toISOString() }]);
+            }
+          }
+        }
+      }
     };
 
     /* ─────────────────────────────────────────

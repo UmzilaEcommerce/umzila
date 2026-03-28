@@ -171,37 +171,48 @@
         <button class="btn nav-btn" data-panel="overview">Overview</button>
         <button class="btn nav-btn" data-panel="orders">Orders</button>
         <button class="btn nav-btn" data-panel="past">Past Orders</button>
-        <button class="btn nav-btn" data-panel="settings">Settings</button>
+        <button class="btn nav-btn" data-panel="stores">Stores</button>
         <button class="btn nav-btn" data-panel="analytics">Analytics</button>
+        <button class="btn nav-btn" data-panel="settings">Settings</button>
         <button id="lsout2" class="btn">Logout</button>
       </nav>
     </aside>
 
     <main class="content">
       <section id="panel-overview" class="panel-section active panel">
-        <div style="display:flex;gap:12px;margin-bottom:12px">
-          <div class="card" style="flex:1;display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <div class="card" style="flex:1;min-width:160px;display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div class="muted">Pending</div>
-              <div id="statPending" style="font-weight:700">0</div>
+              <div class="muted">Total Revenue</div>
+              <div id="statRevenue" style="font-weight:700;font-size:18px">R0.00</div>
             </div>
-            <button id="newOrderOverview" class="btn btn-primary">Create Order</button>
+            <button id="newOrderOverview" class="btn btn-primary">+ Order</button>
           </div>
-
-          <div class="card" style="width:180px">
+          <div class="card" style="min-width:120px">
+            <div class="muted">Pending</div><div id="statPending" style="font-weight:700">0</div>
+          </div>
+          <div class="card" style="min-width:120px">
             <div class="muted">Packaging</div><div id="statPackaging" style="font-weight:700">0</div>
           </div>
-
-          <div class="card" style="width:180px">
+          <div class="card" style="min-width:120px">
             <div class="muted">Fulfilled</div><div id="statFulfilled" style="font-weight:700">0</div>
           </div>
-
-          <div class="card" style="width:180px">
+          <div class="card" style="min-width:120px">
             <div class="muted">Delivered</div><div id="statDelivered" style="font-weight:700">0</div>
           </div>
-
-          <div class="card" style="width:180px">
+          <div class="card" style="min-width:120px">
             <div class="muted">Returned</div><div id="statReturned" style="font-weight:700">0</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="card">
+            <div class="muted" style="margin-bottom:6px">Top Stores by Revenue</div>
+            <div id="overviewTopStores" style="font-size:13px"></div>
+          </div>
+          <div class="card">
+            <div class="muted" style="margin-bottom:6px">Most Ordered Items</div>
+            <div id="overviewTopItems" style="font-size:13px"></div>
           </div>
         </div>
 
@@ -223,6 +234,16 @@
         <div class="panel card">
           <h3>Past Orders <span id="pastFilterLabel" class="muted"></span></h3>
           <div id="pastList" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <section id="panel-stores" class="panel-section panel">
+        <div class="panel card" style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h3>All Stores</h3>
+            <input id="storesSearch" placeholder="Search store name…" style="padding:8px;border-radius:8px;border:1px solid #e6eef9;width:240px" />
+          </div>
+          <div id="storesList" style="margin-top:4px"></div>
         </div>
       </section>
 
@@ -818,7 +839,130 @@ document.addEventListener('supabase-ready', function(event) {
       statFulfilled.textContent = arr.filter(o=>o.status==='Fulfilled').length;
       statDelivered.textContent = arr.filter(o=>o.status==='Delivered').length;
       statReturned.textContent = arr.filter(o=>o.status==='Returned').length;
+      const revenue = arr.filter(o=>o.status!=='Returned').reduce((s,o)=>s+o.total,0);
+      const statRevEl = document.getElementById('statRevenue');
+      if(statRevEl) statRevEl.textContent = formatCurrency(revenue);
       renderOverviewRecent();
+      renderOverviewTopStores(arr);
+      renderOverviewTopItems(arr);
+    }
+
+    function renderOverviewTopStores(arr){
+      const el = document.getElementById('overviewTopStores');
+      if(!el) return;
+      if(!window._storeRevenueMap){ el.innerHTML = '<div class="muted">Loading…</div>'; return; }
+      const map = window._storeRevenueMap;
+      const sorted = Object.entries(map).sort((a,b)=>b[1].revenue - a[1].revenue).slice(0,5);
+      if(!sorted.length){ el.innerHTML = '<div class="muted">No store data</div>'; return; }
+      el.innerHTML = sorted.map(([name,s])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f6f8ff"><div>${escapeHtml(name)}</div><div style="font-weight:700">${formatCurrency(s.revenue)} <span class="muted">(${s.orders} orders)</span></div></div>`).join('');
+    }
+
+    function renderOverviewTopItems(arr){
+      const el = document.getElementById('overviewTopItems');
+      if(!el) return;
+      const itemMap = {};
+      arr.filter(o=>o.status!=='Returned').forEach(o=>{
+        (o.items||[]).forEach(it=>{
+          const name = it.item || it.name || it.title || 'Unknown';
+          const qty = it.quantity || it.qty || 1;
+          if(!itemMap[name]) itemMap[name] = { qty: 0, orders: 0 };
+          itemMap[name].qty += qty;
+          itemMap[name].orders += 1;
+        });
+      });
+      const sorted = Object.entries(itemMap).sort((a,b)=>b[1].orders-a[1].orders).slice(0,5);
+      if(!sorted.length){ el.innerHTML = '<div class="muted">No data</div>'; return; }
+      el.innerHTML = sorted.map(([name,s],i)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f6f8ff"><div>${i+1}. ${escapeHtml(name)}</div><div class="muted">${s.orders} orders · qty ${s.qty}</div></div>`).join('');
+    }
+
+    /* -------- Stores panel -------- */
+    let storesLoaded = false;
+    let allStores = [];
+
+    async function loadStoresPanel(){
+      if(storesLoaded && allStores.length) { renderStores(allStores); return; }
+      const listEl = document.getElementById('storesList');
+      if(listEl) listEl.innerHTML = '<div class="muted">Loading stores…</div>';
+      try {
+        const { data: sellers, error } = await supabaseClient
+          .from('sellers')
+          .select('id, shop_name, status, email, location, delivery_method, created_at')
+          .order('shop_name', { ascending: true });
+        if(error){ if(listEl) listEl.innerHTML = `<div class="muted">Failed: ${escapeHtml(error.message)}</div>`; return; }
+
+        const orders = getOrders();
+        const storeMap = {};
+        (sellers||[]).forEach(s=>{ storeMap[s.id] = { ...s, revenue:0, orderCount:0, itemMap:{} }; });
+
+        // build revenue map by looking at items with product_id → we need product→seller mapping
+        // fetch products seller mapping
+        const { data: products } = await supabaseClient.from('products').select('id, seller_id, name');
+        const prodSellerMap = {};
+        (products||[]).forEach(p=>{ prodSellerMap[p.id] = { seller_id: p.seller_id, name: p.name }; });
+
+        orders.filter(o=>o.status!=='Returned').forEach(o=>{
+          const seenSellers = new Set();
+          (o.items||[]).forEach(it=>{
+            const pid = it.product_id || it.id || null;
+            if(!pid) return;
+            const ps = prodSellerMap[pid];
+            if(!ps) return;
+            const sellerId = ps.seller_id;
+            if(!storeMap[sellerId]) return;
+            const name = it.item || it.name || it.title || ps.name || 'Item';
+            const qty = it.quantity || it.qty || 1;
+            const price = it.price || 0;
+            storeMap[sellerId].revenue += price * qty;
+            if(!seenSellers.has(sellerId)){ storeMap[sellerId].orderCount += 1; seenSellers.add(sellerId); }
+            if(!storeMap[sellerId].itemMap[name]) storeMap[sellerId].itemMap[name] = 0;
+            storeMap[sellerId].itemMap[name] += qty;
+          });
+        });
+
+        // Build global revenue map for overview
+        const revMap = {};
+        Object.values(storeMap).forEach(s=>{ if(s.shop_name) revMap[s.shop_name] = { revenue: s.revenue, orders: s.orderCount }; });
+        window._storeRevenueMap = revMap;
+
+        allStores = Object.values(storeMap);
+        storesLoaded = true;
+        renderStores(allStores);
+        // update overview top stores
+        renderOverviewTopStores(getOrders());
+      } catch(e){
+        console.warn('loadStoresPanel error', e);
+        if(listEl) listEl.innerHTML = `<div class="muted">Error loading stores</div>`;
+      }
+    }
+
+    function renderStores(stores){
+      const listEl = document.getElementById('storesList');
+      if(!listEl) return;
+      const q = (document.getElementById('storesSearch')?.value || '').toLowerCase();
+      let filtered = q ? stores.filter(s=>(s.shop_name||'').toLowerCase().includes(q)) : stores;
+      filtered = filtered.sort((a,b)=>b.revenue - a.revenue);
+      if(!filtered.length){ listEl.innerHTML = '<div class="muted">No stores found</div>'; return; }
+      listEl.innerHTML = filtered.map(s=>{
+        const topItem = Object.entries(s.itemMap||{}).sort((a,b)=>b[1]-a[1])[0];
+        const statusBadgeHtml = s.status === 'approved'
+          ? '<span style="background:#bbf7d0;color:#064e3b;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">Approved</span>'
+          : '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">' + escapeHtml(s.status||'Pending') + '</span>';
+        return `<div class="order-card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+            <div>
+              <strong style="font-size:15px">${escapeHtml(s.shop_name||'(unnamed)')}</strong>
+              ${statusBadgeHtml}
+              <div class="muted" style="margin-top:4px">${escapeHtml(s.email||'')} ${s.location ? '· 📍 '+escapeHtml(s.location) : ''}</div>
+              <div class="muted" style="margin-top:2px">Delivery: ${escapeHtml(s.delivery_method||'—')} · Member since ${s.created_at ? new Date(s.created_at).toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : '—'}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:800;font-size:16px">${formatCurrency(s.revenue)}</div>
+              <div class="muted">${s.orderCount} order${s.orderCount!==1?'s':''}</div>
+              ${topItem ? `<div class="muted" style="margin-top:4px">Top item: ${escapeHtml(topItem[0])} (${topItem[1]})</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
     }
 
     // Render Orders
@@ -1073,8 +1217,55 @@ document.addEventListener('supabase-ready', function(event) {
           </div>
 
           <div class="muted" style="margin-top:12px">Note: status changes require confirmation.</div>
+
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f5">
+            <div class="muted" style="margin-bottom:8px">Per-item delivery override (admin)</div>
+            <div id="adminItemStatuses" style="font-size:13px"></div>
+          </div>
         `;
         openModalHtml(html);
+
+        // load per-item statuses
+        (async function loadAdminItemStatuses(){
+          const itemsDiv = modalBody.querySelector('#adminItemStatuses');
+          if(!itemsDiv || !o.items || !o.items.length){ if(itemsDiv) itemsDiv.innerHTML = '<div class="muted">No items</div>'; return; }
+          // get raw order id
+          const { data: rawOrder } = await supabaseClient.from('orders').select('id').eq('order_number', o.id).maybeSingle();
+          const rawOrderId = rawOrder?.id || null;
+          let existingStatuses = [];
+          if(rawOrderId){
+            const { data: sis } = await supabaseClient.from('order_item_statuses').select('*').eq('order_id', rawOrderId);
+            existingStatuses = sis || [];
+          }
+          itemsDiv.innerHTML = o.items.map((it, idx)=>{
+            const existing = existingStatuses.find(s=>s.item_index === idx);
+            const st = existing?.status || 'pending';
+            const stColor = st==='delivered'?'#064e3b':st==='disputed'?'#7f1d1d':st==='refunded'?'#4c1d95':'#92400e';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f6f8ff">
+              <div>${escapeHtml(it.item||it.name||'Item')} ${it.size?'· '+escapeHtml(it.size):''}</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="background:#f3f4f6;padding:2px 8px;border-radius:6px;color:${stColor};font-weight:600;font-size:11px">${escapeHtml(st)}</span>
+                ${rawOrderId ? `<button class="btn btn-ghost" style="font-size:11px;padding:4px 8px" data-order-id="${rawOrderId}" data-idx="${idx}" data-existing-id="${existing?.id||''}">Mark Received</button>` : ''}
+              </div>
+            </div>`;
+          }).join('');
+          itemsDiv.querySelectorAll('button[data-idx]').forEach(btn=>{
+            btn.addEventListener('click', async ()=>{
+              const idx2 = Number(btn.dataset.idx);
+              const ordId = btn.dataset.orderId;
+              const existId = btn.dataset.existingId;
+              btn.disabled = true;
+              if(existId){
+                await supabaseClient.from('order_item_statuses').update({ status:'delivered', buyer_confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', existId);
+              } else {
+                const it2 = o.items[idx2];
+                await supabaseClient.from('order_item_statuses').insert([{ order_id:ordId, item_index:idx2, product_id: it2?.product_id||null, status:'delivered', buyer_confirmed_at: new Date().toISOString() }]);
+              }
+              showToast('Item marked as received');
+              loadAdminItemStatuses();
+            });
+          });
+        })();
 
         modalBody.querySelector('#openEditBtn').addEventListener('click', ()=> openEditModal(o.id));
 
@@ -1331,8 +1522,16 @@ document.addEventListener('supabase-ready', function(event) {
           }
         }, 100);
       }
+      if(panel === 'stores') {
+        loadStoresPanel();
+      }
     }
     navBtns.forEach(b=> b.addEventListener('click', ()=> showPanel(b.getAttribute('data-panel'))));
+
+    // Stores search
+    document.addEventListener('input', (e)=>{
+      if(e.target && e.target.id === 'storesSearch') renderStores(allStores);
+    });
 
     newOrderHeader.addEventListener('click', ()=> openCreateModal());
     newOrderOverview.addEventListener('click', ()=> openCreateModal());

@@ -965,8 +965,8 @@ function redirectToCheckout() {
     console.error('Failed to save cart:', e);
   }
   
-  // Redirect to checkout.html
-  window.location.href = 'checkout.html';
+  // Redirect to cart.html (cart page before checkout)
+  window.location.href = 'cart.html';
 }
 
 /********************

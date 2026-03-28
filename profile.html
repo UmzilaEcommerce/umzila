@@ -5,716 +5,870 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="icon" href="umzila.webp" type="image/webp">
   <title>Your Profile — Umzila.Store</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <style>
-    :root{
-      --bg:#f7f7f9; --card:#fff; --muted:#6b6b74; --accent:#0a2f66; --cta:#ff6b2c; --shadow:0 6px 18px rgba(11,13,20,0.08);
-    }
-    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter, system-ui, Arial, sans-serif}
-    html,body{height:100%;}
-    body{background:var(--bg);color:#111;min-height:100vh;-webkit-font-smoothing:antialiased}
+    :root{--bg:#f7f7f9;--card:#fff;--muted:#6b6b74;--accent:#0a2f66;--cta:#ff6b2c;--shadow:0 6px 18px rgba(11,13,20,0.08);}
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,Arial,sans-serif}
+    html,body{min-height:100%;background:var(--bg);color:#111;-webkit-font-smoothing:antialiased}
 
-    /* Header */
     header{background:#fff;padding:12px 18px;border-bottom:1px solid #eee;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:1200}
-    .header-left{display:flex;align-items:center;gap:12px}
-    .brand{font-weight:700;color:var(--accent);font-size:16px}
-    .back-btn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent);text-decoration:none}
+    .brand{font-weight:800;color:var(--accent);font-size:16px}
+    .back-btn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent);text-decoration:none;font-size:14px}
     .header-title{flex:1;text-align:center;font-weight:700;color:#111}
-
-    /* Desktop logout button shown on larger screens */
-    #logoutBtn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent)}
-
-    /* Mobile menu (hamburger) */
+    #logoutBtn{padding:8px 12px;border-radius:8px;border:1px solid #e6e6ea;background:transparent;color:var(--accent);cursor:pointer;font-size:14px}
     .hamburger{display:none;border:none;background:transparent;padding:8px;border-radius:8px;cursor:pointer}
     .hamburger .bar{display:block;width:20px;height:2px;background:var(--accent);margin:4px 0;border-radius:2px}
-
-    /* Mobile nav drawer */
-    .mobile-nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1300}
-    .mobile-nav{position:fixed;right:0;top:0;height:100%;width:280px;background:#fff;box-shadow: -12px 0 24px rgba(10,15,30,0.12);transform:translateX(100%);transition:transform .28s ease;padding:18px;z-index:1400}
+    .mobile-nav-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1300}
+    .mobile-nav{position:fixed;right:0;top:0;height:100%;width:280px;background:#fff;box-shadow:-12px 0 24px rgba(10,15,30,.12);transform:translateX(100%);transition:transform .28s ease;padding:18px;z-index:1400}
     .mobile-nav.open{transform:translateX(0)}
-    .mobile-nav .nav-item{padding:12px;border-radius:8px;display:block;color:var(--accent);font-weight:600;margin-bottom:8px}
+    .mobile-nav .nav-item{padding:12px;border-radius:8px;display:block;color:var(--accent);font-weight:600;margin-bottom:8px;cursor:pointer;border:none;background:transparent;text-align:left;width:100%;font-size:15px}
     .mobile-nav .nav-item.secondary{font-weight:400;color:var(--muted)}
 
-    /* Layout */
     .container{max-width:1200px;margin:18px auto;padding:0 18px}
-    .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+    .btn{padding:8px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:14px;font-weight:600}
     .btn.ghost{background:transparent;border:1px solid #e6e6ea;color:var(--accent)}
+    .btn.cta{background:var(--cta);color:#fff}
+    .btn.danger{background:#dc3545;color:#fff}
+    .btn.sm{padding:5px 10px;font-size:12px}
     .profile-wrap{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
     .profile-card{background:var(--card);padding:16px;border-radius:12px;box-shadow:var(--shadow);width:320px;min-width:280px}
-    .panel{flex:1;background:var(--card);padding:16px;border-radius:12px;box-shadow:var(--shadow);min-width:320px}
-    h2{color:var(--accent);margin-bottom:8px}
-    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-    input, select, textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6ea;margin-bottom:10px}
-    .section{margin-bottom:18px}
+    .main-panel{flex:1;min-width:320px}
+    .panel{background:var(--card);padding:16px;border-radius:12px;box-shadow:var(--shadow);margin-bottom:16px}
+    h2{color:var(--accent);margin-bottom:8px;font-size:18px}
+    h3{color:var(--accent);font-size:15px;margin-bottom:8px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+    input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #e6e6ea;margin-bottom:10px;font-size:14px}
     .small{font-size:13px;color:var(--muted)}
-    .cards-list{display:flex;flex-direction:column;gap:8px}
-    .card-item{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:8px;background:#fafafa;border:1px solid #f0f0f5}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .addresses-list, .orders-list{display:flex;flex-direction:column;gap:10px}
-    .address-item, .order-item{padding:12px;border-radius:8px;background:#fafafa;border:1px solid #f0f0f5;cursor:pointer}
-    .order-item{transition:box-shadow .18s ease}
-    .order-item:hover{box-shadow:0 6px 18px rgba(10,15,30,0.04)}
-    .muted-inline{font-size:12px;color:var(--muted)}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid #f2f2f6;text-align:left;font-size:14px}
+    .muted{color:var(--muted);font-size:13px}
 
-    /* Order thumbnails */
-    .order-item img{width:48px;height:48px;border-radius:6px;object-fit:cover}
-    .order-item .thumbs{display:flex;align-items:center}
+    /* Tabs */
+    .tabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
+    .tab-btn{padding:8px 16px;border-radius:8px;border:none;background:#f0f0f5;color:var(--muted);cursor:pointer;font-size:14px;font-weight:600;transition:all .15s}
+    .tab-btn.active{background:var(--accent);color:#fff}
 
-    /* Modal */
-    .modal { position: fixed; inset: 0; background: rgba(4,6,12,0.5); display:none; align-items:center; justify-content:center; z-index:2200; padding:18px; }
-    .modal.open { display:flex; }
-    .modal-card { background: #fff; border-radius:12px; width:100%; max-width:800px; max-height:90vh; overflow:auto; padding:18px; box-shadow:var(--shadow); }
-    .modal-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; margin-bottom:8px; }
-    .modal-row .label { width:180px; color:var(--muted); font-size:13px; }
-    .modal-close { background:transparent;border:none;font-size:18px;cursor:pointer; }
-    .modal-row .value { font-weight: 600; color: #111; }
-    .confirm-body { display:flex; gap:12px; align-items:center; justify-content:center; padding-top:12px; }
+    /* Order items */
+    .order-item{padding:12px;border-radius:10px;background:#fafafa;border:1px solid #f0f0f5;cursor:pointer;margin-bottom:10px;transition:box-shadow .18s}
+    .order-item:hover{box-shadow:0 4px 12px rgba(10,15,30,.06)}
+    .order-expand{display:none;margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f5}
+    .order-expand.open{display:block}
+    .item-line{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #f5f5f8}
+    .item-line:last-child{border-bottom:none}
+    .item-line img{width:56px;height:56px;border-radius:8px;object-fit:cover;flex-shrink:0}
+    .item-status-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-left:6px}
+    .badge-delivered{background:#bbf7d0;color:#064e3b}
+    .badge-disputed{background:#fecaca;color:#7f1d1d}
+    .badge-pending{background:#fef3c7;color:#92400e}
+    .badge-refunded{background:#ede9fe;color:#4c1d95}
 
-    @media (max-width:900px){
+    /* Refund timer */
+    .refund-timer{background:#fff8e7;border:1px solid #ffe58c;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+    .refund-timer strong{color:#7a5c00}
+    .dispute-btn{background:#fff;border:1px solid #fcc;color:#c0392b;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700}
+    .confirm-receipt-btn{background:#bbf7d0;border:none;color:#064e3b;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700}
+
+    /* Favourites */
+    .fav-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:12px}
+    .fav-card{background:var(--card);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;cursor:pointer;transition:transform .15s}
+    .fav-card:hover{transform:translateY(-2px)}
+    .fav-card img{width:100%;aspect-ratio:3/4;object-fit:cover}
+    .fav-card-body{padding:8px}
+    .fav-card-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fav-card-price{font-size:12px;color:var(--cta);font-weight:700;margin-top:2px}
+
+    /* Product modal (reused from index.html style) */
+    .product-modal-overlay{display:none;position:fixed;inset:0;background:rgba(4,6,12,.55);z-index:2000;overflow-y:auto;padding:18px}
+    .product-modal-overlay.active{display:flex;align-items:flex-start;justify-content:center}
+    .product-modal{background:#fff;border-radius:16px;max-width:880px;width:100%;margin:auto;overflow:hidden;box-shadow:0 20px 60px rgba(4,6,12,.18)}
+    .product-modal-inner{display:grid;grid-template-columns:1fr 1fr;gap:0}
+    @media(max-width:640px){.product-modal-inner{grid-template-columns:1fr}}
+    .product-modal-gallery{background:#f8f8f8;padding:16px;display:flex;flex-direction:column;gap:10px}
+    .product-modal-main-image{width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:10px}
+    .product-modal-thumbs{display:flex;gap:8px;overflow-x:auto}
+    .product-modal-thumb{width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;flex-shrink:0}
+    .product-modal-thumb.active{border-color:var(--accent)}
+    .product-modal-body{padding:20px;overflow-y:auto;max-height:90vh}
+    .product-modal-close{position:absolute;top:14px;right:14px;background:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.12);z-index:10}
+    .size-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .size-chip{padding:6px 14px;border-radius:8px;border:1px solid #e6e6ea;background:#fff;cursor:pointer;font-size:13px;font-weight:600}
+    .size-chip.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .qty-row{display:flex;gap:10px;align-items:center;margin:10px 0}
+    .qty-ctrl{width:34px;height:34px;border:1px solid #e6e6ea;background:#fff;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .add-cart-btn{display:block;width:100%;padding:13px;background:var(--cta);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:800;cursor:pointer;margin-top:12px}
+
+    /* Modal overlay for order actions */
+    .modal{position:fixed;inset:0;background:rgba(4,6,12,.5);display:none;align-items:center;justify-content:center;z-index:2200;padding:18px}
+    .modal.open{display:flex}
+    .modal-card{background:#fff;border-radius:12px;width:100%;max-width:480px;padding:20px;box-shadow:var(--shadow)}
+    .modal-close{background:transparent;border:none;font-size:18px;cursor:pointer;float:right}
+
+    @media(max-width:900px){
       .profile-wrap{flex-direction:column}
-      .header-title{text-align:left;padding-left:8px}
-      .back-btn{display:inline-flex}
-      /* hide desktop logout and show hamburger */
+      .profile-card{width:100%;min-width:unset}
+      .main-panel{min-width:unset}
       #logoutBtn{display:none}
       .hamburger{display:block}
-      .header-title{font-size:15px}
-      .brand{font-size:14px}
-      .profile-card{width:100%;min-width:unset}
-      .panel{min-width:unset}
-      .mobile-nav-overlay{display:block}
     }
-
   </style>
-
-  <!-- Use Supabase JS v2 (UMD bundle) so behavior matches other pages -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
   <script>
   (async function initSupabaseClient(){
-    try {
+    try{
       const res = await fetch('/.netlify/functions/get-client-config');
-      if (!res.ok) {
-        console.error('Failed to load Supabase config', res.status, await res.text());
-        // keep trying to parse body where possible
-      }
-      const cfg = await res.json().catch(()=>null) || {};
-
-      // accept multiple possible key names (Netlify / local dev variants)
-      const supabaseUrl = cfg.SUPABASE_URL || cfg.supabaseUrl || cfg.url || (cfg.SUPABASE_URL && cfg.SUPABASE_URL.value) || (cfg.supabase && cfg.supabase.url) || '';
-      const supabaseAnonKey = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || (cfg.SUPABASE_ANON_KEY && cfg.SUPABASE_ANON_KEY.value) || cfg.anonKey || cfg.key || (cfg.supabase && cfg.supabase.anonKey) || '';
-
-      if (!supabaseUrl || !supabaseAnonKey) {
-        console.warn('Missing Supabase config from server — falling back to window.SUPABASE_CONFIG if present');
-        const fallback = window.SUPABASE_CONFIG || {};
-        const fbUrl = fallback.SUPABASE_URL || fallback.supabaseUrl || fallback.url || (fallback.SUPABASE_URL && fallback.SUPABASE_URL.value) || '';
-        const fbKey = fallback.SUPABASE_ANON_KEY || fallback.supabaseAnonKey || fallback.anonKey || fallback.key || '';
-        if (fbUrl && fbKey) {
-          window.SUPABASE_CONFIG = { supabaseUrl: fbUrl, supabaseAnonKey: fbKey };
-        } else {
-          const metaUrl = document.querySelector('meta[name=\"supabase-url\"]')?.getAttribute('content');
-          const metaKey = document.querySelector('meta[name=\"supabase-anon-key\"]')?.getAttribute('content');
-          if (metaUrl && metaKey) {
-            window.SUPABASE_CONFIG = { supabaseUrl: metaUrl, supabaseAnonKey: metaKey };
-          } else {
-            console.error('Supabase configuration not found. Ensure get-client-config returns credentials or provide meta tags.');
-            window.SUPABASE_CONFIG = { supabaseUrl: '', supabaseAnonKey: '' };
-          }
-        }
-      } else {
-        window.SUPABASE_CONFIG = { supabaseUrl, supabaseAnonKey };
-      }
-
-      try {
-        const client = supabase.createClient(window.SUPABASE_CONFIG.supabaseUrl, window.SUPABASE_CONFIG.supabaseAnonKey);
+      const cfg = await res.json().catch(()=>({}));
+      const url = cfg.supabaseUrl||cfg.SUPABASE_URL||cfg.url||'';
+      const key = cfg.supabaseAnonKey||cfg.SUPABASE_ANON_KEY||cfg.anonKey||'';
+      if(url && key){
+        const client = supabase.createClient(url, key);
         window.supabaseClient = client;
         window.supabase = client;
-      } catch (err) {
-        console.error('Error creating Supabase client', err);
-        window.supabaseClient = null;
-        window.supabase = null;
       }
-
       document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } }));
-      console.log('Supabase client initialized (profile.html)');
-    } catch (err) {
-      console.error('Error initializing Supabase client', err);
-      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient || null } }));
+    }catch(e){
+      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: {} }));
     }
   })();
   </script>
 </head>
 <body>
   <header>
-    <div class="header-left">
-      <a href="index.html" class="back-btn">← Back</a>
-      <div class="brand">StreetSale</div>
-    </div>
-    <div class="header-title">Your profile</div>
+    <a href="index.html" class="back-btn">← Back</a>
+    <div class="brand">Umzila</div>
+    <div class="header-title">Your Profile</div>
     <button id="logoutBtn" class="btn ghost">Log out</button>
-    <button id="menuBtn" class="hamburger" aria-label="Open menu" aria-expanded="false">
-      <span class="bar"></span>
-      <span class="bar"></span>
-      <span class="bar"></span>
+    <button id="menuBtn" class="hamburger" aria-label="Open menu">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span>
     </button>
-
-    <!-- Mobile nav drawer -->
-    <div id="mobileNavOverlay" class="mobile-nav-overlay" style="display:none"></div>
+    <div id="mobileNavOverlay" class="mobile-nav-overlay"></div>
     <nav id="mobileNav" class="mobile-nav" aria-hidden="true">
-      <a href="profile.html" class="nav-item">Profile</a>
-      <a href="#orders" id="navOrders" class="nav-item">Orders</a>
-      <a href="#addresses" id="navAddresses" class="nav-item">Addresses</a>
-      <a href="#security" id="navSecurity" class="nav-item">Security</a>
-      <button id="mobileLogout" class="nav-item secondary" style="border:none;background:transparent;text-align:left;padding:0;margin-top:12px">Log out</button>
+      <button class="nav-item" id="navProfile">Profile</button>
+      <button class="nav-item" id="navOrders">Orders</button>
+      <button class="nav-item" id="navFavourites">Favourites</button>
+      <button class="nav-item" id="navSecurity">Security</button>
+      <button class="nav-item secondary" id="mobileLogout">Log out</button>
     </nav>
   </header>
 
   <div class="container">
     <div class="profile-wrap">
+
+      <!-- Left sidebar: account info -->
       <aside class="profile-card">
         <h2>Account</h2>
-        <div class="section">
+        <div style="margin-bottom:12px">
           <div class="small">Signed in as</div>
-          <div id="profileEmail" style="font-weight:800;margin-top:8px">—</div>
+          <div id="profileEmail" style="font-weight:800;margin-top:4px">—</div>
         </div>
-
-        <div class="section">
-          <label for="profileFirstName">First name</label>
+        <div>
+          <label>First name</label>
           <input id="profileFirstName" placeholder="First name" />
-          <label for="profileLastName">Last name</label>
+          <label>Last name</label>
           <input id="profileLastName" placeholder="Last name" />
-          <label for="profilePhone">Phone</label>
+          <label>Phone</label>
           <input id="profilePhone" placeholder="+27 7xx xxx xxxx" />
-          <button id="saveProfileBtn" class="btn" style="width:100%;margin-top:6px">Save profile</button>
+          <button id="saveProfileBtn" class="btn" style="width:100%;margin-top:4px">Save profile</button>
+          <div id="profileStatus" class="small" style="margin-top:6px"></div>
         </div>
 
-        <div class="section">
-          <h3 style="font-size:15px">Address book</h3>
-          <div class="small" style="margin-bottom:8px">Save an address that will be stored on your profile (1 address per user).</div>
+        <hr style="margin:16px 0;border:none;border-top:1px solid #eee">
 
-          <div id="addressesContainer" class="addresses-list" style="margin-bottom:8px"></div>
-
-          <div style="margin-top:8px">
-            <label for="addrLabel">Label (Home, Work)</label>
-            <input id="addrLabel" placeholder="e.g. Home" />
-            <label for="addrLine">Address</label>
-            <textarea id="addrLine" rows="2" placeholder="Street, area, city"></textarea>
-            <label for="province">Province</label>
-            <input type="text" id="addrProvince" placeholder="Enter your province" />
-            <label for="addrCity">City</label>
-            <input id="addrCity" placeholder="e.g. Cape Town" />
-            <label for="addrPostal">Postal / ZIP</label>
-            <input id="addrPostal" placeholder="Postal code" />
-            <button id="addAddressBtn" class="btn" style="width:100%;margin-top:6px">Save address</button>
-          </div>
-        </div>
+        <h3>Address Book</h3>
+        <div class="small" style="margin-bottom:8px">One saved address on your profile.</div>
+        <div id="addressesContainer" style="margin-bottom:8px"></div>
+        <label>Label (Home, Work…)</label>
+        <input id="addrLabel" placeholder="e.g. Home" />
+        <label>Address</label>
+        <textarea id="addrLine" rows="2" placeholder="Street, area, city"></textarea>
+        <label>Province</label>
+        <input id="addrProvince" placeholder="Province" />
+        <label>City</label>
+        <input id="addrCity" placeholder="e.g. Cape Town" />
+        <label>Postal code</label>
+        <input id="addrPostal" placeholder="Postal code" />
+        <button id="addAddressBtn" class="btn" style="width:100%">Save address</button>
       </aside>
 
-      <main class="panel">
-        <h2>Order History</h2>
-        <div class="small">Recent orders from your account (if available). Click any order to view full details.</div>
-        <div id="ordersContainer" class="orders-list" style="margin-top:12px;margin-bottom:12px"></div>
-
-        <div style="margin-top:10px">
-          <h3 style="font-size:15px">Security</h3>
-          <div class="small">Send a password reset email to update your password.</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input id="emailForReset" placeholder="you@example.com" />
-            <button id="sendReset" class="btn">Send reset</button>
-          </div>
-          <div id="resetStatus" class="small" style="margin-top:8px"></div>
+      <!-- Right main panel with tabs -->
+      <main class="main-panel">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="orders">Orders</button>
+          <button class="tab-btn" data-tab="favourites">Favourites</button>
+          <button class="tab-btn" data-tab="security">Security</button>
         </div>
 
-        <div class="section" style="margin-top:14px">
-          <h3 style="font-size:15px">Account actions</h3>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <button id="deleteAccount" class="btn ghost">Delete account (!)</button>
-            <button id="refreshBtn" class="btn">Refresh</button>
+        <!-- ORDERS TAB -->
+        <div id="tab-orders" class="tab-content">
+          <div class="panel">
+            <h2>Order History</h2>
+            <div class="small">Click any order to expand and view items. Full refund available for 5 minutes after placing.</div>
+            <div id="ordersContainer" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- FAVOURITES TAB -->
+        <div id="tab-favourites" class="tab-content" style="display:none">
+          <div class="panel">
+            <h2>Favourites</h2>
+            <div class="small">Products you've saved. Click to view and add to cart.</div>
+            <div id="favsContainer"></div>
+          </div>
+        </div>
+
+        <!-- SECURITY TAB -->
+        <div id="tab-security" class="tab-content" style="display:none">
+          <div class="panel">
+            <h3>Password Reset</h3>
+            <div class="small">Send a password reset link to your email.</div>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <input id="emailForReset" placeholder="you@example.com" style="flex:1;margin-bottom:0" />
+              <button id="sendReset" class="btn" style="white-space:nowrap">Send reset</button>
+            </div>
+            <div id="resetStatus" class="small" style="margin-top:8px"></div>
+          </div>
+          <div class="panel">
+            <h3>Account Actions</h3>
+            <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+              <button id="deleteAccount" class="btn ghost">Delete account</button>
+              <button id="refreshBtn" class="btn ghost">Refresh</button>
+            </div>
           </div>
         </div>
       </main>
     </div>
   </div>
 
-  <!-- Order modal -->
-  <div id="orderModal" class="modal" role="dialog" aria-hidden="true">
-    <div class="modal-card" role="document" aria-labelledby="orderModalTitle">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div>
-          <h3 id="orderModalTitle" style="margin:0">Order details</h3>
-          <div class="muted-inline" id="orderModalSub"></div>
-        </div>
-        <button class="modal-close" id="orderModalClose" aria-label="Close">✕</button>
-      </div>
-      <div id="orderModalBody"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
-        <button class="btn ghost" id="orderModalClose2">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Logout confirm -->
+  <!-- Logout confirm modal -->
   <div id="logoutConfirm" class="modal" role="dialog" aria-hidden="true">
-    <div class="modal-card" style="max-width:420px; text-align:center;">
-      <h3 style="margin:0 0 8px 0">Confirm logout</h3>
+    <div class="modal-card" style="text-align:center">
+      <h3 style="margin-bottom:8px">Confirm logout</h3>
       <div class="small">Do you want to log out?</div>
-      <div class="confirm-body">
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
         <button id="logoutYes" class="btn">Yes, log out</button>
         <button id="logoutNo" class="btn ghost">No, stay</button>
       </div>
     </div>
   </div>
 
-  <script>
-  (async function(){
-    // Wait for supabase client ready
-    if (!window.supabaseClient) {
-      await new Promise(resolve => {
-        if (window.supabaseClient) return resolve();
-        document.addEventListener('supabase-ready', () => resolve());
-        setTimeout(resolve, 4000);
-      });
-    }
+  <!-- Dispute / Confirm modal -->
+  <div id="actionModal" class="modal" role="dialog" aria-hidden="true">
+    <div class="modal-card">
+      <button class="modal-close" id="actionModalClose">✕</button>
+      <div id="actionModalBody" style="margin-top:8px"></div>
+    </div>
+  </div>
 
-    // If supabase client still not set, attempt to create from window.SUPABASE_CONFIG
-    if (!window.supabaseClient && window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.supabaseUrl && window.SUPABASE_CONFIG.supabaseAnonKey) {
-      try {
-        window.supabaseClient = supabase.createClient(window.SUPABASE_CONFIG.supabaseUrl, window.SUPABASE_CONFIG.supabaseAnonKey);
-        window.supabase = window.supabaseClient;
-        console.log('Supabase client created from window.SUPABASE_CONFIG fallback');
-      } catch (e) {
-        console.error('Fallback supabase client creation failed', e);
-      }
-    }
+  <!-- Product modal overlay (for favourites) -->
+  <div id="favProductModal" class="product-modal-overlay" role="dialog" aria-modal="true">
+    <div class="product-modal" style="position:relative">
+      <button class="product-modal-close" id="favModalClose">✕</button>
+      <div class="product-modal-inner">
+        <div class="product-modal-gallery">
+          <img id="fav-modal-main-img" class="product-modal-main-image" src="" alt="">
+          <div id="fav-modal-thumbs" class="product-modal-thumbs"></div>
+        </div>
+        <div class="product-modal-body" id="fav-modal-body"></div>
+      </div>
+    </div>
+  </div>
 
-    const supabase = window.supabaseClient;
+<script>
+(async function(){
+  await new Promise(resolve=>{
+    if(window.supabaseClient) return resolve();
+    document.addEventListener('supabase-ready', ()=>resolve());
+    setTimeout(resolve, 4000);
+  });
 
-    if(!supabase){
-      console.error('Supabase client not initialized. Check script include and keys.');
-      const el = document.getElementById('profileEmail'); if(el) el.textContent = 'Supabase not initialised';
-      return;
-    }
+  const sb = window.supabaseClient;
+  if(!sb){ document.getElementById('profileEmail').textContent='Supabase not init'; return; }
 
-    // ---------- DOM refs ----------
-    const profileEmail = document.getElementById('profileEmail');
-    const profileFirstName = document.getElementById('profileFirstName');
-    const profileLastName = document.getElementById('profileLastName');
-    const profilePhone = document.getElementById('profilePhone');
-    const saveBtn = document.getElementById('saveProfileBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const sendReset = document.getElementById('sendReset');
-    const emailForReset = document.getElementById('emailForReset');
-    const resetStatus = document.getElementById('resetStatus');
-    const addressesContainer = document.getElementById('addressesContainer');
-    const addAddressBtn = document.getElementById('addAddressBtn');
-    const addrLabel = document.getElementById('addrLabel');
-    const addrLine = document.getElementById('addrLine');
-    const addrCity = document.getElementById('addrCity');
-    const addrProvince = document.getElementById('addrProvince');
-    const addrPostal = document.getElementById('addrPostal');
-    const ordersContainer = document.getElementById('ordersContainer');
-    const deleteAccount = document.getElementById('deleteAccount');
-    const refreshBtn = document.getElementById('refreshBtn');
+  // ─── helpers ───
+  function esc(s){ return (s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmt(v){ return 'R'+Number(v||0).toFixed(2); }
+  function showMsg(el, msg, ok){ if(!el) return; el.style.color = ok?'green':'red'; el.textContent = msg; }
 
-    const orderModal = document.getElementById('orderModal');
-    const orderModalClose = document.getElementById('orderModalClose');
-    const orderModalClose2 = document.getElementById('orderModalClose2');
-    const orderModalBody = document.getElementById('orderModalBody');
-    const orderModalTitle = document.getElementById('orderModalTitle');
-    const orderModalSub = document.getElementById('orderModalSub');
+  // ─── auth ───
+  async function getUserOrRedirect(){
+    try{
+      const { data } = await sb.auth.getSession();
+      const user = data?.session?.user || null;
+      if(!user){ window.location.href='index.html'; return null; }
+      return user;
+    }catch(e){ window.location.href='index.html'; return null; }
+  }
 
-    const logoutConfirm = document.getElementById('logoutConfirm');
-    const logoutYes = document.getElementById('logoutYes');
-    const logoutNo = document.getElementById('logoutNo');
-
-    // mobile menu elements
-    const menuBtn = document.getElementById('menuBtn');
-    const mobileNav = document.getElementById('mobileNav');
-    const mobileNavOverlay = document.getElementById('mobileNavOverlay');
-    const mobileLogout = document.getElementById('mobileLogout');
-
-    function openMobileNav(){
-      if(!mobileNav) return;
-      mobileNav.classList.add('open');
-      mobileNav.setAttribute('aria-hidden','false');
-      menuBtn && menuBtn.setAttribute('aria-expanded','true');
-      if(mobileNavOverlay) mobileNavOverlay.style.display = 'block';
-    }
-    function closeMobileNav(){
-      if(!mobileNav) return;
-      mobileNav.classList.remove('open');
-      mobileNav.setAttribute('aria-hidden','true');
-      menuBtn && menuBtn.setAttribute('aria-expanded','false');
-      if(mobileNavOverlay) mobileNavOverlay.style.display = 'none';
-    }
-
-    menuBtn && menuBtn.addEventListener('click', ()=>{
-      if(mobileNav && mobileNav.classList.contains('open')) closeMobileNav(); else openMobileNav();
+  // ─── tabs ───
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c=>c.style.display='none');
+      btn.classList.add('active');
+      const tabEl = document.getElementById('tab-'+btn.dataset.tab);
+      if(tabEl) tabEl.style.display='';
+      if(btn.dataset.tab==='favourites') loadFavourites();
     });
-    mobileNavOverlay && mobileNavOverlay.addEventListener('click', closeMobileNav);
-    document.getElementById('navOrders')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('ordersContainer')?.scrollIntoView({behavior:'smooth'}); });
-    document.getElementById('navAddresses')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('addressesContainer')?.scrollIntoView({behavior:'smooth'}); });
-    document.getElementById('navSecurity')?.addEventListener('click', (e)=>{ e.preventDefault(); closeMobileNav(); document.getElementById('emailForReset')?.scrollIntoView({behavior:'smooth'}); });
-    mobileLogout && mobileLogout.addEventListener('click', ()=>{ closeMobileNav(); showModal(logoutConfirm); });
+  });
 
-    // ---------- helpers ----------
-    function showModal(el){ if(!el) return; el.classList.add('open'); el.setAttribute('aria-hidden','false'); el.style.display='flex'; }
-    function hideModal(el){ if(!el) return; el.classList.remove('open'); el.setAttribute('aria-hidden','true'); el.style.display='none'; }
-    function showError(el, msg){ if(!el) return; el.style.color='red'; el.textContent = msg || ''; }
-    function showSuccess(el, msg){ if(!el) return; el.style.color='green'; el.textContent = msg || ''; }
-    function escapeHtml(s){ if(s===null || s===undefined) return ''; return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
+  // ─── mobile nav ───
+  const menuBtn = document.getElementById('menuBtn');
+  const mobileNav = document.getElementById('mobileNav');
+  const mobileNavOverlay = document.getElementById('mobileNavOverlay');
+  function openNav(){ mobileNav.classList.add('open'); mobileNav.setAttribute('aria-hidden','false'); mobileNavOverlay.style.display='block'; }
+  function closeNav(){ mobileNav.classList.remove('open'); mobileNav.setAttribute('aria-hidden','true'); mobileNavOverlay.style.display='none'; }
+  menuBtn?.addEventListener('click',()=>mobileNav.classList.contains('open')?closeNav():openNav());
+  mobileNavOverlay?.addEventListener('click',closeNav);
+  document.getElementById('navProfile')?.addEventListener('click',()=>{ closeNav(); window.scrollTo({top:0,behavior:'smooth'}); });
+  document.getElementById('navOrders')?.addEventListener('click',()=>{ closeNav(); document.querySelector('.tab-btn[data-tab="orders"]').click(); });
+  document.getElementById('navFavourites')?.addEventListener('click',()=>{ closeNav(); document.querySelector('.tab-btn[data-tab="favourites"]').click(); });
+  document.getElementById('navSecurity')?.addEventListener('click',()=>{ closeNav(); document.querySelector('.tab-btn[data-tab="security"]').click(); });
+  document.getElementById('mobileLogout')?.addEventListener('click',()=>{ closeNav(); showModal(document.getElementById('logoutConfirm')); });
 
-    // Use getSession consistently
-    async function getUserOrRedirect(){
-      try{
-        const { data } = await supabase.auth.getSession();
-        const user = data?.session?.user || null;
-        if(!user){
-          window.location.href = 'index.html';
-          return null;
-        }
-        return user;
-      }catch(err){
-        console.warn('getUserOrRedirect error', err);
-        window.location.href = 'index.html';
-        return null;
-      }
+  // ─── modal ───
+  function showModal(el){ el.classList.add('open'); el.setAttribute('aria-hidden','false'); el.style.display='flex'; }
+  function hideModal(el){ el.classList.remove('open'); el.setAttribute('aria-hidden','true'); el.style.display='none'; }
+  document.getElementById('logoutNo')?.addEventListener('click',()=>hideModal(document.getElementById('logoutConfirm')));
+  document.getElementById('logoutConfirm')?.addEventListener('click',e=>{ if(e.target===document.getElementById('logoutConfirm')) hideModal(document.getElementById('logoutConfirm')); });
+  document.getElementById('actionModalClose')?.addEventListener('click',()=>hideModal(document.getElementById('actionModal')));
+  document.getElementById('actionModal')?.addEventListener('click',e=>{ if(e.target===document.getElementById('actionModal')) hideModal(document.getElementById('actionModal')); });
+
+  // ─── logout ───
+  async function doLogout(){
+    hideModal(document.getElementById('logoutConfirm'));
+    try{ await sb.auth.signOut(); }catch(e){}
+    localStorage.setItem('ss_signout',String(Date.now()));
+    window.location.href='index.html';
+  }
+  document.getElementById('logoutBtn')?.addEventListener('click',()=>showModal(document.getElementById('logoutConfirm')));
+  document.getElementById('logoutYes')?.addEventListener('click',doLogout);
+  window.addEventListener('storage',e=>{ if(e.key==='ss_signout'){ sb.auth.signOut().catch(()=>{}); window.location.href='index.html'; } });
+
+  // ─── profile load/save ───
+  async function loadProfile(){
+    const user = await getUserOrRedirect(); if(!user) return;
+    document.getElementById('profileEmail').textContent = user.email || '—';
+    const emailReset = document.getElementById('emailForReset');
+    if(emailReset) emailReset.value = user.email || '';
+
+    const { data, error } = await sb.from('profiles').select('*').eq('user_id',user.id).maybeSingle();
+    if(error){ console.warn('profile error',error); return; }
+    if(data){
+      document.getElementById('profileFirstName').value = data.first_name || '';
+      document.getElementById('profileLastName').value = data.last_name || '';
+      document.getElementById('profilePhone').value = data.phone || '';
+      document.getElementById('addrLabel').value = data.label || '';
+      document.getElementById('addrLine').value = data.address || '';
+      document.getElementById('addrCity').value = data.city || '';
+      document.getElementById('addrProvince').value = data.province || '';
+      document.getElementById('addrPostal').value = data.postal_code || '';
+      renderAddressPreview(data);
+    } else {
+      // create minimal profile row
+      await sb.from('profiles').insert([{ user_id:user.id, email:user.email, first_name:'', last_name:'', phone:'' }]);
     }
+  }
 
-    // ---------- profile load/save (single-address model) ----------
-    async function loadProfile(){
-      const user = await getUserOrRedirect();
-      if(!user) return;
-      profileEmail.textContent = user.email || (user.user_metadata && user.user_metadata.email) || '—';
-      emailForReset.value = user.email || '';
+  function renderAddressPreview(row){
+    const c = document.getElementById('addressesContainer');
+    const addr = row.address || '';
+    if(!addr){ c.innerHTML='<div class="small">No address saved yet.</div>'; return; }
+    c.innerHTML=`<div style="padding:10px;border-radius:8px;background:#fafafa;border:1px solid #f0f0f5;font-size:13px"><strong>${esc(row.label||'Address')}</strong><div style="margin-top:4px">${esc(addr)}</div><div style="color:var(--muted);margin-top:2px">${esc(row.city||'')} · ${esc(row.province||'')} · ${esc(row.postal_code||'')}</div></div>`;
+  }
 
-      try{
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
+  document.getElementById('saveProfileBtn')?.addEventListener('click', async()=>{
+    const user = await getUserOrRedirect(); if(!user) return;
+    const btn = document.getElementById('saveProfileBtn');
+    btn.disabled=true;
+    const payload = {
+      user_id:user.id, email:user.email||null,
+      first_name:(document.getElementById('profileFirstName').value||'').trim(),
+      last_name:(document.getElementById('profileLastName').value||'').trim(),
+      phone:(document.getElementById('profilePhone').value||'').trim(),
+      label:(document.getElementById('addrLabel').value||'').trim(),
+      address:(document.getElementById('addrLine').value||'').trim(),
+      city:(document.getElementById('addrCity').value||'').trim(),
+      province:(document.getElementById('addrProvince').value||'').trim(),
+      postal_code:(document.getElementById('addrPostal').value||'').trim(),
+      updated_at:new Date().toISOString()
+    };
+    const { error } = await sb.from('profiles').upsert([payload],{ onConflict:['user_id'] });
+    if(error) showMsg(document.getElementById('profileStatus'),'Error: '+error.message,false);
+    else { showMsg(document.getElementById('profileStatus'),'Saved ✓',true); await loadProfile(); }
+    btn.disabled=false;
+  });
+  document.getElementById('addAddressBtn')?.addEventListener('click',()=>document.getElementById('saveProfileBtn').click());
 
-        if(error){
-          console.warn('profile select error', error);
-          return;
-        }
+  // ─── ORDERS ───
+  let ordersData = []; // cached raw order rows
+  let itemStatusesCache = {}; // order_id → item statuses
 
-        if(data){
-          profileFirstName.value = data.first_name || data.full_name || '';
-          profileLastName.value = data.last_name || '';
-          profilePhone.value = data.phone || '';
-          addrLabel.value = data.label || '';
-          addrLine.value = data.address || data.address_line || data.adress || '';
-          addrCity.value = data.city || '';
-          addrProvince.value = data.province || data.Province || '';
-          addrPostal.value = data.postal_code || data.postal || data.zip || '';
-          renderSavedAddressPreview(data);
-        } else {
-          // Profile row missing in DB; create minimal row so other pages (index.html) can rely on it
-          const payload = {
-            user_id: user.id,
-            email: user.email || null,
-            first_name: '',
-            last_name: '',
-            phone: ''
-          };
-          const { data: newProfile, error: createErr } = await supabase.from('profiles').insert([payload]).select().maybeSingle();
-          if(createErr){
-            console.warn('Could not create profile row automatically', createErr);
-            addressesContainer.innerHTML = '<div class="small" style="color:var(--muted)">No address saved yet.</div>';
-          } else {
-            // reload to pick up created row
-            await loadProfile();
-          }
-        }
-      }catch(e){
-        console.warn('loadProfile exception', e);
-      }
-    }
-
-    function renderSavedAddressPreview(row){
-      const addr = (row.address || row.address_line || row.adress || '') || '';
-      const label = row.label || '';
-      const city = row.city || '';
-      const province = row.province || row.Province || '';
-      const postal = row.postal_code || row.postal || row.zip || '';
-      if(!addr){
-        addressesContainer.innerHTML = '<div class="small" style="color:var(--muted)">No address saved yet.</div>';
+  async function loadOrders(){
+    const user = await getUserOrRedirect(); if(!user) return;
+    const container = document.getElementById('ordersContainer');
+    container.innerHTML = '<div class="small">Loading orders…</div>';
+    try{
+      const { data: orders, error } = await sb.from('orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(100);
+      if(error || !orders?.length){
+        container.innerHTML = '<div class="small">'+( error ? 'Error: '+esc(error.message) : 'No orders yet.')+'</div>';
         return;
       }
-      addressesContainer.innerHTML = `
-        <div class="address-item">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <strong>${escapeHtml(label || 'Saved address')}</strong>
-            <div style="font-size:12px;color:var(--muted)"></div>
+      ordersData = orders;
+
+      // Fetch all item statuses for these orders in one go
+      const orderIds = orders.map(o=>o.id);
+      const { data: allStatuses } = await sb.from('order_item_statuses').select('*').in('order_id',orderIds);
+      itemStatusesCache = {};
+      (allStatuses||[]).forEach(s=>{
+        if(!itemStatusesCache[s.order_id]) itemStatusesCache[s.order_id] = [];
+        itemStatusesCache[s.order_id].push(s);
+      });
+
+      // Fetch product images
+      const productIds = [...new Set(orders.flatMap(o=>(o.items||[]).map(i=>i.product_id||i.id).filter(Boolean)))];
+      let imageMap = {};
+      if(productIds.length){
+        const { data: imgs } = await sb.from('product_images').select('product_id,url,image_order').in('product_id',productIds);
+        (imgs||[]).forEach(img=>{
+          if(!imageMap[img.product_id] || (img.image_order||0)<(imageMap[img.product_id].image_order||0)) imageMap[img.product_id]=img;
+        });
+      }
+
+      container.innerHTML = orders.map(o=>renderOrderRow(o, imageMap)).join('');
+
+      // Bind expand clicks
+      container.querySelectorAll('.order-item').forEach(el=>{
+        el.addEventListener('click',(e)=>{
+          if(e.target.classList.contains('refund-btn') || e.target.classList.contains('dispute-btn') || e.target.classList.contains('confirm-receipt-btn')) return;
+          const exp = el.querySelector('.order-expand');
+          if(exp) exp.classList.toggle('open');
+        });
+      });
+
+      // Bind refund buttons
+      container.querySelectorAll('.refund-btn').forEach(btn=>{
+        btn.addEventListener('click',async (e)=>{
+          e.stopPropagation();
+          const orderId = btn.dataset.orderId;
+          await handleFullRefund(orderId);
+        });
+      });
+
+      // Bind confirm receipt buttons
+      container.querySelectorAll('.confirm-receipt-btn').forEach(btn=>{
+        btn.addEventListener('click',async (e)=>{
+          e.stopPropagation();
+          const statusId = btn.dataset.statusId;
+          const orderId = btn.dataset.orderId;
+          await confirmItemReceived(statusId, orderId);
+        });
+      });
+
+      // Bind dispute buttons
+      container.querySelectorAll('.dispute-btn').forEach(btn=>{
+        btn.addEventListener('click',async(e)=>{
+          e.stopPropagation();
+          const statusId = btn.dataset.statusId;
+          const orderId = btn.dataset.orderId;
+          const itemName = btn.dataset.itemName;
+          await handleItemDispute(statusId, orderId, itemName);
+        });
+      });
+
+      // Start live timers for refund countdown
+      container.querySelectorAll('.refund-timer[data-created]').forEach(timerEl=>{
+        startRefundTimer(timerEl);
+      });
+
+    }catch(e){
+      console.warn('loadOrders error',e);
+      container.innerHTML='<div class="small">Unable to load orders.</div>';
+    }
+  }
+
+  function renderOrderRow(o, imageMap){
+    const items = o.items || [];
+    const statuses = itemStatusesCache[o.id] || [];
+    const now = Date.now();
+    const createdMs = o.created_at ? new Date(o.created_at).getTime() : 0;
+    const minutesSince = (now - createdMs) / 60000;
+    const canFullRefund = minutesSince < 5;
+    const thumbs = items.slice(0,3).map(it=>{
+      const img = imageMap[it.product_id||it.id];
+      return `<img src="${esc(img?.url||'https://placehold.co/48?text=Item')}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;margin-right:4px">`;
+    }).join('');
+
+    const allResolved = items.length > 0 && items.every((_,idx)=>{
+      const st = statuses.find(s=>s.item_index===idx);
+      return st && ['delivered','refunded'].includes(st.status);
+    });
+
+    const headerStatus = allResolved ? 'Delivered' : (o.order_status||'Pending');
+
+    const refundTimerHtml = canFullRefund
+      ? `<div class="refund-timer" data-created="${esc(o.created_at)}" data-order-id="${esc(o.id)}">
+          <div><strong>Full refund available</strong> · expires in <span class="countdown-text">5:00</span></div>
+          <button class="refund-btn btn cta sm" data-order-id="${esc(o.id)}">Request Full Refund</button>
+        </div>`
+      : '';
+
+    const itemsHtml = items.map((it, idx)=>{
+      const pid = it.product_id || it.id || '';
+      const img = imageMap[pid];
+      const imgUrl = img?.url || 'https://placehold.co/56?text=Item';
+      const name = it.title || it.name || it.item || 'Product';
+      const qty = it.quantity || it.qty || 1;
+      const price = it.price || 0;
+      const st = statuses.find(s=>s.item_index===idx);
+      const status = st?.status || 'pending';
+      const badgeClass = status==='delivered'?'badge-delivered':status==='disputed'?'badge-disputed':status==='refunded'?'badge-refunded':'badge-pending';
+      const badgeLabel = status==='delivered'?'✓ Delivered':status==='disputed'?'⚠ Disputed':status==='refunded'?'↩ Refunded':'Pending';
+
+      let actionBtn = '';
+      if(st && st.status==='fulfilled' && !st.buyer_confirmed_at){
+        // Seller marked fulfilled/delivered — ask buyer
+        actionBtn = `<div style="margin-top:6px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px;font-size:12px">
+          Seller says this was delivered. Did you receive it?
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="confirm-receipt-btn" data-status-id="${esc(st.id)}" data-order-id="${esc(o.id)}">Yes, received ✓</button>
+            <button class="dispute-btn" data-status-id="${esc(st.id)}" data-order-id="${esc(o.id)}" data-item-name="${esc(name)}">No, dispute</button>
           </div>
-          <div style="margin-top:8px">${escapeHtml(addr)}</div>
-          <div style="margin-top:6px;font-size:13px;color:var(--muted)">${escapeHtml(city)} • ${escapeHtml(province)} • ${escapeHtml(postal)}</div>
         </div>`;
+      } else if(!st && !canFullRefund && o.order_status !== 'Returned'){
+        // After 5 mins, allow per-item dispute
+        actionBtn = `<button class="dispute-btn" style="margin-top:6px" data-status-id="" data-order-id="${esc(o.id)}" data-item-name="${esc(name)}" data-item-idx="${idx}">Raise dispute</button>`;
+      }
+
+      return `<div class="item-line">
+        <img src="${esc(imgUrl)}" alt="${esc(name)}" onerror="this.src='https://placehold.co/56?text=Item'">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${esc(name)} <span class="item-status-badge ${badgeClass}">${badgeLabel}</span></div>
+          <div class="muted">${it.size?esc(it.size)+' · ':''} Qty: ${qty} · ${fmt(price*qty)}</div>
+          ${actionBtn}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="order-item" data-order-id="${esc(o.id)}">
+      <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div>${thumbs}</div>
+          <div>
+            <strong>Order ${esc(o.order_number||String(o.id).slice(0,8))}</strong>
+            <div class="muted">${esc(o.created_at?new Date(o.created_at).toLocaleString():'')}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <strong>${fmt(o.total||0)}</strong>
+          <div class="muted">${esc(headerStatus)}</div>
+        </div>
+      </div>
+      <div class="order-expand" style="pointer-events:auto">
+        ${refundTimerHtml}
+        ${itemsHtml || '<div class="small">No item details available.</div>'}
+      </div>
+    </div>`;
+  }
+
+  function startRefundTimer(el){
+    const created = new Date(el.dataset.created).getTime();
+    const expire = created + 5*60*1000;
+    const textEl = el.querySelector('.countdown-text');
+    function tick(){
+      const left = expire - Date.now();
+      if(left <= 0){
+        el.innerHTML = '<div class="small">Refund window expired. Use per-item dispute.</div>';
+        const btn = el.closest('.order-item')?.querySelector('.refund-btn');
+        if(btn) btn.remove();
+        return;
+      }
+      const mins = Math.floor(left/60000);
+      const secs = Math.floor((left%60000)/1000);
+      if(textEl) textEl.textContent = `${mins}:${String(secs).padStart(2,'0')}`;
+      setTimeout(tick, 1000);
     }
+    tick();
+  }
 
-    // Upsert profile row (will create if missing)
-    saveBtn.addEventListener('click', async ()=>{
-      const user = await getUserOrRedirect();
-      if(!user) return;
-      saveBtn.disabled = true;
-      try{
-        const payload = {
-          user_id: user.id,
-          first_name: (profileFirstName.value||'').trim(),
-          last_name: (profileLastName.value||'').trim(),
-          phone: (profilePhone.value||'').trim(),
-          label: (addrLabel.value||'').trim(),
-          address: (addrLine.value||'').trim(),
-          city: (addrCity.value||'').trim(),
-          province: (addrProvince.value||'').trim(),
-          postal_code: (addrPostal.value||'').trim(),
-          email: user.email || null,
-          updated_at: new Date().toISOString()
-        };
-
-        const { error } = await supabase.from('profiles').upsert([payload], { onConflict: ['user_id'] });
-        if(error){
-          console.error('upsert profiles error', error);
-          alert('Error saving profile: ' + (error.message || JSON.stringify(error)));
-        } else {
-          showSuccess(resetStatus, 'Profile saved');
-          await loadProfile();
-        }
-      }catch(e){
-        console.error('save profile exception', e);
-        alert('Unexpected error. See console.');
-      } finally {
-        saveBtn.disabled = false;
-      }
-    });
-
-    // Save address button reuses save logic (single-address model)
-    addAddressBtn.addEventListener('click', ()=> saveBtn.click());
-
-    // ---------- orders ----------
-    async function loadOrders(){
-      ordersContainer.innerHTML = '';
-      const user = await getUserOrRedirect();
-      if(!user) return;
-      try{
-        const { data: orders, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if(error){
-          console.warn('orders select error', error);
-          ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">No orders or orders table unavailable.</div>`;
-          return;
-        }
-        if(!orders || orders.length===0){
-          ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">You have no orders yet.</div>`;
-          return;
-        }
-
-        const productIds = Array.from(new Set(orders.flatMap(o => (o.items||[]).map(i => i.product_id || i.id).filter(Boolean))));
-        let imageMap = {};
-        if(productIds.length){
-          const { data: imgs } = await supabase.from('product_images').select('*').in('product_id', productIds);
-          (imgs||[]).forEach(img => {
-            if(!imageMap[img.product_id] || (img.image_order||0) < (imageMap[img.product_id].image_order||0)){
-              imageMap[img.product_id] = img;
-            }
-          });
-        }
-
-        ordersContainer.innerHTML = orders.map(o => {
-          const items = o.items || [];
-          const thumbs = items.slice(0,3).map(it=>{
-            const img = imageMap[it.product_id || it.id];
-            const src = img?.url || 'https://via.placeholder.com/48x48?text=Item';
-            return `<img src="${escapeHtml(src)}" style="width:48px;height:48px;border-radius:6px;object-fit:cover;margin-right:6px">`;
-          }).join('');
-          return `<div class="order-item" data-order-id="${escapeHtml(o.id)}">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="display:flex;align-items:center;gap:10px">
-                <div class="thumbs">${thumbs}</div>
-                <div>
-                  <strong>Order ${escapeHtml(o.order_number||String(o.id).slice(0,8))}</strong>
-                  <div class="muted-inline">${escapeHtml(o.created_at ? new Date(o.created_at).toLocaleString() : '')}</div>
-                </div>
-              </div>
-              <div style="text-align:right">
-                <strong>R${Number(o.total||0).toFixed(2)}</strong>
-                <div class="muted-inline">${escapeHtml(o.order_status||'')}</div>
-              </div>
-            </div>
-          </div>`;
-        }).join('');
-
-        ordersContainer.querySelectorAll('.order-item').forEach(el=>{
-          el.addEventListener('click', ()=> openOrderModal(el.getAttribute('data-order-id')));
-        });
-
-      }catch(e){
-        console.warn('loadOrders exception', e);
-        ordersContainer.innerHTML = `<div class="small" style="color:var(--muted)">Unable to load orders.</div>`;
-      }
-    }
-
-    async function openOrderModal(orderId){
-      if(!orderId) return;
-      try{
-        const { data } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
-        if(!data){ alert('Order not found'); return; }
-
-        const title = data.order_number || data.id || 'Order';
-        const sub = data.created_at ? new Date(data.created_at).toLocaleString() : '';
-
-        const productIds = (data.items || []).map(i => i.product_id || i.id).filter(Boolean);
-        const imageMap = {};
-        if(productIds.length){
-          const { data: imgs } = await supabase.from('product_images').select('*').in('product_id', productIds);
-          (imgs||[]).forEach(img=>{
-            if(!imageMap[img.product_id] || (img.image_order||0) < (imageMap[img.product_id].image_order||0)) imageMap[img.product_id] = img;
-          });
-        }
-
-        const itemsHtml = (data.items || []).map(it=>{
-          const pid = it.product_id || it.id || '';
-          const imgObj = imageMap[pid];
-          const imgUrl = imgObj ? (imgObj.url || imgObj.path || '') : '';
-          const img = imgUrl || 'https://via.placeholder.com/80x80?text=Product';
-          const name = it.name || it.title || '';
-          const qty = it.quantity || it.qty || 1;
-          const price = (it.price !== undefined && it.price !== null) ? ('R' + Number(it.price).toFixed(2)) : '';
-          return `<div style="display:flex;gap:12px;align-items:center;margin-bottom:8px"><img src="${escapeHtml(img)}" style="width:64px;height:64px;object-fit:cover;border-radius:8px"><div><div style="font-weight:700">${escapeHtml(name)}</div><div class="muted-inline">Qty: ${escapeHtml(String(qty))} • ${escapeHtml(price)}</div></div></div>`;
-        }).join('');
-
-        const rows = [];
-        const fieldsToShow = ['order_number','customer_name','customer_phone','delivery_address','city','province','postal_code','notes','total','order_status'];
-        fieldsToShow.forEach(k=>{
-          if(k in data && data[k]){
-            let label = k.replace(/_/g,' ').replace(/\b\w/g, s=>s.toUpperCase());
-            let val = data[k];
-            if(k === 'total') val = 'R' + Number(val).toFixed(2);
-            rows.push(`<div class="modal-row"><div class="label">${escapeHtml(label)}</div><div class="value" style="flex:1">${escapeHtml(String(val))}</div></div>`);
-          }
-        });
-
-        orderModalTitle.textContent = `Order ${title}`;
-        orderModalSub.textContent = sub;
-        orderModalBody.innerHTML = `<div style="margin-bottom:12px">${itemsHtml || '<div class="small">No items available</div>'}</div>${rows.join('')}`;
-        showModal(orderModal);
-      }catch(e){
-        console.error('openOrderModal exception', e);
-        alert('Unable to load order details.');
-      }
-    }
-
-    orderModalClose.addEventListener('click', ()=> hideModal(orderModal));
-    orderModalClose2.addEventListener('click', ()=> hideModal(orderModal));
-    orderModal.addEventListener('click', (e)=> { if(e.target === orderModal) hideModal(orderModal); });
-
-    // ---------- password reset ----------
-    sendReset.addEventListener('click', async ()=>{
-      const email = (emailForReset.value || '').trim();
-      if(!email){ showError(resetStatus, 'Enter an email'); return; }
-      resetStatus.textContent = '';
-      try{
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/' });
-        if(error){ showError(resetStatus, error.message || 'Error requesting reset'); }
-        else { showSuccess(resetStatus, 'Reset link sent — check your email'); }
-      }catch(e){
-        console.warn('reset password exception', e);
-        showError(resetStatus, 'Unexpected error.');
-      }
-    });
-
-    // ---------- logout ----------
-    logoutBtn.addEventListener('click', ()=> showModal(logoutConfirm));
-    logoutNo.addEventListener('click', ()=> hideModal(logoutConfirm));
-    logoutConfirm.addEventListener('click', (e)=> { if(e.target === logoutConfirm) hideModal(logoutConfirm); });
-
-    logoutYes.addEventListener('click', async ()=>{
-      hideModal(logoutConfirm);
-      try{ await supabase.auth.signOut(); } catch(e){ console.warn('signOut error', e); }
-      try{ localStorage.setItem('ss_signout', String(Date.now())); }catch(e){}
-      alert('You have been logged out.');
-      window.location.href = 'index.html';
-    });
-
-    // cross-tab signout
-    window.addEventListener('storage', (e)=>{
-      if(e.key === 'ss_signout'){
-        supabase.auth.signOut().catch(()=>{});
-        window.location.href = 'index.html';
-      }
-    });
-
-    // ---------- delete account ----------
-    deleteAccount.addEventListener('click', async ()=>{
-      if(!confirm('Delete account? This is irreversible.')) return;
-      const user = await getUserOrRedirect(); if(!user) return;
-      try{
-        const { data: deletedRows, error: delErr } = await supabase
-          .from('profiles')
-          .delete()
-          .eq('user_id', user.id);
-
-        if(delErr){
-          console.warn('delete profiles error', delErr);
-          alert('Your profile could not be deleted.');
-          return;
-        }
-
-        try{ await supabase.from('addresses').delete().eq('user_id', user.id); }catch(e){ /* ignore */ }
-        try{ await supabase.auth.signOut(); }catch(e){ /* ignore */ }
-
-        alert('Profile deleted.');
-        window.location.href = 'index.html';
-      }catch(e){
-        console.error('deleteAccount exception', e);
-        alert('Unable to delete account.');
-      }
-    });
-
-    refreshBtn.addEventListener('click', async ()=>{ await loadAll(); alert('Refreshed'); });
-
-    // ---------- refresh / init ----------
-    async function loadAll(){
-      await loadProfile();
+  async function handleFullRefund(orderId){
+    const body = document.getElementById('actionModalBody');
+    body.innerHTML = `<h3 style="margin-bottom:8px">Request Full Refund</h3>
+      <div class="small" style="margin-bottom:12px">This will flag the order for a full refund. The admin will review and process it.</div>
+      <textarea id="refundReason" rows="3" placeholder="Reason for refund (optional)" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6e6ea"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="confirmRefundBtn" class="btn cta">Confirm Refund Request</button>
+        <button id="cancelRefundBtn" class="btn ghost">Cancel</button>
+      </div>`;
+    showModal(document.getElementById('actionModal'));
+    document.getElementById('cancelRefundBtn').onclick = ()=>hideModal(document.getElementById('actionModal'));
+    document.getElementById('confirmRefundBtn').onclick = async()=>{
+      const reason = document.getElementById('refundReason').value.trim();
+      const notes = `REFUND_REQUESTED: ${reason||'No reason given'} — ${new Date().toISOString()}`;
+      await sb.from('orders').update({ order_status:'Returned', notes }).eq('id',orderId);
+      hideModal(document.getElementById('actionModal'));
       await loadOrders();
+    };
+  }
+
+  async function confirmItemReceived(statusId, orderId){
+    if(!statusId) return;
+    await sb.from('order_item_statuses').update({ status:'delivered', buyer_confirmed_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id',statusId);
+    // Re-fetch statuses and re-render
+    const { data: fresh } = await sb.from('order_item_statuses').select('*').eq('order_id',orderId);
+    itemStatusesCache[orderId] = fresh || [];
+    // Check if all resolved
+    const order = ordersData.find(o=>o.id===orderId);
+    if(order){
+      const items = order.items || [];
+      const allDone = items.length > 0 && items.every((_,idx)=>{
+        const st = (itemStatusesCache[orderId]||[]).find(s=>s.item_index===idx);
+        return st && ['delivered','refunded'].includes(st.status);
+      });
+      if(allDone){
+        await sb.from('orders').update({ order_status:'Delivered' }).eq('id',orderId);
+      }
     }
+    await loadOrders();
+  }
 
-    // listen to auth state changes
-    supabase.auth.onAuthStateChange((event, session) => {
-      console.log('auth event', event);
-      if(event === 'SIGNED_OUT'){
-        window.location.href = 'index.html';
+  async function handleItemDispute(statusId, orderId, itemName){
+    const body = document.getElementById('actionModalBody');
+    body.innerHTML = `<h3 style="margin-bottom:8px">Dispute: ${esc(itemName)}</h3>
+      <div class="small" style="margin-bottom:10px">Tell us what happened. The seller will be notified and the item goes back to pending.</div>
+      <textarea id="disputeMsg" rows="3" placeholder="Describe the issue…" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e6e6ea"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button id="confirmDisputeBtn" class="btn danger">Submit Dispute</button>
+        <button id="cancelDisputeBtn" class="btn ghost">Cancel</button>
+      </div>`;
+    showModal(document.getElementById('actionModal'));
+    document.getElementById('cancelDisputeBtn').onclick=()=>hideModal(document.getElementById('actionModal'));
+    document.getElementById('confirmDisputeBtn').onclick=async()=>{
+      const msg = document.getElementById('disputeMsg').value.trim();
+      if(statusId){
+        await sb.from('order_item_statuses').update({ status:'disputed', buyer_disputed_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id',statusId);
+      } else {
+        // No status exists yet — create one with disputed status
+        const btn = document.querySelector(`button.dispute-btn[data-order-id="${orderId}"]`);
+        const itemIdx = Number(btn?.dataset.itemIdx || 0);
+        const order = ordersData.find(o=>o.id===orderId);
+        const it = order?.items?.[itemIdx];
+        await sb.from('order_item_statuses').insert([{ order_id:orderId, item_index:itemIdx, product_id:it?.product_id||null, status:'disputed', buyer_disputed_at:new Date().toISOString() }]);
       }
-      if(event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED'){
-        loadAll().catch(e=>console.warn('loadAll after auth event failed', e));
-      }
-    });
-
-    // initial check: require session and then load data
-    (async function init(){
+      // Notify seller via seller_notifications (find seller from product)
       try{
-        const { data } = await supabase.auth.getSession();
-        const session = data?.session || null;
-        if(!session || !session.user){ window.location.href = 'index.html'; return; }
-        await loadAll();
-      }catch(e){
-        console.warn('initial session check failed', e);
-        window.location.href='index.html';
+        const order = ordersData.find(o=>o.id===orderId);
+        if(order){
+          const items = order.items || [];
+          const sellerIds = new Set();
+          items.forEach(it=>{
+            // We'll try to get seller from item directly
+            if(it.seller_id) sellerIds.add(it.seller_id);
+          });
+          // If we don't have seller_id, look up product
+          const productIds = items.map(i=>i.product_id||i.id).filter(Boolean);
+          if(productIds.length && sellerIds.size===0){
+            const { data: prods } = await sb.from('products').select('id,seller_id').in('id',productIds);
+            (prods||[]).forEach(p=>{ if(p.seller_id) sellerIds.add(p.seller_id); });
+          }
+          for(const sellerId of sellerIds){
+            await sb.from('seller_notifications').insert([{
+              seller_id: sellerId,
+              type:'order',
+              title:`Buyer disputed item: ${itemName}`,
+              body: msg || 'Buyer says item was not received.',
+              is_read:false,
+              created_at:new Date().toISOString()
+            }]).catch(()=>{});
+          }
+        }
+      }catch(e){ console.warn('notify seller error',e); }
+
+      hideModal(document.getElementById('actionModal'));
+      await loadOrders();
+    };
+  }
+
+  // ─── FAVOURITES ───
+  let favsLoaded = false;
+
+  async function loadFavourites(){
+    if(favsLoaded) return;
+    favsLoaded = true;
+    const container = document.getElementById('favsContainer');
+    container.innerHTML = '<div class="small">Loading favourites…</div>';
+    const user = await getUserOrRedirect(); if(!user) return;
+    try{
+      const { data: favs, error } = await sb.from('product_favourites').select('product_id').eq('user_id',user.id);
+      if(error || !favs?.length){ container.innerHTML='<div class="small" style="margin-top:12px">No favourites yet. Heart a product to save it here.</div>'; return; }
+      const productIds = [...new Set(favs.map(f=>f.product_id).filter(Boolean))];
+      const { data: products } = await sb.from('products').select('id,name,price,sale_price,on_sale').in('id',productIds);
+      const { data: imgs } = await sb.from('product_images').select('product_id,url,image_order').in('product_id',productIds);
+      const imageMap = {};
+      (imgs||[]).forEach(img=>{ if(!imageMap[img.product_id]||(img.image_order||0)<(imageMap[img.product_id].image_order||0)) imageMap[img.product_id]=img; });
+
+      if(!products?.length){ container.innerHTML='<div class="small" style="margin-top:12px">No products found.</div>'; return; }
+
+      const grid = document.createElement('div');
+      grid.className='fav-grid';
+      grid.innerHTML = products.map(p=>{
+        const img = imageMap[p.id];
+        const price = (p.on_sale && p.sale_price) ? p.sale_price : p.price;
+        return `<div class="fav-card" data-product-id="${esc(p.id)}">
+          <img src="${esc(img?.url||'https://placehold.co/140x186?text=Item')}" alt="${esc(p.name)}" onerror="this.src='https://placehold.co/140x186?text=Item'">
+          <div class="fav-card-body">
+            <div class="fav-card-name">${esc(p.name)}</div>
+            <div class="fav-card-price">${fmt(price)}</div>
+          </div>
+        </div>`;
+      }).join('');
+      container.innerHTML='';
+      container.appendChild(grid);
+
+      grid.querySelectorAll('.fav-card').forEach(card=>{
+        card.addEventListener('click',()=>openFavProductModal(card.dataset.productId));
+      });
+    }catch(e){
+      console.warn('loadFavourites error',e);
+      container.innerHTML='<div class="small">Error loading favourites.</div>';
+    }
+  }
+
+  // ─── FAV PRODUCT MODAL ───
+  async function openFavProductModal(productId){
+    if(!productId) return;
+    const overlay = document.getElementById('favProductModal');
+    const body = document.getElementById('fav-modal-body');
+    const mainImg = document.getElementById('fav-modal-main-img');
+    const thumbsEl = document.getElementById('fav-modal-thumbs');
+    body.innerHTML='<div class="small">Loading…</div>';
+    mainImg.src='';
+    thumbsEl.innerHTML='';
+    overlay.classList.add('active');
+
+    try{
+      const { data: p } = await sb.from('products').select('*').eq('id',productId).maybeSingle();
+      if(!p){ body.innerHTML='<div class="small">Product not found.</div>'; return; }
+      const { data: imgs } = await sb.from('product_images').select('id,url,image_order,alt_text').eq('product_id',productId).order('image_order');
+      const { data: variants } = await sb.from('product_variants').select('id,size,stock,price_override').eq('product_id',productId);
+      const { data: sellerRow } = p.seller_id ? await sb.from('sellers').select('shop_name,delivery_method,turnaround_time').eq('id',p.seller_id).maybeSingle() : { data:null };
+      const allImgs = (imgs||[]).sort((a,b)=>(a.image_order||0)-(b.image_order||0));
+      if(allImgs.length){
+        mainImg.src = allImgs[0].url;
+        mainImg.alt = allImgs[0].alt_text||p.name;
+        thumbsEl.innerHTML = allImgs.map((img,i)=>`<img class="product-modal-thumb${i===0?' active':''}" src="${esc(img.url)}" alt="${esc(img.alt_text||p.name)}" data-url="${esc(img.url)}">`).join('');
+        thumbsEl.querySelectorAll('.product-modal-thumb').forEach(th=>{
+          th.addEventListener('click',()=>{
+            thumbsEl.querySelectorAll('.product-modal-thumb').forEach(x=>x.classList.remove('active'));
+            th.classList.add('active');
+            mainImg.src=th.dataset.url;
+          });
+        });
       }
-    })();
 
-    // expose for debug
-    window._ssProfile = { loadProfile, loadOrders, openOrderModal };
+      const price = (p.on_sale && p.sale_price) ? p.sale_price : p.price;
+      const sizes = variants ? [...new Set(variants.filter(v=>v.stock>0).map(v=>v.size).filter(Boolean))] : [];
+      let selectedSize = sizes[0] || '';
+      let selectedQty = 1;
 
+      function renderBody(){
+        body.innerHTML=`
+          <h2 style="font-size:18px;color:var(--accent);margin-bottom:6px">${esc(p.name)}</h2>
+          ${sellerRow ? `<div class="muted" style="margin-bottom:8px">by ${esc(sellerRow.shop_name||'')}</div>` : ''}
+          <div style="font-size:20px;font-weight:800;color:var(--cta);margin-bottom:10px">${fmt(price)}</div>
+          ${sizes.length?`<div style="font-size:13px;font-weight:600;margin-bottom:4px">Size</div><div class="size-chips" id="fav-size-chips">${sizes.map(s=>`<button class="size-chip${s===selectedSize?' selected':''}" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div>`:''}
+          <div class="qty-row">
+            <span style="font-size:13px;font-weight:600">Qty</span>
+            <button class="qty-ctrl" id="fav-qty-minus">−</button>
+            <span id="fav-qty-display" style="min-width:24px;text-align:center;font-weight:700">${selectedQty}</span>
+            <button class="qty-ctrl" id="fav-qty-plus">+</button>
+          </div>
+          ${sellerRow&&sellerRow.delivery_method?`<div style="background:#f0f4ff;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:10px"><strong>🚚 ${esc(sellerRow.delivery_method)}</strong>${sellerRow.turnaround_time?' · '+esc(sellerRow.turnaround_time):''}</div>`:''}
+          ${p.description?`<div style="font-size:13px;color:#444;margin-bottom:10px">${esc(p.description)}</div>`:''}
+          <button class="add-cart-btn" id="fav-add-cart">Add to Cart</button>`;
+
+        body.querySelectorAll('.size-chip').forEach(chip=>{
+          chip.addEventListener('click',()=>{
+            selectedSize=chip.dataset.size;
+            body.querySelectorAll('.size-chip').forEach(c=>c.classList.remove('selected'));
+            chip.classList.add('selected');
+          });
+        });
+        body.querySelector('#fav-qty-minus')?.addEventListener('click',()=>{
+          if(selectedQty>1){ selectedQty--; body.querySelector('#fav-qty-display').textContent=selectedQty; }
+        });
+        body.querySelector('#fav-qty-plus')?.addEventListener('click',()=>{
+          selectedQty++; body.querySelector('#fav-qty-display').textContent=selectedQty;
+        });
+        body.querySelector('#fav-add-cart')?.addEventListener('click',()=>{
+          addToCart(p, selectedSize, selectedQty, imgs);
+          overlay.classList.remove('active');
+        });
+      }
+
+      renderBody();
+    }catch(e){
+      console.warn('openFavProductModal error',e);
+      body.innerHTML='<div class="small">Error loading product.</div>';
+    }
+  }
+
+  function addToCart(product, size, qty, imgs){
+    try{
+      const cart = JSON.parse(localStorage.getItem('ss_cart')||'[]');
+      const img = (imgs||[]).sort((a,b)=>(a.image_order||0)-(b.image_order||0))[0];
+      const price = (product.on_sale && product.sale_price) ? product.sale_price : product.price;
+      const existing = cart.find(i=>(i.product_id||i.id)===product.id && (i.size||'')===size);
+      if(existing){ existing.quantity = (existing.quantity||1) + qty; }
+      else { cart.push({ product_id:product.id, id:product.id, name:product.name, price, size, quantity:qty, image:img?.url||'', seller_name:'' }); }
+      localStorage.setItem('ss_cart', JSON.stringify(cart));
+      // Show mini toast
+      const t = document.createElement('div');
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;transition:opacity .2s';
+      t.textContent='Added to cart ✓';
+      document.body.appendChild(t);
+      requestAnimationFrame(()=>{ t.style.opacity='1'; setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),300); },2000); });
+    }catch(e){ console.warn('addToCart error',e); }
+  }
+
+  document.getElementById('favModalClose')?.addEventListener('click',()=>document.getElementById('favProductModal').classList.remove('active'));
+  document.getElementById('favProductModal')?.addEventListener('click',e=>{ if(e.target===document.getElementById('favProductModal')) document.getElementById('favProductModal').classList.remove('active'); });
+
+  // ─── SECURITY ───
+  document.getElementById('sendReset')?.addEventListener('click',async()=>{
+    const email=(document.getElementById('emailForReset').value||'').trim();
+    const status=document.getElementById('resetStatus');
+    if(!email){ showMsg(status,'Enter an email',false); return; }
+    const { error } = await sb.auth.resetPasswordForEmail(email,{ redirectTo: window.location.origin+'/' });
+    if(error) showMsg(status,error.message,false); else showMsg(status,'Reset link sent — check your email',true);
+  });
+
+  document.getElementById('deleteAccount')?.addEventListener('click',async()=>{
+    if(!confirm('Delete account? This is irreversible.')) return;
+    const user = await getUserOrRedirect(); if(!user) return;
+    await sb.from('profiles').delete().eq('user_id',user.id);
+    await sb.auth.signOut().catch(()=>{});
+    alert('Profile deleted.'); window.location.href='index.html';
+  });
+
+  document.getElementById('refreshBtn')?.addEventListener('click',async()=>{
+    favsLoaded=false;
+    await loadProfile();
+    await loadOrders();
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
+    if(activeTab==='favourites') await loadFavourites();
+  });
+
+  // ─── init ───
+  sb.auth.onAuthStateChange((event)=>{
+    if(event==='SIGNED_OUT') window.location.href='index.html';
+  });
+
+  (async function init(){
+    const { data } = await sb.auth.getSession();
+    if(!data?.session?.user){ window.location.href='index.html'; return; }
+    await loadProfile();
+    await loadOrders();
   })();
-  </script>
+
+})();
+</script>
 </body>
 </html>
