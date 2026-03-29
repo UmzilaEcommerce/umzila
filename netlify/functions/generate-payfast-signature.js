@@ -113,10 +113,15 @@ if (event.httpMethod !== 'POST') {
       // add additional keys here in the exact order you will submit them
     ];
 
-    // Helper for encoding: encodeURIComponent, replace %20 with +, make percent-hex uppercase
+    // Helper for encoding: matches PHP urlencode() which PayFast uses server-side to verify.
+    // encodeURIComponent intentionally leaves ! ' ( ) * ~ unencoded; PHP urlencode encodes them.
+    // Spaces become + (same as PHP urlencode). Percent-hex is uppercased throughout.
     function pfEncode(value) {
-      const encoded = encodeURIComponent(String(value)).replace(/%20/g, '+');
-      // Uppercase percent-encoding hex characters (PayFast requires upper case in examples)
+      const encoded = encodeURIComponent(String(value))
+        .replace(/%20/g, '+')
+        // Encode the chars that encodeURIComponent skips but PHP urlencode catches
+        .replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+      // Uppercase any remaining lowercase percent-hex sequences
       return encoded.replace(/%[0-9a-f]{2}/gi, match => match.toUpperCase());
     }
 
