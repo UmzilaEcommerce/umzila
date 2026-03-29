@@ -445,31 +445,8 @@
     // Show loading overlay before redirect
     document.getElementById('loadingOverlay').classList.add('visible');
 
-    // Build and submit PayFast Pay Now form directly
-    const form = document.createElement('form');
-    form.method = 'post';
-    form.action = 'https://payment.payfast.io/eng/process';
-
-    const fields = {
-      cmd:         '_paynow',
-      receiver:    '33055301',
-      amount:      '100.00',
-      item_name:   'umzila seller sign up',
-      return_url:  'https://umzila.store/checkout-success',
-      cancel_url:  'https://umzila.store/checkout-cancel',
-      notify_url:  'https://umzila.store/netlify/functions/payfast-itn'
-    };
-
-    Object.entries(fields).forEach(([name, value]) => {
-      const input = document.createElement('input');
-      input.type  = 'hidden';
-      input.name  = name;
-      input.value = value;
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
+    // Redirect to PayFast payment link
+    window.location.href = 'https://payf.st/wj6nc';
   }
 </script>
 </body>
