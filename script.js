@@ -2082,11 +2082,18 @@ function applyFilters(){
     if(f.category!=='All'){
       // Match exact category OR parent group (e.g. "Clothing" matches all sub-cats)
       const group = CATEGORIES.find(g => g.label === f.category);
+      const pCatLower = (p.category||'').toLowerCase().trim();
+      // normalize: strip trailing 's' so snack≈snacks, baked good≈baked goods, etc.
+      const norm = s => s.replace(/s$/i,'').trim();
       if(group){
-        // parent selected — match if product.category is the parent OR any sub
-        if(p.category !== f.category && !group.sub.includes(p.category)) return false;
+        // parent selected — match if product.category is the parent OR any sub (case-insensitive + singular/plural)
+        const groupLabelLower = group.label.toLowerCase();
+        const subLowers = group.sub.map(s => s.toLowerCase());
+        const subNorms  = subLowers.map(norm);
+        const pCatNorm  = norm(pCatLower);
+        if(pCatLower !== groupLabelLower && !subLowers.includes(pCatLower) && !subNorms.includes(pCatNorm)) return false;
       } else {
-        if(p.category!==f.category) return false;
+        if(pCatLower !== f.category.toLowerCase().trim() && norm(pCatLower) !== norm(f.category.toLowerCase().trim())) return false;
       }
     }
 

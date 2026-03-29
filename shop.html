@@ -208,6 +208,7 @@
 
     /* Back-to-home bar */
     .sh-back-bar {
+      position: sticky; top: 0; z-index: 100;
       background: #fff; border-bottom: 1px solid #eaecf0;
       padding: 8px 14px;
     }
@@ -895,12 +896,26 @@
     ───────────────────────────────────────── */
     var allProducts = [];
 
+    // Category aliases: maps display/filter value → array of DB values that should match
+    var CATEGORY_ALIASES = {
+      'food':   ['food','snack','snacks','Food','Snack','Snacks'],
+      'snacks': ['food','snack','snacks','Food','Snack','Snacks'],
+      'snack':  ['food','snack','snacks','Food','Snack','Snacks']
+    };
+
+    function catMatches(productCat, filterCat) {
+      if (!filterCat) return true;
+      var aliases = CATEGORY_ALIASES[filterCat.toLowerCase()];
+      if (aliases) return aliases.some(function(a) { return a.toLowerCase() === (productCat||'').toLowerCase(); });
+      return (productCat||'').toLowerCase() === filterCat.toLowerCase();
+    }
+
     function filterAndRender() {
       var q   = (document.getElementById('shSearch').value || '').trim().toLowerCase();
       var cat = document.getElementById('shCatSelect').value;
       var filtered = allProducts.filter(function(p) {
         var matchQ   = !q   || p.title.toLowerCase().includes(q) || (p.category||'').toLowerCase().includes(q);
-        var matchCat = !cat || p.category === cat;
+        var matchCat = catMatches(p.category, cat);
         return matchQ && matchCat;
       });
       var grid    = document.getElementById('shGrid');
