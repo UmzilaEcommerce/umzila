@@ -20,9 +20,10 @@ exports.handler = async function (event) {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
-  const SUPABASE_URL = process.env.SUPABASE_URL || '';
-  const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  const RESEND_KEY   = process.env.RESEND_API_KEY || '';
+  const SUPABASE_URL  = process.env.SUPABASE_URL || '';
+  const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const RESEND_KEY    = process.env.RESEND_API_KEY || '';
+  const SITE_BASE_URL = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     console.error('complete-seller-enrollment: missing env vars');
@@ -199,7 +200,7 @@ exports.handler = async function (event) {
           from: 'Umzila Sellers <sellers@umzila.store>',
           to: [email],
           subject: "You're officially an Umzila seller!",
-          html: buildWelcomeEmail(name, email, app.shop_name || '')
+          html: buildWelcomeEmail(name, email, app.shop_name || '', SITE_BASE_URL)
         })
       });
       if (!emailRes.ok) {
@@ -224,7 +225,8 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-function buildWelcomeEmail(name, email, shopName) {
+function buildWelcomeEmail(name, email, shopName, siteUrl) {
+  const site = siteUrl || '';
   const firstName = name.trim().split(/\s+/)[0] || name;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -270,7 +272,7 @@ function buildWelcomeEmail(name, email, shopName) {
     <p>Your payment was confirmed and your seller account for <strong>${esc(shopName || 'your shop')}</strong> is now fully activated. You are officially an Umzila seller — congratulations!</p>
 
     <div class="cta">
-      <a href="https://umzila.store/seller-dashboard.html" class="btn">Go to Seller Dashboard &rarr;</a>
+      <a href="${site}/seller-dashboard.html" class="btn">Go to Seller Dashboard &rarr;</a>
     </div>
 
     <div class="info-box">
@@ -282,7 +284,7 @@ function buildWelcomeEmail(name, email, shopName) {
     <div class="steps-box">
       <h3>Your next steps</h3>
       <ol>
-        <li>Log in to your <a href="https://umzila.store/seller-dashboard.html" style="color:#e65100;font-weight:600">Seller Dashboard</a> using your email and password above</li>
+        <li>Log in to your <a href="${site}/seller-dashboard.html" style="color:#e65100;font-weight:600">Seller Dashboard</a> using your email and password above</li>
         <li>Finish setting up your store — add a shop description, logo, and contact details</li>
         <li>Create your first product and start selling</li>
       </ol>
@@ -290,13 +292,13 @@ function buildWelcomeEmail(name, email, shopName) {
 
     <div class="note">
       <strong>How to log in next time:</strong><br>
-      Go to <a href="https://umzila.store" style="color:#0a2f66">umzila.store</a> &rarr; click <strong>About</strong> &rarr; select <strong>Sign In</strong> &rarr; enter your email and password &rarr; choose <strong>Seller Dashboard</strong> to get straight back in.
+      Go to <a href="${site}" style="color:#0a2f66">umzila.store</a> &rarr; click <strong>About</strong> &rarr; select <strong>Sign In</strong> &rarr; enter your email and password &rarr; choose <strong>Seller Dashboard</strong> to get straight back in.
     </div>
 
     <p style="font-size:14px;color:#888">If you have any questions or need help setting up, reply to this email or contact us at <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a>.</p>
   </div>
   <div class="ft">
-    <strong><a href="https://umzila.store">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${site}">Umzila</a></strong> &mdash; campus marketplace<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>

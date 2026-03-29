@@ -22,7 +22,7 @@ module.exports.handler = async function (event) {
   const SUPABASE_URL   = process.env.SUPABASE_URL || '';
   const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const RESEND_KEY     = process.env.RESEND_API_KEY || '';
-  const SITE_BASE_URL  = (process.env.SITE_BASE_URL || 'https://umzila.store').replace(/\/$/, '');
+  const SITE_BASE_URL  = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     console.error('approve-seller: missing env vars');
@@ -102,7 +102,7 @@ module.exports.handler = async function (event) {
           from: 'Umzila <noreply@umzila.store>',
           to: [app.email],
           subject: "You've been approved to sell on Umzila!",
-          html: buildApprovalEmail(applicantName, shopName.trim(), enrollmentLink)
+          html: buildApprovalEmail(applicantName, shopName.trim(), enrollmentLink, SITE_BASE_URL)
         })
       });
 
@@ -130,7 +130,8 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-function buildApprovalEmail(name, shopName, enrollmentLink) {
+function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl) {
+  const site = siteUrl || '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -185,7 +186,7 @@ function buildApprovalEmail(name, shopName, enrollmentLink) {
     <p class="note">If you did not apply to sell on Umzila, you can safely ignore this email.</p>
   </div>
   <div class="ft">
-    <strong><a href="https://umzila.store">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div>
