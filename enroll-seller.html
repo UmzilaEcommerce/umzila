@@ -429,9 +429,12 @@
 
     const btn = document.getElementById('btnPay');
     btn.disabled = true;
-    btn.textContent = 'Preparing payment…';
+    btn.textContent = 'Setting up your account…';
 
-    const password = document.getElementById('fieldPassword').value;
+    const password       = document.getElementById('fieldPassword').value;
+    const phone          = document.getElementById('fieldPhone').value.trim();
+    const deliveryMethod = document.getElementById('fieldDelivery').value;
+    const location       = document.getElementById('fieldLocation').value.trim();
 
     // Store enrollment data in sessionStorage — persists across PayFast redirect
     sessionStorage.setItem('seller_enrollment', JSON.stringify({
@@ -446,7 +449,15 @@
       const res = await fetch('/.netlify/functions/initiate-seller-enrollment', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: EMAIL, name: NAME, applicationId: APPLICATION_ID, total: 100 })
+        body:    JSON.stringify({
+          email:          EMAIL,
+          name:           NAME,
+          applicationId:  APPLICATION_ID,
+          password,
+          phone,
+          deliveryMethod,
+          location
+        })
       });
 
       if (!res.ok) {

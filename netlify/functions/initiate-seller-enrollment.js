@@ -1,8 +1,7 @@
 // netlify/functions/initiate-seller-enrollment.js
-// Creates a pending order row for seller enrollment, then generates and returns
-// an auto-submitting PayFast form. This mirrors how initiate-payfast.js works
-// for regular orders — the order row must exist BEFORE PayFast so that
-// payfast-itn.js can update it to 'paid' when the payment completes.
+// Creates the seller's auth user + profile + links the sellers row BEFORE payment,
+// then pre-creates a pending order row and returns an auto-submitting PayFast form.
+// This ensures payfast-itn.js only needs to UPDATE the order to 'paid' on completion.
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -39,31 +38,112 @@ exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); }
   catch (e) { return { statusCode: 400, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
 
-  const { email, name, applicationId } = body;
-  if (!email || !name || !applicationId) {
-    return { statusCode: 400, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'email, name, and applicationId are required' }) };
+  const { email, name, applicationId, password, phone, deliveryMethod, location } = body;
+  if (!email || !name || !applicationId || !password) {
+    return { statusCode: 400, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'email, name, applicationId, and password are required' }) };
   }
 
-  // Split name into first/last for PayFast fields
-  const nameParts  = name.trim().split(/\s+/);
-  const nameFirst  = nameParts[0] || name;
-  const nameLast   = nameParts.slice(1).join(' ') || '';
-
-  // Generate unique payment ID
-  const mPaymentId = `SELLER-${applicationId}-${Date.now()}`;
-
-  // Pre-create the order row so payfast-itn.js can update it on payment confirmation
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
+  // ── Step 1: Create Supabase auth user ──────────────────────────────────────
+  const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true
+  });
+
+  let userId = authData?.user?.id || null;
+
+  if (authErr) {
+    if (authErr.message && authErr.message.toLowerCase().includes('already registered')) {
+      console.warn('initiate-seller-enrollment: user already exists, fetching existing user');
+      const { data: { users }, error: listErr } = await admin.auth.admin.listUsers();
+      if (!listErr && users) {
+        const existing = users.find(u => u.email === email);
+        if (existing) userId = existing.id;
+      }
+    } else {
+      console.error('initiate-seller-enrollment: createUser error', authErr);
+      return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to create seller account: ' + authErr.message }) };
+    }
+  }
+
+  if (!userId) {
+    console.error('initiate-seller-enrollment: could not resolve user ID for', email);
+    return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Could not resolve seller account' }) };
+  }
+
+  console.log('initiate-seller-enrollment: auth user ready, userId =', userId);
+
+  // ── Step 2: Upsert profile with role='seller' ──────────────────────────────
+  const nameParts = name.trim().split(/\s+/);
+  const firstName = nameParts[0] || name;
+  const lastName  = nameParts.slice(1).join(' ') || '';
+
+  const { error: profileErr } = await admin.from('profiles').upsert(
+    {
+      user_id:    userId,
+      email,
+      first_name: firstName,
+      last_name:  lastName,
+      phone:      phone || null,
+      role:       'seller'
+    },
+    { onConflict: 'user_id' }
+  );
+
+  if (profileErr) {
+    console.error('initiate-seller-enrollment: profile upsert error', profileErr);
+    return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to create profile: ' + profileErr.message }) };
+  }
+
+  // ── Step 3: Fetch application + link sellers row ───────────────────────────
+  const { data: app } = await admin.from('seller_applications')
+    .select('id, shop_name, instagram, phone')
+    .eq('id', applicationId)
+    .maybeSingle();
+
+  if (app && app.shop_name) {
+    const { error: sellerErr } = await admin.from('sellers')
+      .update({
+        user_id:          userId,
+        email,
+        whatsapp_number:  phone || app.phone || null,
+        location:         location || null,
+        delivery_method:  deliveryMethod || null,
+        social_instagram: app.instagram || null,
+        status:           'pending_payment'
+      })
+      .eq('shop_name', app.shop_name)
+      .is('user_id', null);
+
+    if (sellerErr) {
+      console.error('initiate-seller-enrollment: sellers update error', sellerErr);
+      // Non-fatal — continue to create order and payment form
+    } else {
+      console.log('initiate-seller-enrollment: sellers row linked for shop_name', app.shop_name);
+    }
+  } else {
+    console.warn('initiate-seller-enrollment: no application or shop_name found for applicationId', applicationId);
+  }
+
+  // ── Step 4: Create pending order row ──────────────────────────────────────
+  // Split name into first/last for PayFast fields
+  const mPaymentId = `SELLER-${applicationId}-${Date.now()}`;
+
   const { error: orderErr } = await admin.from('orders').insert({
     m_payment_id:    mPaymentId,
+    user_id:         userId,
+    profile_id:      userId,
     customer_email:  email,
     customer_name:   name.trim(),
+    customer_phone:  phone || null,
     total:           100,
     order_status:    'pending_payment',
     payment_status:  'pending',
+    label:           'seller_enrollment',
     items:           [{ item_name: 'Umzila Seller Enrollment Fee', quantity: 1, unit_price: 100, total: 100 }]
   });
 
@@ -72,7 +152,7 @@ exports.handler = async function (event) {
     return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to create enrollment order: ' + orderErr.message }) };
   }
 
-  // Build PayFast data object — same field order as generate-payfast-signature.js
+  // ── Step 5: Build PayFast form ─────────────────────────────────────────────
   const pfHost    = SANDBOX ? 'sandbox.payfast.co.za' : 'www.payfast.co.za';
   const actionUrl = `https://${pfHost}/eng/process`;
 
@@ -82,10 +162,10 @@ exports.handler = async function (event) {
     return_url:           `${SITE_BASE_URL}/checkout-success.html`,
     cancel_url:           `${SITE_BASE_URL}/checkout-cancel.html`,
     notify_url:           `${SITE_BASE_URL}/.netlify/functions/payfast-itn`,
-    name_first:           nameFirst,
-    name_last:            nameLast,
+    name_first:           firstName,
+    name_last:            lastName,
     email_address:        email,
-    cell_number:          '',
+    cell_number:          phone || '',
     m_payment_id:         mPaymentId,
     amount:               (100).toFixed(2),
     item_name:            'Umzila Seller Enrollment',
@@ -114,7 +194,7 @@ exports.handler = async function (event) {
     return encoded.replace(/%[0-9a-f]{2}/gi, m => m.toUpperCase());
   }
 
-  // Include ALL fields so the signed string matches what the form submits exactly
+  // Include ALL fields in signature string (empty values as empty string, never skipped)
   let pfOutput = '';
   orderedKeys.forEach(key => {
     let val = data[key];

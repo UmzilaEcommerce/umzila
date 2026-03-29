@@ -1,8 +1,11 @@
 // netlify/functions/complete-seller-enrollment.js
 // Called by checkout-success.html after a successful seller enrollment payment.
-// Verifies the payment was confirmed by PayFast ITN (via orders table),
-// creates the seller's Supabase auth account, sets profile role to 'seller',
-// and activates the sellers row.
+// Auth user + profile + sellers row were already created by initiate-seller-enrollment.js
+// before payment. This function only needs to:
+//   1. Verify the order is marked paid (by payfast-itn.js)
+//   2. Activate the sellers row (status → 'active')
+//   3. Mark the seller_applications row as 'completed'
+//   4. Send the welcome email
 const { createClient } = require('@supabase/supabase-js');
 
 const headers = {
@@ -34,14 +37,13 @@ exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); }
   catch (e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
 
-  // Accept pf_payment_id (new static-link flow) or m_payment_id (old SELLER- flow)
-  const { pf_payment_id, m_payment_id, email, name, applicationId, password } = body;
+  const { pf_payment_id, m_payment_id, email, name, applicationId } = body;
 
-  if ((!pf_payment_id && !m_payment_id) || !email || !name || !applicationId || !password) {
+  if ((!pf_payment_id && !m_payment_id) || !email || !name || !applicationId) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ error: 'pf_payment_id (or m_payment_id), email, name, applicationId, and password are required' })
+      body: JSON.stringify({ error: 'pf_payment_id (or m_payment_id), email, name, and applicationId are required' })
     };
   }
 
@@ -49,9 +51,9 @@ exports.handler = async function (event) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  // 1. Verify payment — the ITN must have updated the order row to paid before we proceed.
-  //    Primary lookup: m_payment_id (SELLER- prefixed, created by initiate-seller-enrollment.js)
-  //    Fallback: pf_payment_id (in case PayFast also returns it)
+  // 1. Verify payment — order must be marked paid by payfast-itn.js before we proceed.
+  //    Primary lookup: m_payment_id (SELLER- prefixed, from initiate-seller-enrollment.js)
+  //    Fallback: pf_payment_id
   let order = null;
 
   if (m_payment_id) {
@@ -110,53 +112,36 @@ exports.handler = async function (event) {
     return { statusCode: 200, headers, body: JSON.stringify({ success: true, alreadyProcessed: true }) };
   }
 
-  // 3. Create Supabase auth user
-  const { data: authData, error: authErr } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true
-  });
-
-  if (authErr) {
-    if (authErr.message && authErr.message.toLowerCase().includes('already registered')) {
-      console.warn('complete-seller-enrollment: user already exists, continuing with existing user');
-    } else {
-      console.error('complete-seller-enrollment: createUser error', authErr);
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to create seller account: ' + authErr.message }) };
-    }
-  }
-
-  // Resolve the user ID — either newly created or fetch existing
-  let userId = authData && authData.user ? authData.user.id : null;
-
-  if (!userId) {
-    const { data: { users }, error: listErr } = await admin.auth.admin.listUsers();
-    if (!listErr && users) {
-      const existing = users.find(u => u.email === email);
-      if (existing) userId = existing.id;
-    }
-  }
-
-  if (!userId) {
-    console.error('complete-seller-enrollment: could not resolve user ID for', email);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Could not resolve seller account' }) };
-  }
-
-  // 4. Upsert profile with role = 'seller'
-  const nameParts = name.trim().split(/\s+/);
-  const firstName = nameParts[0] || name;
-  const lastName  = nameParts.slice(1).join(' ') || '';
-
-  const { error: profileErr } = await admin
+  // 3. Get the seller's user_id from profiles (created by initiate-seller-enrollment.js)
+  const { data: profileRow, error: profileQueryErr } = await admin
     .from('profiles')
-    .upsert(
-      { user_id: userId, email, first_name: firstName, last_name: lastName, role: 'seller' },
-      { onConflict: 'user_id' }
-    );
+    .select('user_id')
+    .eq('email', email)
+    .maybeSingle();
 
-  if (profileErr) {
-    console.error('complete-seller-enrollment: profile upsert error', profileErr);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update profile: ' + profileErr.message }) };
+  if (profileQueryErr) {
+    console.error('complete-seller-enrollment: profile query error', profileQueryErr);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to look up seller profile' }) };
+  }
+
+  const userId = profileRow?.user_id || null;
+
+  if (!userId) {
+    console.error('complete-seller-enrollment: no profile found for email', email);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Seller account not found. Please contact support.' }) };
+  }
+
+  // 4. Activate the sellers row
+  const { error: sellerUpdateErr } = await admin
+    .from('sellers')
+    .update({ status: 'active' })
+    .eq('user_id', userId);
+
+  if (sellerUpdateErr) {
+    console.error('complete-seller-enrollment: seller activate error', sellerUpdateErr);
+    // Non-fatal — continue
+  } else {
+    console.log('complete-seller-enrollment: sellers row activated for user_id', userId);
   }
 
   // 5. Mark application as completed
@@ -167,33 +152,10 @@ exports.handler = async function (event) {
 
   if (appUpdateErr) {
     console.error('complete-seller-enrollment: application update error', appUpdateErr);
-    // Non-fatal — continue to activate seller row
+    // Non-fatal — continue
   }
 
-  // 6. Find and activate the sellers row (created by approve-seller.js with user_id = null)
-  if (app.shop_name) {
-    const { data: sellerRow, error: sellerQueryErr } = await admin
-      .from('sellers')
-      .select('id')
-      .eq('shop_name', app.shop_name)
-      .is('user_id', null)
-      .maybeSingle();
-
-    if (!sellerQueryErr && sellerRow) {
-      const { error: sellerUpdateErr } = await admin
-        .from('sellers')
-        .update({ user_id: userId, email, status: 'active' })
-        .eq('id', sellerRow.id);
-
-      if (sellerUpdateErr) {
-        console.error('complete-seller-enrollment: seller update error', sellerUpdateErr);
-      }
-    } else {
-      console.warn('complete-seller-enrollment: no unlinked sellers row found for shop_name', app.shop_name);
-    }
-  }
-
-  // 7. Send welcome email via Resend (non-fatal)
+  // 6. Send welcome email via Resend (non-fatal)
   if (RESEND_KEY) {
     try {
       const emailRes = await fetch('https://api.resend.com/emails', {

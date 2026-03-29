@@ -133,7 +133,7 @@
         '<div><strong>Next:</strong> Setting up your seller account&hellip;</div>';
       document.querySelector('p').textContent = 'Please wait while we activate your seller account.';
 
-      if (!enrollData.email || !enrollData.password || !enrollData.applicationId) {
+      if (!enrollData.email || !enrollData.applicationId) {
         // sessionStorage lost (new tab / private browsing)
         document.querySelector('.order-details').innerHTML =
           '<div><strong>Payment ID:</strong> ' + displayId + '</div>' +
@@ -147,8 +147,7 @@
             const payload = {
               email:         enrollData.email,
               name:          enrollData.name || '',
-              applicationId: enrollData.applicationId,
-              password:      enrollData.password
+              applicationId: enrollData.applicationId
             };
             // New flow: pf_payment_id is the payment reference
             if (pfPaymentId) payload.pf_payment_id = pfPaymentId;
