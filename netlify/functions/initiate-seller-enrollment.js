@@ -95,21 +95,29 @@ exports.handler = async function (event) {
   const { data: existingProfile } = await admin.from('profiles')
     .select('id').eq('user_id', userId).maybeSingle();
 
+  let profileId = existingProfile?.id || null;
   let profileErr;
+
   if (existingProfile) {
     const { error } = await admin.from('profiles')
       .update({ email, first_name: firstName, last_name: lastName, phone: phone || null, role: 'seller' })
       .eq('user_id', userId);
     profileErr = error;
   } else {
-    const { error } = await admin.from('profiles').insert(profileData);
+    const { data: newProfile, error } = await admin.from('profiles')
+      .insert(profileData)
+      .select('id')
+      .single();
     profileErr = error;
+    if (newProfile) profileId = newProfile.id;
   }
 
   if (profileErr) {
     console.error('initiate-seller-enrollment: profile error', profileErr);
     return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to create profile: ' + profileErr.message }) };
   }
+
+  console.log('initiate-seller-enrollment: profile ready, profileId =', profileId);
 
   // ── Step 3: Fetch application + link sellers row ───────────────────────────
   const { data: app } = await admin.from('seller_applications')
@@ -148,7 +156,7 @@ exports.handler = async function (event) {
   const { error: orderErr } = await admin.from('orders').insert({
     m_payment_id:    mPaymentId,
     user_id:         userId,
-    profile_id:      userId,
+    profile_id:      profileId || undefined,
     customer_email:  email,
     customer_name:   name.trim(),
     customer_phone:  phone || null,
