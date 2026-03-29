@@ -423,13 +423,13 @@
   }
 
   // ── Pay handler ─────────────────────────────────────────────
-  function handlePay() {
+  async function handlePay() {
     clearError();
     if (!validate()) return;
 
     const btn = document.getElementById('btnPay');
     btn.disabled = true;
-    btn.textContent = 'Redirecting to PayFast…';
+    btn.textContent = 'Preparing payment…';
 
     const password = document.getElementById('fieldPassword').value;
 
@@ -442,11 +442,35 @@
       plan:          selectedPlan
     }));
 
-    // Show loading overlay before redirect
-    document.getElementById('loadingOverlay').classList.add('visible');
+    try {
+      const res = await fetch('/.netlify/functions/initiate-seller-enrollment', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: EMAIL, name: NAME, applicationId: APPLICATION_ID, total: 100 })
+      });
 
-    // Redirect to PayFast payment link
-    window.location.href = 'https://payf.st/wj6nc';
+      if (!res.ok) {
+        let errMsg = 'Failed to initiate payment.';
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      const html = await res.text();
+
+      // Show loading overlay before replacing the page
+      document.getElementById('loadingOverlay').classList.add('visible');
+
+      // Replace page with the auto-submitting PayFast form
+      document.open();
+      document.write(html);
+      document.close();
+
+    } catch (err) {
+      showError(err.message || 'Something went wrong. Please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Pay R100 & Activate Seller Account';
+      document.getElementById('loadingOverlay').classList.remove('visible');
+    }
   }
 </script>
 </body>

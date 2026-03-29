@@ -18,7 +18,8 @@
       "Bash(path=\"/c/Users/ntand/Downloads/umzila-remote/$f\")",
       "Bash(if grep:*)",
       "Bash(then)",
-      "Read(//c/Users/ntand/Downloads/umzila-remote/**)"
+      "Read(//c/Users/ntand/Downloads/umzila-remote/**)",
+      "Bash(find C:UsersntandDownloadsumzila-remote -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))"
     ]
   }
 }

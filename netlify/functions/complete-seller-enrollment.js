@@ -36,9 +36,8 @@ exports.handler = async function (event) {
 
   // Accept pf_payment_id (new static-link flow) or m_payment_id (old SELLER- flow)
   const { pf_payment_id, m_payment_id, email, name, applicationId, password } = body;
-  const paymentRef = pf_payment_id || m_payment_id;
 
-  if (!paymentRef || !email || !name || !applicationId || !password) {
+  if ((!pf_payment_id && !m_payment_id) || !email || !name || !applicationId || !password) {
     return {
       statusCode: 400,
       headers,
@@ -50,34 +49,41 @@ exports.handler = async function (event) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  // 1. Verify payment — look up by pf_payment_id first, then by m_payment_id
-  //    The ITN inserts a row with m_payment_id = pf_payment_id for static-link payments.
+  // 1. Verify payment — the ITN must have updated the order row to paid before we proceed.
+  //    Primary lookup: m_payment_id (SELLER- prefixed, created by initiate-seller-enrollment.js)
+  //    Fallback: pf_payment_id (in case PayFast also returns it)
   let order = null;
-  let orderErr = null;
 
-  if (pf_payment_id) {
-    ({ data: order, error: orderErr } = await admin
-      .from('orders')
-      .select('id, order_status, payment_status')
-      .or(`pf_payment_id.eq.${pf_payment_id},m_payment_id.eq.${pf_payment_id}`)
-      .or('payment_status.eq.paid,order_status.eq.paid')
-      .maybeSingle());
-  }
-
-  // Fallback: look up by m_payment_id (old SELLER- flow)
-  if (!order && m_payment_id) {
-    ({ data: order, error: orderErr } = await admin
+  if (m_payment_id) {
+    const { data, error } = await admin
       .from('orders')
       .select('id, order_status, payment_status')
       .eq('m_payment_id', m_payment_id)
-      .or('payment_status.eq.paid,order_status.eq.paid')
-      .maybeSingle());
+      .maybeSingle();
+    if (error) {
+      console.error('complete-seller-enrollment: m_payment_id query error', error);
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to verify payment' }) };
+    }
+    if (data && (data.order_status === 'paid' || data.payment_status === 'paid')) {
+      order = data;
+    }
   }
 
-  if (orderErr) {
-    console.error('complete-seller-enrollment: order query error', orderErr);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to verify payment' }) };
+  if (!order && pf_payment_id) {
+    const { data, error } = await admin
+      .from('orders')
+      .select('id, order_status, payment_status')
+      .eq('pf_payment_id', pf_payment_id)
+      .maybeSingle();
+    if (error) {
+      console.error('complete-seller-enrollment: pf_payment_id query error', error);
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to verify payment' }) };
+    }
+    if (data && (data.order_status === 'paid' || data.payment_status === 'paid')) {
+      order = data;
+    }
   }
+
   if (!order) {
     return {
       statusCode: 402,

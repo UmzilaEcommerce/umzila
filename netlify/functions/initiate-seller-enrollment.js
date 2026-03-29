@@ -108,16 +108,18 @@ exports.handler = async function (event) {
   ];
 
   function pfEncode(value) {
-    const encoded = encodeURIComponent(String(value)).replace(/%20/g, '+');
+    const encoded = encodeURIComponent(String(value))
+      .replace(/%20/g, '+')
+      .replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
     return encoded.replace(/%[0-9a-f]{2}/gi, m => m.toUpperCase());
   }
 
+  // Include ALL fields so the signed string matches what the form submits exactly
   let pfOutput = '';
   orderedKeys.forEach(key => {
-    const val = data[key];
-    if (val !== undefined && val !== null && String(val).trim() !== '') {
-      pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
-    }
+    let val = data[key];
+    if (val === undefined || val === null) val = '';
+    pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
   });
   if (pfOutput.endsWith('&')) pfOutput = pfOutput.slice(0, -1);
 
