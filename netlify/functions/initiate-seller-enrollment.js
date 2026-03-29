@@ -77,25 +77,37 @@ exports.handler = async function (event) {
 
   console.log('initiate-seller-enrollment: auth user ready, userId =', userId);
 
-  // ── Step 2: Upsert profile with role='seller' ──────────────────────────────
+  // ── Step 2: Create or update profile with role='seller' ───────────────────
   const nameParts = name.trim().split(/\s+/);
   const firstName = nameParts[0] || name;
   const lastName  = nameParts.slice(1).join(' ') || '';
 
-  const { error: profileErr } = await admin.from('profiles').upsert(
-    {
-      user_id:    userId,
-      email,
-      first_name: firstName,
-      last_name:  lastName,
-      phone:      phone || null,
-      role:       'seller'
-    },
-    { onConflict: 'user_id' }
-  );
+  const profileData = {
+    user_id:    userId,
+    email,
+    first_name: firstName,
+    last_name:  lastName,
+    phone:      phone || null,
+    role:       'seller'
+  };
+
+  // Check if profile already exists (partial index on user_id prevents standard upsert)
+  const { data: existingProfile } = await admin.from('profiles')
+    .select('id').eq('user_id', userId).maybeSingle();
+
+  let profileErr;
+  if (existingProfile) {
+    const { error } = await admin.from('profiles')
+      .update({ email, first_name: firstName, last_name: lastName, phone: phone || null, role: 'seller' })
+      .eq('user_id', userId);
+    profileErr = error;
+  } else {
+    const { error } = await admin.from('profiles').insert(profileData);
+    profileErr = error;
+  }
 
   if (profileErr) {
-    console.error('initiate-seller-enrollment: profile upsert error', profileErr);
+    console.error('initiate-seller-enrollment: profile error', profileErr);
     return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Failed to create profile: ' + profileErr.message }) };
   }
 
