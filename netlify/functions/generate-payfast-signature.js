@@ -125,13 +125,12 @@ if (event.httpMethod !== 'POST') {
       return encoded.replace(/%[0-9a-f]{2}/gi, match => match.toUpperCase());
     }
 
-    // Build canonical string from non-blank variables only (like PayFast PHP example)
+    // Build canonical string — include ALL fields so signature matches form exactly
     let pfOutput = '';
     orderedKeys.forEach(key => {
-      const val = data[key];
-      if (val !== undefined && val !== null && String(val).trim() !== '') {
-        pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
-      }
+      let val = data[key];
+      if (val === undefined || val === null) val = '';
+      pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
     });
 
     // remove trailing &

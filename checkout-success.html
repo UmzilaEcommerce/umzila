@@ -84,14 +84,25 @@
   <!-- Supabase for updating order notes with preferred delivery -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <script>
-    // Get order ID from URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const orderId = urlParams.get('m_payment_id');
-    if (orderId) {
-      document.getElementById('orderId').textContent = orderId;
+    const urlParams    = new URLSearchParams(window.location.search);
+    const mPaymentId   = urlParams.get('m_payment_id') || '';
+    const pfPaymentId  = urlParams.get('pf_payment_id') || '';
+    const displayId    = mPaymentId || pfPaymentId || 'N/A';
 
-      // Save buyer preferred delivery to order notes (non-seller payments only)
-      if (!orderId.startsWith('SELLER-')) {
+    document.getElementById('orderId').textContent = displayId;
+
+    // Read seller enrollment data saved in sessionStorage on enroll-seller.html
+    const enrollData = JSON.parse(sessionStorage.getItem('seller_enrollment') || '{}');
+
+    // Detect seller enrollment:
+    //   Old flow: m_payment_id starts with "SELLER-"
+    //   New flow: sessionStorage has enrollment data (static payf.st link)
+    const isSellerEnrollment = mPaymentId.startsWith('SELLER-') ||
+                               (enrollData.email && enrollData.applicationId && pfPaymentId);
+
+    if (!isSellerEnrollment) {
+      // ── Regular product order ──────────────────────────────────────
+      if (mPaymentId) {
         const preferredDelivery = localStorage.getItem('ss_preferred_delivery');
         if (preferredDelivery) {
           (async function() {
@@ -103,7 +114,7 @@
                 const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
                 if (url && key) {
                   const sb = supabase.createClient(url, key);
-                  await sb.from('orders').update({ notes: preferredDelivery }).eq('m_payment_id', orderId);
+                  await sb.from('orders').update({ notes: preferredDelivery }).eq('m_payment_id', mPaymentId);
                 }
               }
             } catch (_) {}
@@ -111,64 +122,67 @@
           })();
         }
       }
+      localStorage.removeItem('ss_cart');
 
-      localStorage.removeItem('ss_cart'); // Clear cart
-    }
-
-    // Seller enrollment: detect SELLER- payment and activate account
-    if (orderId && orderId.startsWith('SELLER-')) {
-      // Update UI to show enrollment-specific messaging
+    } else {
+      // ── Seller enrollment payment ─────────────────────────────────
       document.querySelector('h1').textContent = 'Payment Received!';
       document.querySelector('.order-details').innerHTML =
-        '<div><strong>Payment ID:</strong> ' + orderId + '</div>' +
+        '<div><strong>Payment ID:</strong> ' + displayId + '</div>' +
         '<div><strong>Status:</strong> <span style="color:#28a745;">Paid</span></div>' +
-        '<div><strong>Next:</strong> Setting up your seller account…</div>';
-      document.querySelector('p:last-of-type').textContent = 'Please wait while we activate your seller account.';
+        '<div><strong>Next:</strong> Setting up your seller account&hellip;</div>';
+      document.querySelector('p').textContent = 'Please wait while we activate your seller account.';
 
-      const enrollData = JSON.parse(sessionStorage.getItem('seller_enrollment') || '{}');
-
-      if (!enrollData.email || !enrollData.password) {
-        // sessionStorage was lost (e.g. opened in a new tab)
-        document.querySelector('h1').textContent = 'Payment Successful!';
+      if (!enrollData.email || !enrollData.password || !enrollData.applicationId) {
+        // sessionStorage lost (new tab / private browsing)
         document.querySelector('.order-details').innerHTML =
-          '<div><strong>Payment ID:</strong> ' + orderId + '</div>' +
+          '<div><strong>Payment ID:</strong> ' + displayId + '</div>' +
           '<div><strong>Status:</strong> <span style="color:#28a745;">Paid</span></div>' +
           '<div style="color:#dc3545;margin-top:8px;">Your payment was received but we could not complete account setup automatically. ' +
-          'Please contact <strong>support@umzila.store</strong> with your payment ID to activate your account.</div>';
+          'Please contact <strong>support@umzila.store</strong> quoting your Payment ID above.</div>';
       } else {
-        // Complete enrollment — retry up to 3 times to allow ITN to process first
+        // Complete enrollment — retry up to 5 times (ITN may still be in-flight)
         async function completeEnrollment(attempt) {
           try {
-            const res = await fetch('/.netlify/functions/complete-seller-enrollment', {
-              method: 'POST',
+            const payload = {
+              email:         enrollData.email,
+              name:          enrollData.name || '',
+              applicationId: enrollData.applicationId,
+              password:      enrollData.password
+            };
+            // New flow: pf_payment_id is the payment reference
+            if (pfPaymentId) payload.pf_payment_id = pfPaymentId;
+            // Old flow fallback
+            if (mPaymentId.startsWith('SELLER-')) payload.m_payment_id = mPaymentId;
+
+            const res  = await fetch('/.netlify/functions/complete-seller-enrollment', {
+              method:  'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                m_payment_id: orderId,
-                email:         enrollData.email,
-                name:          enrollData.name,
-                applicationId: enrollData.applicationId,
-                password:      enrollData.password
-              })
+              body:    JSON.stringify(payload)
             });
             const data = await res.json();
+
             if (data.success) {
               sessionStorage.removeItem('seller_enrollment');
+              localStorage.removeItem('ss_cart');
               window.location.href = '/seller-dashboard.html';
-            } else if (res.status === 402 && attempt < 3) {
-              // ITN may still be processing — wait and retry
-              setTimeout(() => completeEnrollment(attempt + 1), 3000);
+            } else if (res.status === 402 && attempt < 5) {
+              // ITN still processing — wait and retry
+              document.querySelector('.order-details').lastElementChild.textContent =
+                'Confirming payment… (attempt ' + attempt + ' of 5)';
+              setTimeout(() => completeEnrollment(attempt + 1), 4000);
             } else {
               document.querySelector('.order-details').innerHTML +=
                 '<div style="color:#dc3545;margin-top:8px;">Account setup failed: ' + (data.error || 'Unknown error') +
-                '. Please contact <strong>support@umzila.store</strong> with your payment ID.</div>';
+                '. Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
             }
           } catch (err) {
-            if (attempt < 3) {
-              setTimeout(() => completeEnrollment(attempt + 1), 3000);
+            if (attempt < 5) {
+              setTimeout(() => completeEnrollment(attempt + 1), 4000);
             } else {
               document.querySelector('.order-details').innerHTML +=
-                '<div style="color:#dc3545;margin-top:8px;">Account setup encountered an error. ' +
-                'Please contact <strong>support@umzila.store</strong> with your payment ID.</div>';
+                '<div style="color:#dc3545;margin-top:8px;">Account setup encountered a network error. ' +
+                'Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
             }
           }
         }
