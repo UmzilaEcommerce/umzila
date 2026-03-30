@@ -15,7 +15,7 @@ exports.handler = async function (event) {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
   const RESEND_KEY    = process.env.RESEND_API_KEY || '';
-  const SITE_BASE_URL = (process.env.SITE_BASE_URL || 'https://umzila.store').replace(/\/$/, '');
+  const SITE_BASE_URL = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
 
   if (!RESEND_KEY) {
     console.warn('send-referral-email: RESEND_API_KEY not set — skipping');

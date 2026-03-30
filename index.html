@@ -34,10 +34,10 @@
 
       <div class="header-right">
         <button class="mobile-search-icon" id="mobileSearchIcon" aria-label="Search">🔍</button>
-        <button class="btn ghost" id="signBtn">Sign In / Sign Up</button>
-        
-        <!-- ADDED FROM FILE 2: Profile button & order badge -->
-        <button id="profileBtnHeader" class="btn ghost" style="display:none;margin-left:6px">Profile</button>
+        <button class="btn ghost icon-only" id="signBtn" aria-label="Sign In / Sign Up">👤</button>
+
+        <!-- Profile button & order badge -->
+        <button id="profileBtnHeader" class="btn ghost icon-only" style="display:none" aria-label="Profile">👤</button>
         <span id="orderUpdatesBadge" style="display:none;background:#ff6b2c;color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
 
         <!-- Cart button - NOW REDIRECTS DIRECTLY TO CHECKOUT -->
@@ -158,8 +158,6 @@
 
     <!-- MAIN -->
     <main id="mainContent">
-      <div class="breadcrumb">Home › Streetwear</div>
-
       <!-- HERO — clean clickable images, no text overlay -->
       <div class="hero fade-up" id="hero">
         <div class="slides" id="slides">
@@ -216,7 +214,7 @@
           <h2 style="margin:0">🧑‍🎨 Featured Shops</h2>
           <button id="seeAllShopsBtn" style="background:none;border:1px solid var(--accent-2);color:var(--accent-2);font-size:12px;font-weight:700;cursor:pointer;padding:4px 12px;border-radius:999px;white-space:nowrap;flex-shrink:0">All Shops →</button>
         </div>
-        <div class="shops-hscroll" id="shopsScroll"></div>
+        <div class="shops-top3" id="shopsScroll"></div>
       </section>
 
       <!-- MOBILE FILTERS SECTION -->
@@ -276,18 +274,15 @@
         </div>
       </div>
 
-      <!-- Filter summary and sort bar -->
-      <div style="display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap">
-        <div id="activeFilters" style="font-size:14px;color:var(--muted)">Showing <strong id="resultCount">0</strong> items</div>
-        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-          <label style="font-size:13px;color:var(--muted)">Sort</label>
-          <select id="topSort" class="size-select">
-            <option value="popular">Popularity</option>
-            <option value="new">Newest</option>
-            <option value="price-asc">Price: Low → High</option>
-            <option value="price-desc">Price: High → Low</option>
-          </select>
-        </div>
+      <!-- Filter summary and sort bar — hidden, kept for script.js compatibility -->
+      <div style="display:none">
+        <div id="activeFilters">Showing <strong id="resultCount">0</strong> items</div>
+        <select id="topSort">
+          <option value="popular">Popularity</option>
+          <option value="new">Newest</option>
+          <option value="price-asc">Price: Low → High</option>
+          <option value="price-desc">Price: High → Low</option>
+        </select>
       </div>
 
       <!-- FILTERED / SEARCH RESULTS VIEW -->
@@ -667,10 +662,7 @@
   <!-- Mystery Gift Popup -->
 <div id="mysteryModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:420px;text-align:center">
-    <div class="modal-header" style="border-bottom:none;padding-bottom:0;justify-content:flex-end">
-      <button class="modal-close" id="mysteryClose">&times;</button>
-    </div>
-    <div class="modal-body" style="padding-top:4px">
+    <div class="modal-body" style="padding-top:24px">
       <div style="font-size:40px;margin-bottom:10px">🎁</div>
       <h2 style="color:#0a2f66;margin:0 0 10px;font-size:22px">Mystery Gift Inside</h2>
       <p style="color:#555;font-size:15px;line-height:1.6;margin-bottom:18px">
@@ -793,7 +785,11 @@
         <h3>All Shops</h3>
         <button class="modal-close" id="allShopsModalClose">&times;</button>
       </div>
-      <div class="modal-body" id="allShopsModalBody" style="max-height:65vh;overflow-y:auto;padding:0">
+      <div style="padding:12px 16px 4px">
+        <input id="allShopsSearch" type="text" placeholder="Search shops..." aria-label="Search shops"
+          style="width:100%;padding:9px 14px;border:1px solid #e0e0e8;border-radius:999px;font-size:14px;outline:none;box-sizing:border-box">
+      </div>
+      <div class="modal-body" id="allShopsModalBody" style="max-height:60vh;overflow-y:auto;padding:0">
         <div style="color:var(--muted);text-align:center;padding:30px">Loading shops...</div>
       </div>
     </div>
@@ -823,7 +819,11 @@
             if (catList) {
               catList.querySelectorAll('li').forEach(function(li){ li.classList.remove('active'); });
               var match = catList.querySelector('li[data-cat="' + filterCat + '"]');
-              if (match) match.classList.add('active');
+              if (match) {
+                match.classList.add('active');
+                var pg = match.closest('.sidebar-cat-group');
+                if (pg) pg.classList.add('open');
+              }
             }
             if (typeof applyFilters === 'function') applyFilters();
           }
@@ -883,7 +883,7 @@
         window._allSellers = sellers;
         window._sellerCountMap = countMap;
 
-        var top3 = sellers.slice(0, 6);
+        var top3 = sellers.slice(0, 3);
         var scroll = document.getElementById('shopsScroll');
         scroll.innerHTML = top3.map(function(s) {
           var cnt      = countMap[s.id] || 0;
@@ -903,32 +903,48 @@
 
     /* ── All Shops modal ── */
     var allShopsModal = document.getElementById('allShopsModal');
-    document.getElementById('seeAllShopsBtn').addEventListener('click', function() {
+    var allShopsSearch = document.getElementById('allShopsSearch');
+
+    function buildShopRow(s, countMap) {
+      var cnt      = countMap[s.id] || 0;
+      var initials = (s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
+      var logoInner = s.logo_url
+        ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+        : '<span style="font-weight:800;font-size:16px;color:#fff">' + initials + '</span>';
+      return '<a href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f5;text-decoration:none;color:inherit;transition:background 0.12s" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">' +
+        '<div style="width:46px;height:46px;border-radius:50%;background:var(--accent);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid #eaecf0">' + logoInner + '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-weight:700;font-size:14px">' + (s.shop_name || '') + '</div>' +
+          '<div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (s.description || 'Umzila seller') + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--muted);flex-shrink:0">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
+        '<div style="font-size:13px;color:var(--accent-2);font-weight:700;flex-shrink:0;padding-left:8px">→</div>' +
+      '</a>';
+    }
+
+    function renderAllShops(query) {
       var sellers = window._allSellers || [];
       var countMap = window._sellerCountMap || {};
       var bodyEl = document.getElementById('allShopsModalBody');
-      if (!sellers.length) {
-        bodyEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px">No shops yet.</div>';
+      var filtered = query
+        ? sellers.filter(function(s){ return (s.shop_name||'').toLowerCase().includes(query.toLowerCase()) || (s.description||'').toLowerCase().includes(query.toLowerCase()); })
+        : sellers;
+      if (!filtered.length) {
+        bodyEl.innerHTML = '<div style="color:var(--muted);text-align:center;padding:30px">' + (sellers.length ? 'No shops match your search.' : 'No shops yet.') + '</div>';
       } else {
-        bodyEl.innerHTML = sellers.map(function(s) {
-          var cnt      = countMap[s.id] || 0;
-          var initials = (s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
-          var logoInner = s.logo_url
-            ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
-            : '<span style="font-weight:800;font-size:16px;color:#fff">' + initials + '</span>';
-          return '<a href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f5;text-decoration:none;color:inherit;transition:background 0.12s" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">' +
-            '<div style="width:46px;height:46px;border-radius:50%;background:var(--accent);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid #eaecf0">' + logoInner + '</div>' +
-            '<div style="flex:1;min-width:0">' +
-              '<div style="font-weight:700;font-size:14px">' + (s.shop_name || '') + '</div>' +
-              '<div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (s.description || 'Umzila seller') + '</div>' +
-            '</div>' +
-            '<div style="font-size:12px;color:var(--muted);flex-shrink:0">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
-            '<div style="font-size:13px;color:var(--accent-2);font-weight:700;flex-shrink:0;padding-left:8px">→</div>' +
-          '</a>';
-        }).join('');
+        bodyEl.innerHTML = filtered.map(function(s){ return buildShopRow(s, countMap); }).join('');
       }
+    }
+
+    document.getElementById('seeAllShopsBtn').addEventListener('click', function() {
+      if (allShopsSearch) allShopsSearch.value = '';
+      renderAllShops('');
       allShopsModal.classList.add('open');
+      if (allShopsSearch) setTimeout(function(){ allShopsSearch.focus(); }, 120);
     });
+    if (allShopsSearch) {
+      allShopsSearch.addEventListener('input', function() { renderAllShops(this.value); });
+    }
     document.getElementById('allShopsModalClose').addEventListener('click', function() {
       allShopsModal.classList.remove('open');
     });
@@ -1182,7 +1198,6 @@
   (function() {
     if (localStorage.getItem('um_mystery_seen')) return;
     var modal      = document.getElementById('mysteryModal');
-    var closeBtn   = document.getElementById('mysteryClose');
     var claimBtn   = document.getElementById('mysteryClaimBtn');
     var declineBtn = document.getElementById('mysteryDeclineBtn');
     var emailForm  = document.getElementById('mysteryEmailForm');
@@ -1197,7 +1212,6 @@
     function closeMystery() { localStorage.setItem('um_mystery_seen','1'); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
 
     setTimeout(openMystery, 3000);
-    closeBtn.addEventListener('click', closeMystery);
     declineBtn.addEventListener('click', closeMystery);
     modal.addEventListener('click', function(e){ if (e.target===modal) closeMystery(); });
 

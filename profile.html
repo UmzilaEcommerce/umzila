@@ -6,6 +6,7 @@
   <link rel="icon" href="umzila.webp" type="image/webp">
   <title>Your Profile — Umzila.Store</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link rel="stylesheet" href="style.css">
 
   <style>
     :root{--bg:#f7f7f9;--card:#fff;--muted:#6b6b74;--accent:#0a2f66;--cta:#ff6b2c;--shadow:0 6px 18px rgba(11,13,20,0.08);}
@@ -257,16 +258,12 @@
     </div>
   </div>
 
-  <!-- Product modal overlay (for favourites) -->
+  <!-- Product modal overlay (for favourites) — same structure as index.html -->
   <div id="favProductModal" class="product-modal-overlay" role="dialog" aria-modal="true">
-    <div class="product-modal" style="position:relative">
-      <button class="product-modal-close" id="favModalClose">✕</button>
-      <div class="product-modal-inner">
-        <div class="product-modal-gallery">
-          <img id="fav-modal-main-img" class="product-modal-main-image" src="" alt="">
-          <div id="fav-modal-thumbs" class="product-modal-thumbs"></div>
-        </div>
-        <div class="product-modal-body" id="fav-modal-body"></div>
+    <div class="product-modal">
+      <div class="product-modal-close" id="favModalClose">&times;</div>
+      <div class="product-modal-content" id="favModalContent">
+        <!-- populated by openFavProductModal -->
       </div>
     </div>
   </div>
@@ -763,101 +760,135 @@
     }
   }
 
-  // ─── FAV PRODUCT MODAL ───
+  // ─── FAV PRODUCT MODAL (same structure as index.html product modal) ───
   async function openFavProductModal(productId){
     if(!productId) return;
     const overlay = document.getElementById('favProductModal');
-    const body = document.getElementById('fav-modal-body');
-    const mainImg = document.getElementById('fav-modal-main-img');
-    const thumbsEl = document.getElementById('fav-modal-thumbs');
-    body.innerHTML='<div class="small">Loading…</div>';
-    mainImg.src='';
-    thumbsEl.innerHTML='';
+    const content = document.getElementById('favModalContent');
+    content.innerHTML='<div style="padding:40px;text-align:center;color:#888">Loading…</div>';
     overlay.classList.add('active');
 
     try{
-      const { data: p } = await sb.from('products').select('*').eq('id',productId).maybeSingle();
-      if(!p){ body.innerHTML='<div class="small">Product not found.</div>'; return; }
-      const { data: imgs } = await sb.from('product_images').select('id,url,image_order,alt_text').eq('product_id',productId).order('image_order');
-      const { data: variants } = await sb.from('product_variants').select('id,size,stock,price_override').eq('product_id',productId);
+      const [{ data: p }, { data: imgs }, { data: variants }] = await Promise.all([
+        sb.from('products').select('*').eq('id',productId).maybeSingle(),
+        sb.from('product_images').select('id,url,image_order,alt_text').eq('product_id',productId).order('image_order'),
+        sb.from('product_variants').select('id,size,stock,price_override').eq('product_id',productId)
+      ]);
+      if(!p){ content.innerHTML='<div style="padding:40px;text-align:center;color:#888">Product not found.</div>'; return; }
       const { data: sellerRow } = p.seller_id ? await sb.from('sellers').select('shop_name,delivery_method,turnaround_time').eq('id',p.seller_id).maybeSingle() : { data:null };
-      const allImgs = (imgs||[]).sort((a,b)=>(a.image_order||0)-(b.image_order||0));
-      if(allImgs.length){
-        mainImg.src = allImgs[0].url;
-        mainImg.alt = allImgs[0].alt_text||p.name;
-        thumbsEl.innerHTML = allImgs.map((img,i)=>`<img class="product-modal-thumb${i===0?' active':''}" src="${esc(img.url)}" alt="${esc(img.alt_text||p.name)}" data-url="${esc(img.url)}">`).join('');
-        thumbsEl.querySelectorAll('.product-modal-thumb').forEach(th=>{
-          th.addEventListener('click',()=>{
-            thumbsEl.querySelectorAll('.product-modal-thumb').forEach(x=>x.classList.remove('active'));
-            th.classList.add('active');
-            mainImg.src=th.dataset.url;
-          });
-        });
-      }
 
-      const price = (p.on_sale && p.sale_price) ? p.sale_price : p.price;
-      const sizes = variants ? [...new Set(variants.filter(v=>v.stock>0).map(v=>v.size).filter(Boolean))] : [];
-      let selectedSize = sizes[0] || '';
+      const allImgs = (imgs||[]).sort((a,b)=>(a.image_order||0)-(b.image_order||0));
+      const isOnSale = p.sale && p.sale_price;
+      const displayPrice = isOnSale ? p.sale_price : p.price;
+      const sizes = (variants||[]).filter(v=>v.stock>0).map(v=>v.size).filter(Boolean);
+      const uniqueSizes = [...new Set(sizes)];
+      let selectedSize = uniqueSizes[0] || '';
       let selectedQty = 1;
 
-      function renderBody(){
-        body.innerHTML=`
-          <h2 style="font-size:18px;color:var(--accent);margin-bottom:6px">${esc(p.name)}</h2>
-          ${sellerRow ? `<div class="muted" style="margin-bottom:8px">by ${esc(sellerRow.shop_name||'')}</div>` : ''}
-          <div style="font-size:20px;font-weight:800;color:var(--cta);margin-bottom:10px">${fmt(price)}</div>
-          ${sizes.length?`<div style="font-size:13px;font-weight:600;margin-bottom:4px">Size</div><div class="size-chips" id="fav-size-chips">${sizes.map(s=>`<button class="size-chip${s===selectedSize?' selected':''}" data-size="${esc(s)}">${esc(s)}</button>`).join('')}</div>`:''}
-          <div class="qty-row">
-            <span style="font-size:13px;font-weight:600">Qty</span>
-            <button class="qty-ctrl" id="fav-qty-minus">−</button>
-            <span id="fav-qty-display" style="min-width:24px;text-align:center;font-weight:700">${selectedQty}</span>
-            <button class="qty-ctrl" id="fav-qty-plus">+</button>
+      const thumbnailsHTML = allImgs.map((img,i)=>`
+        <div class="product-thumbnail${i===0?' active':''}" data-image="${esc(img.url)}">
+          <img src="${esc(img.url)}" alt="${esc(img.alt_text||p.name)}" loading="lazy">
+        </div>`).join('');
+
+      const sizeOptionsHTML = uniqueSizes.map(s=>`<div class="size-option${s===selectedSize?' selected':''}" data-size="${esc(s)}">${esc(s)}</div>`).join('');
+
+      const words = (p.description||'').split(' ');
+      const shortDesc = words.slice(0,10).join(' ') + (words.length>10?'...':'');
+      const hasLong = words.length > 10;
+
+      content.innerHTML=`
+        <div class="product-modal-images">
+          <div class="product-modal-main-image" id="fav-main-wrap">
+            <img src="${esc(allImgs[0]?.url||'')}" alt="${esc(p.name)}" id="fav-main-img" loading="lazy">
           </div>
-          ${sellerRow&&sellerRow.delivery_method?`<div style="background:#f0f4ff;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:10px"><strong>🚚 ${esc(sellerRow.delivery_method)}</strong>${sellerRow.turnaround_time?' · '+esc(sellerRow.turnaround_time):''}</div>`:''}
-          ${p.description?`<div style="font-size:13px;color:#444;margin-bottom:10px">${esc(p.description)}</div>`:''}
-          <button class="add-cart-btn" id="fav-add-cart">Add to Cart</button>`;
+          <div class="product-modal-thumbnails">${thumbnailsHTML}</div>
+        </div>
+        <div class="product-modal-details">
+          <h1 class="product-modal-title">${esc(p.name)}</h1>
+          ${sellerRow?`
+          <div class="product-modal-seller" style="display:flex;flex-direction:column;gap:6px;margin:6px 0 10px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style="font-size:13px;color:#6b7280">Sold by</span>
+              <a href="shop.html?shop=${encodeURIComponent(sellerRow.shop_name||'')}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none">${esc(sellerRow.shop_name||'')} ↗</a>
+            </div>
+            ${(sellerRow.delivery_method||sellerRow.turnaround_time)?`<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px">🚚 <span><strong>Delivery:</strong> ${esc(sellerRow.delivery_method||'')}${sellerRow.turnaround_time?' · '+esc(sellerRow.turnaround_time):''}</span></div>`:''}
+          </div>`:''}
+          <div class="product-modal-price">
+            R${Number(displayPrice).toFixed(2)}
+            ${isOnSale?`<span class="product-modal-original-price">R${Number(p.price).toFixed(2)}</span>`:''}
+          </div>
+          ${uniqueSizes.length?`
+          <div class="product-modal-sizes">
+            <h3>Size</h3>
+            <div class="size-options" id="fav-size-opts">${sizeOptionsHTML}</div>
+          </div>`:''}
+          <div class="product-modal-quantity">
+            <h3>Quantity</h3>
+            <div class="quantity-selector">
+              <button class="quantity-btn" id="fav-qty-minus">-</button>
+              <span class="quantity-value" id="fav-qty-val">1</span>
+              <button class="quantity-btn" id="fav-qty-plus">+</button>
+            </div>
+          </div>
+          <button class="product-modal-add-to-cart" id="fav-add-cart">Add to Cart</button>
+          ${p.description?`
+          <div class="product-modal-description">
+            <h3>Description</h3>
+            <div id="fav-desc-text">${hasLong?esc(shortDesc):esc(p.description)}</div>
+            ${hasLong?`<button class="see-more-btn" id="fav-see-more">See More</button>`:''}
+          </div>`:''}
+        </div>`;
 
-        body.querySelectorAll('.size-chip').forEach(chip=>{
-          chip.addEventListener('click',()=>{
-            selectedSize=chip.dataset.size;
-            body.querySelectorAll('.size-chip').forEach(c=>c.classList.remove('selected'));
-            chip.classList.add('selected');
-          });
+      // thumbnail click
+      content.querySelectorAll('.product-thumbnail').forEach(th=>{
+        th.addEventListener('click',()=>{
+          content.querySelectorAll('.product-thumbnail').forEach(x=>x.classList.remove('active'));
+          th.classList.add('active');
+          document.getElementById('fav-main-wrap').innerHTML=`<img src="${th.dataset.image}" alt="${esc(p.name)}" id="fav-main-img" loading="lazy">`;
         });
-        body.querySelector('#fav-qty-minus')?.addEventListener('click',()=>{
-          if(selectedQty>1){ selectedQty--; body.querySelector('#fav-qty-display').textContent=selectedQty; }
+      });
+      // size click
+      content.querySelectorAll('.size-option').forEach(opt=>{
+        opt.addEventListener('click',()=>{
+          content.querySelectorAll('.size-option').forEach(o=>o.classList.remove('selected'));
+          opt.classList.add('selected');
+          selectedSize=opt.dataset.size;
         });
-        body.querySelector('#fav-qty-plus')?.addEventListener('click',()=>{
-          selectedQty++; body.querySelector('#fav-qty-display').textContent=selectedQty;
-        });
-        body.querySelector('#fav-add-cart')?.addEventListener('click',()=>{
-          addToCart(p, selectedSize, selectedQty, imgs);
+      });
+      // qty
+      document.getElementById('fav-qty-minus')?.addEventListener('click',()=>{
+        if(selectedQty>1){ selectedQty--; document.getElementById('fav-qty-val').textContent=selectedQty; }
+      });
+      document.getElementById('fav-qty-plus')?.addEventListener('click',()=>{
+        selectedQty++; document.getElementById('fav-qty-val').textContent=selectedQty;
+      });
+      // add to cart
+      document.getElementById('fav-add-cart')?.addEventListener('click',()=>{
+        try{
+          const cart=JSON.parse(localStorage.getItem('ss_cart')||'[]');
+          const price=isOnSale?p.sale_price:p.price;
+          const existing=cart.find(i=>(i.product_id||i.id)==p.id&&(i.size||'')==selectedSize);
+          if(existing){ existing.quantity=(existing.quantity||1)+selectedQty; }
+          else{ cart.push({product_id:p.id,id:p.id,name:p.name,price,size:selectedSize,quantity:selectedQty,image:allImgs[0]?.url||'',seller_name:sellerRow?.shop_name||''}); }
+          localStorage.setItem('ss_cart',JSON.stringify(cart));
           overlay.classList.remove('active');
-        });
-      }
-
-      renderBody();
+          const t=document.createElement('div');
+          t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;transition:opacity .2s';
+          t.textContent='Added to cart ✓';
+          document.body.appendChild(t);
+          requestAnimationFrame(()=>{ t.style.opacity='1'; setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),300); },2000); });
+        }catch(e){ console.warn('addToCart error',e); }
+      });
+      // see more
+      document.getElementById('fav-see-more')?.addEventListener('click',function(){
+        const el=document.getElementById('fav-desc-text');
+        if(this.textContent==='See More'){ el.textContent=p.description; this.textContent='See Less'; }
+        else{ el.textContent=shortDesc; this.textContent='See More'; }
+      });
     }catch(e){
       console.warn('openFavProductModal error',e);
-      body.innerHTML='<div class="small">Error loading product.</div>';
+      content.innerHTML='<div style="padding:40px;text-align:center;color:#c0392b">Error loading product.</div>';
     }
-  }
-
-  function addToCart(product, size, qty, imgs){
-    try{
-      const cart = JSON.parse(localStorage.getItem('ss_cart')||'[]');
-      const img = (imgs||[]).sort((a,b)=>(a.image_order||0)-(b.image_order||0))[0];
-      const price = (product.on_sale && product.sale_price) ? product.sale_price : product.price;
-      const existing = cart.find(i=>(i.product_id||i.id)===product.id && (i.size||'')===size);
-      if(existing){ existing.quantity = (existing.quantity||1) + qty; }
-      else { cart.push({ product_id:product.id, id:product.id, name:product.name, price, size, quantity:qty, image:img?.url||'', seller_name:'' }); }
-      localStorage.setItem('ss_cart', JSON.stringify(cart));
-      // Show mini toast
-      const t = document.createElement('div');
-      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;transition:opacity .2s';
-      t.textContent='Added to cart ✓';
-      document.body.appendChild(t);
-      requestAnimationFrame(()=>{ t.style.opacity='1'; setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),300); },2000); });
-    }catch(e){ console.warn('addToCart error',e); }
   }
 
   document.getElementById('favModalClose')?.addEventListener('click',()=>document.getElementById('favProductModal').classList.remove('active'));

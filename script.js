@@ -3470,69 +3470,110 @@ async function loadFilterOptions() {
     filterOptions.categories = ALL_CAT_VALUES;
 
     if (catList) {
-      catList.innerHTML = '<li data-cat="All" class="active">All</li>';
+      catList.innerHTML = '<li data-cat="All" class="active" style="padding:10px 6px;font-weight:700;cursor:pointer;border-bottom:1px solid #f0f0f5">All Products</li>';
 
+      // "All" item click
+      catList.querySelector('li[data-cat="All"]').addEventListener('click', () => {
+        Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
+        catList.querySelector('li[data-cat="All"]').classList.add('active');
+        state.filters.category = 'All';
+        applyFilters();
+      });
+
+      // Helper: deactivate all data-cat items, mark active, and open parent group if needed
+      function setActiveCat(catValue) {
+        Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
+        const target = catList.querySelector(`li[data-cat="${CSS.escape(catValue)}"]`);
+        if (target) {
+          target.classList.add('active');
+          // Expand the accordion group that contains this item
+          const parentGroup = target.closest('.sidebar-cat-group');
+          if (parentGroup) parentGroup.classList.add('open');
+        }
+      }
+
+      // Build accordion groups (desktop) — mobile uses mobileCatAccordion separately
       CATEGORIES.forEach(group => {
-        // Group label (non-clickable divider)
-        const divider = document.createElement('li');
-        divider.className = 'cat-group-label';
-        divider.textContent = group.label;
-        divider.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 2px;cursor:default;pointer-events:none';
-        catList.appendChild(divider);
+        const emoji = CATEGORY_EMOJIS[group.label] || '';
+        const groupLi = document.createElement('li');
+        groupLi.className = 'sidebar-cat-group';
 
-        // Parent category
-        const parent = document.createElement('li');
-        parent.dataset.cat = group.label;
-        parent.className = 'cat-parent';
-        parent.textContent = group.label;
-        parent.addEventListener('click', () => {
-          Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
-          parent.classList.add('active');
+        const header = document.createElement('div');
+        header.className = 'sidebar-cat-group-header';
+        header.innerHTML = `<span>${emoji} ${group.label}</span><span class="sidebar-arrow">▼</span>`;
+
+        const subUl = document.createElement('ul');
+        subUl.className = 'sidebar-cat-sub-list';
+
+        // "All <Group>" item
+        const parentLi = document.createElement('li');
+        parentLi.dataset.cat = group.label;
+        parentLi.className = 'sidebar-cat-parent';
+        parentLi.textContent = `All ${group.label}`;
+        parentLi.addEventListener('click', e => {
+          e.stopPropagation();
+          setActiveCat(group.label);
           state.filters.category = group.label;
           trackEvent('category_view', { category: group.label });
           updateUserPreferences(group.label);
           applyFilters();
         });
-        catList.appendChild(parent);
+        subUl.appendChild(parentLi);
 
         // Sub-categories
         group.sub.forEach(sub => {
           const li = document.createElement('li');
           li.dataset.cat = sub;
-          li.className = 'cat-sub';
+          li.className = 'sidebar-cat-sub';
           li.textContent = sub;
-          li.style.paddingLeft = '14px';
-          li.style.fontSize = '13px';
-          li.addEventListener('click', () => {
-            Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
-            li.classList.add('active');
+          li.addEventListener('click', e => {
+            e.stopPropagation();
+            setActiveCat(sub);
             state.filters.category = sub;
             trackEvent('category_view', { category: group.label, subcategory: sub });
             updateUserPreferences(group.label);
             applyFilters();
           });
-          catList.appendChild(li);
+          subUl.appendChild(li);
         });
+
+        // Toggle open/close on header click
+        header.addEventListener('click', () => groupLi.classList.toggle('open'));
+
+        groupLi.appendChild(header);
+        groupLi.appendChild(subUl);
+        catList.appendChild(groupLi);
       });
 
       // Any extra DB categories not in the static list
       if (extraCats.length) {
-        const divider2 = document.createElement('li');
-        divider2.textContent = 'Other';
-        divider2.style.cssText = 'font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 0 2px;cursor:default;pointer-events:none';
-        catList.appendChild(divider2);
+        const extraGroupLi = document.createElement('li');
+        extraGroupLi.className = 'sidebar-cat-group';
+
+        const extraHeader = document.createElement('div');
+        extraHeader.className = 'sidebar-cat-group-header';
+        extraHeader.innerHTML = `<span>Other</span><span class="sidebar-arrow">▼</span>`;
+
+        const extraSubUl = document.createElement('ul');
+        extraSubUl.className = 'sidebar-cat-sub-list';
+
         extraCats.forEach(cat => {
           const li = document.createElement('li');
           li.dataset.cat = cat;
           li.textContent = cat;
-          li.addEventListener('click', () => {
-            Array.from(catList.querySelectorAll('li[data-cat]')).forEach(l => l.classList.remove('active'));
-            li.classList.add('active');
+          li.addEventListener('click', e => {
+            e.stopPropagation();
+            setActiveCat(cat);
             state.filters.category = cat;
             applyFilters();
           });
-          catList.appendChild(li);
+          extraSubUl.appendChild(li);
         });
+
+        extraHeader.addEventListener('click', () => extraGroupLi.classList.toggle('open'));
+        extraGroupLi.appendChild(extraHeader);
+        extraGroupLi.appendChild(extraSubUl);
+        catList.appendChild(extraGroupLi);
       }
     }
 
