@@ -697,28 +697,60 @@
     const user = await getUserOrRedirect(); if(!user) return;
     try{
       const { data: favs, error } = await sb.from('product_favourites').select('product_id').eq('user_id',user.id);
-      if(error || !favs?.length){ container.innerHTML='<div class="small" style="margin-top:12px">No favourites yet. Heart a product to save it here.</div>'; return; }
+      if(error || !favs?.length){
+        container.innerHTML='<div class="small" style="margin-top:12px;color:#6b7280">No favourites yet. Heart a product on the homepage to save it here.</div>';
+        return;
+      }
       const productIds = [...new Set(favs.map(f=>f.product_id).filter(Boolean))];
-      const { data: products } = await sb.from('products').select('id,name,price,sale_price,on_sale').in('id',productIds);
-      const { data: imgs } = await sb.from('product_images').select('product_id,url,image_order').in('product_id',productIds);
-      const imageMap = {};
-      (imgs||[]).forEach(img=>{ if(!imageMap[img.product_id]||(img.image_order||0)<(imageMap[img.product_id].image_order||0)) imageMap[img.product_id]=img; });
 
-      if(!products?.length){ container.innerHTML='<div class="small" style="margin-top:12px">No products found.</div>'; return; }
+      // Fetch full product data in parallel — fix: use 'sale' not 'on_sale'
+      const [{ data: products }, { data: imgs }] = await Promise.all([
+        sb.from('products')
+          .select('id,name,price,sale_price,sale,category,badge,favourite_count,sellers(shop_name)')
+          .in('id', productIds),
+        sb.from('product_images')
+          .select('product_id,url,image_order')
+          .in('product_id', productIds)
+          .order('image_order', { ascending: true })
+      ]);
+
+      // Build image map (first image per product)
+      const imageMap = {};
+      (imgs||[]).forEach(img=>{
+        if(!imageMap[img.product_id]) imageMap[img.product_id] = img.url;
+      });
+
+      // Filter to only existing products
+      const valid = (products||[]).filter(p=>p && p.id);
+      if(!valid.length){
+        container.innerHTML='<div class="small" style="margin-top:12px;color:#6b7280">Your favourited products are no longer available.</div>';
+        return;
+      }
 
       const grid = document.createElement('div');
-      grid.className='fav-grid';
-      grid.innerHTML = products.map(p=>{
-        const img = imageMap[p.id];
-        const price = (p.on_sale && p.sale_price) ? p.sale_price : p.price;
-        return `<div class="fav-card" data-product-id="${esc(p.id)}">
-          <img src="${esc(img?.url||'https://placehold.co/140x186?text=Item')}" alt="${esc(p.name)}" onerror="this.src='https://placehold.co/140x186?text=Item'">
-          <div class="fav-card-body">
-            <div class="fav-card-name">${esc(p.name)}</div>
-            <div class="fav-card-price">${fmt(price)}</div>
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-top:16px';
+      grid.innerHTML = valid.map(p=>{
+        const imgUrl = imageMap[p.id] || '';
+        const displayPrice = (p.sale && p.sale_price) ? p.sale_price : p.price;
+        const shopName = p.sellers?.shop_name || '';
+        return `<div class="fav-card" data-product-id="${esc(String(p.id))}" style="background:#fff;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:transform .15s" onmouseenter="this.style.transform='scale(1.02)'" onmouseleave="this.style.transform=''">
+          <div style="aspect-ratio:1;overflow:hidden;background:#f3f4f6">
+            ${imgUrl
+              ? `<img src="${esc(imgUrl)}" alt="${esc(p.name)}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML='<div style=width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px>🛒</div>'">`
+              : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px">🛒</div>'}
+          </div>
+          <div style="padding:10px 12px">
+            ${p.badge ? `<span style="font-size:10px;font-weight:700;background:#e0284f;color:#fff;padding:2px 7px;border-radius:999px;display:inline-block;margin-bottom:4px">${esc(p.badge)}</span>` : ''}
+            <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.name)}">${esc(p.name)}</div>
+            ${shopName ? `<div style="font-size:11px;color:#888;margin-top:2px">${esc(shopName)}</div>` : ''}
+            <div style="margin-top:5px;font-weight:700;color:#0a2f66;font-size:14px">
+              ${p.sale && p.sale_price ? `<span style="text-decoration:line-through;color:#aaa;margin-right:4px;font-size:12px;font-weight:400">${fmt(p.price)}</span>` : ''}
+              ${fmt(displayPrice)}
+            </div>
           </div>
         </div>`;
       }).join('');
+
       container.innerHTML='';
       container.appendChild(grid);
 
@@ -727,7 +759,7 @@
       });
     }catch(e){
       console.warn('loadFavourites error',e);
-      container.innerHTML='<div class="small">Error loading favourites.</div>';
+      container.innerHTML='<div class="small" style="color:#c0392b">Failed to load favourites. Please refresh.</div>';
     }
   }
 

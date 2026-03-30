@@ -100,6 +100,8 @@
   .status-pill { display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em }
 </style>
 
+<!-- Chart.js v4 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <!-- Supabase initialization via Netlify function -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
@@ -180,13 +182,13 @@ const supabaseClient = supabase.createClient(
           </div>
         </div>
         <ul class="menu" aria-hidden="false">
-          <li data-section="dashboard">Dashboard</li>
-          <li data-section="manage">Manage Products</li>
-          <li data-section="analytics">Analytics</li>
-          <li data-section="settings">Settings</li>
-          <li data-section="seller-applications">Seller Applications</li>
-          <li data-section="product-reviews">Product Reviews</li>
-          <li id="lsLogout">Logout</li>
+          <li data-section="dashboard">📊 Dashboard</li>
+          <li data-section="intelligence">🧠 Intelligence</li>
+          <li data-section="manage">📦 Manage Products</li>
+          <li data-section="seller-applications">🏪 Seller Applications</li>
+          <li data-section="product-reviews">🔍 Product Reviews</li>
+          <li data-section="settings">⚙️ Settings</li>
+          <li id="lsLogout">🚪 Logout</li>
         </ul>
       </div>
     </aside>
@@ -194,16 +196,41 @@ const supabaseClient = supabase.createClient(
     <main>
       <!-- Dashboard -->
       <section id="section-dashboard">
-        <div class="grid">
-          <div class="card"><h3>Total Products</h3><p id="statTotal">0</p></div>
-          <div class="card"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
-          <div class="card"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
-          <div class="card"><h3>Pending Orders</h3><p id="statPending">0</p></div>
+        <!-- KPI Row 1 -->
+        <div class="grid" style="grid-template-columns:repeat(4,1fr)">
+          <div class="card" style="border-left:4px solid #0073e6"><h3>Total Products</h3><p id="statTotal">0</p></div>
+          <div class="card" style="border-left:4px solid #ff9900"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
+          <div class="card" style="border-left:4px solid #ef4444"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
+          <div class="card" style="border-left:4px solid #8b5cf6"><h3>Pending Orders</h3><p id="statPending">0</p></div>
+        </div>
+        <!-- KPI Row 2 (from Intelligence overview) -->
+        <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:0">
+          <div class="card" style="border-left:4px solid #10b981"><h3>Total Revenue</h3><p id="kpiRevenue">—</p></div>
+          <div class="card" style="border-left:4px solid #0ea5e9"><h3>Total Orders</h3><p id="kpiOrders">—</p></div>
+          <div class="card" style="border-left:4px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
+          <div class="card" style="border-left:4px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
         </div>
 
-        <div class="card" style="padding:18px;margin-bottom:18px">
-          <h3>Sales Overview</h3>
-          <div style="height:180px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Sales Chart Placeholder</div>
+        <!-- Charts row -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px">
+          <div class="card" style="padding:18px">
+            <h3 style="margin:0 0 12px">Revenue (last 30 days)</h3>
+            <canvas id="chartRevenue" height="100"></canvas>
+          </div>
+          <div class="card" style="padding:18px">
+            <h3 style="margin:0 0 12px">Orders (last 30 days)</h3>
+            <canvas id="chartOrders" height="100"></canvas>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+          <div class="card" style="padding:18px">
+            <h3 style="margin:0 0 12px">Top Categories by Favourites</h3>
+            <canvas id="chartCatFav" height="140"></canvas>
+          </div>
+          <div class="card" style="padding:18px">
+            <h3 style="margin:0 0 12px">Event Breakdown (30 days)</h3>
+            <canvas id="chartEvents" height="140"></canvas>
+          </div>
         </div>
       </section>
 
@@ -287,60 +314,134 @@ const supabaseClient = supabase.createClient(
         </div>
       </section>
 
-      <!-- Analytics -->
-      <section id="section-analytics" style="display:none">
-        <div style="display:flex;gap:16px;margin-bottom:12px">
-          <div class="card" style="flex:1"><h3>Total Monthly Sales</h3><p id="analytics_total_month">R0.00</p></div>
-          <div class="card" style="flex:1"><h3>Top Category</h3><p id="analytics_top_category">—</p></div>
+      <!-- Intelligence Dashboard -->
+      <section id="section-intelligence" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h2 style="margin:0;font-size:20px">🧠 Intelligence Dashboard</h2>
+          <button id="refreshIntelligence" class="small-btn">↻ Refresh All</button>
         </div>
 
-        <!-- new analytics controls -->
-        <div class="card" style="padding:12px;margin-bottom:12px">
-          <div style="display:flex;gap:8px;align-items:center">
-            <label>From</label><input id="analytics_from" type="date" />
-            <label>To</label><input id="analytics_to" type="date" />
-            <button id="range_day" class="small-btn">Day</button>
-            <button id="range_week" class="small-btn">Week</button>
-            <button id="range_month" class="small-btn">Month</button>
-            <button id="range_year" class="small-btn">Year</button>
-            <button id="analytics_run" class="small-btn" style="margin-left:auto">Run</button>
-          </div>
-          <div style="margin-top:8px" id="analytics_summary"></div>
+        <!-- Sub-tabs -->
+        <div class="sub-tab-bar">
+          <button class="sub-tab active" data-itab="intel-products">Products</button>
+          <button class="sub-tab" data-itab="intel-categories">Categories</button>
+          <button class="sub-tab" data-itab="intel-sellers">Sellers</button>
+          <button class="sub-tab" data-itab="intel-behaviour">Behaviour</button>
+          <button class="sub-tab" data-itab="intel-search">Search</button>
+          <button class="sub-tab" data-itab="intel-insights">Insights</button>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="card" style="min-height:240px">
-            <h4>Top Products</h4>
-            <div id="topProductsList" style="margin-top:8px">No data</div>
-          </div>
-          <div class="card" style="min-height:240px">
-            <h4>Sales Chart Placeholder</h4>
-            <div style="height:200px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#6b7280;margin-top:12px">Chart</div>
-          </div>
-        </div>
-
-        <!-- Favourites Analytics -->
-        <div style="margin-top:20px">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-            <h4 style="margin:0">❤️ Favourites Analytics</h4>
-            <button id="refreshFavAnalytics" class="small-btn">↻ Refresh</button>
-          </div>
+        <!-- Products sub-tab -->
+        <div id="intel-products">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-            <div class="card" style="min-height:200px">
-              <h4>Most Favourited Products</h4>
-              <div id="favTopProducts" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">❤️ Most Favourited Products</h4>
+              <div id="intelTopFav" style="color:var(--muted);font-size:13px">Loading…</div>
             </div>
-            <div class="card" style="min-height:200px">
-              <h4>Top Shops by Favourites</h4>
-              <div id="favTopShops" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">👆 Most Clicked Products</h4>
+              <div id="intelTopClicks" style="color:var(--muted);font-size:13px">Loading…</div>
             </div>
-            <div class="card" style="min-height:200px">
-              <h4>Most Favourited Categories</h4>
-              <div id="favTopCategories" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">✨ Recent New Products</h4>
+              <div id="intelRecent" style="color:var(--muted);font-size:13px">Loading…</div>
             </div>
-            <div class="card" style="min-height:200px">
-              <h4>High-Interest Products</h4>
-              <div id="favHighInterest" style="margin-top:8px;color:var(--muted)">Load the analytics tab to view.</div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">🔍 High Interest, Low Clicks</h4>
+              <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Products with favourites but few clicks — may need better visibility</p>
+              <div id="intelHighFavLowClick" style="color:var(--muted);font-size:13px">Loading…</div>
+            </div>
+          </div>
+          <div class="card" style="padding:18px;margin-top:16px">
+            <h4 style="margin:0 0 12px">Top 10 Products by Engagement</h4>
+            <canvas id="chartTopProducts" height="80"></canvas>
+          </div>
+        </div>
+
+        <!-- Categories sub-tab -->
+        <div id="intel-categories" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 12px">Category Favourites</h4>
+              <canvas id="chartCatFavIntel" height="160"></canvas>
+            </div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 12px">Category Views (30 days)</h4>
+              <canvas id="chartCatViews" height="160"></canvas>
+            </div>
+          </div>
+          <div class="card" style="padding:18px;margin-top:16px">
+            <h4 style="margin:0 0 10px">Category Breakdown</h4>
+            <div style="overflow-x:auto">
+              <table style="min-width:600px">
+                <thead><tr><th>Category</th><th>Products</th><th>Total Favourites</th><th>Total Clicks</th><th>Views (30d)</th><th>Cart Adds (30d)</th></tr></thead>
+                <tbody id="intelCatTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sellers sub-tab -->
+        <div id="intel-sellers" style="display:none">
+          <div class="card" style="padding:18px;margin-bottom:16px">
+            <h4 style="margin:0 0 12px">Top Sellers by Favourites</h4>
+            <canvas id="chartTopSellers" height="80"></canvas>
+          </div>
+          <div class="card" style="padding:18px">
+            <h4 style="margin:0 0 10px">Seller Rankings</h4>
+            <div style="overflow-x:auto">
+              <table>
+                <thead><tr><th>Shop</th><th>Products</th><th>Total Favourites</th><th>Total Clicks</th><th>Est. Revenue</th></tr></thead>
+                <tbody id="intelSellersTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Behaviour sub-tab -->
+        <div id="intel-behaviour" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 12px">Event Breakdown</h4>
+              <canvas id="chartEventTypes" height="160"></canvas>
+            </div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 12px">Daily Activity (30 days)</h4>
+              <canvas id="chartDailyEvents" height="160"></canvas>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">👆 Top Clicked Products</h4>
+              <div id="intelBehavTopClicks" style="color:var(--muted);font-size:13px">Loading…</div>
+            </div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">🔍 Top Search Terms</h4>
+              <div id="intelBehavTopSearches" style="color:var(--muted);font-size:13px">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search sub-tab -->
+        <div id="intel-search" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">🔝 Top Search Terms (30 days)</h4>
+              <div id="intelSearchTop" style="color:var(--muted);font-size:13px">Loading…</div>
+            </div>
+            <div class="card" style="padding:18px">
+              <h4 style="margin:0 0 10px">⚠️ Searches with No Results</h4>
+              <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Terms people search but nothing comes up — potential product gaps</p>
+              <div id="intelSearchNoResults" style="color:var(--muted);font-size:13px">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Insights sub-tab -->
+        <div id="intel-insights" style="display:none">
+          <div id="intelInsightsWrap" style="display:grid;gap:16px">
+            <div class="card" style="padding:20px">
+              <div style="font-size:14px;color:var(--muted)">Loading insights…</div>
             </div>
           </div>
         </div>
@@ -1230,7 +1331,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   const sections = {
     dashboard: document.getElementById('section-dashboard'),
     manage: document.getElementById('section-manage'),
-    analytics: document.getElementById('section-analytics'),
+    intelligence: document.getElementById('section-intelligence'),
     settings: document.getElementById('section-settings'),
     'seller-applications': document.getElementById('section-seller-applications'),
     'product-reviews': document.getElementById('section-product-reviews')
@@ -1248,13 +1349,31 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(sections[s]) sections[s].style.display = 'block';
     });
   });
-  // Lazy-load favourites analytics when analytics tab is first clicked
-  document.querySelector('[data-section="analytics"]').addEventListener('click', () => {
-    if (!favAnalyticsLoaded) loadFavouriteAnalytics();
+  // Load intelligence dashboard when tab is clicked
+  document.querySelector('[data-section="intelligence"]').addEventListener('click', () => {
+    if (!intelLoaded.overview) loadDashboardOverview();
+    const activeTab = document.querySelector('.sub-tab[data-itab].active');
+    if (activeTab) loadIntelligenceTab(activeTab.dataset.itab);
   });
-  document.getElementById('refreshFavAnalytics').addEventListener('click', () => {
-    favAnalyticsLoaded = false;
-    loadFavouriteAnalytics();
+  document.getElementById('refreshIntelligence').addEventListener('click', () => {
+    Object.keys(intelLoaded).forEach(k => { intelLoaded[k] = false; });
+    destroyCharts();
+    loadDashboardOverview();
+    const activeTab = document.querySelector('.sub-tab[data-itab].active');
+    if (activeTab) loadIntelligenceTab(activeTab.dataset.itab);
+  });
+
+  // Intelligence sub-tab switching
+  document.querySelectorAll('.sub-tab[data-itab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sub-tab[data-itab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tabId = btn.dataset.itab;
+      document.querySelectorAll('#section-intelligence > div[id^="intel-"]').forEach(el => {
+        el.style.display = el.id === tabId ? '' : 'none';
+      });
+      loadIntelligenceTab(tabId);
+    });
   });
 
   // Lazy-load seller applications when that tab is first clicked
@@ -1295,7 +1414,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // small helper functions
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  /* ------------------ Analytics functions ------------------ */
+  /* ------------------ Analytics helpers (kept for updatePopularityFromTop) ------ */
   // parse order items safely — checks items then raw_cart (initiate-payfast uses raw_cart)
   function parseOrderItems(o) {
     const raw = o.items || o.raw_cart;
@@ -1396,182 +1515,345 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
   }
 
-  // render analytics summary and top products list
-  async function runAnalytics(fromDate, toDate){
-    const fromIso = new Date(fromDate).toISOString();
-    // to date inclusive: set to end of day
-    const toObj = new Date(toDate);
-    toObj.setHours(23,59,59,999);
-    const toIso = toObj.toISOString();
-    const res = await fetchOrdersInRange(fromIso, toIso);
-    document.getElementById('analytics_summary').innerHTML = `<div class="muted">Orders: ${res.orders.length} • Revenue: <strong>${fmt(res.total)}</strong></div>`;
-    // top products list
-    const listEl = document.getElementById('topProductsList');
-    if(!res.top.length){ listEl.innerHTML = '<div class="muted">No products sold in this range</div>'; document.getElementById('analytics_total_month').textContent = fmt(res.total); document.getElementById('analytics_top_category').textContent = '—'; return; }
-    const html = res.top.slice(0,10).map((t, idx) => `<div style="display:flex;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #f3f4f6"><div><strong>${idx+1}. ${escapeHtml(t.name)}</strong><div class="muted">${t.qty} sold</div></div><div style="text-align:right"><div>${fmt(t.revenue)}</div><button data-key="${encodeURIComponent(JSON.stringify(t))}" class="viewTopProduct">View</button></div></div>`).join('');
-    listEl.innerHTML = html;
-    document.querySelectorAll('.viewTopProduct').forEach(b => b.addEventListener('click', (e) => {
-      const t = JSON.parse(decodeURIComponent(b.getAttribute('data-key')));
-      openTopProductModal(t, fromIso, toIso);
-    }));
-    document.getElementById('analytics_total_month').textContent = fmt(res.total);
-    // simple best category calculation by mapping product->category if possible (best-effort)
-    const categoryAgg = {};
-    for(const t of res.top){
-      // prefer mapping by product id if available
-      let cat = 'Uncategorized';
-      if(t.pid){
-        const productMatchById = productsCache.find(pc => String(pc.id) === String(t.pid));
-        if(productMatchById) cat = productMatchById.category || 'Uncategorized';
-      } else {
-        const productMatch = productsCache.find(pc => pc.name && pc.name.toLowerCase() === (t.name || '').toLowerCase());
-        if(productMatch) cat = productMatch.category || 'Uncategorized';
-      }
-      categoryAgg[cat] = (categoryAgg[cat] || 0) + t.revenue;
-    }
-    const topCat = Object.entries(categoryAgg).sort((a,b)=> b[1]-a[1])[0];
-    document.getElementById('analytics_top_category').textContent = topCat ? `${topCat[0]} (${fmt(topCat[1])})` : '—';
+  /* ==================== Intelligence Dashboard ==================== */
+  const intelLoaded = { overview: false, 'intel-products': false, 'intel-categories': false, 'intel-sellers': false, 'intel-behaviour': false, 'intel-search': false, 'intel-insights': false };
+  const chartInstances = {};
 
-    // ---- NEW: update product popularity based on top product revenue (guarded) ----
+  function destroyChart(id) {
+    if (chartInstances[id]) { try { chartInstances[id].destroy(); } catch(_){} delete chartInstances[id]; }
+  }
+  function destroyCharts() {
+    Object.keys(chartInstances).forEach(id => { try { chartInstances[id].destroy(); } catch(_){} delete chartInstances[id]; });
+  }
+
+  async function getAdminToken() {
+    try { const { data } = await supabaseClient.auth.getSession(); return data?.session?.access_token || null; }
+    catch (_) { return null; }
+  }
+
+  async function callAnalytics(type) {
+    const token = await getAdminToken();
+    if (!token) throw new Error('Not authenticated');
+    const resp = await fetch('/.netlify/functions/admin-analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ type })
+    });
+    if (!resp.ok) { const err = await resp.json().catch(() => ({})); throw new Error(err.error || `HTTP ${resp.status}`); }
+    return resp.json();
+  }
+
+  function mkChart(id, config) {
+    destroyChart(id);
+    const ctx = document.getElementById(id);
+    if (!ctx || typeof Chart === 'undefined') return null;
+    chartInstances[id] = new Chart(ctx, config);
+    return chartInstances[id];
+  }
+
+  // ── Dashboard Overview ────────────────────────────────────────
+  async function loadDashboardOverview() {
+    if (intelLoaded.overview) return;
+    intelLoaded.overview = true;
+    ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '…';
+    });
     try {
-      await updatePopularityFromTop(res.top);
-    } catch(e){
-      console.warn('updatePopularityFromTop error', e);
-    }
-    // ---- end popularity update ----
-  }
+      const [overview, trends, cats, events] = await Promise.all([
+        callAnalytics('overview'), callAnalytics('trends'),
+        callAnalytics('categories'), callAnalytics('behaviour')
+      ]);
 
-  function openTopProductModal(t, fromIso, toIso){
-    // show details: total qty, revenue, and list of matching products & orders if found
-    const modal = document.getElementById('modalContent');
-    modal.innerHTML = `<h3>${escapeHtml(t.name)}</h3>
-      <div class="muted">Quantity sold: <strong>${t.qty}</strong></div>
-      <div class="muted" style="margin-top:6px">Revenue from this item: <strong>${fmt(t.revenue)}</strong></div>
-      <div style="margin-top:12px"><button id="viewOrdersContainingProduct" class="small-btn">Show Orders containing this product</button> <button id="closeTopModal" style="margin-left:8px">Close</button></div>
-    `;
-    document.getElementById('modalWrap').style.display = 'flex';
-    document.getElementById('closeTopModal').addEventListener('click', ()=> { modalWrap.style.display='none'; });
-    document.getElementById('viewOrdersContainingProduct').addEventListener('click', async ()=>{
-      // fetch orders in range and show filtered orders
-      const res = await fetchOrdersInRange(fromIso, toIso);
-      const ordersWith = res.orders.filter(o => {
-        const items = parseOrderItems(o);
-        return items.some(it => (it.product_id && String(it.product_id) === String(t.pid)) || (String(it.item || it.product_name || it.name || '').toLowerCase() === String(t.name).toLowerCase()));
+      const el = id => document.getElementById(id);
+      if (el('kpiRevenue'))    el('kpiRevenue').textContent    = fmt(overview.totalRevenue || 0);
+      if (el('kpiOrders'))     el('kpiOrders').textContent     = overview.totalOrders  || 0;
+      if (el('kpiSellers'))    el('kpiSellers').textContent    = overview.activeSellers || 0;
+      if (el('kpiFavourites')) el('kpiFavourites').textContent = (overview.totalFavourites || 0).toLocaleString();
+
+      // Revenue line chart
+      const revDays = Object.keys(trends.dailyRevenue || {}).sort();
+      if (revDays.length) {
+        mkChart('chartRevenue', { type: 'line', data: {
+          labels: revDays.map(d => d.slice(5)),
+          datasets: [{ label: 'Revenue (R)', data: revDays.map(d => Math.round(trends.dailyRevenue[d] || 0)), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, pointRadius: 2 }]
+        }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+      }
+
+      // Orders bar chart
+      const ordDays = Object.keys(trends.dailyOrders || {}).sort();
+      if (ordDays.length) {
+        mkChart('chartOrders', { type: 'bar', data: {
+          labels: ordDays.map(d => d.slice(5)),
+          datasets: [{ label: 'Orders', data: ordDays.map(d => trends.dailyOrders[d] || 0), backgroundColor: '#0ea5e9' }]
+        }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+      }
+
+      // Top categories by favourites (horizontal bar)
+      const topCats = (cats.categories || []).slice(0, 8);
+      if (topCats.length) {
+        mkChart('chartCatFav', { type: 'bar', data: {
+          labels: topCats.map(c => c.category),
+          datasets: [{ label: 'Favourites', data: topCats.map(c => c.totalFavourites), backgroundColor: '#f59e0b' }]
+        }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } });
+      }
+
+      // Event type doughnut
+      const typeCounts = events.typeCounts || {};
+      const typeKeys = Object.keys(typeCounts);
+      if (typeKeys.length) {
+        const colors = ['#0073e6','#10b981','#f59e0b','#ec4899','#8b5cf6','#ef4444','#06b6d4'];
+        mkChart('chartEvents', { type: 'doughnut', data: {
+          labels: typeKeys,
+          datasets: [{ data: typeKeys.map(k => typeCounts[k]), backgroundColor: colors }]
+        }, options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } } });
+      }
+    } catch (e) {
+      console.warn('loadDashboardOverview error', e);
+      ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = '—';
       });
-      const listHtml = ordersWith.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><div><strong>${o.order_number || o.id}</strong> • ${escapeHtml(o.customer_name || '')}</div><div class="muted">${new Date(o.created_at).toLocaleString()} • ${fmt(o.total || o.amount)}</div></div>`).join('') || '<div class="muted">No orders found</div>';
-      modal.innerHTML = `<h3>Orders containing ${escapeHtml(t.name)}</h3><div style="max-height:400px;overflow:auto">${listHtml}</div><div style="margin-top:12px"><button id="closeOrdersList" class="small-btn">Close</button></div>`;
-      document.getElementById('closeOrdersList').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
-    });
+    }
   }
 
-  // Favourites analytics
-  let favAnalyticsLoaded = false;
-  async function loadFavouriteAnalytics() {
-    if (!supabaseClient) return;
-    ['favTopProducts','favTopShops','favTopCategories','favHighInterest']
-      .forEach(id => { document.getElementById(id).innerHTML = '<span style="color:var(--muted)">Loading…</span>'; });
-
-    const { data: products, error } = await supabaseClient
-      .from('products')
-      .select('id, name, category, favourite_count, seller_id')
-      .gt('favourite_count', 0)
-      .order('favourite_count', { ascending: false })
-      .limit(60);
-
-    if (error || !products) {
-      ['favTopProducts','favTopShops','favTopCategories','favHighInterest']
-        .forEach(id => { document.getElementById(id).innerHTML = '<span style="color:var(--muted)">Failed to load data.</span>'; });
-      return;
+  // ── Intelligence sub-tab loader ───────────────────────────────
+  async function loadIntelligenceTab(tabId) {
+    if (intelLoaded[tabId]) return;
+    intelLoaded[tabId] = true;
+    try {
+      if (tabId === 'intel-products')    await renderIntelProducts();
+      else if (tabId === 'intel-categories') await renderIntelCategories();
+      else if (tabId === 'intel-sellers')    await renderIntelSellers();
+      else if (tabId === 'intel-behaviour')  await renderIntelBehaviour();
+      else if (tabId === 'intel-search')     await renderIntelSearch();
+      else if (tabId === 'intel-insights')   await renderIntelInsights();
+    } catch (e) {
+      console.warn('loadIntelligenceTab error', tabId, e);
     }
-
-    // Fetch seller names for the seller_ids found
-    const sellerIds = [...new Set(products.map(p => p.seller_id).filter(Boolean))];
-    let sellerMap = {};
-    if (sellerIds.length) {
-      const { data: sellers } = await supabaseClient
-        .from('sellers').select('id, shop_name').in('id', sellerIds);
-      (sellers || []).forEach(s => { sellerMap[s.id] = s.shop_name || 'Unknown Shop'; });
-    }
-
-    // Most favourited products (top 10)
-    const topProds = products.slice(0, 10);
-    document.getElementById('favTopProducts').innerHTML = topProds.length
-      ? topProds.map((p, i) =>
-          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
-            <div><strong>${i+1}. ${escapeHtml(p.name || 'Untitled')}</strong>
-              <div class="muted" style="font-size:11px">${escapeHtml(p.category || '')} · ${escapeHtml(sellerMap[p.seller_id] || '')}</div>
-            </div>
-            <div style="font-weight:700;color:#a8003f">❤️ ${p.favourite_count}</div>
-          </div>`).join('')
-      : '<span class="muted">No favourited products yet.</span>';
-
-    // Top shops by total favourites
-    const shopMap = {};
-    products.forEach(p => {
-      const shop = sellerMap[p.seller_id] || 'Unknown Shop';
-      shopMap[shop] = (shopMap[shop] || 0) + (p.favourite_count || 0);
-    });
-    const topShops = Object.entries(shopMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
-    document.getElementById('favTopShops').innerHTML = topShops.length
-      ? topShops.map((s, i) =>
-          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
-            <div>${i+1}. ${escapeHtml(s[0])}</div>
-            <div style="font-weight:700;color:#a8003f">❤️ ${s[1]}</div>
-          </div>`).join('')
-      : '<span class="muted">No data.</span>';
-
-    // Most favourited categories
-    const catMap = {};
-    products.forEach(p => {
-      const cat = p.category || 'Uncategorized';
-      catMap[cat] = (catMap[cat] || 0) + (p.favourite_count || 0);
-    });
-    const topCats = Object.entries(catMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
-    document.getElementById('favTopCategories').innerHTML = topCats.length
-      ? topCats.map((c, i) =>
-          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
-            <div>${i+1}. ${escapeHtml(c[0])}</div>
-            <div style="font-weight:700;color:#a8003f">❤️ ${c[1]}</div>
-          </div>`).join('')
-      : '<span class="muted">No data.</span>';
-
-    // High-interest products: most favourited — useful to identify demand
-    const highInterest = products.filter(p => (p.favourite_count || 0) >= 3).slice(0, 8);
-    document.getElementById('favHighInterest').innerHTML = highInterest.length
-      ? `<div class="muted" style="font-size:11px;margin-bottom:6px">Products with strong buyer interest — review pricing &amp; stock.</div>` +
-        highInterest.map(p =>
-          `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f3f4f6">
-            <div>${escapeHtml(p.name || 'Untitled')}<div class="muted" style="font-size:11px">${escapeHtml(sellerMap[p.seller_id] || '')}</div></div>
-            <div style="font-weight:700;color:#a8003f">❤️ ${p.favourite_count}</div>
-          </div>`).join('')
-      : '<span class="muted">No products with 3+ favourites yet.</span>';
-
-    favAnalyticsLoaded = true;
   }
 
-  // wire analytics controls
-  document.getElementById('analytics_run').addEventListener('click', ()=>{
-    const from = document.getElementById('analytics_from').value;
-    const to = document.getElementById('analytics_to').value;
-    if(!from || !to) return showToast('Select range');
-    runAnalytics(from, to);
-  });
-  document.getElementById('range_day').addEventListener('click', ()=>{
-    const today = new Date(); const iso = today.toISOString().slice(0,10);
-    document.getElementById('analytics_from').value = iso; document.getElementById('analytics_to').value = iso; document.getElementById('analytics_run').click();
-  });
-  document.getElementById('range_week').addEventListener('click', ()=>{
-    const today = new Date(); const to = new Date(); const from = new Date(); from.setDate(today.getDate()-7);
-    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = to.toISOString().slice(0,10); document.getElementById('analytics_run').click();
-  });
-  document.getElementById('range_month').addEventListener('click', ()=>{
-    const today = new Date(); const from = new Date(); from.setMonth(today.getMonth()-1);
-    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = new Date().toISOString().slice(0,10); document.getElementById('analytics_run').click();
-  });
-  document.getElementById('range_year').addEventListener('click', ()=>{
-    const today = new Date(); const from = new Date(); from.setFullYear(today.getFullYear()-1);
-    document.getElementById('analytics_from').value = from.toISOString().slice(0,10); document.getElementById('analytics_to').value = new Date().toISOString().slice(0,10); document.getElementById('analytics_run').click();
-  });
+  // ── Products tab ──────────────────────────────────────────────
+  async function renderIntelProducts() {
+    const data = await callAnalytics('products');
+
+    const topFavEl = document.getElementById('intelTopFav');
+    if (topFavEl) topFavEl.innerHTML = (data.topFav || []).slice(0, 10).map((p, i) =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div><strong>${i+1}. ${escapeHtml(p.name||'')}</strong>
+          <div class="muted" style="font-size:11px">${escapeHtml(p.category||'')} · ${escapeHtml(p.sellers?.shop_name||'')}</div>
+        </div>
+        <div style="text-align:right;font-size:13px">❤️ ${p.favourite_count||0} · 👁 ${p.click_count||0}
+          <div style="font-weight:700;color:var(--primary)">R${Number(p.sale&&p.sale_price?p.sale_price:p.price||0).toFixed(0)}</div>
+        </div>
+      </div>`).join('') || '<div class="muted">No data yet</div>';
+
+    const topClicksEl = document.getElementById('intelTopClicks');
+    if (topClicksEl) topClicksEl.innerHTML = (data.topClicks || []).slice(0, 10).map((p, i) =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div><strong>${i+1}. ${escapeHtml(p.name||'')}</strong>
+          <div class="muted" style="font-size:11px">${escapeHtml(p.category||'')} · ${escapeHtml(p.sellers?.shop_name||'')}</div>
+        </div>
+        <div style="font-weight:700;color:#0073e6">👁 ${p.click_count||0}</div>
+      </div>`).join('') || '<div class="muted">No data yet</div>';
+
+    const recentEl = document.getElementById('intelRecent');
+    if (recentEl) recentEl.innerHTML = (data.recentProducts || []).slice(0, 8).map(p =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div><strong>${escapeHtml(p.name||'')}</strong>
+          <div class="muted" style="font-size:11px">${escapeHtml(p.category||'')} · Added ${p.created_at?new Date(p.created_at).toLocaleDateString('en-ZA'):''}</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">❤️ ${p.favourite_count||0} 👁 ${p.click_count||0}</div>
+      </div>`).join('') || '<div class="muted">No new products</div>';
+
+    const hflcEl = document.getElementById('intelHighFavLowClick');
+    if (hflcEl) {
+      const gems = data.highFavLowClick || [];
+      hflcEl.innerHTML = gems.length
+        ? `<div class="muted" style="font-size:11px;margin-bottom:8px">Favourited but rarely clicked — consider promoting.</div>` +
+          gems.map(p => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6"><div><strong>${escapeHtml(p.name||'')}</strong><div class="muted" style="font-size:11px">${escapeHtml(p.category||'')}</div></div><div style="font-size:12px">❤️ ${p.favourite_count} 👁 ${p.click_count||0}</div></div>`).join('')
+        : '<div class="muted">No hidden gems found yet</div>';
+    }
+
+    const topProds = (data.topFav || []).slice(0, 10);
+    if (topProds.length) {
+      mkChart('chartTopProducts', { type: 'bar', data: {
+        labels: topProds.map(p => (p.name||'').slice(0, 20)),
+        datasets: [
+          { label: 'Favourites', data: topProds.map(p => p.favourite_count||0), backgroundColor: '#ec4899' },
+          { label: 'Clicks',     data: topProds.map(p => p.click_count||0),     backgroundColor: '#0073e6' }
+        ]
+      }, options: { plugins: { legend: { position: 'bottom' } }, scales: { y: { beginAtZero: true } } } });
+    }
+  }
+
+  // ── Categories tab ─────────────────────────────────────────────
+  async function renderIntelCategories() {
+    const data = await callAnalytics('categories');
+    const cats = (data.categories || []).slice(0, 12);
+
+    const tableEl = document.getElementById('intelCatTable');
+    if (tableEl) tableEl.innerHTML = cats.map(c =>
+      `<tr style="border-bottom:1px solid #f3f4f6">${[c.category,c.productCount,c.totalFavourites,c.totalClicks,c.views,c.cartAdds].map(v=>`<td style="padding:8px 12px">${escapeHtml(String(v))}</td>`).join('')}</tr>`
+    ).join('');
+
+    if (cats.length) {
+      mkChart('chartCatFavIntel', { type: 'bar', data: {
+        labels: cats.map(c => c.category),
+        datasets: [{ label: 'Favourites', data: cats.map(c => c.totalFavourites), backgroundColor: '#f59e0b' }]
+      }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } } });
+    }
+  }
+
+  // ── Sellers tab ────────────────────────────────────────────────
+  async function renderIntelSellers() {
+    const data = await callAnalytics('sellers');
+    const sellers = (data.sellers || []).slice(0, 20);
+
+    const tableEl = document.getElementById('intelSellersTable');
+    if (tableEl) tableEl.innerHTML = sellers.map(s =>
+      `<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:8px 12px;font-weight:600">${escapeHtml(s.shop_name||'')}</td>
+        <td style="padding:8px 12px">${s.productCount}</td>
+        <td style="padding:8px 12px">❤️ ${s.totalFavourites}</td>
+        <td style="padding:8px 12px">👁 ${s.totalClicks}</td>
+        <td style="padding:8px 12px;font-weight:700;color:#059669">${fmt(s.revenue||0)}</td>
+      </tr>`).join('');
+
+    const top10 = sellers.slice(0, 10);
+    if (top10.length) {
+      mkChart('chartTopSellers', { type: 'bar', data: {
+        labels: top10.map(s => (s.shop_name||'').slice(0, 18)),
+        datasets: [{ label: 'Favourites', data: top10.map(s => s.totalFavourites), backgroundColor: '#8b5cf6' }]
+      }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+    }
+  }
+
+  // ── Behaviour tab ──────────────────────────────────────────────
+  async function renderIntelBehaviour() {
+    const data = await callAnalytics('behaviour');
+    const typeCounts = data.typeCounts || {};
+    const typeKeys = Object.keys(typeCounts);
+    if (typeKeys.length) {
+      const colors = ['#0073e6','#10b981','#f59e0b','#ec4899','#8b5cf6','#ef4444','#06b6d4'];
+      mkChart('chartEventTypes', { type: 'doughnut', data: {
+        labels: typeKeys,
+        datasets: [{ data: typeKeys.map(k => typeCounts[k]), backgroundColor: colors }]
+      }, options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } } });
+    }
+
+    const days = Object.keys(data.dailyCounts || {}).sort();
+    if (days.length) {
+      mkChart('chartDailyEvents', { type: 'line', data: {
+        labels: days.map(d => d.slice(5)),
+        datasets: [{ label: 'Daily Events', data: days.map(d => data.dailyCounts[d]||0), borderColor: '#0073e6', backgroundColor: 'rgba(0,115,230,0.08)', fill: true, tension: 0.4, pointRadius: 2 }]
+      }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
+    }
+
+    const topClicksEl = document.getElementById('intelBehavTopClicks');
+    if (topClicksEl) topClicksEl.innerHTML = (data.topClickedProducts || []).slice(0, 10).map((p, i) =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div><strong>${i+1}. ${escapeHtml(p.name||p.id||'')}</strong><div class="muted" style="font-size:11px">${escapeHtml(p.category||'')}</div></div>
+        <div style="font-weight:700;color:#0073e6">👁 ${p.count}</div>
+      </div>`).join('') || '<div class="muted">No click events yet</div>';
+
+    const topSearchEl = document.getElementById('intelBehavTopSearches');
+    if (topSearchEl) topSearchEl.innerHTML = (data.topTerms || []).slice(0, 10).map((t, i) =>
+      `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div>${i+1}. <strong>${escapeHtml(t.term)}</strong></div>
+        <div class="muted">${t.count}×</div>
+      </div>`).join('') || '<div class="muted">No search events yet</div>';
+  }
+
+  // ── Search tab ─────────────────────────────────────────────────
+  async function renderIntelSearch() {
+    const data = await callAnalytics('search');
+    const maxCount = (data.topTerms && data.topTerms[0]) ? data.topTerms[0].count : 1;
+
+    const topEl = document.getElementById('intelSearchTop');
+    if (topEl) topEl.innerHTML = (data.topTerms || []).map((t, i) =>
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6">
+        <div>${i+1}. <strong>${escapeHtml(t.term)}</strong></div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:80px;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden"><div style="width:${Math.round(100*(t.count/maxCount))}%;height:100%;background:#0073e6;border-radius:4px"></div></div>
+          <span class="muted">${t.count}×</span>
+        </div>
+      </div>`).join('') || '<div class="muted">No search data yet</div>';
+
+    const noResEl = document.getElementById('intelSearchNoResults');
+    if (noResEl) {
+      const noRes = data.noResults || [];
+      noResEl.innerHTML = noRes.length
+        ? noRes.map((t, i) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6"><div>${i+1}. <strong>${escapeHtml(t.term)}</strong></div><div style="color:#dc2626;font-weight:700">${t.count}× no results</div></div>`).join('')
+        : '<div class="muted" style="color:#059669">No zero-result searches — great!</div>';
+    }
+  }
+
+  // ── Insights tab ───────────────────────────────────────────────
+  async function renderIntelInsights() {
+    const wrap = document.getElementById('intelInsightsWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<div class="muted" style="padding:12px">Generating insights…</div>';
+    try {
+      const [overview, cats, sellers] = await Promise.all([
+        callAnalytics('overview'), callAnalytics('categories'), callAnalytics('sellers')
+      ]);
+      const cards = [];
+
+      cards.push(`<div class="card" style="padding:18px;border-left:4px solid #10b981">
+        <h4 style="margin:0 0 8px">💰 Revenue Snapshot</h4>
+        <p style="margin:0;font-size:14px;line-height:1.7">
+          <strong>${fmt(overview.totalRevenue||0)}</strong> total revenue across <strong>${overview.totalOrders||0}</strong> paid orders.
+          Average order value: <strong>${fmt(overview.avgOrderValue||0)}</strong>.
+          ${overview.totalOrders > 0 ? `That's one order every ~${Math.round(30/(overview.totalOrders||1))} days on average.` : ''}
+        </p></div>`);
+
+      const topCat = (cats.categories || [])[0];
+      if (topCat) {
+        const convProxy = topCat.views > 0 ? ((topCat.cartAdds / topCat.views) * 100).toFixed(1) : null;
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #f59e0b">
+          <h4 style="margin:0 0 8px">🏷️ Top Category: ${escapeHtml(topCat.category)}</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            <strong>${escapeHtml(topCat.category)}</strong> leads with <strong>${topCat.totalFavourites}</strong> favourites across <strong>${topCat.productCount}</strong> products.
+            ${convProxy !== null ? `View-to-cart rate: <strong>${convProxy}%</strong>.` : ''}
+            ${topCat.totalClicks > 0 ? `Clicked <strong>${topCat.totalClicks}</strong> times.` : ''}
+          </p></div>`);
+      }
+
+      const topSeller = (sellers.sellers || [])[0];
+      if (topSeller) {
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #8b5cf6">
+          <h4 style="margin:0 0 8px">🏪 Top Seller: ${escapeHtml(topSeller.shop_name||'')}</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            <strong>${escapeHtml(topSeller.shop_name||'')}</strong> leads engagement with <strong>${topSeller.totalFavourites}</strong> favourites across <strong>${topSeller.productCount}</strong> products.
+            ${topSeller.revenue > 0 ? `Revenue: <strong>${fmt(topSeller.revenue)}</strong>.` : 'No revenue recorded yet.'}
+          </p></div>`);
+      }
+
+      const totalProducts = overview.totalProducts || 0;
+      if (totalProducts > 0) {
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #0ea5e9">
+          <h4 style="margin:0 0 8px">📊 Platform Health</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            <strong>${totalProducts}</strong> active products · <strong>${overview.activeSellers}</strong> active sellers · <strong>${overview.totalUsers||0}</strong> registered users.
+            Total favourites: <strong>${(overview.totalFavourites||0).toLocaleString()}</strong>.
+            Avg favourites/product: <strong>${((overview.totalFavourites||0)/totalProducts).toFixed(1)}</strong>.
+          </p></div>`);
+      }
+
+      const lowPerf = (cats.categories || []).filter(c => c.productCount >= 2 && c.totalFavourites === 0).slice(0, 3);
+      if (lowPerf.length) {
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #ef4444">
+          <h4 style="margin:0 0 8px">⚠️ Categories Needing Attention</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            ${lowPerf.map(c => `<strong>${escapeHtml(c.category)}</strong> (${c.productCount} products, 0 favourites)`).join(', ')} — consider promoting or curating these.
+          </p></div>`);
+      }
+
+      wrap.innerHTML = cards.join('') || '<div class="muted">Not enough data for insights yet.</div>';
+    } catch (e) {
+      wrap.innerHTML = `<div class="card" style="padding:18px;color:#b91c1c">Failed to load insights: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+  /* ==================== End Intelligence Dashboard ==================== */
 
   /* ------------------ Out-of-stock quick view ------------------ */
   // add an out-of-stock card on dashboard (count & click to view)
@@ -2123,9 +2405,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.getElementById('prModalBackdrop').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
   /* ============================================================ end Product Reviews */
 
-  // initial load: fetch categories then products
+  // initial load: fetch categories then products, then dashboard KPIs
   await fetchCategories();
   await fetchProducts();
+  loadDashboardOverview(); // fire-and-forget — populates KPI row 2 and charts
 
 })();
 </script>
