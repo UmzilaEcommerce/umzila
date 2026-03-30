@@ -82,18 +82,21 @@ async function getOverview(admin) {
     { count: productCount },
     { count: activeSellers },
     { count: totalUsers },
-    { data: favSum }
+    { data: favSum },
+    { data: carts }
   ] = await Promise.all([
     admin.from('orders').select('total, order_status').eq('order_status', 'paid'),
     admin.from('products').select('*', { count: 'exact', head: true }).eq('visible', true),
     admin.from('sellers').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     admin.from('profiles').select('*', { count: 'exact', head: true }),
-    admin.from('products').select('favourite_count').not('favourite_count', 'is', null)
+    admin.from('products').select('favourite_count').not('favourite_count', 'is', null),
+    admin.from('carts').select('items')
   ]);
 
   const paidOrders = orders || [];
   const totalRevenue = paidOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
   const totalFavourites = (favSum || []).reduce((s, p) => s + (Number(p.favourite_count) || 0), 0);
+  const cartsWithItems = (carts || []).filter(c => Array.isArray(c.items) && c.items.length > 0).length;
 
   return {
     totalRevenue: Math.round(totalRevenue * 100) / 100,
@@ -102,34 +105,56 @@ async function getOverview(admin) {
     activeSellers: activeSellers || 0,
     totalUsers: totalUsers || 0,
     totalFavourites,
+    cartsWithItems,
     avgOrderValue: paidOrders.length ? Math.round((totalRevenue / paidOrders.length) * 100) / 100 : 0
   };
 }
 
 // ── Product intelligence ──────────────────────────────────────────────────────
 async function getProductIntelligence(admin) {
-  const [{ data: topFav }, { data: topClicks }, { data: recentProducts }] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const [{ data: topFav }, { data: recentProducts }, { data: clickEvents }] = await Promise.all([
     admin.from('products')
-      .select('id, name, category, favourite_count, click_count, price, sale_price, sale, sellers(shop_name)')
+      .select('id, name, category, favourite_count, price, sale_price, sale, sellers(shop_name)')
       .order('favourite_count', { ascending: false })
       .limit(20),
     admin.from('products')
-      .select('id, name, category, favourite_count, click_count, price, sellers(shop_name)')
-      .order('click_count', { ascending: false })
-      .limit(20),
-    admin.from('products')
-      .select('id, name, category, created_at, favourite_count, click_count')
+      .select('id, name, category, created_at, favourite_count')
       .order('created_at', { ascending: false })
-      .limit(10)
+      .limit(10),
+    admin.from('user_events')
+      .select('product_id')
+      .eq('event_type', 'product_click')
+      .gte('created_at', since)
+      .not('product_id', 'is', null)
+      .limit(5000)
   ]);
+
+  // Aggregate click counts from user_events
+  const clickMap = {};
+  (clickEvents || []).forEach(e => {
+    if (e.product_id) clickMap[String(e.product_id)] = (clickMap[String(e.product_id)] || 0) + 1;
+  });
+  const topClickedIds = Object.entries(clickMap).sort((a, b) => b[1] - a[1]).slice(0, 20);
+
+  let topClicks = [];
+  if (topClickedIds.length) {
+    const { data: clickedProds } = await admin.from('products')
+      .select('id, name, category, favourite_count, price, sellers(shop_name)')
+      .in('id', topClickedIds.map(x => x[0]));
+    topClicks = topClickedIds.map(([id, click_count]) => ({
+      click_count,
+      ...(clickedProds || []).find(p => String(p.id) === String(id)) || { id }
+    }));
+  }
 
   // Products with high favourites but low clicks (hidden gems / needs promotion)
   const allProds = topFav || [];
   const highFavLowClick = allProds
-    .filter(p => (p.favourite_count || 0) >= 2 && (p.click_count || 0) < 5)
+    .filter(p => (p.favourite_count || 0) >= 2 && (clickMap[String(p.id)] || 0) < 5)
     .slice(0, 10);
 
-  return { topFav: topFav || [], topClicks: topClicks || [], recentProducts: recentProducts || [], highFavLowClick };
+  return { topFav: topFav || [], topClicks, recentProducts: recentProducts || [], highFavLowClick };
 }
 
 // ── Category intelligence ─────────────────────────────────────────────────────
@@ -150,7 +175,6 @@ async function getCategoryIntelligence(admin) {
     if (!cats[c]) cats[c] = { category: c, productCount: 0, totalFavourites: 0, totalClicks: 0, views: 0, cartAdds: 0 };
     cats[c].productCount++;
     cats[c].totalFavourites += Number(p.favourite_count) || 0;
-    cats[c].totalClicks += Number(p.click_count) || 0;
   });
 
   (events || []).forEach(e => {
@@ -158,6 +182,7 @@ async function getCategoryIntelligence(admin) {
     if (!cats[c]) cats[c] = { category: c, productCount: 0, totalFavourites: 0, totalClicks: 0, views: 0, cartAdds: 0 };
     if (e.event_type === 'category_view') cats[c].views++;
     if (e.event_type === 'add_to_cart') cats[c].cartAdds++;
+    if (e.event_type === 'product_click') cats[c].totalClicks++;
   });
 
   return { categories: Object.values(cats).sort((a, b) => b.totalFavourites - a.totalFavourites) };
@@ -165,10 +190,17 @@ async function getCategoryIntelligence(admin) {
 
 // ── Seller intelligence ───────────────────────────────────────────────────────
 async function getSellerIntelligence(admin) {
-  const [{ data: sellers }, { data: products }, { data: orders }] = await Promise.all([
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+  const [{ data: sellers }, { data: products }, { data: orders }, { data: clickEvents }] = await Promise.all([
     admin.from('sellers').select('id, shop_name, status').eq('status', 'active').limit(100),
-    admin.from('products').select('seller_id, favourite_count, click_count, name').limit(2000),
-    admin.from('orders').select('items, total, order_status').eq('order_status', 'paid').limit(1000)
+    admin.from('products').select('id, seller_id, favourite_count, name').limit(2000),
+    admin.from('orders').select('items, total, order_status').eq('order_status', 'paid').limit(1000),
+    admin.from('user_events')
+      .select('product_id')
+      .eq('event_type', 'product_click')
+      .gte('created_at', since)
+      .not('product_id', 'is', null)
+      .limit(5000)
   ]);
 
   const sellerMap = {};
@@ -176,12 +208,20 @@ async function getSellerIntelligence(admin) {
     sellerMap[s.id] = { id: s.id, shop_name: s.shop_name, productCount: 0, totalFavourites: 0, totalClicks: 0, revenue: 0 };
   });
 
+  // Build product→seller map for click attribution
+  const prodSellerMap = {};
   (products || []).forEach(p => {
+    if (p.seller_id) prodSellerMap[String(p.id)] = p.seller_id;
     if (sellerMap[p.seller_id]) {
       sellerMap[p.seller_id].productCount++;
       sellerMap[p.seller_id].totalFavourites += Number(p.favourite_count) || 0;
-      sellerMap[p.seller_id].totalClicks += Number(p.click_count) || 0;
     }
+  });
+
+  // Count clicks per seller from user_events
+  (clickEvents || []).forEach(e => {
+    const sid = prodSellerMap[String(e.product_id)];
+    if (sid && sellerMap[sid]) sellerMap[sid].totalClicks++;
   });
 
   // Parse order revenue per seller from items JSON

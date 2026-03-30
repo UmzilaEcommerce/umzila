@@ -1530,85 +1530,42 @@ if (modalSignupSubmit) {
       }
       
       const userId = data?.user?.id;
-      let referrerId = null;
-      let referrerCodeUsed = null;
-      
-      // Handle referral if a code was provided
-      if (referralCode) {
-        const referrer = await getReferrerFromCode(referralCode);
-        if (referrer) {
-          referrerId = referrer.user_id;
-          referrerCodeUsed = referralCode;
-          
-          // Create 15% first-order discount code for the new user (referee)
-          const refereeDiscount = await createRefereeDiscountCode(email, referralCode);
-          // Create R40 reward code for the referrer (was missing — now added)
-          const referrerReward = await createReferrerRewardCode(referrerId, email, referralCode);
 
-          // Send emails for both parties (fire-and-forget — non-fatal)
-          if (refereeDiscount) {
-            fetch('/.netlify/functions/send-referral-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: 'referee',
-                email: email,
-                code: refereeDiscount.code,
-                expires_at: refereeDiscount.expires_at
-              })
-            }).catch(e => console.warn('referee email failed', e));
-          }
-          if (referrerReward) {
-            fetch('/.netlify/functions/send-referral-email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                type: 'referrer',
-                email: referrerReward.referrer_email,
-                code: referrerReward.code,
-                expires_at: referrerReward.expires_at,
-                referrer_name: name.split(' ')[0] || 'there'
-              })
-            }).catch(e => console.warn('referrer email failed', e));
-          }
-        }
-      }
-      
       // Create profile with referral info
       if (userId && client.from) {
         try {
-          await client.from('profiles').upsert([{ 
-            user_id: userId, 
+          await client.from('profiles').upsert([{
+            user_id: userId,
             email: email,
             first_name: name.split(' ')[0] || name,
             last_name: name.split(' ').slice(1).join(' ') || '',
-            referral_code: generateReferralCode(),
-            referred_by: referrerId
-          }], { 
+            referral_code: generateReferralCode()
+          }], {
             onConflict: 'user_id',
-            returning: 'minimal' 
+            returning: 'minimal'
           });
-          
-          // Create a referral tracking record
-          if (referrerId && referrerCodeUsed) {
-            await client.from('referral_tracking').insert([{
-              referrer_id: referrerId,
-              referee_id: userId,
-              referral_code: referrerCodeUsed,
-              referee_email: email,
-              status: 'signed_up',
-              created_at: new Date().toISOString()
-            }]);
-          }
         } catch (profileError) {
           console.warn('Profile creation failed:', profileError);
         }
       }
-      
+
+      // Process referral server-side — creates discount codes, tracking record, and sends emails
+      if (referralCode) {
+        fetch('/.netlify/functions/process-referral', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            referral_code: referralCode,
+            referee_email: email,
+            referee_name: name.split(' ')[0] || 'there'
+          })
+        }).catch(e => console.warn('process-referral failed', e));
+      }
+
       // Show success message
       if (successElement) {
         let successMsg = 'Account created! Check your email to verify your address.';
-        if (referralCode && referrerId) {
+        if (referralCode) {
           successMsg += '<br><strong>Check your email — your 15% off code is on its way!</strong>';
         }
         successElement.innerHTML = successMsg;

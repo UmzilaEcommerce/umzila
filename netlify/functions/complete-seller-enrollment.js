@@ -26,7 +26,7 @@ exports.handler = async function (event) {
   const SUPABASE_URL  = process.env.SUPABASE_URL || '';
   const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const RESEND_KEY    = process.env.RESEND_API_KEY || '';
-  const SITE_BASE_URL = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
+  const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     console.error('complete-seller-enrollment: missing env vars');
@@ -39,11 +39,11 @@ exports.handler = async function (event) {
 
   const { pf_payment_id, m_payment_id, email, name, applicationId } = body;
 
-  if ((!pf_payment_id && !m_payment_id) || !email || !name || !applicationId) {
+  if ((!pf_payment_id && !m_payment_id) || !email || !applicationId) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ error: 'pf_payment_id (or m_payment_id), email, name, and applicationId are required' })
+      body: JSON.stringify({ error: 'pf_payment_id (or m_payment_id), email, and applicationId are required' })
     };
   }
 
@@ -136,7 +136,7 @@ exports.handler = async function (event) {
   // 3. Get the seller's user_id from profiles
   const { data: profileRow, error: profileQueryErr } = await admin
     .from('profiles')
-    .select('user_id')
+    .select('user_id, first_name, last_name')
     .eq('email', email)
     .maybeSingle();
 
@@ -191,7 +191,10 @@ exports.handler = async function (event) {
           from: 'Umzila Sellers <sellers@umzila.store>',
           to: [email],
           subject: "You're officially an Umzila seller!",
-          html: buildWelcomeEmail(name, email, app.shop_name || '', SITE_BASE_URL)
+          html: buildWelcomeEmail(
+            name || [profileRow?.first_name, profileRow?.last_name].filter(Boolean).join(' ') || email,
+            email, app.shop_name || '', SITE_BASE_URL
+          )
         })
       });
       if (!emailRes.ok) {

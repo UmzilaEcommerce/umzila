@@ -693,15 +693,19 @@
     container.innerHTML = '<div class="small">Loading favourites…</div>';
     const user = await getUserOrRedirect(); if(!user) return;
     try{
-      const { data: favs, error } = await sb.from('product_favourites').select('product_id').eq('user_id',user.id);
-      if(error || !favs?.length){
+      const { data: favs, error: favsErr } = await sb.from('product_favourites').select('product_id').eq('user_id',user.id);
+      if(favsErr){
+        container.innerHTML=`<div class="small" style="color:#c0392b">Error loading favourites: ${esc(favsErr.message)}</div>`;
+        return;
+      }
+      if(!favs?.length){
         container.innerHTML='<div class="small" style="margin-top:12px;color:#6b7280">No favourites yet. Heart a product on the homepage to save it here.</div>';
         return;
       }
       const productIds = [...new Set(favs.map(f=>f.product_id).filter(Boolean))];
 
-      // Fetch full product data in parallel — fix: use 'sale' not 'on_sale'
-      const [{ data: products }, { data: imgs }] = await Promise.all([
+      // Fetch full product data in parallel
+      const [{ data: products, error: prodErr }, { data: imgs }] = await Promise.all([
         sb.from('products')
           .select('id,name,price,sale_price,sale,category,badge,favourite_count,sellers(shop_name)')
           .in('id', productIds),
@@ -710,6 +714,11 @@
           .in('product_id', productIds)
           .order('image_order', { ascending: true })
       ]);
+
+      if(prodErr){
+        container.innerHTML=`<div class="small" style="color:#c0392b">Error loading products: ${esc(prodErr.message)}</div>`;
+        return;
+      }
 
       // Build image map (first image per product)
       const imageMap = {};
@@ -927,6 +936,16 @@
   (async function init(){
     const { data } = await sb.auth.getSession();
     if(!data?.session?.user){ window.location.href='index.html'; return; }
+    // Claim any anonymous favourites added while logged out
+    try {
+      const anonId = localStorage.getItem('ss_anon_id');
+      if(anonId){
+        await sb.from('product_favourites')
+          .update({ user_id: data.session.user.id })
+          .eq('anonymous_id', anonId)
+          .is('user_id', null);
+      }
+    }catch(_){}
     await loadProfile();
     await loadOrders();
   })();

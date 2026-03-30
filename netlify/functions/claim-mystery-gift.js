@@ -19,7 +19,7 @@ exports.handler = async function (event) {
   const SUPABASE_URL  = process.env.SUPABASE_URL || '';
   const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const RESEND_KEY    = process.env.RESEND_API_KEY || '';
-  const SITE_BASE_URL = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
+  const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY)
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error' }) };

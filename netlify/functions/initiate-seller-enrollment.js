@@ -25,7 +25,7 @@ exports.handler = async function (event) {
   const MERCHANT_KEY        = (process.env.PAYFAST_MERCHANT_KEY || '').toString().trim();
   const PASSPHRASE          = (process.env.PAYFAST_PASSPHRASE || '').toString().trim();
   const SANDBOX             = (process.env.PAYFAST_SANDBOX || 'true').toLowerCase() !== 'false';
-  const SITE_BASE_URL       = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
+  const SITE_BASE_URL       = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     return { statusCode: 500, headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'Server configuration error' }) };

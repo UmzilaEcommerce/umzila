@@ -143,7 +143,7 @@ async function activateSellerEnrollment(supabase, pfData) {
 
         // Send welcome email via Resend (non-fatal)
         const RESEND_KEY    = process.env.RESEND_API_KEY || '';
-        const SITE_BASE_URL = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
+        const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
         if (RESEND_KEY && email) {
             const name      = pfData.name_first ? (pfData.name_first + ' ' + (pfData.name_last || '')).trim() : (app.full_name || '');

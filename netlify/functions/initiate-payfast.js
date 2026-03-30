@@ -7,10 +7,10 @@ const {
   PAYFAST_MERCHANT_KEY,
   PAYFAST_PASSPHRASE = '',
   PAYFAST_SANDBOX = 'true',
-  SITE_BASE_URL,
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY
 } = process.env;
+const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
 const PAYFAST_URL = PAYFAST_SANDBOX === 'true'
   ? 'https://sandbox.payfast.co.za/eng/process'

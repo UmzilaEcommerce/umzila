@@ -204,11 +204,12 @@ const supabaseClient = supabase.createClient(
           <div class="card" style="border-left:4px solid #8b5cf6"><h3>Pending Orders</h3><p id="statPending">0</p></div>
         </div>
         <!-- KPI Row 2 (from Intelligence overview) -->
-        <div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:0">
+        <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:0">
           <div class="card" style="border-left:4px solid #10b981"><h3>Total Revenue</h3><p id="kpiRevenue">—</p></div>
           <div class="card" style="border-left:4px solid #0ea5e9"><h3>Total Orders</h3><p id="kpiOrders">—</p></div>
           <div class="card" style="border-left:4px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
           <div class="card" style="border-left:4px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
+          <div class="card" style="border-left:4px solid #6366f1"><h3>Carts with Items</h3><p id="kpiCarts">—</p></div>
         </div>
 
         <!-- Charts row -->
@@ -1555,7 +1556,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   async function loadDashboardOverview() {
     if (intelLoaded.overview) return;
     intelLoaded.overview = true;
-    ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
+    ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites','kpiCarts'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '…';
     });
     try {
@@ -1569,6 +1570,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if (el('kpiOrders'))     el('kpiOrders').textContent     = overview.totalOrders  || 0;
       if (el('kpiSellers'))    el('kpiSellers').textContent    = overview.activeSellers || 0;
       if (el('kpiFavourites')) el('kpiFavourites').textContent = (overview.totalFavourites || 0).toLocaleString();
+      if (el('kpiCarts'))      el('kpiCarts').textContent      = (overview.cartsWithItems || 0).toLocaleString();
 
       // Revenue line chart
       const revDays = Object.keys(trends.dailyRevenue || {}).sort();
@@ -1609,7 +1611,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       }
     } catch (e) {
       console.warn('loadDashboardOverview error', e);
-      ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
+      ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites','kpiCarts'].forEach(id => {
         const el = document.getElementById(id); if (el) el.textContent = '—';
       });
     }
@@ -1921,10 +1923,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       saAllApps = data || [];
       const thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const pending = saAllApps.filter(a => (a.status || 'pending') === 'pending');
-      const recent  = saAllApps.filter(a =>
-        (a.status === 'approved' || a.status === 'rejected') &&
-        a.created_at && new Date(a.created_at) >= thirtyAgo
-      );
+      const recent  = saAllApps.filter(a => {
+        if (a.status !== 'approved' && a.status !== 'rejected') return false;
+        const reviewedAt = a.updated_at ? new Date(a.updated_at) : new Date(a.created_at);
+        return reviewedAt >= thirtyAgo;
+      });
       renderSAList(pending, pendingWrap, 'pending');
       renderSAList(recent,  recentWrap,  'recent');
     } catch (e) {
@@ -2022,6 +2025,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           showToast('Approved — seller shop created');
           backdrop.classList.remove('open');
           await fetchSellerApplications();
+          document.querySelector('.sub-tab[data-satab="recent"]')?.click();
         } catch (e) { showToast('Approve failed'); approveBtn.disabled=false; approveBtn.textContent='✓ Approve'; }
       });
     }
@@ -2032,12 +2036,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         rejectBtn.disabled = true; rejectBtn.textContent = 'Rejecting…';
         try {
           const { error } = await supabaseClient.from('seller_applications')
-            .update({ status: 'rejected', rejection_reason: reason.trim() })
+            .update({ status: 'rejected', rejection_reason: reason.trim(), updated_at: new Date().toISOString() })
             .eq('id', app.id);
           if (error) { showToast('Reject failed: ' + error.message); rejectBtn.disabled=false; rejectBtn.textContent='✗ Reject'; return; }
           showToast('Application rejected');
           backdrop.classList.remove('open');
           await fetchSellerApplications();
+          document.querySelector('.sub-tab[data-satab="recent"]')?.click();
         } catch (e) { showToast('Reject failed'); rejectBtn.disabled=false; rejectBtn.textContent='✗ Reject'; }
       });
     }

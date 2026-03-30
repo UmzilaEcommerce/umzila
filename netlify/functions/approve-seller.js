@@ -74,7 +74,7 @@ module.exports.handler = async function (event) {
   // Mark application approved
   const { error: appErr } = await admin
     .from('seller_applications')
-    .update({ status: 'approved' })
+    .update({ status: 'approved', updated_at: new Date().toISOString() })
     .eq('id', applicationId);
 
   if (appErr) {
