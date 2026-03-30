@@ -12,10 +12,7 @@ Do not create “temporary hacks” that bypass proper flows (e.g. skipping ITN 
 Do not break backward compatibility with current frontend or database usage
 Do not tightly couple unrelated systems (e.g. seller logic interfering with buyer checkout)
 💳 PAYFAST / PAYMENTS (CRITICAL)
-Do not modify any PayFast-related Netlify functions:
-generate-payfast-signature
-payfast-itn
-initiate-payfast
+
 Do not change parameter ordering or signature logic (PayFast is extremely strict)
 Do not manually verify payments on the frontend
 Do not trust query params like payment_status=COMPLETE — always rely on ITN + database

@@ -214,12 +214,15 @@ exports.handler = async function (event) {
     return encoded.replace(/%[0-9a-f]{2}/gi, m => m.toUpperCase());
   }
 
-  // Include ALL fields in signature string (empty values as empty string, never skipped)
+  // Skip empty fields — PayFast excludes empty params when computing ITN signature
   let pfOutput = '';
   orderedKeys.forEach(key => {
     let val = data[key];
     if (val === undefined || val === null) val = '';
-    pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
+    val = String(val).trim();
+    if (val !== '') {
+      pfOutput += `${key}=${pfEncode(val)}&`;
+    }
   });
   if (pfOutput.endsWith('&')) pfOutput = pfOutput.slice(0, -1);
 

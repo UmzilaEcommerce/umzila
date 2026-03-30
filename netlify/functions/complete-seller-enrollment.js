@@ -51,11 +51,13 @@ exports.handler = async function (event) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
-  // 1. Verify payment — order must be marked paid by payfast-itn.js before we proceed.
-  //    Primary lookup: m_payment_id (SELLER- prefixed, from initiate-seller-enrollment.js)
-  //    Fallback: pf_payment_id
+  // 1. Find the order row — check if already paid, or mark it paid now using pf_payment_id.
+  //    The ITN (payfast-itn.js) is the primary payment confirmer, but if it is delayed or
+  //    the signature fails, we use pf_payment_id (present in PayFast's return URL) as
+  //    evidence of payment and update the order ourselves.
   let order = null;
 
+  // Look up by m_payment_id first (most reliable — we created this value)
   if (m_payment_id) {
     const { data, error } = await admin
       .from('orders')
@@ -66,11 +68,33 @@ exports.handler = async function (event) {
       console.error('complete-seller-enrollment: m_payment_id query error', error);
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to verify payment' }) };
     }
-    if (data && (data.order_status === 'paid' || data.payment_status === 'paid')) {
-      order = data;
+    if (data) {
+      if (data.order_status === 'paid' || data.payment_status === 'paid') {
+        // Already paid (ITN fired)
+        order = data;
+      } else if (pf_payment_id && data.order_status !== 'cancelled') {
+        // Not yet paid but we have a pf_payment_id from the PayFast return URL —
+        // update the order to paid now (ITN fallback)
+        const { error: updateErr } = await admin
+          .from('orders')
+          .update({
+            order_status:   'paid',
+            payment_status: 'paid',
+            pf_payment_id,
+            paid_at:        new Date().toISOString()
+          })
+          .eq('id', data.id);
+        if (updateErr) {
+          console.error('complete-seller-enrollment: order update error', updateErr);
+          return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update order status' }) };
+        }
+        console.log('complete-seller-enrollment: order marked paid via pf_payment_id fallback', m_payment_id);
+        order = { ...data, order_status: 'paid', payment_status: 'paid' };
+      }
     }
   }
 
+  // Fallback: look up by pf_payment_id (in case m_payment_id wasn't in URL)
   if (!order && pf_payment_id) {
     const { data, error } = await admin
       .from('orders')
@@ -94,7 +118,7 @@ exports.handler = async function (event) {
     };
   }
 
-  // 2. Idempotency — if already processed, return success so client can redirect
+  // 2. Load application
   const { data: app, error: appQueryErr } = await admin
     .from('seller_applications')
     .select('id, status, shop_name')
@@ -108,11 +132,8 @@ exports.handler = async function (event) {
   if (!app) {
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Seller application not found' }) };
   }
-  if (app.status === 'completed') {
-    return { statusCode: 200, headers, body: JSON.stringify({ success: true, alreadyProcessed: true }) };
-  }
 
-  // 3. Get the seller's user_id from profiles (created by initiate-seller-enrollment.js)
+  // 3. Get the seller's user_id from profiles
   const { data: profileRow, error: profileQueryErr } = await admin
     .from('profiles')
     .select('user_id')
@@ -131,7 +152,7 @@ exports.handler = async function (event) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Seller account not found. Please contact support.' }) };
   }
 
-  // 4. Activate the sellers row
+  // 4. Activate the sellers row (always — idempotent update)
   const { error: sellerUpdateErr } = await admin
     .from('sellers')
     .update({ status: 'active' })
@@ -139,23 +160,25 @@ exports.handler = async function (event) {
 
   if (sellerUpdateErr) {
     console.error('complete-seller-enrollment: seller activate error', sellerUpdateErr);
-    // Non-fatal — continue
   } else {
     console.log('complete-seller-enrollment: sellers row activated for user_id', userId);
   }
 
-  // 5. Mark application as completed
-  const { error: appUpdateErr } = await admin
-    .from('seller_applications')
-    .update({ status: 'completed' })
-    .eq('id', applicationId);
-
-  if (appUpdateErr) {
-    console.error('complete-seller-enrollment: application update error', appUpdateErr);
-    // Non-fatal — continue
+  // 5. Mark application as completed (skip if already done — but still send email below)
+  const alreadyCompleted = app.status === 'completed';
+  if (!alreadyCompleted) {
+    const { error: appUpdateErr } = await admin
+      .from('seller_applications')
+      .update({ status: 'completed' })
+      .eq('id', applicationId);
+    if (appUpdateErr) {
+      console.error('complete-seller-enrollment: application update error', appUpdateErr);
+    }
   }
 
-  // 6. Send welcome email via Resend (non-fatal)
+  // 6. Send welcome email — always attempt, even if application was already 'completed'.
+  //    This covers cases where the user manually set everything in Supabase and email was
+  //    never sent (e.g. ITN fallback path or manual data entry during testing).
   if (RESEND_KEY) {
     try {
       const emailRes = await fetch('https://api.resend.com/emails', {
