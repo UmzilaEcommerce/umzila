@@ -1799,10 +1799,23 @@ async function loadFromLocalStorage() {
           console.log('Coupon expired');
           return false;
         }
-        
+
+        // Check first-order-only restriction
+        if (coupon.first_order_only && state.user) {
+          const { count, error: ordErr } = await supabaseClient
+            .from('orders')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', state.user.id)
+            .eq('order_status', 'paid');
+          if (!ordErr && count > 0) {
+            showPromoMessage('This code is valid for first-time orders only.', 'error');
+            return false;
+          }
+        }
+
         // Calculate discount based on coupon type
         let discount = 0;
-        if (coupon.type === 'percentage') {
+        if (coupon.type === 'percentage' || coupon.type === 'mystery_gift') {
           const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
           discount = (subtotal * coupon.amount) / 100;
         } else {

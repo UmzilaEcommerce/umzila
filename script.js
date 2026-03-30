@@ -1206,34 +1206,35 @@ async function getReferrerFromCode(referralCode) {
   }
 }
 
-// Create R20 discount code for new user (referee)
+// Create 15% first-order discount code for new user (referee)
 async function createRefereeDiscountCode(refereeEmail, referralCode) {
   if (!supabaseClient) return null;
-  
+
   try {
     const discountCode = `WELCOME${generateReferralCode().substring(0, 6)}`;
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + 1);
-    
+
     const { data, error } = await supabaseClient
       .from('discount_codes')
       .insert([{
         code: discountCode,
-        amount: 20.00,
+        amount: 15,
         used: false,
         expires_at: expiresAt.toISOString(),
         email: refereeEmail,
         referral_code: referralCode,
-        type: 'referee_welcome'
+        type: 'percentage',
+        first_order_only: true
       }])
       .select()
       .single();
-    
+
     if (error) {
       console.error('Error creating referee discount:', error);
       return null;
     }
-    
+
     return data;
   } catch (e) {
     console.error('Error in createRefereeDiscountCode:', e);
@@ -1379,7 +1380,7 @@ function updateReferralBanner(user) {
           if (navigator.share) {
             navigator.share({
               title: 'Join Umzila!',
-              text: `Get R20 off your first order at Umzila with my referral code: ${info.code}`,
+              text: `Get 15% off your first order at Umzila with my referral code: ${info.code}`,
               url: info.link
             });
           } else {
@@ -1539,11 +1540,36 @@ if (modalSignupSubmit) {
           referrerId = referrer.user_id;
           referrerCodeUsed = referralCode;
           
-          // Create R20 discount code for the NEW USER
+          // Create 15% first-order discount code for the new user (referee)
           const refereeDiscount = await createRefereeDiscountCode(email, referralCode);
-          
+          // Create R40 reward code for the referrer (was missing — now added)
+          const referrerReward = await createReferrerRewardCode(referrerId, email, referralCode);
+
+          // Send emails for both parties (fire-and-forget — non-fatal)
           if (refereeDiscount) {
-            console.log(`R20 discount code created for new user: ${refereeDiscount.code}`);
+            fetch('/.netlify/functions/send-referral-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'referee',
+                email: email,
+                code: refereeDiscount.code,
+                expires_at: refereeDiscount.expires_at
+              })
+            }).catch(e => console.warn('referee email failed', e));
+          }
+          if (referrerReward) {
+            fetch('/.netlify/functions/send-referral-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'referrer',
+                email: referrerReward.referrer_email,
+                code: referrerReward.code,
+                expires_at: referrerReward.expires_at,
+                referrer_name: name.split(' ')[0] || 'there'
+              })
+            }).catch(e => console.warn('referrer email failed', e));
           }
         }
       }
@@ -1583,7 +1609,7 @@ if (modalSignupSubmit) {
       if (successElement) {
         let successMsg = 'Account created! Check your email to verify your address.';
         if (referralCode && referrerId) {
-          successMsg += '<br><strong>You will receive a R20 discount code via email!</strong>';
+          successMsg += '<br><strong>Check your email — your 15% off code is on its way!</strong>';
         }
         successElement.innerHTML = successMsg;
         successElement.style.display = 'block';

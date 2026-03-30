@@ -20,7 +20,8 @@
       "Bash(then)",
       "Read(//c/Users/ntand/Downloads/umzila-remote/**)",
       "Bash(find C:UsersntandDownloadsumzila-remote -type f \\\\\\(-name *.sql -o -name *schema* -o -name *migration* \\\\\\))",
-      "mcp__supabase__get_logs"
+      "mcp__supabase__get_logs",
+      "Bash(find /c/Users/ntand/Downloads/umzila-remote -type f -name *.json -o -name *.js -o -name *.ts -o -name *.sql)"
     ]
   }
 }

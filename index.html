@@ -403,24 +403,12 @@
         <div class="hscroll" id="beautyScroll"></div>
       </section>
 
-      <!-- CTA -->
-      <div class="cta fade-up">
-        <div>
-          <strong style="font-size:18px">Sign up & get exclusive drops and student discounts!</strong>
-          <div style="font-size:14px;margin-top:6px;color:rgba(255,255,255,0.9)">Special early access, student codes and mystery box bundles.</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input id="newsEmail" placeholder="Enter your email" />
-          <button id="subscribeBtn" class="btn">Subscribe</button>
-        </div>
-      </div>
-
-      <!-- Referral Banner (text updated to mention R40 off) -->
+      <!-- Referral Banner -->
       <div style="margin-top:12px;padding:12px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)">
         <div>
           <strong>Share with friends & get rewards.</strong>
           <div style="font-size:13px;color:var(--muted)">
-            Refer a friend — they'll get R40 off their order when they sign up with your code.
+            Refer a friend — they'll get 15% off their first order when they sign up with your code.
             <div id="referralCodeDisplay" style="display:none; margin-top: 6px; font-size: 12px; color: var(--accent);">
               Your referral code: <strong id="userReferralCode">Loading...</strong>
             </div>
@@ -436,44 +424,32 @@
       </div>
 
       <!-- FOOTER -->
-      <footer style="margin-top:18px">
+      <footer>
         <div class="footer-grid">
-          <div style="min-width:220px">
-            <img id="footerLogo" src="umzila.webp" alt="logo" style="margin-bottom:10px">
-            <p style="color:rgba(255,255,255,0.9)">Affordable, trendy streetwear for students & fashion lovers.</p>
+          <div class="footer-col">
+            <img id="footerLogo" src="umzila.webp" alt="Umzila">
+            <p class="footer-tagline">Affordable, trendy streetwear<br>for students &amp; fashion lovers.</p>
+            <div class="footer-newsletter">
+              <input id="newsEmail" type="email" placeholder="Your email" aria-label="Subscribe to newsletter">
+              <button id="subscribeBtn">Subscribe</button>
+            </div>
           </div>
-
-          <div style="display:flex;gap:18px;flex-wrap:wrap">
-            <div>
-              <h4 style="margin-bottom:6px">Quick links</h4>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <a href="#">About</a><a href="#">Contact</a><a href="#">FAQ</a><a href="#">Returns & Exchanges</a>
-              </div>
+          <div class="footer-col">
+            <h4>Quick Links</h4>
+            <a href="about.html">About</a>
+            <a href="mailto:umzilaecommerce@gmail.com">Contact</a>
+            <a href="#">Returns &amp; Exchanges</a>
+            <a href="#" id="sellOnUmzilaBtn">Sell on Umzila</a>
+          </div>
+          <div class="footer-col">
+            <h4>Follow Us</h4>
+            <div class="socials" style="margin-bottom:12px">
+              <a href="#" aria-label="Instagram">📸</a>
+              <a href="#" aria-label="TikTok">🎵</a>
+              <a href="#" aria-label="Facebook">📘</a>
             </div>
-
-            <div>
-              <h4 style="margin-bottom:6px">Payments</h4>
-              <div style="display:flex;gap:8px;align-items:center">
-                <!-- inline SVG placeholders for payment icons -->
-                <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#3cc" rx="3"></rect></svg>
-                <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#111" rx="3"></rect></svg>
-                <svg width="36" height="24" viewBox="0 0 36 24"><rect width="36" height="24" fill="#f79" rx="3"></rect></svg>
-              </div>
-            </div>
-
-            <div>
-              <h4 style="margin-bottom:6px">Sell</h4>
-              <button id="sellOnUmzilaBtn" class="btn" style="background:var(--cta);border:none;cursor:pointer;font-size:13px;padding:8px 14px">Sell on Umzila</button>
-            </div>
-
-            <div>
-              <h4 style="margin-bottom:6px">Follow</h4>
-              <div class="socials">
-                <a href="#" aria-label="instagram">📸</a>
-                <a href="#" aria-label="tiktok">🎵</a>
-                <a href="#" aria-label="facebook">📘</a>
-              </div>
-            </div>
+            <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0">Secured by PayFast</p>
+            <p class="footer-copyright">&copy; 2025 Umzila. All rights reserved.</p>
           </div>
         </div>
       </footer>
@@ -684,6 +660,36 @@
           <button type="button" class="btn" id="sellModalSubmitBtn">Submit Application</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+  <!-- Mystery Gift Popup -->
+<div id="mysteryModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:420px;text-align:center">
+    <div class="modal-header" style="border-bottom:none;padding-bottom:0;justify-content:flex-end">
+      <button class="modal-close" id="mysteryClose">&times;</button>
+    </div>
+    <div class="modal-body" style="padding-top:4px">
+      <div style="font-size:40px;margin-bottom:10px">🎁</div>
+      <h2 style="color:#0a2f66;margin:0 0 10px;font-size:22px">Mystery Gift Inside</h2>
+      <p style="color:#555;font-size:15px;line-height:1.6;margin-bottom:18px">
+        First-time visitor? We've hidden a special discount just for you. Claim it before it's gone.
+      </p>
+      <div id="mysteryInitialButtons" style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn" id="mysteryClaimBtn" style="width:100%;padding:14px">Claim my mystery gift</button>
+        <button class="btn ghost" id="mysteryDeclineBtn" style="width:100%;padding:12px;font-size:13px">No thanks, I don't like saving money</button>
+      </div>
+      <div id="mysteryEmailForm" style="display:none">
+        <p style="color:#555;font-size:14px;margin-bottom:10px">Enter your email and we'll send it right over:</p>
+        <input type="email" id="mysteryEmailInput" placeholder="your@email.com"
+          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:8px;box-sizing:border-box">
+        <div id="mysteryEmailError" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn" id="mysterySendBtn" style="width:100%;padding:14px">Send my gift</button>
+      </div>
+      <div id="mysterySuccess" style="display:none;color:#28a745;font-size:15px;font-weight:600;padding:12px 0">
+        Check your inbox! We've sent your mystery gift. 📬
+      </div>
     </div>
   </div>
 </div>
@@ -1171,6 +1177,67 @@
     e.preventDefault();
     openSellModal();
   });
+
+  // Mystery Gift Popup
+  (function() {
+    if (localStorage.getItem('um_mystery_seen')) return;
+    var modal      = document.getElementById('mysteryModal');
+    var closeBtn   = document.getElementById('mysteryClose');
+    var claimBtn   = document.getElementById('mysteryClaimBtn');
+    var declineBtn = document.getElementById('mysteryDeclineBtn');
+    var emailForm  = document.getElementById('mysteryEmailForm');
+    var initBtns   = document.getElementById('mysteryInitialButtons');
+    var emailInput = document.getElementById('mysteryEmailInput');
+    var emailError = document.getElementById('mysteryEmailError');
+    var sendBtn    = document.getElementById('mysterySendBtn');
+    var successMsg = document.getElementById('mysterySuccess');
+    if (!modal) return;
+
+    function openMystery()  { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+    function closeMystery() { localStorage.setItem('um_mystery_seen','1'); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+
+    setTimeout(openMystery, 3000);
+    closeBtn.addEventListener('click', closeMystery);
+    declineBtn.addEventListener('click', closeMystery);
+    modal.addEventListener('click', function(e){ if (e.target===modal) closeMystery(); });
+
+    claimBtn.addEventListener('click', function() {
+      initBtns.style.display = 'none';
+      emailForm.style.display = 'block';
+      emailInput.focus();
+    });
+
+    sendBtn.addEventListener('click', async function() {
+      var email = emailInput.value.trim();
+      emailError.style.display = 'none';
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        emailError.textContent = 'Please enter a valid email address.';
+        emailError.style.display = 'block'; return;
+      }
+      sendBtn.disabled = true; sendBtn.textContent = 'Sending...';
+      try {
+        var res = await fetch('/.netlify/functions/claim-mystery-gift', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ email: email })
+        });
+        var data = await res.json();
+        if (data.success) {
+          emailForm.style.display = 'none';
+          successMsg.style.display = 'block';
+          localStorage.setItem('um_mystery_seen','1');
+          setTimeout(closeMystery, 2200);
+        } else {
+          emailError.textContent = data.error || 'Something went wrong. Please try again.';
+          emailError.style.display = 'block';
+          sendBtn.disabled = false; sendBtn.textContent = 'Send my gift';
+        }
+      } catch (err) {
+        emailError.textContent = 'Network error. Please try again.';
+        emailError.style.display = 'block';
+        sendBtn.disabled = false; sendBtn.textContent = 'Send my gift';
+      }
+    });
+  })();
   </script>
 </body>
 </html>

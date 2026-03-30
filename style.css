@@ -926,63 +926,22 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   }
 }
 
-/* CTA & footer */
-.cta{margin-top:18px;background:linear-gradient(90deg,var(--accent),var(--accent-2));color:#fff;padding:18px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-
-/* Mobile CTA */
-@media (max-width: 768px) {
-  .cta {
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-    text-align: center;
-  }
-}
-
-.cta input{padding:10px;border-radius:999px;border:none;width:300px}
-
-/* Mobile CTA input */
-@media (max-width: 768px) {
-  .cta input {
-    width: 100%;
-    max-width: 300px;
-  }
-}
-
-footer{margin-top:20px;background:var(--accent);color:#fff;padding:24px;border-radius:10px}
-
-/* Mobile footer */
-@media (max-width: 768px) {
-  footer {
-    padding: 20px 16px;
-    border-radius: 10px;
-  }
-}
-
-.footer-grid{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
-
-/* Mobile footer grid */
-@media (max-width: 768px) {
-  .footer-grid {
-    flex-direction: column;
-    gap: 20px;
-  }
-}
-
+/* Footer */
+footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;border-radius:10px}
+@media(max-width:768px){footer{padding:20px 16px}}
+.footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;align-items:start}
+@media(max-width:768px){.footer-grid{grid-template-columns:1fr;gap:20px}}
+.footer-col h4{margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.6)}
+.footer-col a{display:block;color:rgba(255,255,255,0.9);text-decoration:none;font-size:14px;margin-bottom:6px}
+.footer-col a:hover{color:#fff;text-decoration:underline}
+.footer-newsletter{display:flex;gap:6px;margin-top:8px}
+.footer-newsletter input{flex:1;padding:9px 12px;border-radius:999px;border:none;font-size:13px;min-width:0;outline:none}
+.footer-newsletter button{padding:9px 16px;border-radius:999px;border:none;background:#e0284f;color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+.footer-newsletter button:hover{background:#c41f40}
+.footer-tagline{color:rgba(255,255,255,0.75);font-size:13px;line-height:1.5;margin:4px 0 10px}
+.footer-copyright{font-size:12px;color:rgba(255,255,255,0.45);margin-top:12px;margin-bottom:0}
 .socials{display:flex;gap:10px;align-items:center}
-
-/* Footer logo size reduced */
-#footerLogo {
-  height: 60px;
-  width: auto;
-  margin-bottom: 15px;
-}
-
-@media (max-width: 768px) {
-  #footerLogo {
-    height: 50px;
-  }
-}
+#footerLogo{height:46px;width:auto;display:block;margin-bottom:2px}
 
 /* reveal animation */
 .fade-up{opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.2,.9,.2,1)}

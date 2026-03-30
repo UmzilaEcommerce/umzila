@@ -74,8 +74,18 @@
 
     .card:hover{background:linear-gradient(180deg,#ffffff,#f3fbff);box-shadow:0 18px 50px rgba(13,71,161,.08)}
 
-    footer{padding:28px 6vw;background:var(--main);color:#fff;text-align:center}
-    footer a{color:rgba(255,255,255,.95);text-decoration:none;margin:0 10px}
+    footer{margin-top:20px;background:var(--main);color:#fff;padding:28px 24px;border-radius:10px}
+    footer a{color:rgba(255,255,255,.9);text-decoration:none}
+    footer a:hover{color:#fff;text-decoration:underline}
+    .footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;align-items:start}
+    @media(max-width:768px){.footer-grid{grid-template-columns:1fr;gap:20px}}
+    .footer-col h4{margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.6)}
+    .footer-col a{display:block;color:rgba(255,255,255,0.9);text-decoration:none;font-size:14px;margin-bottom:6px}
+    .footer-tagline{color:rgba(255,255,255,0.75);font-size:13px;line-height:1.5;margin:4px 0 10px}
+    .footer-copyright{font-size:12px;color:rgba(255,255,255,0.45);margin-top:12px}
+    #footerLogo{height:46px;width:auto;display:block;margin-bottom:2px}
+    .socials{display:flex;gap:10px}
+    .socials a{font-size:20px}
 
     @media(max-width:960px){
       .hero{grid-template-columns:1fr;padding-top:100px;text-align:left}
@@ -219,10 +229,30 @@
   </main>
 
   <footer>
-    <div style="max-width:960px;margin:0 auto;color:#fff">
-      <a href="#" id="openPrivacy">Privacy Policy</a> |
-      <a href="#" id="openTerms">Terms &amp; Conditions</a> |
-      <a href="mailto:umzilaecommerce@gmail.com">Contact</a>
+    <div class="footer-grid">
+      <div class="footer-col">
+        <img id="footerLogo" src="umzila.webp" alt="Umzila">
+        <p class="footer-tagline">Affordable, trendy streetwear<br>for students &amp; fashion lovers.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Quick Links</h4>
+        <a href="index.html">Home</a>
+        <a href="mailto:umzilaecommerce@gmail.com">Contact</a>
+        <a href="#">Returns &amp; Exchanges</a>
+        <a href="enroll-seller.html">Sell on Umzila</a>
+        <a href="#" id="openPrivacy">Privacy Policy</a>
+        <a href="#" id="openTerms">Terms &amp; Conditions</a>
+      </div>
+      <div class="footer-col">
+        <h4>Follow Us</h4>
+        <div class="socials" style="margin-bottom:12px">
+          <a href="#" aria-label="Instagram">📸</a>
+          <a href="#" aria-label="TikTok">🎵</a>
+          <a href="#" aria-label="Facebook">📘</a>
+        </div>
+        <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0">Secured by PayFast</p>
+        <p class="footer-copyright">&copy; 2025 Umzila. All rights reserved.</p>
+      </div>
     </div>
   </footer>
 
