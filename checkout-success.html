@@ -169,79 +169,71 @@
         '<div><strong>Next:</strong> Setting up your seller account&hellip;</div>';
       document.querySelector('p').textContent = 'Please wait while we activate your seller account.';
 
-      if (!enrollData.email || !enrollData.applicationId) {
-        // sessionStorage lost (new tab / private browsing)
-        document.querySelector('.order-details').innerHTML =
-          '<div><strong>Payment ID:</strong> ' + displayId + '</div>' +
-          '<div><strong>Status:</strong> <span style="color:#28a745;">Paid</span></div>' +
-          '<div style="color:#dc3545;margin-top:8px;">Your payment was received but we could not complete account setup automatically. ' +
-          'Please contact <strong>support@umzila.store</strong> quoting your Payment ID above.</div>';
-      } else {
-        // Complete enrollment — retry up to 15 times (ITN can take up to 60 seconds)
-        const MAX_ATTEMPTS = 15;
-        const RETRY_DELAY  = 4000;
+      // Always attempt enrollment — the function can derive email + applicationId
+      // from the order row if sessionStorage was lost (new tab / private browsing).
+      const MAX_ATTEMPTS = 15;
+      const RETRY_DELAY  = 4000;
 
-        function showRetryButton() {
-          const details = document.querySelector('.order-details');
-          if (document.getElementById('retryBtn')) return;
-          const btn = document.createElement('button');
-          btn.id = 'retryBtn';
-          btn.textContent = 'Try Again';
-          btn.style.cssText = 'margin-top:14px;padding:10px 24px;background:#0a2f66;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;display:block';
-          btn.onclick = function() { btn.remove(); completeEnrollment(1); };
-          details.appendChild(btn);
-        }
+      function showRetryButton() {
+        const details = document.querySelector('.order-details');
+        if (document.getElementById('retryBtn')) return;
+        const btn = document.createElement('button');
+        btn.id = 'retryBtn';
+        btn.textContent = 'Try Again';
+        btn.style.cssText = 'margin-top:14px;padding:10px 24px;background:#0a2f66;color:#fff;border:none;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;display:block';
+        btn.onclick = function() { btn.remove(); completeEnrollment(1); };
+        details.appendChild(btn);
+      }
 
-        async function completeEnrollment(attempt) {
-          try {
-            const payload = {
-              email:         enrollData.email,
-              name:          enrollData.name || '',
-              applicationId: enrollData.applicationId
-            };
-            if (pfPaymentId) payload.pf_payment_id = pfPaymentId;
-            if (mPaymentId.startsWith('SELLER-')) payload.m_payment_id = mPaymentId;
+      async function completeEnrollment(attempt) {
+        try {
+          const payload = {};
+          // Pass whatever we have — the function will fill in the rest from the DB
+          if (enrollData.email)         payload.email         = enrollData.email;
+          if (enrollData.name)          payload.name          = enrollData.name;
+          if (enrollData.applicationId) payload.applicationId = enrollData.applicationId;
+          if (pfPaymentId)              payload.pf_payment_id = pfPaymentId;
+          if (mPaymentId.startsWith('SELLER-')) payload.m_payment_id = mPaymentId;
 
-            const res  = await fetch('/.netlify/functions/complete-seller-enrollment', {
-              method:  'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify(payload)
-            });
-            const data = await res.json();
+          const res  = await fetch('/.netlify/functions/complete-seller-enrollment', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload)
+          });
+          const data = await res.json();
 
-            if (data.success) {
-              sessionStorage.removeItem('seller_enrollment');
-              localStorage.removeItem('ss_cart');
-              window.location.href = '/seller-dashboard.html';
-            } else if (res.status === 402 && attempt < MAX_ATTEMPTS) {
-              // ITN still processing — wait and retry
-              document.querySelector('.order-details').lastElementChild.textContent =
-                'Confirming payment… (' + attempt + ' of ' + MAX_ATTEMPTS + ')';
-              setTimeout(() => completeEnrollment(attempt + 1), RETRY_DELAY);
-            } else if (res.status === 402) {
-              // Exhausted retries
-              document.querySelector('.order-details').lastElementChild.textContent =
-                'Payment confirmed but activation is taking longer than expected.';
-              showRetryButton();
-            } else {
-              document.querySelector('.order-details').innerHTML +=
-                '<div style="color:#dc3545;margin-top:8px;">Account setup failed: ' + (data.error || 'Unknown error') +
-                '. Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
-              showRetryButton();
-            }
-          } catch (err) {
-            if (attempt < MAX_ATTEMPTS) {
-              setTimeout(() => completeEnrollment(attempt + 1), RETRY_DELAY);
-            } else {
-              document.querySelector('.order-details').innerHTML +=
-                '<div style="color:#dc3545;margin-top:8px;">Network error during account setup. ' +
-                'Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
-              showRetryButton();
-            }
+          if (data.success) {
+            sessionStorage.removeItem('seller_enrollment');
+            localStorage.removeItem('ss_cart');
+            window.location.href = '/seller-dashboard.html';
+          } else if (res.status === 402 && attempt < MAX_ATTEMPTS) {
+            // ITN still processing — wait and retry
+            document.querySelector('.order-details').lastElementChild.textContent =
+              'Confirming payment… (' + attempt + ' of ' + MAX_ATTEMPTS + ')';
+            setTimeout(() => completeEnrollment(attempt + 1), RETRY_DELAY);
+          } else if (res.status === 402) {
+            // Exhausted retries
+            document.querySelector('.order-details').lastElementChild.textContent =
+              'Payment confirmed but activation is taking longer than expected.';
+            showRetryButton();
+          } else {
+            document.querySelector('.order-details').innerHTML +=
+              '<div style="color:#dc3545;margin-top:8px;">Account setup failed: ' + (data.error || 'Unknown error') +
+              '. Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
+            showRetryButton();
+          }
+        } catch (err) {
+          if (attempt < MAX_ATTEMPTS) {
+            setTimeout(() => completeEnrollment(attempt + 1), RETRY_DELAY);
+          } else {
+            document.querySelector('.order-details').innerHTML +=
+              '<div style="color:#dc3545;margin-top:8px;">Network error during account setup. ' +
+              'Please contact <strong>support@umzila.store</strong> with your Payment ID.</div>';
+            showRetryButton();
           }
         }
-        completeEnrollment(1);
       }
+      completeEnrollment(1);
     }
   </script>
 </body>

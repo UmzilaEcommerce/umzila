@@ -97,7 +97,7 @@ module.exports.handler = async function (event) {
   if (!existingSeller) {
     const { error: sellerErr } = await admin
       .from('sellers')
-      .insert({ shop_name: shopName.trim(), user_id: null });
+      .insert({ shop_name: shopName.trim(), user_id: null, application_id: applicationId });
 
     if (sellerErr) {
       console.error('approve-seller: insert sellers error', sellerErr);

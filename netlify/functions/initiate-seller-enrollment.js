@@ -125,8 +125,9 @@ exports.handler = async function (event) {
     .eq('id', applicationId)
     .maybeSingle();
 
-  if (app && app.shop_name) {
-    const { error: sellerErr } = await admin.from('sellers')
+  if (app) {
+    // Link by application_id (set during admin approval) — reliable, no text-match fragility
+    const { error: sellerErr, count } = await admin.from('sellers')
       .update({
         user_id:          userId,
         email,
@@ -136,17 +137,38 @@ exports.handler = async function (event) {
         social_instagram: app.instagram || null,
         status:           'pending_payment'
       })
-      .eq('shop_name', app.shop_name)
-      .is('user_id', null);
+      .eq('application_id', applicationId)
+      .is('user_id', null)
+      .select('id', { count: 'exact', head: true });
 
     if (sellerErr) {
       console.error('initiate-seller-enrollment: sellers update error', sellerErr);
       // Non-fatal — continue to create order and payment form
+    } else if (count === 0) {
+      // Fallback: approval may have pre-dated this column — try shop_name match
+      const { error: fallbackErr } = await admin.from('sellers')
+        .update({
+          user_id:          userId,
+          email,
+          whatsapp_number:  phone || app.phone || null,
+          location:         location || null,
+          delivery_method:  deliveryMethod || null,
+          social_instagram: app.instagram || null,
+          status:           'pending_payment',
+          application_id:   applicationId
+        })
+        .eq('shop_name', app.shop_name)
+        .is('user_id', null);
+      if (fallbackErr) {
+        console.error('initiate-seller-enrollment: sellers fallback update error', fallbackErr);
+      } else {
+        console.log('initiate-seller-enrollment: sellers row linked via shop_name fallback for', app.shop_name);
+      }
     } else {
-      console.log('initiate-seller-enrollment: sellers row linked for shop_name', app.shop_name);
+      console.log('initiate-seller-enrollment: sellers row linked via application_id', applicationId);
     }
   } else {
-    console.warn('initiate-seller-enrollment: no application or shop_name found for applicationId', applicationId);
+    console.warn('initiate-seller-enrollment: no application found for applicationId', applicationId);
   }
 
   // ── Step 4: Create pending order row ──────────────────────────────────────

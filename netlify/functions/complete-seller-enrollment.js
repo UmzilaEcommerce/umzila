@@ -37,19 +37,43 @@ exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); }
   catch (e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON body' }) }; }
 
-  const { pf_payment_id, m_payment_id, email, name, applicationId } = body;
+  let { pf_payment_id, m_payment_id, email, name, applicationId } = body;
 
-  if ((!pf_payment_id && !m_payment_id) || !email || !applicationId) {
+  if (!pf_payment_id && !m_payment_id) {
     return {
       statusCode: 400,
       headers,
-      body: JSON.stringify({ error: 'pf_payment_id (or m_payment_id), email, and applicationId are required' })
+      body: JSON.stringify({ error: 'pf_payment_id or m_payment_id is required' })
     };
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
+
+  // If email or applicationId are missing (sessionStorage was lost), derive them from the order row.
+  // m_payment_id format: SELLER-{applicationId UUID}-{timestamp}
+  if (m_payment_id && (!email || !applicationId)) {
+    const uuidMatch = m_payment_id.match(/^SELLER-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-\d+$/i);
+    if (uuidMatch && !applicationId) applicationId = uuidMatch[1];
+
+    if (!email) {
+      const { data: orderRow } = await admin
+        .from('orders')
+        .select('customer_email')
+        .eq('m_payment_id', m_payment_id)
+        .maybeSingle();
+      if (orderRow?.customer_email) email = orderRow.customer_email;
+    }
+  }
+
+  if (!email || !applicationId) {
+    return {
+      statusCode: 400,
+      headers,
+      body: JSON.stringify({ error: 'Could not resolve email and applicationId. Please contact support@umzila.store with your Payment ID.' })
+    };
+  }
 
   // 1. Find the order row — check if already paid, or mark it paid now using pf_payment_id.
   //    The ITN (payfast-itn.js) is the primary payment confirmer, but if it is delayed or

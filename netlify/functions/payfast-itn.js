@@ -84,23 +84,29 @@ exports.handler = async function(event, context) {
 
                     // ── Clear buyer's Supabase cart ────────────────────────
                     if (existingOrder.user_id) {
-                        await supabase
-                            .from('carts')
-                            .delete()
-                            .eq('user_id', existingOrder.user_id)
-                            .catch(e => console.warn('ITN: cart clear error:', e));
-                        console.log('ITN: cart cleared for user:', existingOrder.user_id);
+                        try {
+                            await supabase
+                                .from('carts')
+                                .delete()
+                                .eq('user_id', existingOrder.user_id);
+                            console.log('ITN: cart cleared for user:', existingOrder.user_id);
+                        } catch (cartErr) {
+                            console.warn('ITN: cart clear error:', cartErr.message);
+                        }
                     }
 
                     // ── Update referral_tracking to converted ──────────────
                     const buyerEmail = existingOrder.customer_email || pfData.email_address || '';
                     if (buyerEmail) {
-                        await supabase
-                            .from('referral_tracking')
-                            .update({ status: 'converted' })
-                            .eq('referee_email', buyerEmail.toLowerCase())
-                            .eq('status', 'signed_up') // only advance, never overwrite
-                            .catch(e => console.warn('ITN: referral_tracking conversion error:', e));
+                        try {
+                            await supabase
+                                .from('referral_tracking')
+                                .update({ status: 'converted' })
+                                .eq('referee_email', buyerEmail.toLowerCase())
+                                .eq('status', 'signed_up'); // only advance, never overwrite
+                        } catch (refErr) {
+                            console.warn('ITN: referral_tracking conversion error:', refErr.message);
+                        }
                     }
 
                     // ── Send buyer order confirmation email ────────────────
