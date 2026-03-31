@@ -102,27 +102,63 @@
 
     if (!isSellerEnrollment) {
       // ── Regular product order ──────────────────────────────────────
+      // Clear localStorage cart only after confirming payment is paid in DB.
+      // The ITN (server-to-server) may arrive slightly before or after the user lands here.
+      // Poll up to 8 times (4-second intervals = 32 seconds) to allow ITN to process.
       if (mPaymentId) {
-        const preferredDelivery = localStorage.getItem('ss_preferred_delivery');
-        if (preferredDelivery) {
-          (async function() {
-            try {
-              const res = await fetch('/.netlify/functions/get-client-config');
-              if (res.ok) {
-                const cfg = await res.json();
-                const url = cfg.SUPABASE_URL || cfg.supabaseUrl || '';
-                const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
-                if (url && key) {
-                  const sb = supabase.createClient(url, key);
-                  await sb.from('orders').update({ notes: preferredDelivery }).eq('m_payment_id', mPaymentId);
-                }
+        (async function() {
+          try {
+            const res = await fetch('/.netlify/functions/get-client-config');
+            if (!res.ok) { localStorage.removeItem('ss_cart'); return; }
+            const cfg = await res.json();
+            const url = cfg.SUPABASE_URL || cfg.supabaseUrl || '';
+            const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
+            if (!url || !key) { localStorage.removeItem('ss_cart'); return; }
+
+            const sb = supabase.createClient(url, key);
+
+            // Update preferred delivery notes if present
+            const preferredDelivery = localStorage.getItem('ss_preferred_delivery');
+            if (preferredDelivery) {
+              try {
+                await sb.from('orders').update({ notes: preferredDelivery }).eq('m_payment_id', mPaymentId);
+              } catch (_) {}
+              localStorage.removeItem('ss_preferred_delivery');
+            }
+
+            // Poll until order shows payment_status = 'paid' before clearing cart
+            const MAX_ATTEMPTS = 8;
+            const POLL_DELAY   = 4000;
+            for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+              const { data: order } = await sb
+                .from('orders')
+                .select('payment_status')
+                .eq('m_payment_id', mPaymentId)
+                .maybeSingle();
+
+              if (order && order.payment_status === 'paid') {
+                localStorage.removeItem('ss_cart');
+                localStorage.removeItem('ss_coupon');
+                console.log('checkout-success: payment confirmed, cart cleared');
+                break;
               }
-            } catch (_) {}
-            localStorage.removeItem('ss_preferred_delivery');
-          })();
-        }
+
+              if (attempt < MAX_ATTEMPTS) {
+                await new Promise(r => setTimeout(r, POLL_DELAY));
+              } else {
+                // ITN took too long — clear cart optimistically since user reached success page
+                console.warn('checkout-success: ITN not yet confirmed after polling, clearing cart optimistically');
+                localStorage.removeItem('ss_cart');
+                localStorage.removeItem('ss_coupon');
+              }
+            }
+          } catch (_) {
+            // Fallback: clear cart anyway since user is on success page
+            localStorage.removeItem('ss_cart');
+            localStorage.removeItem('ss_coupon');
+          }
+        })();
       }
-      localStorage.removeItem('ss_cart');
 
     } else {
       // ── Seller enrollment payment ─────────────────────────────────

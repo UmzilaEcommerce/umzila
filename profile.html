@@ -403,7 +403,7 @@
     const container = document.getElementById('ordersContainer');
     container.innerHTML = '<div class="small">Loading orders…</div>';
     try{
-      const { data: orders, error } = await sb.from('orders').select('*').eq('user_id',user.id).order('created_at',{ascending:false}).limit(100);
+      const { data: orders, error } = await sb.from('orders').select('*').eq('user_id',user.id).eq('payment_status','paid').order('created_at',{ascending:false}).limit(100);
       if(error || !orders?.length){
         container.innerHTML = '<div class="small">'+( error ? 'Error: '+esc(error.message) : 'No orders yet.')+'</div>';
         return;

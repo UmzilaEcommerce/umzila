@@ -8,13 +8,18 @@ exports.handler = async function(event, context) {
     const immediateResponse = { statusCode: 200, headers, body: 'OK' };
 
     try {
-        const params = new URLSearchParams(event.body);
+        // Decode body (Netlify may base64-encode it)
+        const rawBody = event.isBase64Encoded
+            ? Buffer.from(event.body, 'base64').toString('utf-8')
+            : (event.body || '');
+
+        const params = new URLSearchParams(rawBody);
         const pfData = {};
         for (const [key, value] of params) {
             pfData[key] = value;
         }
 
-        console.log('PayFast ITN received:', JSON.stringify(pfData, null, 2));
+        console.log('PayFast ITN received — m_payment_id:', pfData.m_payment_id, 'status:', pfData.payment_status);
 
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -29,7 +34,7 @@ exports.handler = async function(event, context) {
         });
 
         const passphrase = process.env.PAYFAST_PASSPHRASE || '';
-        const signatureValid = verifySignature(pfData, passphrase);
+        const signatureValid = verifySignature(rawBody, passphrase);
 
         if (!signatureValid) {
             console.error('Invalid PayFast signature — skipping update');
@@ -37,6 +42,15 @@ exports.handler = async function(event, context) {
         }
 
         if (pfData.payment_status === 'COMPLETE') {
+            // Fetch order before update — needed for idempotency check, coupon/cart data, confirmation + seller emails
+            const { data: existingOrder } = await supabase
+                .from('orders')
+                .select('id, payment_status, user_id, customer_email, customer_name, coupon_code, items, total, discount, shipping_cost, order_number, label, delivery_address, city, province, postal_code, notes')
+                .eq('m_payment_id', pfData.m_payment_id)
+                .maybeSingle();
+
+            const alreadyPaid = existingOrder?.payment_status === 'paid';
+
             // Mark order paid
             const { error: orderErr } = await supabase
                 .from('orders')
@@ -53,6 +67,106 @@ exports.handler = async function(event, context) {
                 console.error('ITN: error updating order:', orderErr);
             } else {
                 console.log('ITN: order marked as paid:', pfData.m_payment_id);
+
+                // Run post-payment tasks only once (guard against ITN retries)
+                if (!alreadyPaid && existingOrder) {
+
+                    // ── Mark coupon as used ────────────────────────────────
+                    if (existingOrder.coupon_code) {
+                        const { error: dcErr } = await supabase
+                            .from('discount_codes')
+                            .update({ used: true, used_at: new Date().toISOString() })
+                            .eq('code', existingOrder.coupon_code)
+                            .eq('used', false); // idempotent — only updates if not already consumed
+                        if (dcErr) console.error('ITN: error marking coupon used:', dcErr);
+                        else console.log('ITN: coupon marked used:', existingOrder.coupon_code);
+                    }
+
+                    // ── Clear buyer's Supabase cart ────────────────────────
+                    if (existingOrder.user_id) {
+                        await supabase
+                            .from('carts')
+                            .delete()
+                            .eq('user_id', existingOrder.user_id)
+                            .catch(e => console.warn('ITN: cart clear error:', e));
+                        console.log('ITN: cart cleared for user:', existingOrder.user_id);
+                    }
+
+                    // ── Update referral_tracking to converted ──────────────
+                    const buyerEmail = existingOrder.customer_email || pfData.email_address || '';
+                    if (buyerEmail) {
+                        await supabase
+                            .from('referral_tracking')
+                            .update({ status: 'converted' })
+                            .eq('referee_email', buyerEmail.toLowerCase())
+                            .eq('status', 'signed_up') // only advance, never overwrite
+                            .catch(e => console.warn('ITN: referral_tracking conversion error:', e));
+                    }
+
+                    // ── Send buyer order confirmation email ────────────────
+                    // Only for product orders, not seller enrollment
+                    if (pfData.custom_str1 !== 'seller_enrollment' && existingOrder.label !== 'seller_enrollment' && existingOrder.customer_email) {
+                        const RESEND_KEY    = process.env.RESEND_API_KEY || '';
+                        const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
+                        if (RESEND_KEY) {
+                            try {
+                                const emailRes = await fetch('https://api.resend.com/emails', {
+                                    method: 'POST',
+                                    headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        from:    'Umzila <orders@umzila.store>',
+                                        to:      [existingOrder.customer_email],
+                                        subject: `Order confirmed — ${existingOrder.order_number || pfData.m_payment_id}`,
+                                        html:    buildOrderConfirmationEmail(existingOrder, pfData, SITE_BASE_URL)
+                                    })
+                                });
+                                if (!emailRes.ok) {
+                                    const t = await emailRes.text();
+                                    console.error('ITN: order confirmation email failed', emailRes.status, t);
+                                } else {
+                                    console.log('ITN: order confirmation email sent for order', existingOrder.order_number || pfData.m_payment_id);
+                                }
+                            } catch (emailErr) {
+                                console.error('ITN: order confirmation email error', emailErr);
+                            }
+                        }
+
+                        // ── Send per-seller new order notification emails ──
+                        await sendSellerOrderNotifications(supabase, existingOrder, pfData).catch(
+                            e => console.error('ITN: seller notifications error', e)
+                        );
+                    }
+
+                    // ── Decrement product stock ────────────────────────────
+                    try {
+                        const orderItems = Array.isArray(existingOrder.items)
+                            ? existingOrder.items
+                            : (typeof existingOrder.items === 'string' ? JSON.parse(existingOrder.items) : []);
+
+                        for (const item of orderItems) {
+                            const pid = item.product_id || item.id;
+                            const qty = Number(item.quantity || item.qty || 1);
+                            if (!pid || qty <= 0) continue;
+
+                            const { data: prod } = await supabase
+                                .from('products')
+                                .select('stock')
+                                .eq('id', pid)
+                                .maybeSingle();
+
+                            if (prod != null) {
+                                const newStock = Math.max(0, (Number(prod.stock) || 0) - qty);
+                                const { error: stockErr } = await supabase
+                                    .from('products')
+                                    .update({ stock: newStock })
+                                    .eq('id', pid);
+                                if (stockErr) console.warn('ITN: stock decrement failed for product', pid);
+                            }
+                        }
+                    } catch (stockError) {
+                        console.warn('ITN: stock decrement error:', stockError.message);
+                    }
+                }
             }
 
             // ── Seller enrollment activation ───────────────────────────────
@@ -183,24 +297,366 @@ async function activateSellerEnrollment(supabase, pfData) {
 }
 
 // ── PayFast signature verification ───────────────────────────────────────────
-function verifySignature(pfData, passphrase = '') {
+// Uses the raw POST body to avoid re-encoding discrepancies between PHP urlencode
+// and JS encodeURIComponent. PayFast signs the URL-encoded parameter string as-is.
+function verifySignature(rawBody, passphrase = '') {
     let pfParamString = '';
-    const keys = Object.keys(pfData).filter(key => key !== 'signature');
+    let receivedSignature = '';
 
-    for (const key of keys) {
-        if (pfData[key] !== '') {
-            pfParamString += `${key}=${encodeURIComponent(pfData[key].trim()).replace(/%20/g, '+').replace(/%[0-9a-f]{2}/gi, m => m.toUpperCase())}&`;
+    const pairs = rawBody.split('&');
+
+    for (let pair of pairs) {
+        if (pair.startsWith('signature=')) {
+            receivedSignature = decodeURIComponent(pair.split('=')[1] || '');
+        } else {
+            pfParamString += pair + '&';
         }
     }
 
+    // Remove trailing &
     pfParamString = pfParamString.slice(0, -1);
 
     if (passphrase) {
-        pfParamString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, '+')}`;
+        pfParamString += `&passphrase=${encodeURIComponent(passphrase).replace(/%20/g, '+')}`;
     }
 
-    const calculatedSignature = crypto.createHash('md5').update(pfParamString).digest('hex');
-    return calculatedSignature === pfData.signature;
+    const calculatedSignature = crypto
+        .createHash('md5')
+        .update(pfParamString)
+        .digest('hex');
+
+    return calculatedSignature === receivedSignature;
+}
+
+// ── Per-seller new order notification ────────────────────────────────────────
+// Groups order items by their owning seller and sends one email per seller.
+async function sendSellerOrderNotifications(supabase, order, pfData) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    if (!items.length) return;
+
+    const RESEND_KEY    = process.env.RESEND_API_KEY || '';
+    const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
+    if (!RESEND_KEY) return;
+
+    // Collect all product IDs in this order
+    const productIds = [...new Set(items.map(i => i.id || i.product_id).filter(Boolean))];
+    if (!productIds.length) return;
+
+    // Fetch products → get seller_id per product
+    const { data: products, error: prodErr } = await supabase
+        .from('products')
+        .select('id, seller_id')
+        .in('id', productIds);
+
+    if (prodErr || !products || !products.length) {
+        console.warn('ITN seller notify: product lookup failed', prodErr);
+        return;
+    }
+
+    // Map product_id → seller_id
+    const productToSeller = {};
+    products.forEach(p => { if (p.seller_id) productToSeller[p.id] = p.seller_id; });
+
+    // Get unique seller IDs that appear in this order
+    const sellerIds = [...new Set(Object.values(productToSeller))];
+    if (!sellerIds.length) return;
+
+    // Fetch active sellers with email
+    const { data: sellers, error: sellerErr } = await supabase
+        .from('sellers')
+        .select('id, shop_name, email')
+        .in('id', sellerIds)
+        .eq('status', 'active');
+
+    if (sellerErr || !sellers || !sellers.length) {
+        console.warn('ITN seller notify: seller lookup failed', sellerErr);
+        return;
+    }
+
+    // Map seller_id → seller row
+    const sellerMap = {};
+    sellers.forEach(s => { sellerMap[s.id] = s; });
+
+    // Group order items by seller_id
+    const grouped = {};
+    items.forEach(item => {
+        const pid      = item.id || item.product_id;
+        const sellerId = productToSeller[pid];
+        if (!sellerId || !sellerMap[sellerId]) return;
+        if (!grouped[sellerId]) grouped[sellerId] = [];
+        grouped[sellerId].push(item);
+    });
+
+    // Send one email per seller
+    for (const [sellerId, sellerItems] of Object.entries(grouped)) {
+        const seller = sellerMap[sellerId];
+        if (!seller.email || !sellerItems.length) continue;
+
+        try {
+            const res = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    from:    'Umzila Sellers <sellers@umzila.store>',
+                    to:      [seller.email],
+                    subject: `New order for ${seller.shop_name || 'your store'} — ${order.order_number || pfData.m_payment_id}`,
+                    html:    buildSellerOrderEmail(seller, sellerItems, order, pfData, SITE_BASE_URL)
+                })
+            });
+            if (!res.ok) {
+                console.error('ITN seller notify: email failed for', seller.email, res.status, await res.text());
+            } else {
+                console.log('ITN seller notify: email sent to', seller.email, '—', sellerItems.length, 'item(s)');
+            }
+        } catch (e) {
+            console.error('ITN seller notify: email error for', seller.email, e);
+        }
+    }
+}
+
+function buildSellerOrderEmail(seller, sellerItems, order, pfData, siteUrl) {
+    const site     = siteUrl || '';
+    const orderRef = order.order_number || pfData.m_payment_id || 'N/A';
+    const shopName = esc(seller.shop_name || 'Your Store');
+
+    const fmt  = (n) => 'R' + (parseFloat(n) || 0).toFixed(2);
+    const getName  = (i) => i.title || i.name || i.item_name  || 'Item';
+    const getPrice = (i) => parseFloat(i.price || i.unit_price || 0);
+    const getQty   = (i) => parseInt(i.qty   || i.quantity    || 1, 10);
+    const getImg   = (i) => i.img || i.image_url || i.image   || '';
+    const getSize  = (i) => i.size || i.variant  || '';
+
+    const sellerTotal = sellerItems.reduce((s, i) => s + getPrice(i) * getQty(i), 0);
+
+    const itemsHtml = sellerItems.map(item => {
+        const img  = getImg(item);
+        const name = esc(getName(item));
+        const size = getSize(item) ? ` — ${esc(String(getSize(item)))}` : '';
+        const qty  = getQty(item);
+        const price = getPrice(item);
+
+        const imgCell = img
+            ? `<td style="padding:10px 12px 10px 0;vertical-align:top;width:68px"><img src="${esc(img)}" width="64" height="64" alt="${name}" style="border-radius:8px;object-fit:cover;display:block;border:1px solid #eaecf0"></td>`
+            : `<td style="padding:10px 12px 10px 0;vertical-align:top;width:68px"><div style="width:64px;height:64px;background:#f0f4ff;border-radius:8px;text-align:center;line-height:64px;font-size:20px">🛍️</div></td>`;
+
+        return `<tr>
+          ${imgCell}
+          <td style="padding:10px 0;vertical-align:top">
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e">${name}${size}</div>
+            <div style="font-size:13px;color:#666;margin-top:3px">Qty: ${qty} &nbsp;·&nbsp; ${fmt(price)} each</div>
+          </td>
+          <td style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;white-space:nowrap;font-size:14px;font-weight:700;color:#0a2f66">${fmt(price * qty)}</td>
+        </tr>`;
+    }).join('');
+
+    // Customer delivery info
+    const customerName = esc(order.customer_name || pfData.name_first || 'Customer');
+    const deliveryType = esc(order.label || 'Standard Delivery');
+    const address      = [order.delivery_address, order.city, order.province, order.postal_code].filter(Boolean).map(esc).join(', ');
+    const notes        = order.notes ? esc(order.notes) : '';
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
+  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.09)}
+  .hdr{background:#0a2f66;padding:30px 40px;text-align:center}
+  .hdr h1{color:#fff;margin:0 0 4px;font-size:22px;font-weight:800}
+  .hdr p{color:rgba(255,255,255,0.7);margin:0;font-size:13px}
+  .badge{display:inline-block;background:#e0284f;color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:999px;margin-top:12px;letter-spacing:.5px}
+  .bd{padding:32px 40px}
+  .bd h2{color:#0a2f66;margin:0 0 6px;font-size:19px;font-weight:700}
+  .bd p{color:#555;line-height:1.7;margin:0 0 14px;font-size:14px}
+  .ref-box{background:#f0f4ff;border-radius:8px;padding:12px 16px;margin:0 0 20px;font-size:13px;color:#0a2f66;font-weight:600}
+  .section-label{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.8px;margin:20px 0 8px}
+  .info-box{background:#f8f9fa;border-radius:8px;padding:14px 18px;font-size:14px;color:#333;line-height:1.8}
+  .info-box .row{display:flex;gap:8px}
+  .info-box .lbl{color:#888;min-width:100px;flex-shrink:0}
+  .info-box .val{color:#1a1a2e;font-weight:600}
+  .items-table{width:100%;border-collapse:collapse;margin:8px 0 4px}
+  .total-row{border-top:2px solid #eaecf0;padding-top:8px;margin-top:4px;font-size:15px;font-weight:800;color:#0a2f66}
+  .divider{border:none;border-top:1px solid #eaecf0;margin:20px 0}
+  .cta{text-align:center;margin:24px 0 8px}
+  .btn{display:inline-block;background:#0a2f66;color:#fff !important;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
+  .note{font-size:12px;color:#aaa;text-align:center;margin-top:8px}
+  .ft{background:#f4f6fb;padding:18px 40px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
+  .ft a{color:#0a2f66;text-decoration:none}
+  @media(max-width:480px){.bd{padding:24px 20px}.hdr{padding:24px 20px}.info-box .row{flex-direction:column;gap:2px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>Umzila Sellers</h1>
+    <p>${shopName}</p>
+    <span class="badge">🛒 NEW ORDER</span>
+  </div>
+  <div class="bd">
+    <h2>You have a new order!</h2>
+    <p>A customer just paid for items from your store. Here are the details — log in to your dashboard to manage fulfilment.</p>
+
+    <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
+
+    <div class="section-label">Items ordered from your store</div>
+    <table class="items-table">
+      <tbody>${itemsHtml}</tbody>
+    </table>
+    <div class="total-row" style="display:flex;justify-content:space-between;padding:10px 0 4px">
+      <span>Your items total</span><span>${fmt(sellerTotal)}</span>
+    </div>
+
+    <hr class="divider">
+
+    <div class="section-label">Customer details</div>
+    <div class="info-box">
+      <div class="row"><span class="lbl">Name</span><span class="val">${customerName}</span></div>
+      <div class="row" style="margin-top:6px"><span class="lbl">Delivery</span><span class="val">${deliveryType}</span></div>
+      ${address ? `<div class="row" style="margin-top:6px"><span class="lbl">Address</span><span class="val">${address}</span></div>` : ''}
+      ${notes ? `<div class="row" style="margin-top:6px"><span class="lbl">Notes</span><span class="val">${notes}</span></div>` : ''}
+    </div>
+
+    <div class="cta">
+      <a href="${esc(site)}/login-admin.html" class="btn">Log In to Dashboard &rarr;</a>
+    </div>
+    <p class="note">Your full order details, customer contact info, and fulfilment tools are in your seller dashboard.</p>
+  </div>
+  <div class="ft">
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// ── Order confirmation email builder ─────────────────────────────────────────
+function buildOrderConfirmationEmail(order, pfData, siteUrl) {
+    const site      = siteUrl || '';
+    const orderRef  = order.order_number || pfData.m_payment_id || 'N/A';
+    const firstName = (order.customer_name || pfData.name_first || 'there').split(/\s+/)[0];
+    const items     = Array.isArray(order.items) ? order.items : [];
+
+    const fmt = (n) => 'R' + (parseFloat(n) || 0).toFixed(2);
+
+    // Normalise field names — cart items use various conventions
+    const getName  = (i) => i.title || i.name || i.item_name   || 'Item';
+    const getPrice = (i) => parseFloat(i.price || i.unit_price  || 0);
+    const getQty   = (i) => parseInt(i.qty   || i.quantity      || 1, 10);
+    const getImg   = (i) => i.img || i.image_url || i.image     || '';
+    const getSize  = (i) => i.size || i.variant  || '';
+
+    const subtotal  = items.reduce((s, i) => s + getPrice(i) * getQty(i), 0);
+    const discount  = parseFloat(order.discount || 0);
+    const shipping  = parseFloat(order.shipping_cost || 0);
+    const total     = parseFloat(order.total || subtotal - discount + shipping);
+
+    const itemsHtml = items.map(item => {
+        const img   = getImg(item);
+        const name  = esc(getName(item));
+        const size  = getSize(item) ? `<span style="color:#888;font-size:12px"> — ${esc(String(getSize(item)))}</span>` : '';
+        const qty   = getQty(item);
+        const price = getPrice(item);
+        const line  = fmt(price * qty);
+
+        const imgHtml = img
+            ? `<td style="padding:10px 12px 10px 0;vertical-align:top;width:72px">
+                 <img src="${esc(img)}" width="68" height="68" alt="${name}" style="border-radius:8px;object-fit:cover;display:block;border:1px solid #eaecf0" />
+               </td>`
+            : `<td style="padding:10px 12px 10px 0;vertical-align:top;width:72px">
+                 <div style="width:68px;height:68px;background:#f0f4ff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px">🛍️</div>
+               </td>`;
+
+        return `<tr>
+          ${imgHtml}
+          <td style="padding:10px 0;vertical-align:top">
+            <div style="font-size:14px;font-weight:600;color:#1a1a2e;line-height:1.4">${name}${size}</div>
+            <div style="font-size:13px;color:#666;margin-top:3px">${qty} × ${fmt(price)}</div>
+          </td>
+          <td style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;white-space:nowrap">
+            <div style="font-size:14px;font-weight:700;color:#0a2f66">${line}</div>
+          </td>
+        </tr>`;
+    }).join('\n');
+
+    const discountRow = discount > 0
+        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Discount${order.coupon_code ? ` (${esc(order.coupon_code)})` : ''}</td><td style="padding:4px 0;text-align:right;color:#28a745;font-weight:600;font-size:14px">-${fmt(discount)}</td></tr>`
+        : '';
+
+    const shippingRow = shipping > 0
+        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Shipping</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(shipping)}</td></tr>`
+        : `<tr><td style="padding:4px 0;color:#555;font-size:14px">Shipping</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">Calculated at delivery</td></tr>`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
+  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.09)}
+  .hdr{background:#0a2f66;padding:30px 40px;text-align:center}
+  .hdr h1{color:#fff;margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-0.5px}
+  .hdr p{color:rgba(255,255,255,0.7);margin:0;font-size:13px}
+  .badge{display:inline-block;background:#28a745;color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:999px;margin-top:12px;letter-spacing:.5px}
+  .bd{padding:32px 40px}
+  .bd h2{color:#0a2f66;margin:0 0 6px;font-size:19px;font-weight:700}
+  .bd p{color:#555;line-height:1.7;margin:0 0 14px;font-size:14px}
+  .ref-box{background:#f0f4ff;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:13px;color:#0a2f66;font-weight:600}
+  .items-table{width:100%;border-collapse:collapse;margin:20px 0}
+  .divider{border:none;border-top:1px solid #eaecf0;margin:20px 0}
+  .summary-table{width:100%;border-collapse:collapse}
+  .total-row td{padding:8px 0;font-size:16px;font-weight:800;color:#0a2f66;border-top:2px solid #eaecf0}
+  .cta{text-align:center;margin:24px 0 8px}
+  .btn{display:inline-block;background:#e0284f;color:#fff !important;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
+  .ft{background:#f4f6fb;padding:18px 40px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
+  .ft a{color:#0a2f66;text-decoration:none}
+  @media(max-width:480px){.bd{padding:24px 20px}.hdr{padding:24px 20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>Umzila</h1>
+    <p>Your order has been confirmed</p>
+    <span class="badge">✓ PAYMENT CONFIRMED</span>
+  </div>
+  <div class="bd">
+    <h2>Thanks, ${esc(firstName)}! 🎉</h2>
+    <p>We've received your payment and your order is now being processed. The seller will be in touch once your items are on their way.</p>
+
+    <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
+
+    <table class="items-table">
+      <tbody>
+        ${itemsHtml}
+      </tbody>
+    </table>
+
+    <hr class="divider">
+
+    <table class="summary-table">
+      <tbody>
+        <tr><td style="padding:4px 0;color:#555;font-size:14px">Subtotal</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(subtotal)}</td></tr>
+        ${discountRow}
+        ${shippingRow}
+        <tr class="total-row"><td>Total paid</td><td style="text-align:right">${fmt(total)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="cta">
+      <a href="${esc(site)}/profile.html" class="btn">View My Orders &rarr;</a>
+    </div>
+
+    <p style="font-size:13px;color:#888;text-align:center;margin-top:8px">
+      Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a>
+    </p>
+  </div>
+  <div class="ft">
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <a href="mailto:orders@umzila.store">orders@umzila.store</a>
+  </div>
+</div>
+</body>
+</html>`;
 }
 
 // ── Welcome email builder ─────────────────────────────────────────────────────

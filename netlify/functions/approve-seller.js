@@ -6,9 +6,10 @@
 const { createClient } = require('@supabase/supabase-js');
 
 module.exports.handler = async function (event) {
+  const origin = process.env.ALLOWED_ORIGIN || '*';
   const headers = {
     'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*'
+    'Access-Control-Allow-Origin': origin
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -22,12 +23,39 @@ module.exports.handler = async function (event) {
   const SUPABASE_URL   = process.env.SUPABASE_URL || '';
   const SERVICE_KEY    = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const RESEND_KEY     = process.env.RESEND_API_KEY || '';
-  const SITE_BASE_URL  = (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
+  const SITE_BASE_URL  = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
   if (!SUPABASE_URL || !SERVICE_KEY) {
     console.error('approve-seller: missing env vars');
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error' }) };
   }
+
+  // ── Verify caller is an authenticated admin ────────────────────────────
+  const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+  }
+
+  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+
+  const { data: { user: callerUser }, error: authErr } = await admin.auth.getUser(token);
+  if (authErr || !callerUser) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid or expired session' }) };
+  }
+
+  const { data: adminRow } = await admin
+    .from('admins')
+    .select('role')
+    .eq('user_id', callerUser.id)
+    .maybeSingle();
+
+  if (!adminRow || adminRow.role !== 'admin') {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden' }) };
+  }
+  // ── End auth check ─────────────────────────────────────────────────────
 
   let body;
   try { body = JSON.parse(event.body || '{}'); }
@@ -37,10 +65,6 @@ module.exports.handler = async function (event) {
   if (!applicationId || !shopName || !shopName.trim()) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'applicationId and shopName are required' }) };
   }
-
-  const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
 
   // Fetch the application so we have the applicant's email and name for the enrollment email
   const { data: app, error: fetchErr } = await admin
@@ -57,18 +81,30 @@ module.exports.handler = async function (event) {
     return { statusCode: 404, headers, body: JSON.stringify({ error: 'Application not found' }) };
   }
 
-  // Insert seller row — user_id is intentionally null; the seller will claim it after payment
-  const { error: sellerErr } = await admin
+  // Insert seller row — user_id is intentionally null; the seller will claim it after payment.
+  // Skip insert if a row for this shop already exists (idempotent re-approval).
+  const { data: existingSeller, error: sellerCheckErr } = await admin
     .from('sellers')
-    .insert({ shop_name: shopName.trim(), user_id: null });
+    .select('id, user_id')
+    .eq('shop_name', shopName.trim())
+    .maybeSingle();
 
-  if (sellerErr) {
-    console.error('approve-seller: insert sellers error', sellerErr);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Failed to create seller shop: ' + sellerErr.message })
-    };
+  if (sellerCheckErr) {
+    console.error('approve-seller: sellers check error', sellerCheckErr);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to check seller: ' + sellerCheckErr.message }) };
+  }
+
+  if (!existingSeller) {
+    const { error: sellerErr } = await admin
+      .from('sellers')
+      .insert({ shop_name: shopName.trim(), user_id: null });
+
+    if (sellerErr) {
+      console.error('approve-seller: insert sellers error', sellerErr);
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to create seller shop: ' + sellerErr.message }) };
+    }
+  } else {
+    console.log('approve-seller: sellers row already exists for shop_name', shopName.trim(), '— skipping insert');
   }
 
   // Mark application approved
@@ -110,7 +146,7 @@ module.exports.handler = async function (event) {
         const errText = await emailRes.text();
         console.error('approve-seller: Resend error', emailRes.status, errText);
       } else {
-        console.log('approve-seller: enrollment email sent to', app.email);
+        console.log('approve-seller: enrollment email sent for application', app.id);
       }
     } catch (emailErr) {
       console.error('approve-seller: failed to send email', emailErr);

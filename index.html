@@ -1253,5 +1253,23 @@
     });
   })();
   </script>
+
+  <!-- Skeleton loading: fills every product scroll row immediately on parse.
+       renderAll() in script.js replaces innerHTML with real cards when products load. -->
+  <script>
+    (function () {
+      var card = '<div class="sk-card">'
+        + '<div class="sk-img"></div>'
+        + '<div class="sk-line sk-line-wide"></div>'
+        + '<div class="sk-line sk-line-mid"></div>'
+        + '<div class="sk-line-btn"></div>'
+        + '</div>';
+      var row = '';
+      for (var i = 0; i < 6; i++) row += card;
+      document.querySelectorAll('.hscroll').forEach(function (el) {
+        if (!el.innerHTML.trim()) el.innerHTML = row;
+      });
+    })();
+  </script>
 </body>
 </html>

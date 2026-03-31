@@ -1,5 +1,6 @@
 // netlify/functions/generate-payfast-signature.js
 const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async function (event, context) {
   try {
@@ -30,6 +31,30 @@ if (event.httpMethod !== 'POST') {
   };
 }
 
+    // ── Require authenticated user ─────────────────────────────────────────
+    const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+    const userToken  = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!userToken) {
+      return {
+        statusCode: 401,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*' },
+        body: JSON.stringify({ error: 'Authentication required' })
+      };
+    }
+    const SUPABASE_URL      = process.env.SUPABASE_URL || '';
+    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data: { user }, error: authErr } = await sb.auth.getUser(userToken);
+      if (authErr || !user) {
+        return {
+          statusCode: 401,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*' },
+          body: JSON.stringify({ error: 'Invalid or expired session' })
+        };
+      }
+    }
+    // ── End auth check ──────────────────────────────────────────────────────
 
     // Parse input
     const body = JSON.parse(event.body || '{}');
@@ -125,12 +150,13 @@ if (event.httpMethod !== 'POST') {
       return encoded.replace(/%[0-9a-f]{2}/gi, match => match.toUpperCase());
     }
 
-    // Build canonical string — include ALL fields so signature matches form exactly
+    // Build canonical string — skip empty/null/undefined fields (PayFast excludes them)
     let pfOutput = '';
     orderedKeys.forEach(key => {
       let val = data[key];
-      if (val === undefined || val === null) val = '';
-      pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        pfOutput += `${key}=${pfEncode(String(val).trim())}&`;
+      }
     });
 
     // remove trailing &
@@ -160,10 +186,11 @@ const paramsToReturn = { ...params };
     // Return either JSON (params) or a ready-to-submit HTML form
         if (returnForm) {
       // Build form HTML using paramsToReturn (no merchant_key)
-      const keysInOrder = [
-        ...orderedKeys,
-        'signature'
-      ];
+      const keysInOrder = orderedKeys.filter(key => {
+        const val = paramsToReturn[key];
+        return val !== undefined && val !== null && String(val).trim() !== '';
+      });
+      keysInOrder.push('signature');
 
       const inputsHtml = keysInOrder.map(key => {
         const val = paramsToReturn[key] !== undefined && paramsToReturn[key] !== null ? paramsToReturn[key] : '';

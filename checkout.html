@@ -1794,10 +1794,23 @@ async function loadFromLocalStorage() {
         // Check if coupon is expired
         const now = new Date();
         const expiresAt = new Date(coupon.expires_at);
-        
+
         if (now > expiresAt) {
-          console.log('Coupon expired');
+          showPromoMessage('This code has expired.', 'error');
           return false;
+        }
+
+        // Check email ownership — if the code was issued to a specific email, only that user can use it
+        if (coupon.email) {
+          const userEmail = state.user?.email || '';
+          if (!userEmail) {
+            showPromoMessage('Please log in to use this code.', 'error');
+            return false;
+          }
+          if (coupon.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
+            showPromoMessage('This code is not valid for your account.', 'error');
+            return false;
+          }
         }
 
         // Check first-order-only restriction
@@ -2179,9 +2192,10 @@ async function submitToPayFast(cartItems, orderId, total) {
   };
 
   // Call your Netlify function to generate signature + final params
+  const { data: { session: pfSession } } = await supabaseClient.auth.getSession().catch(() => ({ data: {} }));
   const res = await fetch('/.netlify/functions/generate-payfast-signature', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pfSession?.access_token || ''}` },
     body: JSON.stringify({ payload, returnForm: false })
   });
 
@@ -2263,7 +2277,9 @@ async function submitToPayFast(cartItems, orderId, total) {
         const discount = state.discount || 0;
         const total = Math.max(0, subtotal - discount + shipping);
         
-        // Save order to Supabase before payment
+        // Save order to Supabase before payment.
+        // Coupon is NOT marked used here — that happens in payfast-itn.js after confirmed payment.
+        // Cart is NOT cleared here — cleared in payfast-itn.js (Supabase) and checkout-success.html (localStorage).
         if (supabaseClient) {
             const orderData = {
                 user_id: state.user?.id || null,
@@ -2279,44 +2295,28 @@ async function submitToPayFast(cartItems, orderId, total) {
                 total: total,
                 discount: discount,
                 shipping_cost: shipping,
-                order_status: 'pending',
+                order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
                 label: state.shippingInfo.label || 'Standard Delivery',
-                notes: elements.orderNotes.value.trim() || ''
+                notes: elements.orderNotes.value.trim() || '',
+                // Store applied coupon code so payfast-itn.js can mark it used after confirmed payment
+                coupon_code: state.appliedPromoCode?.code || null
             };
-            
+
             const { data: order, error } = await supabaseClient
                 .from('orders')
                 .insert([orderData])
                 .select()
                 .single();
-                
+
             if (error) {
                 console.error('Error saving order:', error);
                 throw new Error('Failed to create order. Please try again.');
             }
-            
+
             state.orderId = order.id;
-            
-            // Update coupon as used if one was applied
-            if (state.appliedPromoCode) {
-                await supabaseClient
-                    .from('discount_codes')
-                    .update({ used: true })
-                    .eq('id', state.appliedPromoCode.id);
-            }
         }
-        
-        // Clear cart after successful order creation
-        if (supabaseClient && state.user) {
-            await supabaseClient
-                .from('carts')
-                .delete()
-                .eq('user_id', state.user.id);
-        }
-        localStorage.removeItem('ss_cart');
-        localStorage.removeItem('ss_coupon');
         
         // Generate PayFast parameters
         await submitToPayFast(validatedCart, orderId, total);

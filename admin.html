@@ -1416,9 +1416,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   /* ------------------ Analytics helpers (kept for updatePopularityFromTop) ------ */
-  // parse order items safely — checks items then raw_cart (initiate-payfast uses raw_cart)
+  // parse order items safely
   function parseOrderItems(o) {
-    const raw = o.items || o.raw_cart;
+    const raw = o.items;
     if(!raw) return [];
     if (Array.isArray(raw)) return raw;
     try { return JSON.parse(raw); } catch(e) { return []; }
@@ -1430,7 +1430,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('orders')
-        .select('id, created_at, total, amount, items, raw_cart, order_number, customer_name, order_status, status')
+        .select('id, created_at, total, items, order_number, customer_name, order_status')
         .gte('created_at', fromIso)
         .lte('created_at', toIso)
         .order('created_at', { ascending: true });
@@ -1438,11 +1438,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const orders = data || [];
       // exclude returned orders from revenue & aggregation
       const validOrders = orders.filter(o => {
-        const st = (o.order_status || o.status || '').toString().trim().toLowerCase();
+        const st = (o.order_status || '').toString().trim().toLowerCase();
         return st !== 'returned';
       });
-      // compute total revenue — initiate-payfast uses 'amount', payfast-itn uses 'total'
-      const total = validOrders.reduce((s,o) => s + (Number(o.total || o.amount || 0)), 0);
+      const total = validOrders.reduce((s,o) => s + (Number(o.total || 0)), 0);
       // aggregate top products by name or product_id
       const agg = {};
       for(const o of validOrders){
@@ -2015,9 +2014,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       approveBtn.addEventListener('click', async () => {
         approveBtn.disabled = true; approveBtn.textContent = 'Approving…';
         try {
+          const adminToken = await getAdminToken();
           const res = await fetch('/.netlify/functions/approve-seller', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken || ''}` },
             body: JSON.stringify({ applicationId: app.id, shopName: app.shop_name })
           });
           const json = await res.json().catch(() => ({}));

@@ -1187,122 +1187,44 @@ async function getUserReferralInfo(userId) {
   }
 }
 
-// Get referrer from referral code
-async function getReferrerFromCode(referralCode) {
-  if (!supabaseClient || !referralCode) return null;
-  
-  try {
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .select('id, user_id, email, first_name, last_name')
-      .eq('referral_code', referralCode)
-      .single();
-    
-    if (error) return null;
-    return data;
-  } catch (e) {
-    console.error('Error in getReferrerFromCode:', e);
-    return null;
-  }
-}
+// REMOVED: getReferrerFromCode, createRefereeDiscountCode, createReferrerRewardCode
+// These were dead frontend functions that wrote directly to discount_codes via the anon key.
+// All discount code creation is handled server-side by /.netlify/functions/process-referral.
 
-// Create 15% first-order discount code for new user (referee)
-async function createRefereeDiscountCode(refereeEmail, referralCode) {
-  if (!supabaseClient) return null;
-
-  try {
-    const discountCode = `WELCOME${generateReferralCode().substring(0, 6)}`;
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 1);
-
-    const { data, error } = await supabaseClient
-      .from('discount_codes')
-      .insert([{
-        code: discountCode,
-        amount: 15,
-        used: false,
-        expires_at: expiresAt.toISOString(),
-        email: refereeEmail,
-        referral_code: referralCode,
-        type: 'percentage',
-        first_order_only: true
-      }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating referee discount:', error);
-      return null;
-    }
-
-    return data;
-  } catch (e) {
-    console.error('Error in createRefereeDiscountCode:', e);
-    return null;
-  }
-}
-
-// Create R40 discount code for referrer
-async function createReferrerRewardCode(referrerUserId, refereeEmail, referralCode) {
-  if (!supabaseClient || !referrerUserId) return null;
-  
-  try {
-    const { data: referrerProfile, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('email')
-      .eq('user_id', referrerUserId)
-      .single();
-    
-    if (profileError) return null;
-    
-    const discountCode = `REFERRAL${generateReferralCode().substring(0, 6)}`;
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + 3);
-    
-    const { data, error } = await supabaseClient
-      .from('discount_codes')
-      .insert([{
-        user_id: referrerUserId,
-        code: discountCode,
-        amount: 40.00,
-        used: false,
-        expires_at: expiresAt.toISOString(),
-        referral_reward: true,
-        referee_email: refereeEmail,
-        referral_code: referralCode,
-        type: 'referrer_reward'
-      }])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating referrer reward:', error);
-      return null;
-    }
-    
-    return {
-      ...data,
-      referrer_email: referrerProfile.email
-    };
-  } catch (e) {
-    console.error('Error in createReferrerRewardCode:', e);
-    return null;
-  }
-}
-
-// Check URL for referral parameter
+// Check URL for referral parameter.
+// Stores pending_referral as JSON { code, storedAt } so it can expire after 7 days.
 function checkUrlForReferral() {
   const urlParams = new URLSearchParams(window.location.search);
   const refCode = urlParams.get('ref');
-  
+
   if (refCode) {
     if (modalSignupReferralCode) {
       modalSignupReferralCode.value = refCode;
     }
-    
+
     try {
-      localStorage.setItem('pending_referral', refCode);
+      localStorage.setItem('pending_referral', JSON.stringify({ code: refCode, storedAt: Date.now() }));
     } catch (e) {}
+  }
+}
+
+// Read pending referral, respecting 7-day expiry. Returns code string or null.
+function readPendingReferral() {
+  try {
+    const raw = localStorage.getItem('pending_referral');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Support legacy plain-string storage
+    if (typeof parsed === 'string') return parsed;
+    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+    if (!parsed.storedAt || Date.now() - parsed.storedAt > SEVEN_DAYS) {
+      localStorage.removeItem('pending_referral');
+      return null;
+    }
+    return parsed.code || null;
+  } catch (e) {
+    localStorage.removeItem('pending_referral');
+    return null;
   }
 }
 
@@ -1549,39 +1471,51 @@ if (modalSignupSubmit) {
         }
       }
 
-      // Process referral server-side — creates discount codes, tracking record, and sends emails
+      // Process referral server-side — creates discount codes, tracking record, and sends emails.
+      // Awaited so we can report accurate success/failure to the user.
+      let referralMsg = '';
       if (referralCode) {
-        fetch('/.netlify/functions/process-referral', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            referral_code: referralCode,
-            referee_email: email,
-            referee_name: name.split(' ')[0] || 'there'
-          })
-        }).catch(e => console.warn('process-referral failed', e));
+        try {
+          const rfRes = await fetch('/.netlify/functions/process-referral', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              referral_code: referralCode,
+              referee_email: email,
+              referee_name: name.split(' ')[0] || 'there'
+            })
+          });
+          if (rfRes.ok) {
+            referralMsg = '<br><strong>Check your email — your 15% off code is on its way!</strong>';
+            // Successfully processed — clear pending referral
+            try { localStorage.removeItem('pending_referral'); } catch (e) {}
+          } else {
+            console.warn('process-referral returned non-ok status', rfRes.status);
+            referralMsg = '<br>Your account was created but we could not issue the referral reward yet. Please contact support if needed.';
+            // Keep pending_referral so it can be retried if needed
+          }
+        } catch (rfErr) {
+          console.warn('process-referral network error', rfErr);
+          referralMsg = '<br>Your account was created but we could not issue the referral reward yet. Please contact support if needed.';
+        }
       }
 
       // Show success message
       if (successElement) {
-        let successMsg = 'Account created! Check your email to verify your address.';
-        if (referralCode) {
-          successMsg += '<br><strong>Check your email — your 15% off code is on its way!</strong>';
-        }
-        successElement.innerHTML = successMsg;
+        successElement.innerHTML = 'Account created! Check your email to verify your address.' + referralMsg;
         successElement.style.display = 'block';
       }
-      
+
       // Clear forms
       if (modalSignupName) modalSignupName.value = '';
       if (modalSignupEmail) modalSignupEmail.value = '';
       if (modalSignupPassword) modalSignupPassword.value = '';
       if (modalSignupReferralCode) modalSignupReferralCode.value = '';
-      
-      // Clear stored referral
-      try {
-        localStorage.removeItem('pending_referral');
-      } catch (e) {}
+
+      // Clear stored referral only if no referral code was used (already cleared above on success)
+      if (!referralCode) {
+        try { localStorage.removeItem('pending_referral'); } catch (e) {}
+      }
       
       // Close modal after success
       setTimeout(() => {
@@ -3873,9 +3807,9 @@ document.addEventListener('DOMContentLoaded', function() {
     localStorage.setItem('ss_cart', JSON.stringify(state.cart));
   });
   
-  // Check if we have a pending referral code
+  // Check if we have a pending referral code (respects 7-day expiry)
   try {
-    const pendingReferral = localStorage.getItem('pending_referral');
+    const pendingReferral = readPendingReferral();
     if (pendingReferral) {
       if (modalSignupReferralCode) {
         modalSignupReferralCode.value = pendingReferral;

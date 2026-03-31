@@ -1692,10 +1692,11 @@
         ordersLoaded = true; return;
       }
 
-      // Fetch recent orders (RLS allows sellers to read relevant orders)
+      // Fetch recent paid orders only — pending/abandoned orders are not shown to sellers
       var { data, error } = await SD.sb
         .from('orders')
         .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, total, notes')
+        .eq('payment_status', 'paid')
         .order('created_at', { ascending: false })
         .limit(150);
 
@@ -1962,10 +1963,11 @@
       var rejectedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
       var totalFavs     = SD.products.reduce(function(s, p) { return s + (p.favourite_count || 0); }, 0);
 
-      // Ensure orders loaded
+      // Ensure orders loaded — paid orders only for analytics accuracy
       if (!SD.orders.length && myProductIds.length) {
         var { data: od } = await SD.sb
           .from('orders').select('id, items, raw_cart, order_status, payment_status')
+          .eq('payment_status', 'paid')
           .order('created_at', { ascending: false }).limit(200);
         SD.orders = (od || []).filter(function(o) {
           var items = Array.isArray(o.items) ? o.items : (Array.isArray(o.raw_cart) ? o.raw_cart : []);

@@ -468,13 +468,21 @@
 
       const html = await res.text();
 
-      // Show loading overlay before replacing the page
+      // Show loading overlay before redirecting to PayFast
       document.getElementById('loadingOverlay').classList.add('visible');
 
-      // Replace page with the auto-submitting PayFast form
-      document.open();
-      document.write(html);
-      document.close();
+      // Inject the PayFast form into the page and submit it
+      const container = document.createElement('div');
+      container.style.display = 'none';
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      const pfForm = container.querySelector('form');
+      if (pfForm) {
+        document.body.appendChild(pfForm);
+        pfForm.submit();
+      } else {
+        throw new Error('Payment form not found in server response.');
+      }
 
     } catch (err) {
       showError(err.message || 'Something went wrong. Please try again.');
