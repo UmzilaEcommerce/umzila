@@ -2,6 +2,7 @@ use existing tables on supabase as much as you can,only creating new tables if c
 do not edit or modify any of the netlify functions linked with payfast drastically, they work and are correct.
 do not put any supabase keys in the frontend and use existing functions and code as much as possible before creating anything new, if creating something new, make sure there is no other option first.
 if there are already duplicate stuff on supabase and files using separate tables for example, but for the same data, and you see flaws, fix all of that, delete tables or columns or anything to make it as minimal and viable and streamlined as possible. do not have files looking at different places for the same info or updating wrong tables unused by other files.
+never write the site in the frontend, always use SITE_BASE_URL variable in netlify.
 
 🚫 UMZILA SELLER SYSTEM — STRICT “DO NOT” RULES
 🧱 ARCHITECTURE / SYSTEM INTEGRITY

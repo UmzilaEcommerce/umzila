@@ -4,7 +4,8 @@ module.exports.handler = async function () {
     const payload = {
       supabaseUrl: process.env.SUPABASE_URL || '',
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-      payfastSandbox: process.env.PAYFAST_SANDBOX === 'true'
+      payfastSandbox: process.env.PAYFAST_SANDBOX === 'true',
+      siteBaseUrl: (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '')
       // payfastMerchantId, payfastMerchantKey, payfastPassphrase intentionally excluded —
       // PayFast secrets must never be exposed to the frontend.
     };
