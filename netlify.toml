@@ -2,14 +2,15 @@
   publish = "."
   functions = "netlify/functions"
 
-# Seller landing page subdomain rewrite
+# Sellers subdomain → sellers.html
 [[redirects]]
-  from = "sellers.umzila.store/*"
+  from = "/*"
   to = "/sellers.html"
   status = 200
   force = true
+  conditions = {Host = ["sellers.umzila.store"]}
 
-# SPA catch-all (keep last)
+# Main site fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
