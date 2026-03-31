@@ -206,7 +206,7 @@ const paramsToReturn = { ...params };
     <form id="pf_form" action="${actionUrl}" method="post">
       ${inputsHtml}
       <noscript>
-        <p>JavaScript is disabled — click the button below to continue to PayFast.</p>
+        <p>JavaScript is disabled — click the button below to continue to PayFast.</p> 
         <input type="submit" value="Continue to PayFast" />
       </noscript>
     </form>
