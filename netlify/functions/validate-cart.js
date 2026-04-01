@@ -48,7 +48,7 @@ if (!productIds.length) {
         // Fetch products (simple)
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
   .in('id', productIds);
 
 // then fetch variants separately
@@ -162,7 +162,9 @@ variants.forEach(v => {
     image: product.image || item.image,
     variant_id: item.variant_id,
     max_quantity: maxQuantity,
-    subtotal: itemPrice * qty
+    subtotal: itemPrice * qty,
+    seller_id: product.seller_id || null,
+    delivery_class: product.delivery_class || null
   });
 
   total += itemPrice * qty;

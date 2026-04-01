@@ -791,6 +791,23 @@
           </div>
           
           <div id="shippingForm">
+            <!-- Delivery area restriction banner -->
+            <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#856404;line-height:1.5">
+              📍 <strong>Deliveries are currently only available to areas near UKZN Westville.</strong>
+              Select your delivery area below before continuing.
+            </div>
+
+            <!-- Delivery zone dropdown (required) -->
+            <div class="form-group">
+              <label class="form-label">Delivery Area <span class="required">*</span></label>
+              <select id="deliveryZoneSelect" class="form-control" required>
+                <option value="">Select your delivery area…</option>
+              </select>
+              <div id="deliveryZoneError" style="display:none;color:#dc3545;font-size:12px;margin-top:4px">
+                Delivery is only available in selected areas near UKZN Westville.
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">Email Address <span class="required">*</span></label>
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -958,8 +975,12 @@
             <span id="discountAmount">-R0.00</span>
           </div>
           <div class="summary-row shipping">
-            <span>Shipping</span>
-            <span id="shippingAmount">Calculating...</span>
+            <span>Delivery</span>
+            <span id="shippingAmount">—</span>
+          </div>
+          <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
+          <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
+            No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
           </div>
           <div class="summary-row total">
             <span>Total</span>
@@ -1039,18 +1060,43 @@
      * CONFIGURATION
      ********************/
     
-    // Shipping costs by province (Rand)
-    const SHIPPING_COSTS = {
-      'KwaZulu-Natal': 90,
-      'Gauteng': 120,
-      'Western Cape': 130,
-      'Eastern Cape': 120,
-      'Free State': 110,
-      'Limpopo': 130,
-      'Mpumalanga': 110,
-      'North West': 110,
-      'Northern Cape': 140
-    };
+    // ── Delivery pricing constants (edit here to update rates) ──────────────
+    const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
+    const PER_SELLER_FEE          = 3;
+    const FREE_DELIVERY_THRESHOLD = 150; // subtotal >= this → delivery free
+
+    // ── Delivery zones — edit this list to add/remove areas ─────────────────
+    const DELIVERY_ZONES = [
+      { name: 'UKZN Westville Campus', code: 'campus'         },
+      { name: 'Westville',             code: 'westville'      },
+      { name: 'Berea West',            code: 'berea_west'     },
+      { name: 'Dawncliffe',            code: 'dawncliffe'     },
+      { name: 'Chiltern Hills',        code: 'chiltern_hills' },
+      { name: 'Reservoir Hills',       code: 'reservoir_hills'}
+    ];
+
+    /**
+     * calculateDeliveryFee — cart-aware delivery fee
+     * Returns { fee, maxClass, uniqueSellers, isFree }
+     */
+    function calculateDeliveryFee(cartItems, subtotal) {
+      if (!cartItems || cartItems.length === 0)
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: false };
+      if (subtotal >= FREE_DELIVERY_THRESHOLD)
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true };
+
+      const classOrder = { small: 0, medium: 1, large: 2 };
+      let maxClass = 'small';
+      const sellerIds = new Set();
+      cartItems.forEach(item => {
+        const dc = (item.delivery_class || 'small').toLowerCase();
+        if ((classOrder[dc] ?? 0) > classOrder[maxClass]) maxClass = dc;
+        if (item.seller_id) sellerIds.add(item.seller_id);
+      });
+      const uniqueSellers = Math.max(sellerIds.size, 1);
+      const fee = DELIVERY_CLASS_PRICES[maxClass] + (uniqueSellers - 1) * PER_SELLER_FEE;
+      return { fee: Math.max(0, fee), maxClass, uniqueSellers, isFree: false };
+    }
     
     // Configuration will be fetched from environment variables via Netlify Function
     let CONFIG = {
@@ -1078,7 +1124,12 @@
       configLoaded: false,
       discount: 0,
       couponCode: null,
-      appliedPromoCode: null
+      appliedPromoCode: null,
+      validatedCart: null,      // enriched cart from validate-cart (has seller_id + delivery_class)
+      deliveryFee: 0,
+      deliveryClass: 'small',
+      uniqueSellerCount: 0,
+      selectedZone: null        // delivery zone code
     };
     
     /********************
@@ -1181,11 +1232,6 @@
     function isValidPhone(phone) {
       const cleaned = phone.replace(/\D/g, '');
       return /^(0|27)[0-9]{9,10}$/.test(cleaned);
-    }
-    
-    // Calculate shipping cost
-    function calculateShipping(province) {
-      return SHIPPING_COSTS[province] || 0;
     }
     
 
@@ -1612,7 +1658,9 @@ async function loadAndValidateCartItems(serverItems) {
                     size: item.size,
                     image: item.image || product.image || 'https://via.placeholder.com/400x400?text=Product+Image',
                     variant_id: item.variant_id,
-                    product_data: product
+                    product_data: product,
+                    seller_id: product.seller_id || null,
+                    delivery_class: product.delivery_class || null
                 });
             }
         });
@@ -1640,7 +1688,7 @@ async function loadFromLocalStorage() {
             
             const { data: products, error } = await supabaseClient
                 .from('products')
-                .select('id, price, sale, sale_price, stock, name, image')
+                .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
                 .in('id', productIds);
                 
             if (!error && products) {
@@ -1656,7 +1704,9 @@ async function loadFromLocalStorage() {
                             ...item,
                             price: currentPrice,
                             name: product.name || item.name,
-                            image: product.image || item.image
+                            image: product.image || item.image,
+                            seller_id: product.seller_id || item.seller_id || null,
+                            delivery_class: product.delivery_class || item.delivery_class || null
                         };
                     }
                     return item;
@@ -1967,32 +2017,58 @@ async function validateCheckout() {
       updateShippingAndTotal(subtotal);
     }
     
-    // Update shipping and total
+    // Update delivery fee and total
     function updateShippingAndTotal(subtotal) {
       if (typeof subtotal !== 'number') {
         subtotal = 0;
         state.cart.forEach(item => {
-          subtotal += (item.price || 0) * (item.quantity || 1);
+          subtotal += (item.price || 0) * (item.quantity || item.qty || 1);
         });
       }
-      
-      const shipping = state.selectedProvince ? calculateShipping(state.selectedProvince) : 0;
+
+      // Use enriched validated cart when available; fall back to raw cart
+      const cartForFee = (state.validatedCart && state.validatedCart.length) ? state.validatedCart : state.cart;
+      const { fee, maxClass, uniqueSellers, isFree } = calculateDeliveryFee(cartForFee, subtotal);
+      state.deliveryFee       = fee;
+      state.deliveryClass     = maxClass;
+      state.uniqueSellerCount = uniqueSellers;
+
       const discount = state.discount || 0;
-      const total = Math.max(0, subtotal - discount + shipping);
+      const total    = Math.max(0, subtotal - discount + fee);
       state.orderTotal = total;
-      
+
       elements.subtotalAmount.textContent = formatCurrency(subtotal);
-      elements.shippingAmount.textContent = state.selectedProvince ? formatCurrency(shipping) : 'Select province';
-      
-      // Update discount display
+
+      // Shipping display
+      const shippingEl = elements.shippingAmount;
+      const breakdownEl = document.getElementById('deliveryBreakdown');
+      const multiSellerEl = document.getElementById('multiSellerNote');
+
+      if (cartForFee.length === 0) {
+        shippingEl.textContent = '—';
+        if (breakdownEl) breakdownEl.style.display = 'none';
+      } else if (isFree) {
+        shippingEl.textContent = 'Free 🎉';
+        if (breakdownEl) { breakdownEl.textContent = 'Free delivery on this order'; breakdownEl.style.display = 'block'; }
+      } else {
+        shippingEl.textContent = formatCurrency(fee);
+        if (breakdownEl) {
+          const classLabel = maxClass.charAt(0).toUpperCase() + maxClass.slice(1);
+          const sellerLabel = uniqueSellers === 1 ? '1 seller' : `${uniqueSellers} sellers`;
+          breakdownEl.textContent = `${classLabel} parcel · ${sellerLabel}`;
+          breakdownEl.style.display = 'block';
+        }
+      }
+      if (multiSellerEl) multiSellerEl.style.display = uniqueSellers > 1 ? 'inline' : 'none';
+
+      // Discount display
       if (discount > 0 && state.couponCode) {
         elements.discountRow.classList.remove('hidden');
-        elements.discountAmount.textContent = `-${formatCurrency(discount)}`;
         elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})</span> <span>-${formatCurrency(discount)}</span>`;
       } else {
         elements.discountRow.classList.add('hidden');
       }
-      
+
       elements.totalAmount.textContent = formatCurrency(total);
     }
     
@@ -2000,11 +2076,10 @@ async function validateCheckout() {
      * SHIPPING MANAGEMENT
      ********************/
     
-    // Select province
+    // Select province — retained for address; no longer drives delivery cost
     function selectProvince(province) {
       state.selectedProvince = province;
-      elements.shippingCost.value = SHIPPING_COSTS[province] || 0;
-      updateShippingAndTotal();
+      elements.shippingCost.value = 0; // cost is cart-based, not province-based
     }
     
     /********************
@@ -2043,7 +2118,26 @@ function validateShippingForm() {
         elements.phoneNumber.focus();
         return false;
     }
-    
+
+    // Delivery zone validation
+    const zoneErrorEl = document.getElementById('deliveryZoneError');
+    if (!state.selectedZone) {
+        if (zoneErrorEl) zoneErrorEl.style.display = 'block';
+        document.getElementById('deliveryZoneSelect')?.focus();
+        return false;
+    }
+    if (zoneErrorEl) zoneErrorEl.style.display = 'none';
+
+    // Soft address/zone mismatch warning (non-blocking)
+    const selectedZoneObj = DELIVERY_ZONES.find(z => z.code === state.selectedZone);
+    if (selectedZoneObj) {
+        const addr = ((elements.shippingAddress?.value || '') + ' ' + (elements.city?.value || '')).toLowerCase();
+        const zoneKeyword = selectedZoneObj.name.toLowerCase().split(' ')[0];
+        if (!addr.includes(zoneKeyword)) {
+            console.warn('[Umzila] Address may not match selected delivery zone:', selectedZoneObj.name);
+        }
+    }
+
     return true;
 }
     
@@ -2059,7 +2153,7 @@ async function saveShippingInfo() {
             city: elements.city.value.trim(),
             postalCode: elements.postalCode.value.trim(),
             province: elements.provinceSelect.value,
-            shippingCost: parseFloat(elements.shippingCost.value),
+            shippingCost: state.deliveryFee,
             instructions: elements.deliveryInstructions.value.trim()
         };
         
@@ -2268,12 +2362,20 @@ async function submitToPayFast(cartItems, orderId, total) {
             return;
         }
         
+        // Store enriched validated cart and recompute delivery fee from server-validated items
+        state.validatedCart = validatedCart;
+        const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const { fee: computedFee, maxClass, uniqueSellers } = calculateDeliveryFee(validatedCart, subtotal);
+        state.deliveryFee       = computedFee;
+        state.deliveryClass     = maxClass;
+        state.uniqueSellerCount = uniqueSellers;
+        if (state.shippingInfo) state.shippingInfo.shippingCost = computedFee;
+
         // Generate order ID
         const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // Calculate totals based on validated cart
-        const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const shipping = state.shippingInfo?.shippingCost || 0;
+        const shipping = computedFee;
         const discount = state.discount || 0;
         const total = Math.max(0, subtotal - discount + shipping);
         
@@ -2301,7 +2403,10 @@ async function submitToPayFast(cartItems, orderId, total) {
                 label: state.shippingInfo.label || 'Standard Delivery',
                 notes: elements.orderNotes.value.trim() || '',
                 // Store applied coupon code so payfast-itn.js can mark it used after confirmed payment
-                coupon_code: state.appliedPromoCode?.code || null
+                coupon_code: state.appliedPromoCode?.code || null,
+                delivery_class: maxClass || null,
+                seller_count:   uniqueSellers || null,
+                delivery_zone:  state.selectedZone || null
             };
 
             const { data: order, error } = await supabaseClient
@@ -2377,6 +2482,22 @@ async function submitToPayFast(cartItems, orderId, total) {
      ********************/
     
     function setupEventListeners() {
+      // Populate delivery zone dropdown from DELIVERY_ZONES config
+      const zoneSelect = document.getElementById('deliveryZoneSelect');
+      if (zoneSelect) {
+        DELIVERY_ZONES.forEach(z => {
+          const opt = document.createElement('option');
+          opt.value = z.code;
+          opt.textContent = z.name;
+          zoneSelect.appendChild(opt);
+        });
+        zoneSelect.addEventListener('change', () => {
+          state.selectedZone = zoneSelect.value || null;
+          const errEl = document.getElementById('deliveryZoneError');
+          if (errEl) errEl.style.display = state.selectedZone ? 'none' : 'block';
+        });
+      }
+
       // Province select change
       elements.provinceSelect.addEventListener('change', (e) => {
         selectProvince(e.target.value);

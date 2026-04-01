@@ -522,6 +522,20 @@ function buildSellerOrderEmail(seller, sellerItems, order, pfData, siteUrl) {
       ${notes ? `<div class="row" style="margin-top:6px"><span class="lbl">Notes</span><span class="val">${notes}</span></div>` : ''}
     </div>
 
+    <hr class="divider">
+
+    <div class="section-label">Drop-off instructions</div>
+    <div class="info-box" style="background:#fff8f0;border:1px solid #ffe0b2">
+      <div style="font-size:14px;color:#333;line-height:1.9">
+        <strong>1. Prepare your item(s)</strong><br>
+        Pack securely and label the package clearly with the order reference: <strong>${esc(orderRef)}</strong><br><br>
+        <strong>2. Arrange drop-off with Umzila logistics</strong><br>
+        You will be contacted via WhatsApp to coordinate a convenient drop-off or collection time.<br><br>
+        <strong>3. Mark as fulfilled in your dashboard</strong><br>
+        Once you have handed over the item(s), log in and mark the order as fulfilled.
+      </div>
+    </div>
+
     <div class="cta">
       <a href="${esc(site)}/login-admin.html" class="btn">Log In to Dashboard &rarr;</a>
     </div>
@@ -590,8 +604,8 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
         : '';
 
     const shippingRow = shipping > 0
-        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Shipping</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(shipping)}</td></tr>`
-        : `<tr><td style="padding:4px 0;color:#555;font-size:14px">Shipping</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">Calculated at delivery</td></tr>`;
+        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Delivery fee</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(shipping)}</td></tr>`
+        : `<tr><td style="padding:4px 0;color:#555;font-size:14px">Delivery fee</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">Included</td></tr>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -627,7 +641,7 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
   </div>
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
-    <p>We've received your payment and your order is now being processed. The seller will be in touch once your items are on their way.</p>
+    <p>We've received your payment and your order is now being processed. Your items may come from one or more campus sellers — each seller will prepare their items and hand them to our logistics team, who will bundle and deliver everything together to your selected area.</p>
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
 

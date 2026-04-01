@@ -333,7 +333,8 @@ async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '') {
       variantId: variantId,
       stock: variantStock,
       maxQuantity: variantStock,
-      preferred_delivery: preferred_delivery || ''
+      preferred_delivery: preferred_delivery || '',
+      seller_id: (p.seller && p.seller.id) ? p.seller.id : null
     });
   }
   

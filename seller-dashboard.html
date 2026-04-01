@@ -566,6 +566,14 @@
             <input type="hidden" id="newProdImage">
           </div>
           <div class="form-group">
+            <label class="form-label">Delivery Class <span style="color:var(--error)">*</span> <span class="opt" style="font-size:11px">(affects customer delivery fee)</span></label>
+            <select id="newProdDeliveryClass" class="form-control">
+              <option value="small">Small — envelopes, accessories, jewellery (R12)</option>
+              <option value="medium" selected>Medium — clothing, shoes, tech (R22)</option>
+              <option value="large">Large — bags, large items, bulk (R50)</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">Available Sizes</label>
             <div class="sizes-grid" id="newProdSizes">
               <span class="size-chip" data-size="XS">XS</span>
@@ -691,6 +699,14 @@
                 <option value="Stationery">Stationery</option>
                 <option value="Other Home &amp; Gifts">Other Home &amp; Gifts</option>
               </optgroup>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Delivery Class <span style="color:var(--error)">*</span></label>
+            <select id="editProdDeliveryClass" class="form-control">
+              <option value="small">Small — envelopes, accessories, jewellery (R12)</option>
+              <option value="medium">Medium — clothing, shoes, tech (R22)</option>
+              <option value="large">Large — bags, large items, bulk (R50)</option>
             </select>
           </div>
           <div class="form-group">
@@ -1440,7 +1456,7 @@
 
       var { data, error } = await SD.sb
         .from('products')
-        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at, favourite_count')
+        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
         .eq('seller_id', SD.seller.id)
         .order('created_at', { ascending: false });
 
@@ -1519,19 +1535,21 @@
       }
 
       setBtnLoading('submitProductBtn', true, 'Submit for Review');
+      var deliveryClassNew = document.getElementById('newProdDeliveryClass').value || 'medium';
       var { data, error } = await SD.sb.from('products').insert({
-        seller_id:   SD.seller.id,
-        name:        name,
-        description: desc    || null,
-        price:       onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
-        sale_price:  salePrice || null,
-        sale:        onSale,
-        stock:       stock,
-        category:    category,
-        badge:       badge   || null,
-        image:       coverImg|| null,
-        sizes:       sizes.length ? sizes : ['S','M','L','XL'],
-        visible:     false,
+        seller_id:      SD.seller.id,
+        name:           name,
+        description:    desc    || null,
+        price:          onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
+        sale_price:     salePrice || null,
+        sale:           onSale,
+        stock:          stock,
+        category:       category,
+        badge:          badge   || null,
+        image:          coverImg|| null,
+        sizes:          sizes.length ? sizes : ['S','M','L','XL'],
+        delivery_class: deliveryClassNew,
+        visible:        false,
         metadata:    { review_status: 'pending_review' }
       }).select().single();
 
@@ -1584,6 +1602,8 @@
       document.getElementById('editProdImage').value    = p.image || '';
       document.getElementById('editProdCategory').value = p.category || 'All';
       document.getElementById('editProdBadge').value    = p.badge || '';
+      var dcEl = document.getElementById('editProdDeliveryClass');
+      if (dcEl) dcEl.value = p.delivery_class || 'medium';
 
       // Sale fields
       var saleCb = document.getElementById('editProdSale');
@@ -1636,18 +1656,20 @@
         setMsg('editProdMsg', 'Sale price must be less than original price.'); return;
       }
 
+      var deliveryClassEdit = document.getElementById('editProdDeliveryClass').value || 'medium';
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
       var { data, error } = await SD.sb.from('products').update({
-        name:        name,
-        description: desc    || null,
-        price:       onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
-        sale_price:  salePrice || null,
-        sale:        onSale,
-        stock:       stock,
-        category:    category,
-        badge:       badge   || null,
-        image:       image   || null,
-        sizes:       sizes.length ? sizes : ['S','M','L','XL']
+        name:           name,
+        description:    desc    || null,
+        price:          onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
+        sale_price:     salePrice || null,
+        sale:           onSale,
+        stock:          stock,
+        category:       category,
+        badge:          badge   || null,
+        image:          image   || null,
+        sizes:          sizes.length ? sizes : ['S','M','L','XL'],
+        delivery_class: deliveryClassEdit
       }).eq('id', id).select().single();
 
       setBtnLoading('saveEditProdBtn', false, 'Save Changes');
