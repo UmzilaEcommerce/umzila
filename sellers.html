@@ -662,11 +662,11 @@
 </div>
 
 <nav class="nav">
-  <a href="#" id="navLogoLink" class="nav-logo">
+  <a href="https://umzila.store" class="nav-logo">
     <img src="umzila.webp" alt="Umzila">
     <span>Umzila · sellers</span>
   </a>
-  <a href="#" id="navLoginLink" class="nav-login">Seller portal</a>
+  <a href="https://umzila.store/login-admin.html" class="nav-login">Seller portal</a>
 </nav>
 
 <main>
@@ -739,7 +739,7 @@
 </main>
 
 <footer>
-  <p>© 2026 Umzila — <a href="#" id="footerHomeLink">umzila.store</a> · <a href="#" id="footerTermsLink">Seller Terms</a> · <a href="mailto:support@umzila.store">support@umzila.store</a></p>
+  <p>© 2026 Umzila — <a href="https://umzila.store">umzila.store</a> · <a href="https://umzila.store/seller-terms.html">Seller Terms</a> · <a href="mailto:support@umzila.store">support@umzila.store</a></p>
 </footer>
 
 <!-- MODAL STRUCTURE (all ids preserved) -->
@@ -773,7 +773,7 @@
         <div class="form-group" style="margin-bottom: 16px;"><label>What do you sell? (describe) *</label><textarea id="sfPlanToSell" rows="2" placeholder="e.g. Custom sneakers, thrifted vintage, homemade rusks..."></textarea><span class="err" id="sfPlanToSellErr">Tell us about your products.</span></div>
         <div class="form-group"><label>Instagram (optional)</label><input type="text" id="sfInstagram" placeholder="@yourbrand"></div>
         <div class="terms-box">
-          <label><input type="checkbox" id="sfTerms"> I agree to the <a href="#" id="modalTermsLink" target="_blank" style="color: var(--accent);">Seller Terms & Conditions</a>.</label>
+          <label><input type="checkbox" id="sfTerms"> I agree to the <a href="https://umzila.store/seller-terms.html" target="_blank" style="color: var(--accent);">Seller Terms & Conditions</a>.</label>
           <span class="err" id="sfTermsErr">Please accept the terms.</span>
         </div>
         <span class="submit-err" id="sfSubmitErr" style="color: #e25c5f; font-size: 0.8rem; display: none;"></span>
@@ -798,15 +798,6 @@
         const url = cfg.SUPABASE_URL || cfg.supabaseUrl || '';
         const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
         if (url && key) sbClient = supabase.createClient(url, key);
-
-        const site = (cfg.siteBaseUrl || '').replace(/\/$/, '');
-        if (site) {
-          document.getElementById('navLogoLink').href      = site;
-          document.getElementById('navLoginLink').href     = site + '/login-admin.html';
-          document.getElementById('footerHomeLink').href   = site;
-          document.getElementById('footerTermsLink').href  = site + '/seller-terms.html';
-          document.getElementById('modalTermsLink').href   = site + '/seller-terms.html';
-        }
       }
     } catch (_) {}
   })();

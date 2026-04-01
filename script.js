@@ -503,6 +503,18 @@ function initMobileMenu() {
       });
     }
     
+    // Mobile sell on Umzila
+    const mobileSellOnUmzila = document.getElementById('mobileSellOnUmzila');
+    if (mobileSellOnUmzila) {
+      mobileSellOnUmzila.addEventListener('click', (e) => {
+        e.preventDefault();
+        mobileMenu.classList.remove('active');
+        mobileMenuOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+        if (typeof openSellModal === 'function') openSellModal();
+      });
+    }
+
     // Mobile sign in
     if (mobileSignIn) {
       mobileSignIn.addEventListener('click', (e) => {

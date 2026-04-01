@@ -2,15 +2,7 @@
   publish = "."
   functions = "netlify/functions"
 
-# Sellers subdomain → sellers.html
-[[redirects]]
-  from = "/*"
-  to = "/sellers.html"
-  status = 200
-  force = true
-  conditions = {Host = ["sellers.umzila.store"]}
-
-# Main site fallback
+# SPA fallback (keep this only)
 [[redirects]]
   from = "/*"
   to = "/index.html"
