@@ -511,7 +511,8 @@ function initMobileMenu() {
         mobileMenu.classList.remove('active');
         mobileMenuOverlay.classList.remove('active');
         document.body.style.overflow = '';
-        if (typeof openSellModal === 'function') openSellModal();
+        const sellBtn = document.getElementById('sellOnUmzilaBtn');
+        if (sellBtn) sellBtn.click();
       });
     }
 
