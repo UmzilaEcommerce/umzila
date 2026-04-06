@@ -45,11 +45,12 @@ if (!productIds.length) {
   };
 }
         
-        // Fetch products (simple)
+        // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
-  .in('id', productIds);
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible')
+  .in('id', productIds)
+  .eq('visible', true);
 
 // then fetch variants separately
 const { data: variants = [], error: variantsError } = await supabase

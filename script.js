@@ -298,7 +298,11 @@ async function validateCartPrices() {
 async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '') {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
-  
+
+  // Refuse hidden or out-of-stock products
+  if (!p.visible) return;
+  if ((p.stock || 0) <= 0) { showNotification('This item is out of stock.'); return; }
+
   // Check stock
   const variant = p.variants?.find(v => v.size === size);
   const variantId = variant ? variant.id : null;
@@ -1040,6 +1044,7 @@ async function loadProducts() {
         product_images!fk_product_images_product(*),
         sellers(id, shop_name, logo_url, whatsapp_number, delivery_method, turnaround_time)
       `)
+      .eq('visible', true)
       .order('created_at', { ascending: false });
     
     if(error) {
@@ -1107,6 +1112,7 @@ async function loadProducts() {
         badge: row.badge || (sale ? 'Sale' : ''),
         stock: totalStock,
         variants: variants,
+        visible: row.visible === true,
         type: 'New',
         color: '',
         tags: tags,
@@ -2025,6 +2031,9 @@ document.addEventListener('click',(e)=>{
 function applyFilters(){
   const f = state.filters;
   let out = state.products.filter(p=>{
+    // Never show hidden or out-of-stock products
+    if (!p.visible) return false;
+    if ((p.stock || 0) <= 0) return false;
     if(f.category!=='All'){
       // Match exact category OR parent group (e.g. "Clothing" matches all sub-cats)
       const group = CATEGORIES.find(g => g.label === f.category);
@@ -2559,7 +2568,8 @@ function makeCardHTML(p){
 }
 
 function renderAll(products){
-  const visible = products || state.products;
+  // Only render products that are visible and in stock
+  const visible = (products || state.products).filter(p => p.visible !== false && (p.stock || 0) > 0);
   if(resultCount) resultCount.textContent = visible.length;
 
   const userCats = getUserPreferenceCategories();
@@ -2787,6 +2797,7 @@ let currentModalProduct = null;
 async function openProductModal(id) {
   currentModalProduct = state.products.find(x => x.id == id);
   if (!currentModalProduct) return;
+  if (!currentModalProduct.visible) return;
 
   // Track product click
   trackEvent('product_click', {

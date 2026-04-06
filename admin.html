@@ -254,13 +254,18 @@ const supabaseClient = supabase.createClient(
                   <option value="">Loading categories...</option>
                 </select>
 
-                <!-- new: Badge select (None / Sale / New / Hot) -->
+                <label>Seller / Store <span style="color:#6b7280;font-size:12px">(optional — leave blank for platform product)</span></label>
+                <select id="prodSeller">
+                  <option value="">— No seller (platform product) —</option>
+                </select>
+
                 <label>Badge</label>
                 <select id="prodBadge">
                   <option value="">None</option>
                   <option value="Sale">Sale</option>
                   <option value="New">New</option>
                   <option value="Hot">Hot</option>
+                  <option value="Limited">Limited</option>
                 </select>
 
                 <div class="row">
@@ -274,15 +279,24 @@ const supabaseClient = supabase.createClient(
                   </div>
                 </div>
 
+                <label>Delivery Class</label>
+                <select id="prodDeliveryClass">
+                  <option value="small">Small — envelopes, accessories (R12)</option>
+                  <option value="medium" selected>Medium — clothing, shoes, tech (R22)</option>
+                  <option value="large">Large — bags, large items (R50)</option>
+                </select>
+
                 <label>Sizes</label>
                 <div style="display:flex;gap:8px;margin-top:6px">
+                  <label><input type="checkbox" value="XS" class="sizeCb" /> XS</label>
                   <label><input type="checkbox" value="S" class="sizeCb" /> S</label>
                   <label><input type="checkbox" value="M" class="sizeCb" /> M</label>
                   <label><input type="checkbox" value="L" class="sizeCb" /> L</label>
                   <label><input type="checkbox" value="XL" class="sizeCb" /> XL</label>
+                  <label><input type="checkbox" value="2XL" class="sizeCb" /> 2XL</label>
+                  <label><input type="checkbox" value="One Size" class="sizeCb" /> One Size</label>
                 </div>
 
-                <!-- new: per-size quantity inputs will render here when sizes selected -->
                 <div id="sizeQtys" style="margin-top:8px"></div>
 
                 <label style="margin-top:8px"><input id="onSale" type="checkbox" /> On Sale?</label>
@@ -298,6 +312,8 @@ const supabaseClient = supabase.createClient(
                 <label>Tags (comma separated)</label>
                 <input id="prodTags" placeholder="streetwear, vintage, oversized" />
 
+                <label style="margin-top:8px"><input id="prodVisible" type="checkbox" checked /> Visible to buyers</label>
+
                 <button id="addProductBtn" class="small-btn" style="margin-top:10px">Add Product</button>
               </div>
             </div>
@@ -308,7 +324,7 @@ const supabaseClient = supabase.createClient(
           <h3>Product List</h3>
           <div style="overflow:auto;margin-top:8px">
             <table id="productsTable" aria-live="polite">
-              <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Sale/Badge</th><th>Quantity</th><th>Sizes</th><th>Actions</th> </thead>
+              <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Seller</th><th>Price</th><th>Sale/Badge</th><th>Qty</th><th>Visible</th><th>Actions</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -742,6 +758,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // in-memory product cache (single source for UI)
   let productsCache = [];
   let categoriesCache = [];
+  let sellersCache = [];
 
   // fetch categories from supabase and populate the category select
   async function fetchCategories(){
@@ -767,6 +784,30 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     } catch(e){
       console.warn('fetchCategories failed', e);
       return [];
+    }
+  }
+
+  // fetch sellers and populate the seller selector in add product form
+  async function fetchSellers(){
+    if(!supabaseClient) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from('sellers')
+        .select('id, shop_name')
+        .order('shop_name', { ascending: true });
+      if(error){ console.warn('fetch sellers error', error); return; }
+      sellersCache = data || [];
+      const sel = document.getElementById('prodSeller');
+      if(!sel) return;
+      sel.innerHTML = '<option value="">— No seller (platform product) —</option>';
+      sellersCache.forEach(s => {
+        const o = document.createElement('option');
+        o.value = s.id;
+        o.textContent = s.shop_name;
+        sel.appendChild(o);
+      });
+    } catch(e){
+      console.warn('fetchSellers failed', e);
     }
   }
 
@@ -814,21 +855,26 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const { data, error } = await supabaseClient
         .from('products')
         .select(`
-          id, 
-          name, 
-          description, 
-          price, 
-          currency, 
-          sku, 
-          badge, 
-          featured, 
-          visible, 
-          category_id, 
-          stock, 
-          metadata, 
+          id,
+          name,
+          description,
+          price,
+          currency,
+          sku,
+          badge,
+          featured,
+          visible,
+          category_id,
+          category,
+          seller_id,
+          delivery_class,
+          sizes,
+          stock,
+          metadata,
           popularity,
           product_images!fk_product_images_product(url),
-          product_variants!product_variants_product_id_fkey(id, sku, size, stock)
+          product_variants!product_variants_product_id_fkey(id, sku, size, stock),
+          sellers(id, shop_name)
         `)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -858,11 +904,15 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         const totalQty = sizes.length ? sizes.reduce((s, v) => s + (Number(v.stock || 0)), 0) : (r.stock || 0);
         
         return {
-          id: r.id,               // supabase product id (primary)
+          id: r.id,
           name: r.name,
           sku: r.sku || '',
           category_id: r.category_id || null,
-          category: categoryName,
+          category: categoryName || r.category || '',
+          seller_id: r.seller_id || null,
+          seller_name: (r.sellers && r.sellers.shop_name) || '',
+          delivery_class: r.delivery_class || 'medium',
+          sizes_arr: (r.sizes || []),
           price: Number(r.price) || 0,
           quantity: totalQty,
           sizes: sizes,
@@ -872,6 +922,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           tags: tags,
           image: image,
           badge: r.badge || '',
+          visible: !!(r.visible),
           popularity: Number(r.popularity || 0),
           raw: r
         };
@@ -903,30 +954,35 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const tr = document.createElement('tr');
       const imgCell = document.createElement('td');
       if(p.image){ imgCell.innerHTML = `<img src="${p.image}" style="width:60px;height:60px;object-fit:cover;border-radius:6px"/>`; }
-      else imgCell.innerHTML = `<div style="width:60px;height:60px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8">No Image</div>`;
-      const sizes = (p.sizes||[]).map(s=>s.size + (s.stock !== undefined ? ` (${s.stock})` : '')).join(', ');
-      const saleCol = p.sale ? `<span class="tag-sale">On Sale</span> <span style="text-decoration:line-through;color:#9ca3af;margin-left:6px">${fmt(p.salePrice)}</span>` : '';
-      const badgeCol = p.badge ? `<div style="margin-top:6px">${escapeHtml(p.badge)}</div>` : '';
+      else imgCell.innerHTML = `<div style="width:60px;height:60px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:11px">No Img</div>`;
+      const sizesStr = (p.sizes||[]).map(s=>s.size + (s.stock !== undefined ? ` (${s.stock})` : '')).join(', ');
+      const saleCol = p.sale ? `<span class="tag-sale">On Sale</span>` : '';
+      const badgeCol = p.badge ? `<div style="margin-top:4px"><span style="background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:4px;font-size:11px">${escapeHtml(p.badge)}</span></div>` : '';
+      const visibleBadge = p.visible
+        ? `<span style="color:#16a34a;font-size:12px;font-weight:600">● Live</span>`
+        : `<span style="color:#dc2626;font-size:12px;font-weight:600">● Hidden</span>`;
       tr.innerHTML = `
         <td></td>
-        <td>${escapeHtml(p.name)}<div style="font-size:12px;color:#6b7280;margin-top:6px">SKU: ${escapeHtml(p.sku || '')}</div></td>
-        <td>${escapeHtml(p.category||'')}</td>
+        <td>${escapeHtml(p.name)}<div style="font-size:11px;color:#6b7280;margin-top:4px">SKU: ${escapeHtml(p.sku || '')}</div></td>
+        <td>${escapeHtml(p.category||'—')}</td>
+        <td style="font-size:12px;color:#374151">${p.seller_name ? escapeHtml(p.seller_name) : '<span style="color:#9ca3af">Platform</span>'}</td>
         <td>${fmt(p.price)}</td>
         <td>${saleCol}${badgeCol}</td>
         <td>${p.quantity}</td>
-        <td>${sizes}</td>
+        <td>${visibleBadge}</td>
         <td class="actions"></td>
       `;
       tr.children[0].replaceWith(imgCell);
       const actionsTd = tr.querySelector('.actions');
 
-      // action buttons
       const editBtn = document.createElement('button'); editBtn.textContent = '✏️ Edit'; editBtn.onclick = ()=> openEditModal(p.id);
       const delBtn = document.createElement('button'); delBtn.textContent = '🗑️ Delete'; delBtn.onclick = ()=> confirmModal('Delete product', `Delete ${p.name}?`, ()=> deleteProduct(p.id));
-      const changeImg = document.createElement('button'); changeImg.textContent = '📷 Change Image'; changeImg.onclick = ()=> changeImage(p.id);
-      const toggleSale = document.createElement('button'); toggleSale.textContent = '💰 Toggle Sale'; toggleSale.onclick = ()=> toggleProductSale(p.id);
+      const changeImg = document.createElement('button'); changeImg.textContent = '📷 Image'; changeImg.onclick = ()=> changeImage(p.id);
+      const toggleVis = document.createElement('button');
+      toggleVis.textContent = p.visible ? '🙈 Hide' : '👁️ Show';
+      toggleVis.onclick = ()=> toggleProductVisible(p.id);
 
-      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleSale);
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis);
       tbody.appendChild(tr);
     });
   }
@@ -960,10 +1016,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const name = document.getElementById('prodName').value.trim();
     if(!name){ showToast('Product name required'); return; }
     const categoryId = (document.getElementById('prodCategory').value || '') || null;
+    const sellerId = (document.getElementById('prodSeller').value || '') || null;
+    const deliveryClass = document.getElementById('prodDeliveryClass').value || 'medium';
     const price = parseFloat(document.getElementById('prodPrice').value || 0);
     const qty = parseInt(document.getElementById('prodQty').value || 0);
     const sizesChecked = Array.from(document.querySelectorAll('.sizeCb:checked')).map(n=>n.value);
-    // collect per-size quantities (if present)
     const sizeQtyInputs = Array.from(document.querySelectorAll('.size_qty_input'));
     const sizeEntries = sizeQtyInputs.length ? sizeQtyInputs.map(i => ({ size: i.dataset.size, qty: parseInt(i.value || 0) || 0 })) : (sizesChecked.length ? sizesChecked.map(s => ({ size: s, qty: 0 })) : []);
     const sale = document.getElementById('onSale').checked;
@@ -971,6 +1028,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const desc = document.getElementById('prodDesc').value.trim();
     const tags = document.getElementById('prodTags').value.split(',').map(s=>s.trim()).filter(Boolean);
     const badge = document.getElementById('prodBadge').value || null;
+    const visible = document.getElementById('prodVisible').checked;
     const file = document.getElementById('prodImage').files && document.getElementById('prodImage').files[0];
 
     // generate random SKU (SKU-xxxxx)
@@ -1050,7 +1108,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
             return;
           } else {
             // insert new product with variants
-            await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible: true, category_id: categoryId, stock: totalToAdd, description: desc, metadata, imageUrl: publicImageUrl, sizes: sizeEntries.length ? sizeEntries : [] });
+            await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, stock: totalToAdd, description: desc, metadata, imageUrl: publicImageUrl, sizes: sizeEntries.length ? sizeEntries : [] });
             await fetchProducts();
             showToast('Product added');
             clearForm();
@@ -1074,7 +1132,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           clearForm();
           return;
         } else {
-          await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible: true, category_id: categoryId, stock: totalToAdd, description: desc, metadata, imageUrl: null, sizes: sizeEntries.length ? sizeEntries : [] });
+          await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, stock: totalToAdd, description: desc, metadata, imageUrl: null, sizes: sizeEntries.length ? sizeEntries : [] });
           await fetchProducts();
           showToast('Product added');
           clearForm();
@@ -1088,37 +1146,35 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   }
 
   // Insert product and related rows to supabase
-  async function insertProductToSupabase({ name, sku, price, currency='ZAR', badge=null, featured=false, visible=true, category_id=null, stock=0, description='', metadata={}, imageUrl=null, sizes=[] }){
+  async function insertProductToSupabase({ name, sku, price, currency='ZAR', badge=null, featured=false, visible=true, category_id=null, seller_id=null, delivery_class='medium', stock=0, description='', metadata={}, imageUrl=null, sizes=[] }){
     // guard: admin required
-    if(!(await isAdminAuthenticated())) { 
-      showToast('Must be signed in as admin to create product'); 
-      localStorage.removeItem('scp_current_user'); 
-      setTimeout(()=>{ location.href='login-admin.html'; }, 300); 
-      return null; 
+    if(!(await isAdminAuthenticated())) {
+      showToast('Must be signed in as admin to create product');
+      localStorage.removeItem('scp_current_user');
+      setTimeout(()=>{ location.href='login-admin.html'; }, 300);
+      return null;
     }
 
     if(!supabaseClient) return null;
     try {
-      // Get category name for the category field
-      const categoryName = categoriesCache.find(c => c.id === category_id)?.name || '';
-      
-      // insert product
+      // insert product — category text will be set by DB trigger from category_id
       const slug = (name || '').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9\-]/g,'').slice(0,200);
       const { data: insertData, error: insertErr } = await supabaseClient
         .from('products')
         .insert([{
-          name, 
+          name,
           slug,
-          description, 
-          price, 
-          currency, 
-          sku, 
-          badge, 
-          featured, 
-          visible, 
-          category_id, 
-          category: categoryName, // Set both category_id and category
-          stock, 
+          description,
+          price,
+          currency,
+          sku,
+          badge,
+          featured,
+          visible,
+          category_id,
+          seller_id,
+          delivery_class,
+          stock,
           metadata
         }])
         .select('id')
@@ -1181,52 +1237,138 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
   }
 
-  // open edit modal for product
+  // open edit modal for product — full admin edit
   function openEditModal(productId){
     const p = productsCache.find(x => x.id === productId);
     if(!p) return showToast('Product not found');
-    // build modal content
+
+    // Build category options
+    const catOpts = categoriesCache.map(c =>
+      `<option value="${escapeHtml(c.id)}"${c.id === p.category_id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
+    ).join('');
+
+    // Build seller options from sellersCache
+    const sellerOpts = (sellersCache || []).map(s =>
+      `<option value="${escapeHtml(s.id)}"${s.id === p.seller_id ? ' selected' : ''}>${escapeHtml(s.shop_name)}</option>`
+    ).join('');
+
+    // Build sizes checkboxes
+    const allSizes = ['XS','S','M','L','XL','2XL','One Size'];
+    const currentSizes = (p.sizes_arr || []);
+    const sizesHtml = allSizes.map(sz =>
+      `<label style="margin-right:8px"><input type="checkbox" class="edit_size_cb" value="${sz}"${currentSizes.includes(sz) ? ' checked' : ''} /> ${sz}</label>`
+    ).join('');
+
     const html = `
-      <h3>Edit product</h3>
-      <label>Name</label><input id="edit_name" value="${escapeHtml(p.name)}" />
-      <label>Price (R)</label><input id="edit_price" type="number" value="${p.price}" />
-      <label>Quantity</label><input id="edit_qty" type="number" value="${p.quantity}" />
-      <label>Badge</label>
-      <select id="edit_badge">
-        <option value="">None</option>
-        <option value="Sale"${p.badge==='Sale'?' selected':''}>Sale</option>
-        <option value="New"${p.badge==='New'?' selected':''}>New</option>
-        <option value="Hot"${p.badge==='Hot'?' selected':''}>Hot</option>
-      </select>
-      <label>Sale?</label><input id="edit_sale" type="checkbox"${p.sale ? ' checked' : ''} />
-      <div id="edit_sale_price_row"${p.sale ? '' : ' style="display:none"'}><label>Sale Price (R)</label><input id="edit_sale_price" type="number" value="${p.salePrice||0}" /></div>
-      <div style="margin-top:8px"><button id="edit_save_btn" class="small-btn">Save</button> <button id="edit_cancel_btn" style="margin-left:8px">Cancel</button></div>
+      <h3 style="margin:0 0 14px">Edit Product</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label>Name</label>
+          <input id="edit_name" value="${escapeHtml(p.name)}" style="width:100%;box-sizing:border-box" />
+        </div>
+        <div>
+          <label>Price (R)</label>
+          <input id="edit_price" type="number" step="0.01" value="${p.price}" style="width:100%;box-sizing:border-box" />
+        </div>
+        <div>
+          <label>Quantity</label>
+          <input id="edit_qty" type="number" value="${p.quantity}" style="width:100%;box-sizing:border-box" />
+        </div>
+        <div>
+          <label>Badge</label>
+          <select id="edit_badge" style="width:100%;box-sizing:border-box">
+            <option value="">None</option>
+            <option value="Sale"${p.badge==='Sale'?' selected':''}>Sale</option>
+            <option value="New"${p.badge==='New'?' selected':''}>New</option>
+            <option value="Hot"${p.badge==='Hot'?' selected':''}>Hot</option>
+            <option value="Limited"${p.badge==='Limited'?' selected':''}>Limited</option>
+          </select>
+        </div>
+        <div>
+          <label>Category</label>
+          <select id="edit_category" style="width:100%;box-sizing:border-box">
+            <option value="">— No category —</option>
+            ${catOpts}
+          </select>
+        </div>
+        <div>
+          <label>Seller / Store</label>
+          <select id="edit_seller" style="width:100%;box-sizing:border-box">
+            <option value="">— Platform product —</option>
+            ${sellerOpts}
+          </select>
+        </div>
+        <div>
+          <label>Delivery Class</label>
+          <select id="edit_delivery_class" style="width:100%;box-sizing:border-box">
+            <option value="small"${p.delivery_class==='small'?' selected':''}>Small (R12)</option>
+            <option value="medium"${(!p.delivery_class||p.delivery_class==='medium')?' selected':''}>Medium (R22)</option>
+            <option value="large"${p.delivery_class==='large'?' selected':''}>Large (R50)</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;padding-top:20px">
+          <label><input id="edit_sale" type="checkbox"${p.sale ? ' checked' : ''} /> On Sale</label>
+          <label><input id="edit_visible" type="checkbox"${p.visible ? ' checked' : ''} /> Visible</label>
+        </div>
+      </div>
+      <div id="edit_sale_price_row" style="margin-top:10px;${p.sale ? '' : 'display:none'}">
+        <label>Sale Price (R)</label>
+        <input id="edit_sale_price" type="number" step="0.01" value="${p.salePrice||0}" style="width:100%;box-sizing:border-box" />
+      </div>
+      <div style="margin-top:10px">
+        <label>Description</label>
+        <textarea id="edit_desc" rows="3" style="width:100%;box-sizing:border-box;padding:6px;border:1px solid #e5e7eb;border-radius:6px">${escapeHtml(p.description||'')}</textarea>
+      </div>
+      <div style="margin-top:10px">
+        <label>Sizes</label>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${sizesHtml}</div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px">
+        <button id="edit_save_btn" class="small-btn">Save Changes</button>
+        <button id="edit_cancel_btn">Cancel</button>
+      </div>
     `;
     const modalContent = document.getElementById('modalContent');
     modalContent.innerHTML = html;
     document.getElementById('modalWrap').style.display = 'flex';
-    const editSale = document.getElementById('edit_sale');
-    editSale.addEventListener('change', ()=> {
-      document.getElementById('edit_sale_price_row').style.display = editSale.checked ? 'block' : 'none';
+
+    document.getElementById('edit_sale').addEventListener('change', e => {
+      document.getElementById('edit_sale_price_row').style.display = e.target.checked ? 'block' : 'none';
     });
     document.getElementById('edit_cancel_btn').addEventListener('click', ()=> { document.getElementById('modalWrap').style.display = 'none'; });
     document.getElementById('edit_save_btn').addEventListener('click', async ()=> {
-      // guard: admin required
       if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update product'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
       const name = document.getElementById('edit_name').value.trim();
       const price = parseFloat(document.getElementById('edit_price').value || 0);
       const qty = parseInt(document.getElementById('edit_qty').value || 0);
       const badge = document.getElementById('edit_badge').value || null;
+      const categoryId = document.getElementById('edit_category').value || null;
+      const sellerId = document.getElementById('edit_seller').value || null;
+      const deliveryClass = document.getElementById('edit_delivery_class').value || 'medium';
       const sale = document.getElementById('edit_sale').checked;
+      const visible = document.getElementById('edit_visible').checked;
       const salePrice = sale ? parseFloat(document.getElementById('edit_sale_price').value || 0) : 0;
-      // update product row
+      const desc = document.getElementById('edit_desc').value.trim();
+      const checkedSizes = Array.from(document.querySelectorAll('.edit_size_cb:checked')).map(cb => cb.value);
+
       try {
         const { error } = await supabaseClient.from('products').update({
-          name, price, stock: qty, badge, metadata: { ...(p.raw && p.raw.metadata ? p.raw.metadata : {}), sale: sale, salePrice }
+          name,
+          price,
+          stock: qty,
+          badge,
+          category_id: categoryId,
+          seller_id: sellerId,
+          delivery_class: deliveryClass,
+          sale,
+          sale_price: sale ? salePrice : null,
+          visible,
+          description: desc || null,
+          sizes: checkedSizes.length ? checkedSizes : null,
+          metadata: { ...(p.raw && p.raw.metadata ? p.raw.metadata : {}), sale, salePrice }
         }).eq('id', p.id);
-        if(error){ console.warn('update product error', error); showToast('Update failed'); return; }
-        // refresh and close
+        if(error){ console.warn('update product error', error); showToast('Update failed: ' + error.message); return; }
         await fetchProducts();
         document.getElementById('modalWrap').style.display = 'none';
         showToast('Product updated');
@@ -1235,6 +1377,18 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         showToast('Update failed');
       }
     });
+  }
+
+  // toggle product visibility
+  async function toggleProductVisible(productId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin'); return; }
+    const p = productsCache.find(x => x.id === productId); if(!p) return;
+    try {
+      const { error } = await supabaseClient.from('products').update({ visible: !p.visible }).eq('id', productId);
+      if(error){ showToast('Toggle failed'); return; }
+      await fetchProducts();
+      showToast(p.visible ? 'Product hidden' : 'Product visible');
+    } catch(e){ showToast('Toggle failed'); }
   }
 
   // change image for a product
@@ -1297,6 +1451,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     imgPreview.style.backgroundImage=''; imgPreview.textContent='Preview'; document.querySelectorAll('.sizeCb').forEach(c=>c.checked=false);
     onSale.checked=false; salePriceRow.style.display='none'; document.getElementById('prodBadge').value = '';
     document.getElementById('prodCategory').value = '';
+    document.getElementById('prodSeller').value = '';
+    document.getElementById('prodDeliveryClass').value = 'medium';
+    const visEl = document.getElementById('prodVisible'); if(visEl) visEl.checked = true;
     document.getElementById('sizeQtys').innerHTML = '';
   }
 
@@ -2410,8 +2567,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.getElementById('prModalBackdrop').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
   /* ============================================================ end Product Reviews */
 
-  // initial load: fetch categories then products, then dashboard KPIs
+  // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();
+  await fetchSellers();
   await fetchProducts();
   loadDashboardOverview(); // fire-and-forget — populates KPI row 2 and charts
 

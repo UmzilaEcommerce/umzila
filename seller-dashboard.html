@@ -487,57 +487,7 @@
             <div class="form-group">
               <label class="form-label">Category</label>
               <select id="newProdCategory" class="form-control">
-                <optgroup label="Clothing">
-                  <option value="T-Shirts">T-Shirts</option>
-                  <option value="Hoodies">Hoodies</option>
-                  <option value="Pants">Pants</option>
-                  <option value="Jackets">Jackets</option>
-                  <option value="Dresses">Dresses</option>
-                  <option value="Shoes">Shoes</option>
-                  <option value="Hats &amp; Caps">Hats &amp; Caps</option>
-                  <option value="Activewear">Activewear</option>
-                  <option value="Other Clothing">Other Clothing</option>
-                </optgroup>
-                <optgroup label="Food">
-                  <option value="Baked Goods">Baked Goods</option>
-                  <option value="Plates &amp; Meals">Plates &amp; Meals</option>
-                  <option value="Snacks">Snacks</option>
-                  <option value="Drinks">Drinks</option>
-                  <option value="Desserts">Desserts</option>
-                  <option value="Other Food">Other Food</option>
-                </optgroup>
-                <optgroup label="Accessories &amp; Gadgets">
-                  <option value="Watches">Watches</option>
-                  <option value="Phone Accessories">Phone Accessories</option>
-                  <option value="Bags">Bags</option>
-                  <option value="Jewelry">Jewelry</option>
-                  <option value="Tech Accessories">Tech Accessories</option>
-                  <option value="Sunglasses">Sunglasses</option>
-                  <option value="Other Accessories">Other Accessories</option>
-                </optgroup>
-                <optgroup label="Beauty &amp; Self-Care">
-                  <option value="Perfume">Perfume</option>
-                  <option value="Skincare">Skincare</option>
-                  <option value="Hair Products">Hair Products</option>
-                  <option value="Body Care">Body Care</option>
-                  <option value="Makeup">Makeup</option>
-                  <option value="Other Beauty">Other Beauty</option>
-                </optgroup>
-                <optgroup label="Services">
-                  <option value="Tutoring">Tutoring</option>
-                  <option value="Photography">Photography</option>
-                  <option value="Graphic Design">Graphic Design</option>
-                  <option value="Hair &amp; Nails">Hair &amp; Nails</option>
-                  <option value="Delivery">Delivery</option>
-                  <option value="Other Services">Other Services</option>
-                </optgroup>
-                <optgroup label="Home &amp; Gifts">
-                  <option value="Home Decor">Home Decor</option>
-                  <option value="Custom Gifts">Custom Gifts</option>
-                  <option value="Art &amp; Prints">Art &amp; Prints</option>
-                  <option value="Stationery">Stationery</option>
-                  <option value="Other Home &amp; Gifts">Other Home &amp; Gifts</option>
-                </optgroup>
+                <option value="">Loading categories…</option>
               </select>
             </div>
             <div class="form-group">
@@ -648,57 +598,7 @@
           <div class="form-group">
             <label class="form-label">Category</label>
             <select id="editProdCategory" class="form-control">
-              <optgroup label="Clothing">
-                <option value="T-Shirts">T-Shirts</option>
-                <option value="Hoodies">Hoodies</option>
-                <option value="Pants">Pants</option>
-                <option value="Jackets">Jackets</option>
-                <option value="Dresses">Dresses</option>
-                <option value="Shoes">Shoes</option>
-                <option value="Hats &amp; Caps">Hats &amp; Caps</option>
-                <option value="Activewear">Activewear</option>
-                <option value="Other Clothing">Other Clothing</option>
-              </optgroup>
-              <optgroup label="Food">
-                <option value="Baked Goods">Baked Goods</option>
-                <option value="Plates &amp; Meals">Plates &amp; Meals</option>
-                <option value="Snacks">Snacks</option>
-                <option value="Drinks">Drinks</option>
-                <option value="Desserts">Desserts</option>
-                <option value="Other Food">Other Food</option>
-              </optgroup>
-              <optgroup label="Accessories &amp; Gadgets">
-                <option value="Watches">Watches</option>
-                <option value="Phone Accessories">Phone Accessories</option>
-                <option value="Bags">Bags</option>
-                <option value="Jewelry">Jewelry</option>
-                <option value="Tech Accessories">Tech Accessories</option>
-                <option value="Sunglasses">Sunglasses</option>
-                <option value="Other Accessories">Other Accessories</option>
-              </optgroup>
-              <optgroup label="Beauty &amp; Self-Care">
-                <option value="Perfume">Perfume</option>
-                <option value="Skincare">Skincare</option>
-                <option value="Hair Products">Hair Products</option>
-                <option value="Body Care">Body Care</option>
-                <option value="Makeup">Makeup</option>
-                <option value="Other Beauty">Other Beauty</option>
-              </optgroup>
-              <optgroup label="Services">
-                <option value="Tutoring">Tutoring</option>
-                <option value="Photography">Photography</option>
-                <option value="Graphic Design">Graphic Design</option>
-                <option value="Hair &amp; Nails">Hair &amp; Nails</option>
-                <option value="Delivery">Delivery</option>
-                <option value="Other Services">Other Services</option>
-              </optgroup>
-              <optgroup label="Home &amp; Gifts">
-                <option value="Home Decor">Home Decor</option>
-                <option value="Custom Gifts">Custom Gifts</option>
-                <option value="Art &amp; Prints">Art &amp; Prints</option>
-                <option value="Stationery">Stationery</option>
-                <option value="Other Home &amp; Gifts">Other Home &amp; Gifts</option>
-              </optgroup>
+              <option value="">Loading categories…</option>
             </select>
           </div>
           <div class="form-group">
@@ -869,7 +769,8 @@
       products:      [],
       orders:        [],
       notifications: [],
-      pendingImages:  []   // images staged for a new product before insert
+      pendingImages:  [],   // images staged for a new product before insert
+      categories:    []
     };
 
     /* ── Redirect helpers ── */
@@ -1065,6 +966,22 @@
       showDashboard();
     }
 
+    async function fetchSDCategories() {
+      try {
+        var { data, error } = await SD.sb.from('categories').select('id, name').order('name', { ascending: true });
+        if (error || !data) return;
+        SD.categories = data;
+        var opts = '<option value="">Select category</option>' +
+          data.map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+        var newSel = document.getElementById('newProdCategory');
+        var editSel = document.getElementById('editProdCategory');
+        if (newSel) newSel.innerHTML = opts;
+        if (editSel) editSel.innerHTML = opts;
+      } catch(e) {
+        console.warn('fetchSDCategories failed', e);
+      }
+    }
+
     function showDashboard() {
       var el = document.getElementById('topbarShopName');
       if (el) el.textContent = SD.seller.shop_name || '';
@@ -1078,6 +995,7 @@
       switchTab('shop');
       loadProgressBar();
       loadUnreadNotifCount();
+      fetchSDCategories();
     }
 
     /* ── Logout ── */
@@ -1456,7 +1374,7 @@
 
       var { data, error } = await SD.sb
         .from('products')
-        .select('id, name, price, sale_price, sale, visible, badge, category, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
+        .select('id, name, price, sale_price, sale, visible, badge, category, category_id, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
         .eq('seller_id', SD.seller.id)
         .order('created_at', { ascending: false });
 
@@ -1513,12 +1431,12 @@
     });
 
     document.getElementById('submitProductBtn').addEventListener('click', async function() {
-      var name     = (document.getElementById('newProdName').value || '').trim();
-      var desc     = (document.getElementById('newProdDesc').value || '').trim();
-      var price    = parseFloat(document.getElementById('newProdPrice').value);
-      var stock    = parseInt(document.getElementById('newProdStock').value, 10) || 0;
-      var category = document.getElementById('newProdCategory').value;
-      var badge    = document.getElementById('newProdBadge').value;
+      var name       = (document.getElementById('newProdName').value || '').trim();
+      var desc       = (document.getElementById('newProdDesc').value || '').trim();
+      var price      = parseFloat(document.getElementById('newProdPrice').value);
+      var stock      = parseInt(document.getElementById('newProdStock').value, 10) || 0;
+      var categoryId = document.getElementById('newProdCategory').value || null;
+      var badge      = document.getElementById('newProdBadge').value;
       var sizes    = getSelectedSizes('newProdSizes');
       var sizePrices = getSizePriceOverrides('newProdSizePrices');
       var onSale   = document.getElementById('newProdSale').checked;
@@ -1544,7 +1462,7 @@
         sale_price:     salePrice || null,
         sale:           onSale,
         stock:          stock,
-        category:       category,
+        category_id:    categoryId,
         badge:          badge   || null,
         image:          coverImg|| null,
         sizes:          sizes.length ? sizes : ['S','M','L','XL'],
@@ -1600,7 +1518,7 @@
       document.getElementById('editProdPrice').value    = p.price || '';
       document.getElementById('editProdStock').value    = p.stock || '';
       document.getElementById('editProdImage').value    = p.image || '';
-      document.getElementById('editProdCategory').value = p.category || 'All';
+      document.getElementById('editProdCategory').value = p.category_id || '';
       document.getElementById('editProdBadge').value    = p.badge || '';
       var dcEl = document.getElementById('editProdDeliveryClass');
       if (dcEl) dcEl.value = p.delivery_class || 'medium';
@@ -1635,13 +1553,13 @@
     });
 
     document.getElementById('saveEditProdBtn').addEventListener('click', async function() {
-      var id       = document.getElementById('editProdId').value;
-      var name     = (document.getElementById('editProdName').value || '').trim();
-      var desc     = (document.getElementById('editProdDesc').value || '').trim();
-      var price    = parseFloat(document.getElementById('editProdPrice').value);
-      var stock    = parseInt(document.getElementById('editProdStock').value, 10) || 0;
-      var category = document.getElementById('editProdCategory').value;
-      var badge    = document.getElementById('editProdBadge').value;
+      var id         = document.getElementById('editProdId').value;
+      var name       = (document.getElementById('editProdName').value || '').trim();
+      var desc       = (document.getElementById('editProdDesc').value || '').trim();
+      var price      = parseFloat(document.getElementById('editProdPrice').value);
+      var stock      = parseInt(document.getElementById('editProdStock').value, 10) || 0;
+      var categoryId = document.getElementById('editProdCategory').value || null;
+      var badge      = document.getElementById('editProdBadge').value;
       var image    = (document.getElementById('editProdImage').value || '').trim();
       var sizes    = getSelectedSizes('editProdSizes');
       var sizePricesEdit = getSizePriceOverrides('editProdSizePrices');
@@ -1665,7 +1583,7 @@
         sale_price:     salePrice || null,
         sale:           onSale,
         stock:          stock,
-        category:       category,
+        category_id:    categoryId,
         badge:          badge   || null,
         image:          image   || null,
         sizes:          sizes.length ? sizes : ['S','M','L','XL'],
