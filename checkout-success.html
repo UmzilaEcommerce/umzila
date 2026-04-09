@@ -76,7 +76,19 @@
     </div>
     
     <p>We're processing your order and will notify you when it ships.</p>
-    
+
+    <!-- Service next steps (shown if order has service items) -->
+    <div id="serviceNextSteps" style="display:none;margin-top:20px;background:#f0fdf4;border-radius:10px;padding:20px;text-align:left">
+      <h3 style="margin-top:0;color:#166534">🔧 Your Service Order — Next Steps</h3>
+      <ol style="color:#374151;line-height:1.8;padding-left:20px">
+        <li>The seller will <strong>accept your order within 24 hours</strong>. You'll receive an email confirmation.</li>
+        <li id="dropoffStep" style="display:none">Once accepted, <strong>bring your item to the Umzila collection point at UKZN Westville campus</strong>.</li>
+        <li>Umzila will hand your item to the seller when ready.</li>
+        <li>The seller completes the service and submits proof of completion.</li>
+        <li>Your item is returned to the campus collection point. You can <strong>collect it</strong> or have it <strong>delivered to your address</strong>.</li>
+      </ol>
+    </div>
+
     <a href="index.html" class="btn">Continue Shopping</a>
     <a href="profile.html" class="btn" style="background: #6c757d; margin-left: 10px;">View Orders</a>
   </div>
@@ -140,6 +152,17 @@
                 localStorage.removeItem('ss_cart');
                 localStorage.removeItem('ss_coupon');
                 console.log('checkout-success: payment confirmed, cart cleared');
+                // Check for service items and show next steps panel
+                try {
+                  const { data: fullOrder } = await sb.from('orders').select('items').eq('m_payment_id', mPaymentId).maybeSingle();
+                  const items = Array.isArray(fullOrder && fullOrder.items) ? fullOrder.items : [];
+                  const hasService = items.some(i => i.listing_type === 'service');
+                  if (hasService) {
+                    document.getElementById('serviceNextSteps').style.display = '';
+                    const hasDropoff = items.some(i => i.listing_type === 'service' && i.fulfillment_type === 'item_dropoff');
+                    if (hasDropoff) document.getElementById('dropoffStep').style.display = '';
+                  }
+                } catch (_) {}
                 break;
               }
 

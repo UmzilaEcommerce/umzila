@@ -137,6 +137,11 @@ exports.handler = async function(event, context) {
                             }
                         }
 
+                        // ── Create service order records (pending_acceptance) ──
+                        await createServiceOrderRecords(supabase, existingOrder).catch(
+                            e => console.error('ITN: service order records error', e)
+                        );
+
                         // ── Send per-seller new order notification emails ──
                         await sendSellerOrderNotifications(supabase, existingOrder, pfData).catch(
                             e => console.error('ITN: seller notifications error', e)
@@ -153,6 +158,11 @@ exports.handler = async function(event, context) {
                             const pid = item.product_id || item.id;
                             const qty = Number(item.quantity || item.qty || 1);
                             if (!pid || qty <= 0) continue;
+                            // Services don't have physical stock to decrement
+                            if (item.listing_type === 'service') {
+                                console.log('ITN: skipping stock decrement for service item', pid);
+                                continue;
+                            }
 
                             const { data: prod } = await supabase
                                 .from('products')
@@ -398,6 +408,14 @@ async function sendSellerOrderNotifications(supabase, order, pfData) {
         const seller = sellerMap[sellerId];
         if (!seller.email || !sellerItems.length) continue;
 
+        const hasServices = sellerItems.some(i => i.listing_type === 'service');
+        const emailSubject = hasServices
+            ? `🔧 New service order — accept required — ${order.order_number || pfData.m_payment_id}`
+            : `New order for ${seller.shop_name || 'your store'} — ${order.order_number || pfData.m_payment_id}`;
+        const emailHtml = hasServices
+            ? buildSellerServiceOrderEmail(seller, sellerItems, order, pfData, SITE_BASE_URL)
+            : buildSellerOrderEmail(seller, sellerItems, order, pfData, SITE_BASE_URL);
+
         try {
             const res = await fetch('https://api.resend.com/emails', {
                 method: 'POST',
@@ -405,8 +423,8 @@ async function sendSellerOrderNotifications(supabase, order, pfData) {
                 body: JSON.stringify({
                     from:    'Umzila Sellers <sellers@umzila.store>',
                     to:      [seller.email],
-                    subject: `New order for ${seller.shop_name || 'your store'} — ${order.order_number || pfData.m_payment_id}`,
-                    html:    buildSellerOrderEmail(seller, sellerItems, order, pfData, SITE_BASE_URL)
+                    subject: emailSubject,
+                    html:    emailHtml
                 })
             });
             if (!res.ok) {
@@ -571,20 +589,25 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
     const shipping  = parseFloat(order.shipping_cost || 0);
     const total     = parseFloat(order.total || subtotal - discount + shipping);
 
-    const itemsHtml = items.map(item => {
+    const productItems = items.filter(i => i.listing_type !== 'service');
+    const serviceItems = items.filter(i => i.listing_type === 'service');
+
+    const renderItemRow = (item) => {
         const img   = getImg(item);
         const name  = esc(getName(item));
+        const isService = item.listing_type === 'service';
         const size  = getSize(item) ? `<span style="color:#888;font-size:12px"> — ${esc(String(getSize(item)))}</span>` : '';
         const qty   = getQty(item);
         const price = getPrice(item);
         const line  = fmt(price * qty);
+        const typeIcon = isService ? '🔧' : '🛍️';
 
         const imgHtml = img
             ? `<td style="padding:10px 12px 10px 0;vertical-align:top;width:72px">
                  <img src="${esc(img)}" width="68" height="68" alt="${name}" style="border-radius:8px;object-fit:cover;display:block;border:1px solid #eaecf0" />
                </td>`
             : `<td style="padding:10px 12px 10px 0;vertical-align:top;width:72px">
-                 <div style="width:68px;height:68px;background:#f0f4ff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px">🛍️</div>
+                 <div style="width:68px;height:68px;background:#f0f4ff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px">${typeIcon}</div>
                </td>`;
 
         return `<tr>
@@ -597,7 +620,24 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
             <div style="font-size:14px;font-weight:700;color:#0a2f66">${line}</div>
           </td>
         </tr>`;
-    }).join('\n');
+    };
+
+    const itemsHtml = items.map(renderItemRow).join('\n');
+
+    // Build service next-steps section if order contains services
+    const hasItemDropoff = serviceItems.some(i => i.fulfillment_type === 'item_dropoff');
+    const serviceNextStepsHtml = serviceItems.length > 0 ? `
+    <hr style="border:none;border-top:1px solid #eaecf0;margin:24px 0">
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:18px 20px;margin:16px 0">
+      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:10px">🔧 Your Service Order — What happens next</div>
+      <ol style="margin:0;padding-left:20px;color:#374151;font-size:13px;line-height:2">
+        <li>The seller will <strong>review and accept your service request within 24 hours</strong>.</li>
+        ${hasItemDropoff ? `<li>Once accepted, <strong>bring your item to the Umzila collection point at UKZN Westville campus</strong>. Umzila will hand it to the seller.</li>` : ''}
+        <li>The seller completes the service and marks it done with proof.</li>
+        <li>Your item is returned to the campus collection point for you to collect or have delivered.</li>
+      </ol>
+      <div style="margin-top:12px;font-size:12px;color:#6b7280">Order ref: <strong>${esc(orderRef)}</strong> — check your seller dashboard or contact support if you need updates.</div>
+    </div>` : '';
 
     const discountRow = discount > 0
         ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Discount${order.coupon_code ? ` (${esc(order.coupon_code)})` : ''}</td><td style="padding:4px 0;text-align:right;color:#28a745;font-weight:600;font-size:14px">-${fmt(discount)}</td></tr>`
@@ -661,6 +701,8 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
         <tr class="total-row"><td>Total paid</td><td style="text-align:right">${fmt(total)}</td></tr>
       </tbody>
     </table>
+
+    ${serviceNextStepsHtml}
 
     <div class="cta">
       <a href="${esc(site)}/profile.html" class="btn">View My Orders &rarr;</a>
@@ -754,6 +796,139 @@ function buildWelcomeEmail(firstName, email, shopName, siteUrl) {
   </div>
   <div class="ft">
     <strong><a href="${site}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+// ── Service order records creator ────────────────────────────────────────────
+async function createServiceOrderRecords(supabase, order) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const serviceItems = items.filter(i => i.listing_type === 'service');
+    if (!serviceItems.length) return;
+
+    const now = new Date();
+    for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        if (item.listing_type !== 'service') continue;
+        const deadlineHours = item.acceptance_deadline_hours || 24;
+        const deadline = new Date(now.getTime() + deadlineHours * 60 * 60 * 1000);
+
+        const { error: insErr } = await supabase.from('order_item_statuses').insert([{
+            order_id: order.id,
+            item_index: idx,
+            product_id: item.product_id || item.id || null,
+            seller_id: item.seller_id || null,
+            listing_type: 'service',
+            service_status: 'pending_acceptance',
+            acceptance_deadline: deadline.toISOString(),
+            status: 'pending_acceptance'
+        }]);
+        if (insErr) console.error('ITN: service record insert error', insErr);
+
+        // In-app notification for seller
+        if (item.seller_id) {
+            await supabase.from('seller_notifications').insert([{
+                seller_id: item.seller_id,
+                type: 'service_order',
+                title: '🔧 New service order — action required',
+                body: `New service order for "${item.name || item.title || 'service'}". You must accept within ${deadlineHours}h or it will be cancelled.`,
+                related_order_id: order.id,
+                metadata: { order_number: order.order_number, item_index: idx },
+                is_read: false
+            }]).catch(e => console.error('ITN: service notification insert error', e));
+        }
+    }
+    console.log('ITN: created service order records for order', order.id);
+}
+
+// ── Seller service order email builder ───────────────────────────────────────
+function buildSellerServiceOrderEmail(seller, sellerItems, order, pfData, siteUrl) {
+    const site     = siteUrl || '';
+    const orderRef = order.order_number || pfData.m_payment_id || 'N/A';
+    const shopName = esc(seller.shop_name || 'Your Store');
+    const fmt      = (n) => 'R' + (parseFloat(n) || 0).toFixed(2);
+    const getName  = (i) => i.title || i.name || 'Service';
+    const getPrice = (i) => parseFloat(i.price || i.unit_price || 0);
+    const getQty   = (i) => parseInt(i.qty || i.quantity || 1, 10);
+    const deadlineHours = sellerItems.find(i => i.acceptance_deadline_hours)?.acceptance_deadline_hours || 24;
+
+    const serviceTotal = sellerItems.reduce((s, i) => s + getPrice(i) * getQty(i), 0);
+
+    const itemsHtml = sellerItems.map(item => {
+        const img = item.img || item.image_url || item.image || '';
+        const name = esc(getName(item));
+        const ft = item.fulfillment_type || 'item_dropoff';
+        const ftLabel = ft === 'item_dropoff' ? '📦 Item drop-off' : ft === 'in_person' ? '📍 In-person' : '💻 Digital';
+        const turnaround = item.service_turnaround ? ` · Turnaround: ${esc(item.service_turnaround)}` : '';
+        const imgCell = img
+            ? `<td style="padding:10px 12px 10px 0;vertical-align:top;width:68px"><img src="${esc(img)}" width="64" height="64" alt="${name}" style="border-radius:8px;object-fit:cover;display:block;border:1px solid #eaecf0"></td>`
+            : `<td style="padding:10px 12px 10px 0;vertical-align:top;width:68px"><div style="width:64px;height:64px;background:#f0fdf4;border-radius:8px;text-align:center;line-height:64px;font-size:22px">🔧</div></td>`;
+        return `<tr>${imgCell}
+          <td style="padding:10px 0;vertical-align:top">
+            <div style="font-size:14px;font-weight:700;color:#1a1a2e">${name}</div>
+            <div style="font-size:12px;color:#16a34a;margin-top:3px;font-weight:600">${ftLabel}${turnaround}</div>
+            <div style="font-size:13px;color:#666;margin-top:3px">Qty: ${getQty(item)} · ${fmt(getPrice(item))} each</div>
+          </td>
+          <td style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:14px;font-weight:700;color:#0a2f66;white-space:nowrap">${fmt(getPrice(item) * getQty(item))}</td>
+        </tr>`;
+    }).join('');
+
+    const customerName = esc(order.customer_name || pfData.name_first || 'Customer');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
+  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.09)}
+  .hdr{background:#166534;padding:28px 36px;text-align:center}
+  .hdr h1{color:#fff;margin:0 0 4px;font-size:20px;font-weight:800}
+  .hdr p{color:rgba(255,255,255,.75);margin:0;font-size:13px}
+  .badge{display:inline-block;background:#16a34a;color:#fff;font-size:12px;font-weight:700;padding:4px 14px;border-radius:999px;margin-top:10px;letter-spacing:.5px;border:2px solid rgba(255,255,255,.3)}
+  .bd{padding:28px 36px}
+  .urgency{background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:14px 18px;margin:0 0 20px;font-size:14px;color:#9a3412;font-weight:600;text-align:center}
+  .ref-box{background:#f0fdf4;border-radius:8px;padding:10px 14px;margin:14px 0;font-size:13px;color:#166534;font-weight:600}
+  .items-table{width:100%;border-collapse:collapse;margin:16px 0}
+  .action-box{background:#f0f4ff;border-radius:10px;padding:18px 20px;margin:20px 0;text-align:center}
+  .btn{display:inline-block;background:#0a2f66;color:#fff !important;padding:14px 32px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
+  .steps{background:#f9fafb;border-radius:8px;padding:14px 18px;margin:16px 0;font-size:13px;color:#374151;line-height:1.8}
+  .ft{background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
+  .ft a{color:#0a2f66;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>Umzila — Service Order</h1>
+    <p>${shopName}</p>
+    <span class="badge">🔧 ACTION REQUIRED</span>
+  </div>
+  <div class="bd">
+    <div class="urgency">⏰ You must accept this service order within <strong>${deadlineHours} hours</strong> or it will be automatically cancelled.</div>
+    <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has placed a service order. Log in to your seller dashboard to <strong>accept or reject</strong> this request.</p>
+    <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong> · Customer: ${customerName}</div>
+    <table class="items-table"><tbody>${itemsHtml}</tbody></table>
+    <div style="text-align:right;font-size:15px;font-weight:700;color:#0a2f66;margin-bottom:16px">Service total: ${fmt(serviceTotal)}</div>
+    <div class="action-box">
+      <div style="font-size:14px;font-weight:600;color:#0a2f66;margin-bottom:12px">Log in to accept or reject this service order</div>
+      <a href="${esc(site)}/seller-dashboard.html" class="btn">Go to Seller Dashboard &rarr;</a>
+    </div>
+    <div class="steps">
+      <strong>Once accepted:</strong>
+      <ol style="margin:8px 0 0;padding-left:18px">
+        <li>The customer will be notified and will drop off their item at the Umzila campus collection point.</li>
+        <li>Umzila will hand the item to you.</li>
+        <li>Complete the service and mark it done in your dashboard (with a completion note).</li>
+        <li>Hand the item back to Umzila for return to the customer.</li>
+      </ol>
+    </div>
+    <p style="font-size:13px;color:#888;text-align:center">Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a></p>
+  </div>
+  <div class="ft">
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>

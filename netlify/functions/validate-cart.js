@@ -48,7 +48,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -124,8 +124,10 @@ variants.forEach(v => {
   }
 
   // default
+  const isService = product.listing_type === 'service';
   let itemPrice = product.price;
-  let itemStock = Number.isFinite(product.stock) ? product.stock : Infinity;
+  // Services with null stock have unlimited slots
+  let itemStock = (isService && product.stock == null) ? Infinity : (Number.isFinite(product.stock) ? product.stock : Infinity);
   let maxQuantity = itemStock;
 
   // If item has variant_id use that, else try by size
@@ -165,7 +167,11 @@ variants.forEach(v => {
     max_quantity: maxQuantity,
     subtotal: itemPrice * qty,
     seller_id: product.seller_id || null,
-    delivery_class: product.delivery_class || null
+    delivery_class: product.delivery_class || null,
+    listing_type: product.listing_type || 'product',
+    fulfillment_type: product.fulfillment_type || null,
+    service_turnaround: product.service_turnaround || null,
+    acceptance_deadline_hours: product.acceptance_deadline_hours || 24
   });
 
   total += itemPrice * qty;

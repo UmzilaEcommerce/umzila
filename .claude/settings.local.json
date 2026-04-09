@@ -24,7 +24,9 @@
       "Bash(find /c/Users/ntand/Downloads/umzila-remote -type f -name *.json -o -name *.js -o -name *.ts -o -name *.sql)",
       "Bash(do sed:*)",
       "Bash(done)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(wc:*)",
+      "Bash(xargs -I {} basename {} .js)"
     ]
   }
 }

@@ -186,6 +186,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="intelligence">🧠 Intelligence</li>
           <li data-section="manage">📦 Manage Products</li>
           <li data-section="seller-applications">🏪 Seller Applications</li>
+          <li data-section="service-orders">🔧 Service Orders</li>
           <li data-section="product-reviews">🔍 Product Reviews</li>
           <li data-section="settings">⚙️ Settings</li>
           <li id="lsLogout">🚪 Logout</li>
@@ -482,6 +483,17 @@ const supabaseClient = supabase.createClient(
         </div>
       </section>
 
+      <!-- Service Orders -->
+      <section id="section-service-orders" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <h3 style="margin:0">🔧 Service Orders</h3>
+          <button id="refreshServiceOrdersBtn" class="small-btn" onclick="loadAdminServiceOrders()">↻ Refresh</button>
+        </div>
+        <div id="adminServiceOrdersLoading" style="color:var(--muted);padding:20px">Loading…</div>
+        <div id="adminServiceOrdersList"></div>
+        <div id="adminServiceOrdersEmpty" style="display:none;color:var(--muted);padding:20px">No service orders yet.</div>
+      </section>
+
       <!-- Product Reviews -->
       <section id="section-product-reviews" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -766,20 +778,37 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('categories')
-        .select('id, name')
+        .select('id, name, parent_id')
         .order('name', { ascending: true });
       if(error){ console.warn('fetch categories error', error); return []; }
       categoriesCache = data || [];
+
+      const parents  = categoriesCache.filter(c => !c.parent_id);
+      const children = categoriesCache.filter(c =>  c.parent_id);
+
+      function buildCategoryHTML(noneLabel) {
+        let html = `<option value="">${noneLabel}</option>`;
+        parents.forEach(parent => {
+          const subs = children.filter(c => c.parent_id === parent.id);
+          if (subs.length) {
+            html += `<optgroup label="${escapeHtml(parent.name)}">`;
+            subs.forEach(sub => {
+              html += `<option value="${sub.id}">${escapeHtml(sub.name)}</option>`;
+            });
+            html += '</optgroup>';
+          } else {
+            html += `<option value="${parent.id}">${escapeHtml(parent.name)}</option>`;
+          }
+        });
+        return html;
+      }
+
       const sel = document.getElementById('prodCategory');
-      sel.innerHTML = '';
-      const noneOpt = document.createElement('option'); noneOpt.value = ''; noneOpt.textContent = 'Select category';
-      sel.appendChild(noneOpt);
-      categoriesCache.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c.id; // value is category id
-        o.textContent = c.name;
-        sel.appendChild(o);
-      });
+      if(sel) sel.innerHTML = buildCategoryHTML('Select category');
+
+      // Store builder for use in edit modal
+      categoriesCache._buildHTML = buildCategoryHTML;
+
       return categoriesCache;
     } catch(e){
       console.warn('fetchCategories failed', e);
@@ -1242,10 +1271,25 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const p = productsCache.find(x => x.id === productId);
     if(!p) return showToast('Product not found');
 
-    // Build category options
-    const catOpts = categoriesCache.map(c =>
-      `<option value="${escapeHtml(c.id)}"${c.id === p.category_id ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
-    ).join('');
+    // Build category options (grouped)
+    const catOpts = (() => {
+      const parents  = categoriesCache.filter(c => !c.parent_id);
+      const children = categoriesCache.filter(c =>  c.parent_id);
+      let html = '';
+      parents.forEach(parent => {
+        const subs = children.filter(c => c.parent_id === parent.id);
+        if (subs.length) {
+          html += `<optgroup label="${escapeHtml(parent.name)}">`;
+          subs.forEach(sub => {
+            html += `<option value="${sub.id}"${sub.id === p.category_id ? ' selected' : ''}>${escapeHtml(sub.name)}</option>`;
+          });
+          html += '</optgroup>';
+        } else {
+          html += `<option value="${parent.id}"${parent.id === p.category_id ? ' selected' : ''}>${escapeHtml(parent.name)}</option>`;
+        }
+      });
+      return html;
+    })();
 
     // Build seller options from sellersCache
     const sellerOpts = (sellersCache || []).map(s =>
@@ -1492,6 +1536,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     intelligence: document.getElementById('section-intelligence'),
     settings: document.getElementById('section-settings'),
     'seller-applications': document.getElementById('section-seller-applications'),
+    'service-orders': document.getElementById('section-service-orders'),
     'product-reviews': document.getElementById('section-product-reviews')
   };
   menuItems.forEach(it => {
@@ -1536,6 +1581,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Lazy-load seller applications when that tab is first clicked
   document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
+
+  // Lazy-load service orders when that tab is clicked
+  document.querySelector('[data-section="service-orders"]').addEventListener('click', loadAdminServiceOrders);
 
   // Lazy-load product reviews when that tab is first clicked
   document.querySelector('[data-section="product-reviews"]').addEventListener('click', fetchProductReviews);
@@ -2566,6 +2614,95 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.getElementById('prModalClose').addEventListener('click', () => document.getElementById('prModalBackdrop').classList.remove('open'));
   document.getElementById('prModalBackdrop').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
   /* ============================================================ end Product Reviews */
+
+  /* ============================================================ Service Orders (Admin) */
+  var adminServiceOrdersLoaded = false;
+  window.loadAdminServiceOrders = async function() {
+    if (!supabaseClient) return;
+    const loadingEl = document.getElementById('adminServiceOrdersLoading');
+    const listEl    = document.getElementById('adminServiceOrdersList');
+    const emptyEl   = document.getElementById('adminServiceOrdersEmpty');
+    if (loadingEl) loadingEl.style.display = '';
+    if (listEl) listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    const { data: statuses, error } = await supabaseClient
+      .from('order_item_statuses')
+      .select('id, order_id, item_index, seller_id, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, listing_type, completion_note, created_at')
+      .eq('listing_type', 'service')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (error) { if (listEl) listEl.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load service orders: ' + escapeHtml(error.message) + '</div>'; return; }
+    if (!statuses || !statuses.length) { if (emptyEl) emptyEl.style.display = ''; return; }
+
+    // Fetch orders and sellers for display
+    const orderIds  = [...new Set(statuses.map(s => s.order_id))];
+    const sellerIds = [...new Set(statuses.map(s => s.seller_id).filter(Boolean))];
+    const [ordersRes, sellersRes] = await Promise.all([
+      supabaseClient.from('orders').select('id, order_number, customer_name, items').in('id', orderIds),
+      sellerIds.length ? supabaseClient.from('sellers').select('id, shop_name').in('id', sellerIds) : Promise.resolve({ data: [] })
+    ]);
+    const orderMap  = {};
+    (ordersRes.data || []).forEach(o => { orderMap[o.id] = o; });
+    const sellerMap = {};
+    (sellersRes.data || []).forEach(s => { sellerMap[s.id] = s; });
+
+    const now = new Date();
+    const statusLabels = {
+      pending_acceptance: '⏳ Pending acceptance', accepted: '✅ Accepted',
+      item_received: '📬 Item received', handed_to_seller: '🤝 Handed to seller',
+      in_progress: '🔧 In progress', completed: '✅ Completed',
+      rejected: '✗ Rejected', cancelled: '✗ Cancelled', returned: '📦 Returned'
+    };
+
+    if (listEl) listEl.innerHTML = statuses.map(s => {
+      const order  = orderMap[s.order_id] || {};
+      const seller = sellerMap[s.seller_id] || {};
+      const items  = Array.isArray(order.items) ? order.items : [];
+      const item   = items[s.item_index] || {};
+      const itemName  = item.name || item.title || ('Service item #' + s.item_index);
+      const orderNum  = order.order_number || (s.order_id || '').slice(0, 8);
+      const status    = s.service_status || 'pending_acceptance';
+      const isOverdue = status === 'pending_acceptance' && s.acceptance_deadline && new Date(s.acceptance_deadline) < now;
+
+      const actionBtns = [];
+      if (status === 'accepted') {
+        actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'item_received\',\'item_received_at\')" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">📬 Mark Item Received</button>');
+      }
+      if (status === 'item_received') {
+        actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'handed_to_seller\',\'handed_to_seller_at\')" style="padding:5px 12px;background:#7c3aed;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">🤝 Hand to Seller</button>');
+      }
+      if (status === 'completed') {
+        actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'returned\',\'returned_at\')" style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">📦 Mark Returned</button>');
+      }
+
+      return '<div style="background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border:1px solid' + (isOverdue ? ' #fca5a5' : ' #e5e7eb') + '">' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">' +
+          '<span style="font-weight:700;font-size:14px">#' + escapeHtml(String(orderNum)) + '</span>' +
+          (isOverdue ? '<span style="background:#ef4444;color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px">⚠️ Acceptance Overdue</span>' : '') +
+          '<span style="font-size:12px;background:#f3f4f6;padding:2px 9px;border-radius:999px">' + escapeHtml(statusLabels[status] || status) + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#374151">🔧 <strong>' + escapeHtml(itemName) + '</strong></div>' +
+        (order.customer_name ? '<div style="font-size:12px;color:#6b7280;margin-top:2px">👤 ' + escapeHtml(order.customer_name) + '</div>' : '') +
+        (seller.shop_name ? '<div style="font-size:12px;color:#6b7280">🏪 ' + escapeHtml(seller.shop_name) + '</div>' : '') +
+        (s.completion_note ? '<div style="font-size:12px;color:#166534;background:#f0fdf4;padding:6px 10px;border-radius:6px;margin-top:6px">📝 ' + escapeHtml(s.completion_note) + '</div>' : '') +
+        (actionBtns.length ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + actionBtns.join('') + '</div>' : '') +
+      '</div>';
+    }).join('');
+    adminServiceOrdersLoaded = true;
+  };
+
+  window.adminUpdateServiceStatus = async function(statusId, newStatus, timestampField) {
+    if (!supabaseClient) return;
+    const update = { service_status: newStatus };
+    if (timestampField) update[timestampField] = new Date().toISOString();
+    const { error } = await supabaseClient.from('order_item_statuses').update(update).eq('id', statusId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    await loadAdminServiceOrders();
+  };
+  /* ============================================================ end Service Orders */
 
   // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();

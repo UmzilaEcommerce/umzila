@@ -241,6 +241,22 @@
     /* ── Toast ── */
     #sdToast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #fff; padding: 10px 22px; border-radius: 999px; font-size: 14px; font-weight: 600; z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
     #sdToast.show { opacity: 1; }
+    /* ── Shop picker ── */
+    #shopPickerOverlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 9000; display: none; align-items: center; justify-content: center; padding: 16px; }
+    #shopPickerOverlay.open { display: flex; }
+    #shopPickerBox { background: #fff; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 8px 40px rgba(0,0,0,.18); overflow: hidden; }
+    #shopPickerBox .sp-header { padding: 18px 20px 12px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+    #shopPickerBox .sp-header h3 { margin: 0; font-size: 17px; font-weight: 700; }
+    #shopPickerBox .sp-header button { background: none; border: none; font-size: 20px; cursor: pointer; color: #6b7280; line-height: 1; }
+    .shop-picker-card { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: none; background: none; cursor: pointer; border-radius: 10px; text-align: left; transition: background .15s; }
+    .shop-picker-card:hover { background: #f5f7ff; }
+    .shop-picker-card.active-shop { background: #eef2ff; }
+    .shop-picker-card .sp-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 20px; overflow: hidden; }
+    .shop-picker-card .sp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .shop-picker-card .sp-name { font-weight: 700; font-size: 14px; }
+    .shop-picker-card .sp-status { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    #switchShopBtn { background: none; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; margin-right: 8px; transition: background .15s; }
+    #switchShopBtn:hover { background: rgba(255,255,255,.15); }
   </style>
 </head>
 <body>
@@ -257,6 +273,7 @@
         <div class="notif-badge" id="notifBadge"></div>
       </div>
       <span class="topbar-seller-name" id="topbarShopName"></span>
+      <button id="switchShopBtn" style="display:none" onclick="openShopPicker()">⇄ Switch Shop</button>
       <button class="topbar-logout" id="logoutBtn">Log out</button>
     </div>
   </div>
@@ -380,21 +397,20 @@
             <label class="form-label">Location / City <span class="opt">(optional)</span></label>
             <input type="text" id="editLocation" class="form-control" placeholder="e.g. Johannesburg, Gauteng">
           </div>
-          <div class="form-group">
-            <label class="form-label">Delivery Method <span class="opt">(optional)</span></label>
-            <select id="editDeliveryMethod" class="form-control">
-              <option value="">Select...</option>
-              <option value="courier">Courier</option>
-              <option value="self_delivery">Self Delivery</option>
-              <option value="collection">Collection Only</option>
-              <option value="digital">Digital / No Shipping</option>
-            </select>
-          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Processing Time <span class="opt">(optional)</span></label>
-            <input type="text" id="editTurnaround" class="form-control" placeholder="e.g. 3–5 business days">
+            <label class="form-label">How soon can you drop off at UKZN Westville? <span style="color:var(--error)">*</span></label>
+            <select id="editTurnaround" class="form-control">
+              <option value="">Select…</option>
+              <option value="Within 1 hour">Within 1 hour</option>
+              <option value="Within 2 hours">Within 2 hours</option>
+              <option value="Within 4 hours">Within 4 hours</option>
+              <option value="Same day (order before 12pm)">Same day (order before 12pm)</option>
+              <option value="Next business day">Next business day</option>
+              <option value="2–3 days">2–3 days</option>
+            </select>
+            <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Buyers will see an estimated delivery time based on this</small>
           </div>
           <div class="form-group">
             <label class="form-label">Years in Business <span class="opt">(optional)</span></label>
@@ -449,11 +465,18 @@
 
         <!-- Add product form -->
         <div id="addProductForm" class="product-form-wrap" style="display:none">
-          <div class="product-form-title">New Product</div>
+          <div class="product-form-title">New Listing</div>
+          <!-- Listing type toggle -->
           <div class="form-group">
-            <label class="form-label">Product Name <span style="color:var(--error)">*</span></label>
-            <input type="text" id="newProdName" class="form-control" placeholder="e.g. Oversized Hoodie">
+            <label class="form-label">Listing Type</label>
+            <div style="display:flex;gap:16px;margin-top:4px">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newListingType" value="product" id="newListingTypeProduct" checked> 🛍️ Physical Product</label>
+              <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newListingType" value="service" id="newListingTypeService"> 🔧 Service</label>
+            </div>
           </div>
+          <div class="form-group">
+            <label class="form-label">Name <span style="color:var(--error)">*</span></label>
+            <input type="text" id="newProdName" class="form-control" placeholder="e.g. Oversized Hoodie or Shoe Cleaning"></div>
           <div class="form-group">
             <label class="form-label">Description</label>
             <textarea id="newProdDesc" class="form-control" placeholder="Describe the product..."></textarea>
@@ -515,12 +538,15 @@
             <!-- Hidden fallback URL -->
             <input type="hidden" id="newProdImage">
           </div>
+          <!-- Product-only fields (hidden for services) -->
+          <div id="newProductOnlyFields">
           <div class="form-group">
-            <label class="form-label">Delivery Class <span style="color:var(--error)">*</span> <span class="opt" style="font-size:11px">(affects customer delivery fee)</span></label>
+            <label class="form-label">Package Size <span style="color:var(--error)">*</span></label>
+            <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">Umzila uses this to work out the delivery fee</small>
             <select id="newProdDeliveryClass" class="form-control">
-              <option value="small">Small — envelopes, accessories, jewellery (R12)</option>
-              <option value="medium" selected>Medium — clothing, shoes, tech (R22)</option>
-              <option value="large">Large — bags, large items, bulk (R50)</option>
+              <option value="small">Small — envelopes, accessories, jewellery</option>
+              <option value="medium" selected>Medium — clothing, shoes, tech</option>
+              <option value="large">Large — bags, large items, bulk</option>
             </select>
           </div>
           <div class="form-group">
@@ -536,6 +562,34 @@
             </div>
             <div id="newProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
             <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
+          </div>
+          </div><!-- /newProductOnlyFields -->
+          <!-- Service-only fields (hidden for products) -->
+          <div id="newServiceFields" style="display:none">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Service Type <span style="color:var(--error)">*</span></label>
+                <select id="newFulfillmentType" class="form-control">
+                  <option value="item_dropoff">📦 Item Drop-off (e.g. shoe cleaning)</option>
+                  <option value="in_person">📍 In-person (e.g. tutoring)</option>
+                  <option value="digital">💻 Digital (e.g. CV writing)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Turnaround Time <span style="color:var(--error)">*</span></label>
+                <select id="newServiceTurnaround" class="form-control">
+                  <option value="">Select…</option>
+                  <option value="Same day (order before 12pm)">Same day (order before 12pm)</option>
+                  <option value="Next business day">Next business day</option>
+                  <option value="2–3 days">2–3 days</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Acceptance window (hours)</label>
+              <input type="number" id="newAcceptanceDeadline" class="form-control" value="24" min="1" max="72" style="max-width:120px">
+              <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept this service order before it auto-cancels</small>
+            </div>
           </div>
           <div id="addProdMsg" class="msg"></div>
           <div class="btn-row">
@@ -559,10 +613,11 @@
 
       <!-- Edit product form -->
       <div class="panel" id="editProductPanel" style="display:none">
-        <div class="product-form-title">Edit Product</div>
+        <div class="product-form-title">Edit Listing</div>
         <input type="hidden" id="editProdId">
+        <input type="hidden" id="editListingType" value="product">
         <div class="form-group">
-          <label class="form-label">Product Name</label>
+          <label class="form-label">Name</label>
           <input type="text" id="editProdName" class="form-control">
         </div>
         <div class="form-group">
@@ -601,14 +656,18 @@
               <option value="">Loading categories…</option>
             </select>
           </div>
+          <!-- Product-only: package size (hidden for services) -->
+          <div id="editPackageSizeGroup">
           <div class="form-group">
-            <label class="form-label">Delivery Class <span style="color:var(--error)">*</span></label>
+            <label class="form-label">Package Size <span style="color:var(--error)">*</span></label>
+            <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">Umzila uses this to work out the delivery fee</small>
             <select id="editProdDeliveryClass" class="form-control">
-              <option value="small">Small — envelopes, accessories, jewellery (R12)</option>
-              <option value="medium">Medium — clothing, shoes, tech (R22)</option>
-              <option value="large">Large — bags, large items, bulk (R50)</option>
+              <option value="small">Small — envelopes, accessories, jewellery</option>
+              <option value="medium">Medium — clothing, shoes, tech</option>
+              <option value="large">Large — bags, large items, bulk</option>
             </select>
           </div>
+          </div><!-- /editPackageSizeGroup -->
           <div class="form-group">
             <label class="form-label">Badge</label>
             <select id="editProdBadge" class="form-control">
@@ -643,6 +702,33 @@
           <div id="editProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
           <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
         </div>
+        <!-- Service-only fields (hidden for products) -->
+        <div id="editServiceFields" style="display:none">
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Service Type <span style="color:var(--error)">*</span></label>
+              <select id="editFulfillmentType" class="form-control">
+                <option value="item_dropoff">📦 Item Drop-off (e.g. shoe cleaning)</option>
+                <option value="in_person">📍 In-person (e.g. tutoring)</option>
+                <option value="digital">💻 Digital (e.g. CV writing)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Turnaround Time <span style="color:var(--error)">*</span></label>
+              <select id="editServiceTurnaround" class="form-control">
+                <option value="">Select…</option>
+                <option value="Same day (order before 12pm)">Same day (order before 12pm)</option>
+                <option value="Next business day">Next business day</option>
+                <option value="2–3 days">2–3 days</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Acceptance window (hours)</label>
+            <input type="number" id="editAcceptanceDeadline" class="form-control" value="24" min="1" max="72" style="max-width:120px">
+            <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept this service order before it auto-cancels</small>
+          </div>
+        </div>
         <div id="editProdMsg" class="msg"></div>
         <div class="btn-row">
           <button class="btn primary" id="saveEditProdBtn">Save Changes</button>
@@ -657,6 +743,15 @@
         <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
           <button class="btn primary sm" id="ordersSubActive" onclick="switchOrdersSub('active')">Active Orders</button>
           <button class="btn ghost sm" id="ordersSubPast" onclick="switchOrdersSub('past')">Past Orders</button>
+          <button class="btn ghost sm" id="ordersSubServiceBtn" onclick="switchOrdersSub('service')">🔧 Services</button>
+        </div>
+        <div id="ordersSubServicePanel" style="display:none">
+          <div class="spinner-wrap" id="serviceOrdersLoading" style="display:none"><div class="spinner"></div></div>
+          <div id="serviceOrdersList"></div>
+          <div class="empty-state" id="serviceOrdersEmpty" style="display:none">
+            <div class="empty-state-icon">🔧</div>
+            <div>No service orders yet.</div>
+          </div>
         </div>
         <div id="ordersSubActivePanel">
           <div class="spinner-wrap" id="ordersLoading"><div class="spinner"></div></div>
@@ -740,6 +835,20 @@
 
   </div><!-- /stateDashboard -->
 
+  <!-- Shop picker modal -->
+  <div id="shopPickerOverlay" role="dialog" aria-modal="true">
+    <div id="shopPickerBox">
+      <div class="sp-header">
+        <h3>Choose a Shop</h3>
+        <button id="shopPickerClose" title="Close">✕</button>
+      </div>
+      <div id="shopPickerList" style="padding:12px 8px;display:flex;flex-direction:column;gap:4px;max-height:50vh;overflow-y:auto"></div>
+      <div style="padding:8px 16px 16px;border-top:1px solid #f0f0f0;margin-top:4px">
+        <button class="btn ghost" id="addAnotherShopBtn" style="width:100%;font-size:14px">+ Add a New Shop</button>
+      </div>
+    </div>
+  </div>
+
   <div id="sdToast"></div>
 
   <script>
@@ -765,7 +874,8 @@
     var SD = {
       sb:            null,
       user:          null,
-      seller:        null,
+      seller:        null,   // currently active shop
+      shops:         [],     // all shops for this user
       products:      [],
       orders:        [],
       notifications: [],
@@ -953,30 +1063,59 @@
     }
 
     async function loadSellerRow() {
-      var { data, error } = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).limit(1);
+      var { data, error } = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).order('created_at', { ascending: true });
       if (error || !data || !data.length) {
         var linked = await linkSellerIfNeeded(SD.user);
         if (linked) {
-          var reRes = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).limit(1);
-          if (reRes.data && reRes.data.length) { SD.seller = reRes.data[0]; showDashboard(); return; }
+          var reRes = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).order('created_at', { ascending: true });
+          if (reRes.data && reRes.data.length) {
+            SD.shops = reRes.data;
+            if (SD.shops.length === 1) { SD.seller = SD.shops[0]; showDashboard(); }
+            else openShopPicker();
+            return;
+          }
         }
         showState('setup'); return;
       }
-      SD.seller = data[0];
-      showDashboard();
+      SD.shops = data;
+      if (data.length === 1) {
+        SD.seller = data[0];
+        showDashboard();
+      } else {
+        openShopPicker();
+      }
     }
 
     async function fetchSDCategories() {
       try {
-        var { data, error } = await SD.sb.from('categories').select('id, name').order('name', { ascending: true });
+        var { data, error } = await SD.sb
+          .from('categories')
+          .select('id, name, parent_id')
+          .order('name', { ascending: true });
         if (error || !data) return;
         SD.categories = data;
-        var opts = '<option value="">Select category</option>' +
-          data.map(function(c) { return '<option value="' + c.id + '">' + c.name + '</option>'; }).join('');
+
+        var parents = data.filter(function(c) { return !c.parent_id; });
+        var children = data.filter(function(c) { return !!c.parent_id; });
+
+        var html = '<option value="">Select category</option>';
+        parents.forEach(function(parent) {
+          var subs = children.filter(function(c) { return c.parent_id === parent.id; });
+          if (subs.length) {
+            html += '<optgroup label="' + parent.name + '">';
+            subs.forEach(function(sub) {
+              html += '<option value="' + sub.id + '">' + sub.name + '</option>';
+            });
+            html += '</optgroup>';
+          } else {
+            html += '<option value="' + parent.id + '">' + parent.name + '</option>';
+          }
+        });
+
         var newSel = document.getElementById('newProdCategory');
         var editSel = document.getElementById('editProdCategory');
-        if (newSel) newSel.innerHTML = opts;
-        if (editSel) editSel.innerHTML = opts;
+        if (newSel) newSel.innerHTML = html;
+        if (editSel) editSel.innerHTML = html;
       } catch(e) {
         console.warn('fetchSDCategories failed', e);
       }
@@ -987,6 +1126,8 @@
       if (el) el.textContent = SD.seller.shop_name || '';
       var link = document.getElementById('viewShopLink');
       if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name || '');
+      var switchBtn = document.getElementById('switchShopBtn');
+      if (switchBtn) switchBtn.style.display = (SD.shops && SD.shops.length > 1) ? '' : 'none';
       populateShopForm();
       initUploadBindings();
       wireSaleToggle('newProdSale', 'newSaleFields');
@@ -997,6 +1138,60 @@
       loadUnreadNotifCount();
       fetchSDCategories();
     }
+
+    /* ── Shop picker ── */
+    function openShopPicker() {
+      var list = document.getElementById('shopPickerList');
+      if (!list) return;
+      list.innerHTML = (SD.shops || []).map(function(shop) {
+        var isActive = SD.seller && SD.seller.id === shop.id;
+        var avatar = shop.logo_url
+          ? '<img src="' + shop.logo_url + '" alt="">'
+          : '🏪';
+        return '<button class="shop-picker-card' + (isActive ? ' active-shop' : '') + '" onclick="switchShop(\'' + shop.id + '\')">' +
+          '<div class="sp-avatar">' + avatar + '</div>' +
+          '<div><div class="sp-name">' + (shop.shop_name || 'Unnamed Shop') + (isActive ? ' <span style="font-size:11px;color:var(--accent);font-weight:600">● Active</span>' : '') + '</div>' +
+          '<div class="sp-status">' + (shop.status ? shop.status.replace(/_/g,' ') : '') + '</div></div>' +
+          '</button>';
+      }).join('');
+      document.getElementById('shopPickerOverlay').classList.add('open');
+    }
+
+    function closeShopPicker() {
+      document.getElementById('shopPickerOverlay').classList.remove('open');
+    }
+
+    function switchShop(shopId) {
+      var shop = (SD.shops || []).find(function(s) { return s.id === shopId; });
+      if (!shop) return;
+      SD.seller = shop;
+      SD.products = [];
+      SD.orders = [];
+      SD.notifications = [];
+      closeShopPicker();
+      showDashboard();
+    }
+
+    document.getElementById('shopPickerClose').addEventListener('click', function() {
+      // Only allow closing if a shop is already active (don't allow closing on first login with no selection)
+      if (SD.seller) closeShopPicker();
+    });
+
+    document.getElementById('shopPickerOverlay').addEventListener('click', function(e) {
+      if (e.target === this && SD.seller) closeShopPicker();
+    });
+
+    document.getElementById('addAnotherShopBtn').addEventListener('click', function() {
+      closeShopPicker();
+      // Clear form and show setup state to create a new shop
+      ['setupShopName','setupDesc','setupLogo','setupBanner','setupWhatsApp'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      setMsg('setupMsg', '');
+      document.querySelector('#stateSetup h2') && (document.querySelector('#stateSetup h2').textContent = 'Create Another Shop');
+      showState('setup');
+    });
 
     /* ── Logout ── */
     document.getElementById('logoutBtn').addEventListener('click', async function() {
@@ -1025,6 +1220,8 @@
       setBtnLoading('setupSubmitBtn', false, 'Create My Shop →');
       if (error) { setMsg('setupMsg', error.message); return; }
       SD.seller = data;
+      if (!SD.shops) SD.shops = [];
+      SD.shops.push(data);
       showDashboard();
     });
 
@@ -1098,8 +1295,7 @@
       val('editOwnerStory',    s.owner_story);
       var yrs = document.getElementById('editYearsOp');
       if (yrs) yrs.value = s.years_operating != null ? s.years_operating : '';
-      var dm = document.getElementById('editDeliveryMethod');
-      if (dm) dm.value = s.delivery_method || '';
+      // delivery_method is always 'self_dropoff' — sellers drop off at UKZN Westville
       // Previews
       var lp = document.getElementById('editLogoPreview');
       if (lp && s.logo_url) { lp.src = s.logo_url; lp.style.display = ''; }
@@ -1125,7 +1321,7 @@
         whatsapp_number:  gv('editWhatsApp'),
         support_email:    gv('editSupportEmail'),
         location:         gv('editLocation'),
-        delivery_method:  gv('editDeliveryMethod'),
+        delivery_method:  'self_dropoff',
         return_policy:    gv('editReturnPolicy'),
         turnaround_time:  gv('editTurnaround'),
         years_operating:  isNaN(yrs) ? null : yrs,
@@ -1430,6 +1626,15 @@
       document.getElementById('addProductToggleBtn').textContent = '+ Add Product';
     });
 
+    // Wire listing type toggle — new product form
+    document.querySelectorAll('input[name="newListingType"]').forEach(function(r) {
+      r.addEventListener('change', function() {
+        var isService = r.value === 'service';
+        document.getElementById('newServiceFields').style.display    = isService ? '' : 'none';
+        document.getElementById('newProductOnlyFields').style.display = isService ? 'none' : '';
+      });
+    });
+
     document.getElementById('submitProductBtn').addEventListener('click', async function() {
       var name       = (document.getElementById('newProdName').value || '').trim();
       var desc       = (document.getElementById('newProdDesc').value || '').trim();
@@ -1443,6 +1648,11 @@
       var salePrice= onSale ? parseFloat(document.getElementById('newProdSalePrice').value) : null;
       var origPrice= onSale ? parseFloat(document.getElementById('newProdOrigPrice').value) : null;
       var coverImg = (document.getElementById('newProdImage').value || '').trim();
+      var listingType = document.querySelector('input[name="newListingType"]:checked').value || 'product';
+      var isService   = listingType === 'service';
+      var fulfillmentType  = isService ? (document.getElementById('newFulfillmentType').value || null) : null;
+      var serviceTurnaround = isService ? (document.getElementById('newServiceTurnaround').value || null) : null;
+      var acceptanceDeadline = isService ? (parseInt(document.getElementById('newAcceptanceDeadline').value, 10) || 24) : 24;
 
       setMsg('addProdMsg', '');
       if (!name)         { setMsg('addProdMsg', 'Product name is required.');   return; }
@@ -1451,9 +1661,10 @@
         if (isNaN(salePrice) || salePrice <= 0) { setMsg('addProdMsg', 'Enter a valid sale price.'); return; }
         if (!isNaN(origPrice) && origPrice > 0 && salePrice >= origPrice) { setMsg('addProdMsg', 'Sale price must be less than original price.'); return; }
       }
+      if (isService && !serviceTurnaround) { setMsg('addProdMsg', 'Please select a turnaround time.'); return; }
 
       setBtnLoading('submitProductBtn', true, 'Submit for Review');
-      var deliveryClassNew = document.getElementById('newProdDeliveryClass').value || 'medium';
+      var deliveryClassNew = isService ? null : (document.getElementById('newProdDeliveryClass').value || 'medium');
       var { data, error } = await SD.sb.from('products').insert({
         seller_id:      SD.seller.id,
         name:           name,
@@ -1461,12 +1672,16 @@
         price:          onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
         sale_price:     salePrice || null,
         sale:           onSale,
-        stock:          stock,
+        stock:          isService ? null : stock,
         category_id:    categoryId,
         badge:          badge   || null,
         image:          coverImg|| null,
-        sizes:          sizes.length ? sizes : ['S','M','L','XL'],
+        sizes:          isService ? [] : (sizes.length ? sizes : ['S','M','L','XL']),
         delivery_class: deliveryClassNew,
+        listing_type:   listingType,
+        fulfillment_type: fulfillmentType,
+        service_turnaround: serviceTurnaround,
+        acceptance_deadline_hours: acceptanceDeadline,
         visible:        false,
         metadata:    { review_status: 'pending_review' }
       }).select().single();
@@ -1516,12 +1731,33 @@
       document.getElementById('editProdName').value     = p.name || '';
       document.getElementById('editProdDesc').value     = p.description || '';
       document.getElementById('editProdPrice').value    = p.price || '';
-      document.getElementById('editProdStock').value    = p.stock || '';
+      document.getElementById('editProdStock').value    = p.stock != null ? p.stock : '';
       document.getElementById('editProdImage').value    = p.image || '';
       document.getElementById('editProdCategory').value = p.category_id || '';
       document.getElementById('editProdBadge').value    = p.badge || '';
+
+      // Listing type
+      var lt = p.listing_type || 'product';
+      var isService = lt === 'service';
+      document.getElementById('editListingType').value = lt;
+      document.getElementById('editServiceFields').style.display   = isService ? '' : 'none';
+      document.getElementById('editPackageSizeGroup').style.display = isService ? 'none' : '';
+      // Also hide sizes grid for services
+      var sizesGroup = document.getElementById('editProdSizes') && document.getElementById('editProdSizes').closest('.form-group');
+      if (sizesGroup) sizesGroup.style.display = isService ? 'none' : '';
+
+      // Service fields
+      if (isService) {
+        var ftEl = document.getElementById('editFulfillmentType');
+        if (ftEl) ftEl.value = p.fulfillment_type || 'item_dropoff';
+        var stEl = document.getElementById('editServiceTurnaround');
+        if (stEl) stEl.value = p.service_turnaround || '';
+        var adEl = document.getElementById('editAcceptanceDeadline');
+        if (adEl) adEl.value = p.acceptance_deadline_hours || 24;
+      }
+
       var dcEl = document.getElementById('editProdDeliveryClass');
-      if (dcEl) dcEl.value = p.delivery_class || 'medium';
+      if (dcEl && !isService) dcEl.value = p.delivery_class || 'medium';
 
       // Sale fields
       var saleCb = document.getElementById('editProdSale');
@@ -1574,7 +1810,13 @@
         setMsg('editProdMsg', 'Sale price must be less than original price.'); return;
       }
 
-      var deliveryClassEdit = document.getElementById('editProdDeliveryClass').value || 'medium';
+      var ltEdit = document.getElementById('editListingType').value || 'product';
+      var isServiceEdit = ltEdit === 'service';
+      var deliveryClassEdit = isServiceEdit ? null : (document.getElementById('editProdDeliveryClass').value || 'medium');
+      var fulfillmentTypeEdit  = isServiceEdit ? (document.getElementById('editFulfillmentType').value || null) : null;
+      var serviceTurnaroundEdit = isServiceEdit ? (document.getElementById('editServiceTurnaround').value || null) : null;
+      var acceptanceDeadlineEdit = isServiceEdit ? (parseInt(document.getElementById('editAcceptanceDeadline').value, 10) || 24) : 24;
+      if (isServiceEdit && !serviceTurnaroundEdit) { setMsg('editProdMsg', 'Please select a turnaround time.'); return; }
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
       var { data, error } = await SD.sb.from('products').update({
         name:           name,
@@ -1582,12 +1824,16 @@
         price:          onSale && !isNaN(origPrice) && origPrice > 0 ? origPrice : price,
         sale_price:     salePrice || null,
         sale:           onSale,
-        stock:          stock,
+        stock:          isServiceEdit ? null : stock,
         category_id:    categoryId,
         badge:          badge   || null,
         image:          image   || null,
-        sizes:          sizes.length ? sizes : ['S','M','L','XL'],
-        delivery_class: deliveryClassEdit
+        sizes:          isServiceEdit ? [] : (sizes.length ? sizes : ['S','M','L','XL']),
+        delivery_class: deliveryClassEdit,
+        listing_type:   ltEdit,
+        fulfillment_type: fulfillmentTypeEdit,
+        service_turnaround: serviceTurnaroundEdit,
+        acceptance_deadline_hours: acceptanceDeadlineEdit
       }).eq('id', id).select().single();
 
       setBtnLoading('saveEditProdBtn', false, 'Save Changes');
@@ -1658,21 +1904,29 @@
     }
 
     window.switchOrdersSub = function(sub) {
-      var activeBtn = document.getElementById('ordersSubActive');
-      var pastBtn   = document.getElementById('ordersSubPast');
-      var activePanel = document.getElementById('ordersSubActivePanel');
-      var pastPanel   = document.getElementById('ordersSubPastPanel');
+      var activeBtn  = document.getElementById('ordersSubActive');
+      var pastBtn    = document.getElementById('ordersSubPast');
+      var serviceBtn = document.getElementById('ordersSubServiceBtn');
+      var activePanel  = document.getElementById('ordersSubActivePanel');
+      var pastPanel    = document.getElementById('ordersSubPastPanel');
+      var servicePanel = document.getElementById('ordersSubServicePanel');
+      activeBtn.className  = 'btn ghost sm';
+      pastBtn.className    = 'btn ghost sm';
+      serviceBtn.className = 'btn ghost sm';
+      activePanel.style.display  = 'none';
+      pastPanel.style.display    = 'none';
+      servicePanel.style.display = 'none';
       if (sub === 'active') {
         activeBtn.className = 'btn primary sm';
-        pastBtn.className   = 'btn ghost sm';
         activePanel.style.display = '';
-        pastPanel.style.display   = 'none';
-      } else {
-        activeBtn.className = 'btn ghost sm';
-        pastBtn.className   = 'btn primary sm';
-        activePanel.style.display = 'none';
-        pastPanel.style.display   = '';
+      } else if (sub === 'past') {
+        pastBtn.className = 'btn primary sm';
+        pastPanel.style.display = '';
         renderPastOrders();
+      } else if (sub === 'service') {
+        serviceBtn.className = 'btn primary sm';
+        servicePanel.style.display = '';
+        loadServiceOrders();
       }
     };
 
@@ -1801,6 +2055,160 @@
           }
         }
       }
+    };
+
+    /* ─────────────────────────────────────────
+       SERVICE ORDERS
+    ───────────────────────────────────────── */
+    var serviceOrdersLoaded = false;
+
+    async function loadServiceOrders() {
+      if (serviceOrdersLoaded) return;
+      document.getElementById('serviceOrdersLoading').style.display = '';
+      document.getElementById('serviceOrdersEmpty').style.display = 'none';
+      document.getElementById('serviceOrdersList').innerHTML = '';
+
+      var { data: statuses, error } = await SD.sb
+        .from('order_item_statuses')
+        .select('id, order_id, item_index, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, proof_urls, completion_note, listing_type, product_id, status, created_at')
+        .eq('seller_id', SD.seller.id)
+        .eq('listing_type', 'service')
+        .order('created_at', { ascending: false });
+
+      document.getElementById('serviceOrdersLoading').style.display = 'none';
+      if (error) { toast('Failed to load service orders'); return; }
+      if (!statuses || !statuses.length) { document.getElementById('serviceOrdersEmpty').style.display = ''; return; }
+
+      // Fetch order info for each
+      var orderIds = [...new Set(statuses.map(function(s) { return s.order_id; }))];
+      var { data: orders } = await SD.sb.from('orders')
+        .select('id, order_number, customer_name, customer_email, customer_phone, items, created_at')
+        .in('id', orderIds);
+
+      var orderMap = {};
+      (orders || []).forEach(function(o) { orderMap[o.id] = o; });
+
+      SD.serviceStatuses = statuses;
+      SD.serviceOrders = orderMap;
+      serviceOrdersLoaded = true;
+      renderServiceOrders(statuses, orderMap);
+    }
+
+    function renderServiceOrders(statuses, orderMap) {
+      var list = document.getElementById('serviceOrdersList');
+      var now = new Date();
+
+      list.innerHTML = statuses.map(function(s) {
+        var order = orderMap[s.order_id] || {};
+        var items = Array.isArray(order.items) ? order.items : [];
+        var item  = items[s.item_index] || {};
+        var itemName = item.name || item.title || ('Service item #' + s.item_index);
+        var orderNum = order.order_number || (s.order_id || '').slice(0,8);
+        var status = s.service_status || 'pending_acceptance';
+
+        // Deadline countdown
+        var deadlineHtml = '';
+        if (status === 'pending_acceptance' && s.acceptance_deadline) {
+          var dl = new Date(s.acceptance_deadline);
+          var minsLeft = Math.round((dl - now) / 60000);
+          var overdue = minsLeft < 0;
+          var dlText = overdue
+            ? '⚠️ Acceptance overdue!'
+            : ('⏰ Accept within ' + (minsLeft > 60 ? Math.round(minsLeft/60) + 'h' : minsLeft + 'min'));
+          deadlineHtml = '<div style="font-size:12px;font-weight:700;color:' + (overdue ? 'var(--error)' : '#b45309') + ';margin-top:6px">' + dlText + '</div>';
+        }
+
+        // Status badge
+        var statusColors = {
+          pending_acceptance: '#b45309', accepted: '#0a2f66', item_received: '#2563eb',
+          handed_to_seller: '#7c3aed', in_progress: '#0891b2', completed: '#16a34a',
+          rejected: '#dc2626', cancelled: '#6b7280', returned: '#16a34a'
+        };
+        var statusLabels = {
+          pending_acceptance: '⏳ Pending acceptance', accepted: '✅ Accepted',
+          item_received: '📬 Item received by Umzila', handed_to_seller: '🤝 Handed to you',
+          in_progress: '🔧 In progress', completed: '✅ Completed',
+          rejected: '✗ Rejected', cancelled: '✗ Cancelled', returned: '📦 Returned'
+        };
+        var badgeColor = statusColors[status] || '#6b7280';
+        var badgeLabel = statusLabels[status] || status;
+
+        // Action buttons
+        var actions = '';
+        if (status === 'pending_acceptance') {
+          actions = '<button class="btn success sm" onclick="acceptServiceOrder(\'' + s.id + '\')">Accept</button>' +
+                    '<button class="btn danger sm" onclick="rejectServiceOrder(\'' + s.id + '\')">Reject</button>';
+        } else if (status === 'handed_to_seller') {
+          actions = '<button class="btn primary sm" onclick="markServiceInProgress(\'' + s.id + '\')">Mark In Progress</button>';
+        } else if (status === 'in_progress') {
+          actions = '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+            '<textarea id="note-' + s.id + '" class="form-control" style="font-size:12px;min-height:60px;flex:1;min-width:180px" placeholder="Completion note (optional)…"></textarea>' +
+            '<button class="btn success sm" onclick="completeServiceOrder(\'' + s.id + '\')">Mark Completed</button>' +
+          '</div>';
+        }
+
+        return '<div class="order-row" id="svc-' + s.id + '">' +
+          '<div class="order-row-header">' +
+            '<span class="order-row-id">#' + orderNum + '</span>' +
+            '<span style="background:' + badgeColor + ';color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px">' + badgeLabel + '</span>' +
+            '<span class="order-row-date">' + formatDate(s.created_at) + '</span>' +
+          '</div>' +
+          '<div class="order-items-list"><div class="order-item-line"><span>🔧 ' + itemName + '</span></div></div>' +
+          (order.customer_name ? '<div class="order-buyer">👤 ' + order.customer_name + (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') + '</div>' : '') +
+          deadlineHtml +
+          (actions ? '<div class="btn-row" style="margin-top:10px">' + actions + '</div>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    window.acceptServiceOrder = async function(statusId) {
+      var { error } = await SD.sb.from('order_item_statuses').update({
+        service_status: 'accepted',
+        accepted_at: new Date().toISOString()
+      }).eq('id', statusId);
+      if (error) { toast('Error: ' + error.message); return; }
+      var s = (SD.serviceStatuses || []).find(function(x) { return x.id === statusId; });
+      if (s) s.service_status = 'accepted';
+      renderServiceOrders(SD.serviceStatuses, SD.serviceOrders);
+      toast('Service order accepted ✓');
+    };
+
+    window.rejectServiceOrder = async function(statusId) {
+      if (!confirm('Reject this service order? This cannot be undone.')) return;
+      var { error } = await SD.sb.from('order_item_statuses').update({
+        service_status: 'rejected'
+      }).eq('id', statusId);
+      if (error) { toast('Error: ' + error.message); return; }
+      var s = (SD.serviceStatuses || []).find(function(x) { return x.id === statusId; });
+      if (s) s.service_status = 'rejected';
+      renderServiceOrders(SD.serviceStatuses, SD.serviceOrders);
+      toast('Service order rejected.');
+    };
+
+    window.markServiceInProgress = async function(statusId) {
+      var { error } = await SD.sb.from('order_item_statuses').update({
+        service_status: 'in_progress'
+      }).eq('id', statusId);
+      if (error) { toast('Error: ' + error.message); return; }
+      var s = (SD.serviceStatuses || []).find(function(x) { return x.id === statusId; });
+      if (s) s.service_status = 'in_progress';
+      renderServiceOrders(SD.serviceStatuses, SD.serviceOrders);
+      toast('Marked in progress ✓');
+    };
+
+    window.completeServiceOrder = async function(statusId) {
+      var noteEl = document.getElementById('note-' + statusId);
+      var note = noteEl ? (noteEl.value || '').trim() : null;
+      var { error } = await SD.sb.from('order_item_statuses').update({
+        service_status: 'completed',
+        service_completed_at: new Date().toISOString(),
+        completion_note: note || null
+      }).eq('id', statusId);
+      if (error) { toast('Error: ' + error.message); return; }
+      var s = (SD.serviceStatuses || []).find(function(x) { return x.id === statusId; });
+      if (s) { s.service_status = 'completed'; s.completion_note = note; }
+      renderServiceOrders(SD.serviceStatuses, SD.serviceOrders);
+      toast('Service marked as completed ✓');
     };
 
     /* ─────────────────────────────────────────

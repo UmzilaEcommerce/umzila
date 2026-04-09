@@ -299,16 +299,17 @@ async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '') {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
 
-  // Refuse hidden or out-of-stock products
+  // Refuse hidden products
   if (!p.visible) return;
-  if ((p.stock || 0) <= 0) { showNotification('This item is out of stock.'); return; }
+  const isService = p.listing_type === 'service';
+  if (!isService && (p.stock || 0) <= 0) { showNotification('This item is out of stock.'); return; }
 
-  // Check stock
-  const variant = p.variants?.find(v => v.size === size);
+  // Check stock (skip for services)
+  const variant = !isService ? p.variants?.find(v => v.size === size) : null;
   const variantId = variant ? variant.id : null;
-  const variantStock = variant ? variant.stock : p.stock;
-  
-  if (variantStock < qty) {
+  const variantStock = isService ? Infinity : (variant ? variant.stock : p.stock);
+
+  if (!isService && variantStock < qty) {
     alert(`Only ${variantStock} items available for size ${size}`);
     return;
   }
@@ -332,13 +333,16 @@ async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '') {
       title: p.title,
       price,
       qty,
-      size,
+      size: isService ? 'One Size' : size,
       img: (p.primary_image || (p.imgs && p.imgs[0]) || svgPlaceholder(p.title)),
-      variantId: variantId,
-      stock: variantStock,
-      maxQuantity: variantStock,
-      preferred_delivery: preferred_delivery || '',
-      seller_id: (p.seller && p.seller.id) ? p.seller.id : null
+      variantId: isService ? null : variantId,
+      stock: isService ? null : variantStock,
+      maxQuantity: isService ? null : variantStock,
+      preferred_delivery: isService ? '' : (preferred_delivery || ''),
+      seller_id: (p.seller && p.seller.id) ? p.seller.id : null,
+      listing_type: p.listing_type || 'product',
+      fulfillment_type: p.fulfillment_type || null,
+      service_turnaround: p.service_turnaround || null
     });
   }
   
@@ -857,7 +861,7 @@ const CATEGORIES = [
   },
   {
     label: 'Food',
-    sub: ['Baked Goods', 'Plates & Meals', 'Snacks', 'Drinks', 'Desserts', 'Other Food']
+    sub: ['Breakfast', 'Baked Goods', 'Plates & Meals', 'Snacks', 'Drinks', 'Desserts', 'Other Food']
   },
   {
     label: 'Accessories & Gadgets',
@@ -1120,7 +1124,10 @@ async function loadProducts() {
         desc: row.description || '',
         metadata: row.metadata || {},
         seller: row.sellers || null,
-        favourite_count: Number(row.favourite_count || 0)
+        favourite_count: Number(row.favourite_count || 0),
+        listing_type: row.listing_type || 'product',
+        fulfillment_type: row.fulfillment_type || null,
+        service_turnaround: row.service_turnaround || null
       };
     });
     
@@ -2540,8 +2547,8 @@ function makeCardHTML(p){
   return `<div class="product-card fade-up" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${p.title}">
       <div class="badges">
-        ${p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:''}
-        ${isOnSale && !p.badge ? '<span class="badge sale">Sale</span>' : ''}
+        ${p.listing_type === 'service' ? '<span class="badge" style="background:#7c3aed">🔧 Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:'')}
+        ${isOnSale && !p.badge && p.listing_type !== 'service' ? '<span class="badge sale">Sale</span>' : ''}
       </div>
       ${mediaTagForCard(primaryImage, p.title)}
       ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
@@ -2895,11 +2902,25 @@ async function openProductModal(id) {
             <span style="font-size:13px;color:#6b7280">Sold by</span>
             <a href="shop.html?shop=${encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${currentModalProduct.seller.shop_name} ↗</a>
           </div>
-          ${(currentModalProduct.seller.delivery_method || currentModalProduct.seller.turnaround_time) ? `
+          ${currentModalProduct.seller.turnaround_time ? `
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px;flex-wrap:wrap">
-            🚚 <span><strong>Delivery:</strong> ${currentModalProduct.seller.delivery_method || ''}${currentModalProduct.seller.turnaround_time ? ' · ' + currentModalProduct.seller.turnaround_time : ''}</span>
+            📦 <span>Usually ready for drop-off within: <strong>${currentModalProduct.seller.turnaround_time}</strong></span>
           </div>` : ''}
         </div>` : ''}
+        ${currentModalProduct.listing_type === 'service' ? (() => {
+          const ft = currentModalProduct.fulfillment_type;
+          const ta = currentModalProduct.service_turnaround || 'TBD';
+          let ftIcon = '', ftLabel = '';
+          if (ft === 'item_dropoff') { ftIcon = '📦'; ftLabel = 'Drop off your item at the <strong>Umzila collection point, UKZN Westville campus</strong>'; }
+          else if (ft === 'in_person') { ftIcon = '📍'; ftLabel = 'Meet in-person on campus'; }
+          else if (ft === 'digital') { ftIcon = '💻'; ftLabel = 'Digital delivery'; }
+          else { ftIcon = '🔧'; ftLabel = 'Service'; }
+          return `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:10px 14px;margin:8px 0;font-size:13px;color:#4c1d95">
+            <div style="font-weight:700;margin-bottom:4px">🔧 Service listing</div>
+            <div>${ftIcon} ${ftLabel}</div>
+            <div style="margin-top:4px;color:#6b7280">⏱ Turnaround: <strong>${ta}</strong></div>
+          </div>`;
+        })() : ''}
         <div class="product-modal-rating">
           <div class="stars" style="color: #ffd700; font-size: 16px;">
             ${'★'.repeat(5)}
@@ -2912,16 +2933,16 @@ async function openProductModal(id) {
             `<span class="product-modal-original-price">R${originalPrice.toFixed(2)}</span>` : ''}
         </div>
         
-        <div class="product-modal-sizes">
+        ${currentModalProduct.listing_type !== 'service' ? `<div class="product-modal-sizes">
           <h3>Size</h3>
           <div class="size-options">
             ${sizeOptions}
           </div>
-        </div>
+        </div>` : ''}
         
         ${colorOptionsHTML}
 
-        <div class="product-modal-delivery-pref" style="margin:12px 0">
+        ${currentModalProduct.listing_type !== 'service' ? `<div class="product-modal-delivery-pref" style="margin:12px 0">
           <h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>
           <select id="modal-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">
             <option value="">No preference</option>
@@ -2930,7 +2951,7 @@ async function openProductModal(id) {
             <option value="Meet on campus">Meet on campus</option>
             <option value="Hostel delivery">Hostel delivery</option>
           </select>
-        </div>
+        </div>` : ''}
 
         <div class="product-modal-quantity">
           <h3>Quantity</h3>
