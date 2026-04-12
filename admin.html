@@ -1554,11 +1554,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   });
   // Load intelligence dashboard when tab is clicked
   document.querySelector('[data-section="intelligence"]').addEventListener('click', () => {
+    if (typeof intelLoaded === 'undefined') return;
     if (!intelLoaded.overview) loadDashboardOverview();
     const activeTab = document.querySelector('.sub-tab[data-itab].active');
     if (activeTab) loadIntelligenceTab(activeTab.dataset.itab);
   });
   document.getElementById('refreshIntelligence').addEventListener('click', () => {
+    if (typeof intelLoaded === 'undefined') return;
     Object.keys(intelLoaded).forEach(k => { intelLoaded[k] = false; });
     destroyCharts();
     loadDashboardOverview();
@@ -1583,7 +1585,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
 
   // Lazy-load service orders when that tab is clicked
-  document.querySelector('[data-section="service-orders"]').addEventListener('click', loadAdminServiceOrders);
+  document.querySelector('[data-section="service-orders"]').addEventListener('click', () => window.loadAdminServiceOrders?.());
 
   // Lazy-load product reviews when that tab is first clicked
   document.querySelector('[data-section="product-reviews"]').addEventListener('click', fetchProductReviews);
@@ -2100,6 +2102,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   let saAllApps = [];
 
   async function fetchSellerApplications() {
+    if (typeof saAllApps === 'undefined') {
+      // page still initializing — retry after a short delay
+      setTimeout(fetchSellerApplications, 500);
+      return;
+    }
     const pendingWrap = document.getElementById('sellerAppsWrap');
     const recentWrap  = document.getElementById('sellerAppsRecentWrap');
     const loading = '<div style="color:var(--muted);padding:20px">Loading…</div>';

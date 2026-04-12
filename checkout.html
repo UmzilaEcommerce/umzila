@@ -804,7 +804,7 @@
                 <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:12px 14px;border:2px solid #e5e7eb;border-radius:10px;transition:border-color .15s" id="radioLabelPickup">
                   <input type="radio" name="deliveryMethod" value="pickup" id="methodPickup" style="margin-top:3px;accent-color:var(--accent)">
                   <div>
-                    <div style="font-weight:600;font-size:14px">Collect at UKZN Westville campus — <span style="color:var(--accent)">R6</span></div>
+                    <div style="font-weight:600;font-size:14px">Collect at UKZN Westville campus</div>
                     <div style="font-size:12px;color:#6b7280;margin-top:2px">Pick up your order at the Umzila collection point on campus</div>
                   </div>
                 </label>
@@ -1097,17 +1097,20 @@
     // ── Delivery pricing constants (edit here to update rates) ──────────────
     const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
     const PER_SELLER_FEE          = 3;
-    const FREE_DELIVERY_THRESHOLD = 150; // subtotal >= this → delivery free
+    const FREE_DELIVERY_THRESHOLD = 250; // subtotal >= this → delivery free
     const PICKUP_FEE              = 6;   // fixed fee for campus collection
 
     // ── Delivery zones — edit this list to add/remove areas ─────────────────
     const DELIVERY_ZONES = [
-      { name: 'UKZN Westville Campus', code: 'campus'         },
-      { name: 'Westville',             code: 'westville'      },
-      { name: 'Berea West',            code: 'berea_west'     },
-      { name: 'Dawncliffe',            code: 'dawncliffe'     },
-      { name: 'Chiltern Hills',        code: 'chiltern_hills' },
-      { name: 'Reservoir Hills',       code: 'reservoir_hills'}
+      { name: 'Varsity Drive',          code: 'varsity_drive'    },
+      { name: 'Umgudulu Road',          code: 'umgudulu_rd'      },
+      { name: 'Pitlochry Road',         code: 'pitlochry_rd'     },
+      { name: 'Around Checkers',        code: 'around_checkers'  },
+      { name: 'Near Westwood Mall',     code: 'westwood_mall'    },
+      { name: 'On Westville Campus',    code: 'westville_campus' },
+      { name: 'On/Around Santa Cruz',   code: 'santa_cruz'       },
+      { name: 'On/Around Crystal Valley', code: 'crystal_valley' },
+      { name: 'On/Around Westview',     code: 'westview'         }
     ];
 
     /**
