@@ -1046,7 +1046,7 @@ async function loadProducts() {
       .select(`
         *,
         product_images!fk_product_images_product(*),
-        sellers(id, shop_name, logo_url, whatsapp_number, delivery_method, turnaround_time)
+        sellers(id, shop_name, logo_url, whatsapp_number, delivery_method, turnaround_time, status)
       `)
       .eq('visible', true)
       .order('created_at', { ascending: false });
@@ -1131,8 +1131,10 @@ async function loadProducts() {
       };
     });
     
-    state.products = mapped;
-    window._allProducts = mapped; // expose for back button
+    // Only show products from active sellers (or platform products with no seller)
+    const filtered = mapped.filter(p => !p.seller || p.seller.status === 'active');
+    state.products = filtered;
+    window._allProducts = filtered; // expose for back button
     applyFilters();
     
   } catch (e) {

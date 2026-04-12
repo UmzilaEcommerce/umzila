@@ -1140,7 +1140,7 @@
     }
 
     /* ── Shop picker ── */
-    function openShopPicker() {
+    window.openShopPicker = function() {
       var list = document.getElementById('shopPickerList');
       if (!list) return;
       list.innerHTML = (SD.shops || []).map(function(shop) {
@@ -1155,22 +1155,25 @@
           '</button>';
       }).join('');
       document.getElementById('shopPickerOverlay').classList.add('open');
-    }
+    };
 
     function closeShopPicker() {
       document.getElementById('shopPickerOverlay').classList.remove('open');
     }
 
-    function switchShop(shopId) {
+    window.switchShop = function(shopId) {
       var shop = (SD.shops || []).find(function(s) { return s.id === shopId; });
       if (!shop) return;
       SD.seller = shop;
       SD.products = [];
       SD.orders = [];
       SD.notifications = [];
+      ordersLoaded = false;
+      serviceOrdersLoaded = false;
+      notifsLoaded = false;
       closeShopPicker();
       showDashboard();
-    }
+    };
 
     document.getElementById('shopPickerClose').addEventListener('click', function() {
       // Only allow closing if a shop is already active (don't allow closing on first login with no selection)
