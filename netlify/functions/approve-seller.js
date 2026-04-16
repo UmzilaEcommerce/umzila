@@ -125,7 +125,7 @@ module.exports.handler = async function (event) {
   // Send enrollment email via Resend (non-fatal if it fails)
   if (RESEND_KEY && app.email) {
     const applicantName = app.full_name || shopName;
-    const enrollmentLink = `${SITE_BASE_URL}/enroll-seller.html?applicationId=${encodeURIComponent(app.id)}&email=${encodeURIComponent(app.email)}&name=${encodeURIComponent(applicantName)}`;
+    const enrollmentLink = `${SITE_BASE_URL}/enroll-seller-free.html?applicationId=${encodeURIComponent(app.id)}&email=${encodeURIComponent(app.email)}&name=${encodeURIComponent(applicantName)}`;
 
     try {
       const emailRes = await fetch('https://api.resend.com/emails', {
@@ -137,7 +137,7 @@ module.exports.handler = async function (event) {
         body: JSON.stringify({
           from: 'Umzila <noreply@umzila.store>',
           to: [app.email],
-          subject: "You've been approved to sell on Umzila!",
+          subject: "You've been approved to sell on Umzila — for free!",
           html: buildApprovalEmail(applicantName, shopName.trim(), enrollmentLink, SITE_BASE_URL)
         })
       });
@@ -197,25 +197,24 @@ function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl) {
 <div class="wrap">
   <div class="hdr">
     <h1>Umzila Sellers</h1>
-    <p>Your application has been approved</p>
+    <p>Your application has been approved — you're in!</p>
   </div>
   <div class="bd">
     <h2>Congratulations, ${esc(name)}!</h2>
     <p>Great news — your application to sell on Umzila has been <strong>approved</strong>. Your shop <strong>${esc(shopName)}</strong> is ready to be activated.</p>
-    <p>Click the button below to complete your enrollment, pay the one-time R100 activation fee, and get access to your seller dashboard.</p>
+    <p>Click the button below to complete your <strong>free</strong> enrollment and get instant access to your seller dashboard.</p>
 
     <div class="steps">
       <h3>What happens next</h3>
       <ol>
         <li>Click the link below to open your personalised enrollment page</li>
-        <li>Fill in your phone number, delivery method, and create a password</li>
-        <li>Complete the R100 once-off activation payment via PayFast</li>
+        <li>Fill in your details and create a password for your seller account</li>
         <li>Log in to your seller dashboard and finish setting up your shop</li>
       </ol>
     </div>
 
     <div class="cta">
-      <a href="${esc(enrollmentLink)}" class="btn">Complete Enrollment &rarr;</a>
+      <a href="${esc(enrollmentLink)}" class="btn">Complete Free Enrollment &rarr;</a>
     </div>
 
     <p class="note">This link is unique to you — it contains your application details. Do not share it with anyone.</p>

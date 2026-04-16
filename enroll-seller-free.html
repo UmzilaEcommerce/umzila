@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="umzila.webp" type="image/webp">
+  <title>Seller Enrollment - Umzila</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f7f7f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px 60px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(10,47,102,0.10);
+      padding: 40px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .logo a {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0a2f66;
+      text-decoration: none;
+      letter-spacing: -0.5px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #0a2f66;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #6b6b74;
+      font-size: 14px;
+      margin-bottom: 28px;
+      line-height: 1.5;
+    }
+
+    /* Pricing toggle */
+    .plan-toggle {
+      display: flex;
+      background: #f0f2f5;
+      border-radius: 999px;
+      padding: 4px;
+      margin-bottom: 20px;
+      gap: 4px;
+    }
+    .plan-toggle button {
+      flex: 1;
+      border: none;
+      background: none;
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #6b6b74;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .plan-toggle button.active {
+      background: #0a2f66;
+      color: #fff;
+    }
+
+    .plan-card {
+      border: 2px solid #0a2f66;
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      background: #f5f8ff;
+    }
+    .plan-card .plan-label {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #0a2f66;
+      margin-bottom: 4px;
+    }
+    .plan-card .plan-price-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .plan-card .plan-price-old {
+      font-size: 28px;
+      font-weight: 800;
+      color: #aaa;
+      text-decoration: line-through;
+      text-decoration-thickness: 3px;
+      text-decoration-color: #555;
+    }
+    .plan-card .plan-price-free {
+      font-size: 32px;
+      font-weight: 900;
+      color: #dc3545;
+    }
+    .plan-card .plan-period {
+      font-size: 14px;
+      color: #6b6b74;
+    }
+    .plan-card .plan-promo {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #28a745;
+      font-weight: 600;
+    }
+
+    /* Form */
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #999;
+      margin: 20px 0 12px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 5px;
+    }
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="tel"],
+    select {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #222;
+      background: #fff;
+      transition: border-color 0.15s;
+      appearance: none;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #0a2f66;
+    }
+    input[readonly] {
+      background: #f5f5f7;
+      color: #777;
+      cursor: not-allowed;
+    }
+    input.error, select.error {
+      border-color: #dc3545;
+    }
+
+    .terms-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 20px 0 24px;
+      font-size: 13px;
+      color: #555;
+      line-height: 1.5;
+    }
+    .terms-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+      accent-color: #0a2f66;
+    }
+    .terms-row a {
+      color: #0a2f66;
+      text-decoration: underline;
+    }
+
+    .btn-pay {
+      width: 100%;
+      padding: 15px;
+      background: #0a2f66;
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+      letter-spacing: 0.2px;
+    }
+    .btn-pay:hover { background: #08315f; }
+    .btn-pay:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .pay-note {
+      text-align: center;
+      font-size: 12px;
+      color: #aaa;
+      margin-top: 12px;
+    }
+
+    .error-msg {
+      background: #fff3f3;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+
+    .success-msg {
+      background: #f0fff4;
+      border: 1px solid #b2dfdb;
+      color: #1b5e20;
+      border-radius: 8px;
+      padding: 16px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: none;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .success-msg.visible { display: block; }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      font-size: 15px;
+      color: #0a2f66;
+      font-weight: 600;
+      z-index: 999;
+      display: none;
+    }
+    .loading-overlay.visible { display: flex; }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid #dde4f0;
+      border-top-color: #0a2f66;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 540px) {
+      .card { padding: 28px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <span>Activating your seller account…</span>
+</div>
+
+<div class="card">
+  <div class="logo"><a href="index.html">Umzila</a></div>
+
+  <h1>Complete Your Seller Enrollment</h1>
+  <p class="subtitle">Fill in your details below to activate your seller account — completely free.</p>
+
+  <!-- Pricing toggle -->
+  <div class="plan-toggle">
+    <button id="btnYearly" class="active" onclick="selectPlan('yearly')">Yearly</button>
+    <button id="btnMonthly" onclick="selectPlan('monthly')">Monthly</button>
+  </div>
+
+  <!-- Plan detail card -->
+  <div class="plan-card">
+    <div class="plan-label" id="planLabel">Yearly plan</div>
+    <div class="plan-price-row">
+      <span class="plan-price-old" id="planPriceOld">R1,200</span>
+      <span class="plan-price-free">FREE</span>
+      <span class="plan-period" id="planPeriod">/year</span>
+    </div>
+    <div class="plan-promo" id="planPromo">No payment needed — activate your store today for free</div>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+  <div class="success-msg" id="successMsg"></div>
+
+  <!-- Seller info (pre-filled from URL) -->
+  <div class="section-title">Your Details</div>
+
+  <div class="form-group">
+    <label for="fieldEmail">Email address</label>
+    <input type="email" id="fieldEmail" readonly placeholder="your@email.com">
+  </div>
+
+  <div class="form-group">
+    <label for="fieldName">Full name</label>
+    <input type="text" id="fieldName" readonly placeholder="Your name">
+  </div>
+
+  <div class="form-group">
+    <label for="fieldPhone">Phone number <span style="color:#dc3545">*</span></label>
+    <input type="tel" id="fieldPhone" placeholder="e.g. 0812345678">
+  </div>
+
+  <div class="form-group">
+    <label for="fieldDelivery">Primary delivery method <span style="color:#dc3545">*</span></label>
+    <select id="fieldDelivery">
+      <option value="">Select delivery method…</option>
+      <option value="courier">Courier</option>
+      <option value="self_delivery">Self delivery</option>
+      <option value="collection">Collection only</option>
+      <option value="digital">Digital / no shipping</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label for="fieldLocation">Business location <span style="color:#dc3545">*</span></label>
+    <input type="text" id="fieldLocation" placeholder="e.g. Johannesburg, Gauteng">
+  </div>
+
+  <div class="form-group">
+    <label for="fieldBusiness">Business / shop name <span style="color:#dc3545">*</span></label>
+    <input type="text" id="fieldBusiness" placeholder="e.g. My Cool Shop">
+  </div>
+
+  <!-- Account creation -->
+  <div class="section-title">Create Your Seller Account</div>
+
+  <div class="form-group">
+    <label for="fieldPassword">Create a password <span style="color:#dc3545">*</span></label>
+    <input type="password" id="fieldPassword" placeholder="At least 8 characters" autocomplete="new-password">
+  </div>
+
+  <div class="form-group">
+    <label for="fieldPasswordConfirm">Confirm password <span style="color:#dc3545">*</span></label>
+    <input type="password" id="fieldPasswordConfirm" placeholder="Repeat your password" autocomplete="new-password">
+  </div>
+
+  <!-- Terms -->
+  <div class="terms-row">
+    <input type="checkbox" id="termsCheck">
+    <label for="termsCheck" style="font-weight:400">
+      I agree to the <a href="#" target="_blank">Seller Terms &amp; Conditions</a>.
+    </label>
+  </div>
+
+  <button class="btn-pay" id="btnPay" onclick="handleActivate()">Activate Free Seller Account</button>
+
+  <p class="pay-note">One of the first 20 free sellers — no payment, no catches.</p>
+</div>
+
+<script>
+  // ── URL params ──────────────────────────────────────────────
+  const params         = new URLSearchParams(window.location.search);
+  const EMAIL          = params.get('email') || '';
+  const NAME           = params.get('name')  || '';
+  const APPLICATION_ID = params.get('applicationId') || '';
+
+  document.getElementById('fieldEmail').value = EMAIL;
+  document.getElementById('fieldName').value  = NAME;
+
+  if (!EMAIL || !APPLICATION_ID) {
+    showError('This enrollment link is invalid or incomplete. Please use the link sent to your email.');
+    document.getElementById('btnPay').disabled = true;
+  }
+
+  // ── Pricing toggle ──────────────────────────────────────────
+  let selectedPlan = 'yearly';
+
+  function selectPlan(plan) {
+    selectedPlan = plan;
+    document.getElementById('btnYearly').classList.toggle('active', plan === 'yearly');
+    document.getElementById('btnMonthly').classList.toggle('active', plan === 'monthly');
+    if (plan === 'yearly') {
+      document.getElementById('planLabel').textContent    = 'Yearly plan';
+      document.getElementById('planPriceOld').textContent = 'R1,200';
+      document.getElementById('planPeriod').textContent   = '/year';
+      document.getElementById('planPromo').textContent    = 'No payment needed — activate your store today for free';
+    } else {
+      document.getElementById('planLabel').textContent    = 'Monthly plan';
+      document.getElementById('planPriceOld').textContent = 'R250';
+      document.getElementById('planPeriod').textContent   = '/month';
+      document.getElementById('planPromo').textContent    = 'No payment needed — activate your store today for free';
+    }
+  }
+
+  // ── Error / success display ─────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.classList.add('visible');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  function clearError() {
+    const el = document.getElementById('errorMsg');
+    el.textContent = '';
+    el.classList.remove('visible');
+  }
+  function showSuccess(msg) {
+    const el = document.getElementById('successMsg');
+    el.innerHTML = msg;
+    el.classList.add('visible');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ── Validation ──────────────────────────────────────────────
+  function validate() {
+    const phone    = document.getElementById('fieldPhone').value.trim();
+    const delivery = document.getElementById('fieldDelivery').value;
+    const location = document.getElementById('fieldLocation').value.trim();
+    const business = document.getElementById('fieldBusiness').value.trim();
+    const password = document.getElementById('fieldPassword').value;
+    const confirm  = document.getElementById('fieldPasswordConfirm').value;
+    const terms    = document.getElementById('termsCheck').checked;
+
+    if (!phone)    { showError('Please enter your phone number.');          return false; }
+    if (!delivery) { showError('Please select a delivery method.');         return false; }
+    if (!location) { showError('Please enter your business location.');     return false; }
+    if (!business) { showError('Please enter your business or shop name.'); return false; }
+    if (!password) { showError('Please create a password for your seller account.'); return false; }
+    if (password.length < 8) { showError('Password must be at least 8 characters.'); return false; }
+    if (password !== confirm) { showError('Passwords do not match. Please re-enter.'); return false; }
+    if (!terms)    { showError('Please accept the Terms & Conditions to continue.'); return false; }
+    return true;
+  }
+
+  // ── Activate handler (free — no PayFast redirect) ───────────
+  async function handleActivate() {
+    clearError();
+    if (!validate()) return;
+
+    const btn = document.getElementById('btnPay');
+    btn.disabled    = true;
+    btn.textContent = 'Setting up your account…';
+    document.getElementById('loadingOverlay').classList.add('visible');
+
+    const password       = document.getElementById('fieldPassword').value;
+    const phone          = document.getElementById('fieldPhone').value.trim();
+    const deliveryMethod = document.getElementById('fieldDelivery').value;
+    const location       = document.getElementById('fieldLocation').value.trim();
+    const business       = document.getElementById('fieldBusiness').value.trim();
+
+    try {
+      const res = await fetch('/.netlify/functions/activate-free-seller', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          email:          EMAIL,
+          name:           NAME,
+          applicationId:  APPLICATION_ID,
+          password,
+          phone,
+          deliveryMethod,
+          location,
+          shopName:       business,
+          free:           true
+        })
+      });
+
+      if (!res.ok) {
+        let errMsg = 'Failed to activate account.';
+        try { const d = await res.json(); errMsg = d.error || errMsg; } catch (_) {}
+        throw new Error(errMsg);
+      }
+
+      document.getElementById('loadingOverlay').classList.remove('visible');
+      btn.style.display = 'none';
+      showSuccess('🎉 You\'re officially on Umzila!<br>Your seller account is now <strong>live</strong>. Check your inbox for a welcome email, then head to your <a href="seller-dashboard.html" style="color:#0a2f66;font-weight:700">Seller Dashboard</a> to set up your store.');
+
+    } catch (err) {
+      showError(err.message || 'Something went wrong. Please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Activate Free Seller Account';
+      document.getElementById('loadingOverlay').classList.remove('visible');
+    }
+  }
+</script>
+</body>
+</html>
