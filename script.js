@@ -1869,9 +1869,9 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [
-  `thumbnail1.webp`,
+  `bannerPrinting.webp`,
   `thumbnail2.webp`,
-  `easterthumbnail.webp`,
+  `bannerLaundry.webp`,
   `thumbnail1.webp`  // 4th slide fallback
 ];
 Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
@@ -1899,6 +1899,8 @@ Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
     } else if(section && section.startsWith('#')){
       const target = document.querySelector(section);
       if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
+    } else if(section && !section.startsWith('#')){
+      window.location.href = section;
     }
   });
 });

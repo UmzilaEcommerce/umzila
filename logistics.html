@@ -171,6 +171,7 @@
         <button class="btn nav-btn" data-panel="overview">Overview</button>
         <button class="btn nav-btn" data-panel="orders">Orders</button>
         <button class="btn nav-btn" data-panel="past">Past Orders</button>
+        <button class="btn nav-btn" data-panel="baskets">Baskets</button>
         <button class="btn nav-btn" data-panel="stores">Stores</button>
         <button class="btn nav-btn" data-panel="analytics">Analytics</button>
         <button class="btn nav-btn" data-panel="settings">Settings</button>
@@ -234,6 +235,17 @@
         <div class="panel card">
           <h3>Past Orders <span id="pastFilterLabel" class="muted"></span></h3>
           <div id="pastList" style="margin-top:12px"></div>
+        </div>
+      </section>
+
+      <section id="panel-baskets" class="panel-section panel">
+        <div class="panel card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <h3 style="margin:0">Active Baskets <span id="basketCount" class="muted" style="font-size:14px;font-weight:400"></span></h3>
+            <button id="basketsRefresh" class="btn btn-ghost" style="font-size:13px">Refresh</button>
+          </div>
+          <div class="muted" style="margin-bottom:16px;font-size:13px">Shoppers who have items in their cart — send them a nudge to complete checkout.</div>
+          <div id="basketsList" style="margin-top:4px"></div>
         </div>
       </section>
 
@@ -445,7 +457,13 @@ document.addEventListener('supabase-ready', function(event) {
       label: r.label || '',
       details: r.details || '',
       date: (r.created_at ? (new Date(r.created_at)).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric', hour:'2-digit', minute:'2-digit'}) : (r.date || '')),
-      status: r.order_status || r.status || 'Pending',
+      status: (function(){
+        var s = r.order_status || r.status || 'Pending';
+        if (s === 'paid') return 'Pending';
+        if (s === 'cancelled' || s === 'Cancelled') return 'Returned';
+        if (s === 'pending_payment') return null; // not paid yet — skip
+        return s;
+      })(),
       items: Array.isArray(items) ? items : [],
       total: Number(r.total || r.amount || 0),
       discount: Number(r.discount || 0),
@@ -468,7 +486,7 @@ document.addEventListener('supabase-ready', function(event) {
         .limit(1000);
       if(error){ console.warn('Supabase fetch orders error:', error); return []; }
       if(!data) return [];
-      const mapped = data.map(mapRowToUIOrder);
+      const mapped = data.map(mapRowToUIOrder).filter(o => o.status !== null);
       return mapped;
     } catch (e){
       console.warn('Unexpected fetchOrdersFromSupabase error:', e);
@@ -964,6 +982,182 @@ document.addEventListener('supabase-ready', function(event) {
         </div>`;
       }).join('');
     }
+
+    /* -------- Baskets panel -------- */
+    let basketsLoaded = false;
+
+    async function loadBasketsPanel(force){
+      if(basketsLoaded && !force) { return; }
+      const listEl = document.getElementById('basketsList');
+      const countEl = document.getElementById('basketCount');
+      if(listEl) listEl.innerHTML = '<div class="muted">Loading baskets…</div>';
+
+      try {
+        // Fetch all active carts (RLS now allows admin/logistics to see all)
+        const { data: carts, error: cartsErr } = await supabaseClient
+          .from('carts')
+          .select('id, user_id, items, created_at, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(200);
+
+        if(cartsErr || !carts || !carts.length){
+          if(listEl) listEl.innerHTML = '<div class="muted">No active baskets found.</div>';
+          if(countEl) countEl.textContent = '';
+          return;
+        }
+
+        // Batch-fetch profiles for those user_ids
+        const userIds = [...new Set(carts.map(c => c.user_id).filter(Boolean))];
+        let profileMap = {};
+        if(userIds.length){
+          const { data: profiles } = await supabaseClient
+            .from('profiles')
+            .select('user_id, email, first_name, last_name')
+            .in('user_id', userIds);
+          (profiles || []).forEach(p => { profileMap[p.user_id] = p; });
+        }
+
+        basketsLoaded = true;
+        if(countEl) countEl.textContent = `(${carts.length})`;
+
+        if(!listEl) return;
+        listEl.innerHTML = carts.map(cart => {
+          const profile = profileMap[cart.user_id] || {};
+          const email = profile.email || '(no email)';
+          const name = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || 'Anonymous';
+          const items = Array.isArray(cart.items) ? cart.items : [];
+          const itemCount = items.reduce((s, i) => s + (Number(i.quantity || i.qty || 1)), 0);
+          const cartTotal = items.reduce((s, i) => s + (parseFloat(i.price || 0) * Number(i.quantity || i.qty || 1)), 0);
+          const updated = cart.updated_at ? new Date(cart.updated_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+          const created = cart.created_at ? new Date(cart.created_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+
+          const itemsPreview = items.slice(0, 4).map(it => {
+            const n = it.name || it.title || 'Item';
+            const sz = it.size ? ` · ${escapeHtml(it.size)}` : '';
+            const q = it.quantity || it.qty || 1;
+            return `<div style="font-size:12px;color:#555;padding:2px 0">${escapeHtml(n)}${sz} ×${q} — ${formatCurrency(parseFloat(it.price||0)*Number(q))}</div>`;
+          }).join('');
+          const more = items.length > 4 ? `<div class="muted" style="font-size:12px;margin-top:2px">+${items.length - 4} more item${items.length-4!==1?'s':''}</div>` : '';
+
+          return `<div class="order-card" style="margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:14px">${escapeHtml(name)}</div>
+                <div class="muted" style="font-size:13px;margin-top:1px">${escapeHtml(email)}</div>
+                <div class="muted" style="font-size:12px;margin-top:4px">Created: ${created} &nbsp;·&nbsp; Last updated: ${updated}</div>
+                <div style="margin-top:8px;padding:8px;background:#f8faff;border-radius:8px">${itemsPreview}${more}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-weight:800;font-size:16px">${formatCurrency(cartTotal)}</div>
+                <div class="muted" style="font-size:12px">${itemCount} item${itemCount!==1?'s':''}</div>
+                <button class="btn btn-primary basket-email-btn" style="margin-top:8px;font-size:12px;padding:6px 10px"
+                  data-email="${escapeHtml(email)}"
+                  data-user-id="${escapeHtml(cart.user_id||'')}"
+                  data-items="${escapeHtml(JSON.stringify(items))}">
+                  Send Email
+                </button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+
+        // Wire send email buttons
+        listEl.querySelectorAll('.basket-email-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const email = btn.dataset.email;
+            const userId = btn.dataset.userId;
+            let items = [];
+            try { items = JSON.parse(btn.dataset.items); } catch {}
+            openEngagementModal(email, userId, items);
+          });
+        });
+
+      } catch(e){
+        console.warn('loadBasketsPanel error', e);
+        if(listEl) listEl.innerHTML = `<div class="muted">Error loading baskets: ${escapeHtml(String(e.message||e))}</div>`;
+      }
+    }
+
+    function openEngagementModal(customerEmail, userId, cartItems){
+      const emailDisplay = escapeHtml(customerEmail);
+      const html = `
+        <h3 style="margin:0 0 8px">Send nudge email</h3>
+        <div class="muted" style="margin-bottom:16px">Sending to: <strong>${emailDisplay}</strong></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:14px;border-radius:10px;border:2px solid #e6eef9;cursor:pointer;background:#f8faff">
+            <input type="radio" name="engType" value="free-delivery" style="margin-top:2px" />
+            <div>
+              <div style="font-weight:700;color:#0a2f66">Free Delivery</div>
+              <div class="muted" style="font-size:13px;margin-top:2px">Tell the customer their delivery is on us — no code needed.</div>
+            </div>
+          </label>
+          <label style="display:flex;align-items:flex-start;gap:10px;padding:14px;border-radius:10px;border:2px solid #e6eef9;cursor:pointer;background:#f8faff">
+            <input type="radio" name="engType" value="discount" style="margin-top:2px" />
+            <div>
+              <div style="font-weight:700;color:#0a2f66">10% Discount — code COMEBACK10</div>
+              <div class="muted" style="font-size:13px;margin-top:2px">Send them a 10% off code to apply at checkout.</div>
+            </div>
+          </label>
+        </div>
+        <div id="engResult" style="margin-top:12px;font-size:13px"></div>
+      `;
+      openModalHtml(html);
+      modalConfirm.textContent = 'Send Email';
+      modalConfirm.disabled = true;
+
+      modalBody.querySelectorAll('input[name="engType"]').forEach(radio => {
+        radio.addEventListener('change', () => { modalConfirm.disabled = false; });
+      });
+
+      modalConfirm.onclick = async () => {
+        const selected = modalBody.querySelector('input[name="engType"]:checked');
+        if(!selected){ showToast('Please choose an email type'); return; }
+        const emailType = selected.value;
+
+        modalConfirm.disabled = true;
+        modalConfirm.textContent = 'Sending…';
+
+        try {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          const token = session?.access_token || '';
+
+          const res = await fetch('/.netlify/functions/send-engagement-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              customer_email: customerEmail,
+              email_type: emailType,
+              cart_items: cartItems,
+              user_id: userId
+            })
+          });
+
+          const result = await res.json().catch(() => ({}));
+          if(res.ok && result.ok){
+            showToast(`Email sent to ${customerEmail}`);
+            closeModal();
+          } else {
+            const engResult = modalBody.querySelector('#engResult');
+            if(engResult) engResult.innerHTML = `<span style="color:#c00">Failed: ${escapeHtml(result.error || 'Unknown error')}</span>`;
+            modalConfirm.disabled = false;
+            modalConfirm.textContent = 'Retry';
+          }
+        } catch(e){
+          const engResult = modalBody.querySelector('#engResult');
+          if(engResult) engResult.innerHTML = `<span style="color:#c00">Error: ${escapeHtml(String(e.message||e))}</span>`;
+          modalConfirm.disabled = false;
+          modalConfirm.textContent = 'Retry';
+        }
+      };
+    }
+
+    document.getElementById('basketsRefresh')?.addEventListener('click', () => {
+      basketsLoaded = false;
+      loadBasketsPanel(true);
+    });
 
     // Render Orders
     function renderOrders(filter = 'AUTO'){
@@ -1524,6 +1718,9 @@ document.addEventListener('supabase-ready', function(event) {
       }
       if(panel === 'stores') {
         loadStoresPanel();
+      }
+      if(panel === 'baskets') {
+        loadBasketsPanel();
       }
     }
     navBtns.forEach(b=> b.addEventListener('click', ()=> showPanel(b.getAttribute('data-panel'))));

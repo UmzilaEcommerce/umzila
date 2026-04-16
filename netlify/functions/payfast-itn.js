@@ -146,6 +146,11 @@ exports.handler = async function(event, context) {
                         await sendSellerOrderNotifications(supabase, existingOrder, pfData).catch(
                             e => console.error('ITN: seller notifications error', e)
                         );
+
+                        // ── Send admin CHA-CHING! notification ──
+                        await sendAdminOrderNotification(supabase, existingOrder, pfData).catch(
+                            e => console.error('ITN: admin notification error', e)
+                        );
                     }
 
                     // ── Decrement product stock ────────────────────────────
@@ -934,4 +939,162 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, pfData, siteUr
 </div>
 </body>
 </html>`;
+}
+
+// ── Admin CHA-CHING! order notification ──────────────────────────────────────
+async function sendAdminOrderNotification(supabase, order, pfData) {
+    const RESEND_KEY    = process.env.RESEND_API_KEY || '';
+    const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
+    if (!RESEND_KEY) return;
+
+    const adminEmailsRaw = process.env.ADMIN_EMAILS || 'umzilaecommerce@gmail.com';
+    const adminEmails = adminEmailsRaw.split(',').map(e => e.trim()).filter(Boolean);
+    if (!adminEmails.length) return;
+
+    const orderRef   = order.order_number || pfData.m_payment_id || 'N/A';
+    const total      = parseFloat(order.total || pfData.amount_gross || 0);
+    const fmt        = (n) => 'R' + (parseFloat(n) || 0).toFixed(2);
+    const escA       = (s) => (s || '').toString().replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+    const items = Array.isArray(order.items) ? order.items : [];
+
+    // Group items by seller, fetch shop names
+    const productIds = [...new Set(items.map(i => i.id || i.product_id).filter(Boolean))];
+    let storeMap = {};
+    if (productIds.length) {
+        const { data: products } = await supabase
+            .from('products')
+            .select('id, seller_id')
+            .in('id', productIds);
+        if (products && products.length) {
+            const sellerIds = [...new Set(products.map(p => p.seller_id).filter(Boolean))];
+            const { data: sellers } = await supabase
+                .from('sellers')
+                .select('id, shop_name')
+                .in('id', sellerIds);
+            const sellerNameMap = {};
+            (sellers || []).forEach(s => { sellerNameMap[s.id] = s.shop_name || 'Unknown Store'; });
+            const prodSellerMap = {};
+            products.forEach(p => { prodSellerMap[p.id] = p.seller_id; });
+            items.forEach(item => {
+                const pid = item.id || item.product_id;
+                const sellerId = prodSellerMap[pid];
+                const shopName = sellerId ? (sellerNameMap[sellerId] || 'Unknown Store') : 'Unknown Store';
+                if (!storeMap[shopName]) storeMap[shopName] = [];
+                storeMap[shopName].push(item);
+            });
+        }
+    }
+    if (!Object.keys(storeMap).length && items.length) {
+        storeMap['Unknown Store'] = items;
+    }
+
+    const getName  = (i) => i.title || i.name || i.item_name || i.item || 'Item';
+    const getPrice = (i) => parseFloat(i.price || i.unit_price || 0);
+    const getQty   = (i) => parseInt(i.qty || i.quantity || 1, 10);
+    const getSize  = (i) => i.size || i.variant || '';
+
+    const storesHtml = Object.entries(storeMap).map(([shopName, shopItems]) => {
+        const storeTotal = shopItems.reduce((s, i) => s + getPrice(i) * getQty(i), 0);
+        const itemsHtml = shopItems.map(item => {
+            const size = getSize(item) ? ` <span style="color:#888">&middot; ${escA(String(getSize(item)))}</span>` : '';
+            return `<tr>
+              <td style="padding:6px 0;font-size:13px;color:#1a1a2e">${escA(getName(item))}${size}</td>
+              <td style="padding:6px 0;font-size:13px;color:#555;text-align:center">&times;${getQty(item)}</td>
+              <td style="padding:6px 0;font-size:13px;font-weight:700;color:#0a2f66;text-align:right">${fmt(getPrice(item) * getQty(item))}</td>
+            </tr>`;
+        }).join('');
+        return `<div style="background:#f8faff;border-radius:10px;padding:14px 18px;margin-bottom:12px;border:1px solid #e8eef8">
+          <div style="font-size:13px;font-weight:800;color:#0a2f66;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">&#127978; ${escA(shopName)}</div>
+          <table style="width:100%;border-collapse:collapse"><tbody>${itemsHtml}</tbody></table>
+          <div style="border-top:1px solid #dde6f5;margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#0a2f66">
+            <span>Store subtotal</span><span>${fmt(storeTotal)}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    const customerName   = escA(order.customer_name || pfData.name_first || 'Customer');
+    const customerEmail  = escA(order.customer_email || pfData.email_address || '—');
+    const deliveryType   = escA(order.label || 'Standard Delivery');
+    const address        = [order.delivery_address, order.city, order.province, order.postal_code].filter(Boolean).map(escA).join(', ');
+    const notes          = order.notes ? escA(order.notes) : '';
+    const storeCount     = Object.keys(storeMap).length;
+    const storeNames     = Object.keys(storeMap).map(escA).join(', ');
+
+    const adminHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;background:#0a2f66;font-family:system-ui,-apple-system,sans-serif}
+  .wrap{max-width:600px;margin:30px auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.25)}
+  .hdr{background:linear-gradient(135deg,#0a2f66 0%,#1a4f8a 100%);padding:36px 40px;text-align:center}
+  .cha{font-size:42px;font-weight:900;color:#ffd700;letter-spacing:2px;margin:0;text-shadow:0 2px 8px rgba(0,0,0,0.3)}
+  .sub{color:rgba(255,255,255,0.85);font-size:15px;margin:8px 0 0}
+  .total-badge{display:inline-block;background:#ffd700;color:#0a2f66;font-size:26px;font-weight:900;padding:10px 28px;border-radius:999px;margin-top:16px}
+  .bd{padding:28px 36px}
+  .lbl{font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:1px;margin:20px 0 8px}
+  .ibox{background:#f8f9fb;border-radius:10px;padding:14px 18px;font-size:14px;color:#333;line-height:1.9;margin-bottom:16px}
+  .row{display:flex;gap:10px}
+  .k{color:#888;min-width:110px;flex-shrink:0;font-size:13px}
+  .v{color:#1a1a2e;font-weight:600;font-size:13px}
+  .divider{border:none;border-top:1px solid #eaecf0;margin:20px 0}
+  .ft{background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa}
+  .ft a{color:#0a2f66;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="cha">CHA-CHING! &#128176;</div>
+    <div class="sub">New order just dropped on Umzila</div>
+    <div class="total-badge">${fmt(total)}</div>
+  </div>
+  <div class="bd">
+    <div class="lbl">Order Reference</div>
+    <div class="ibox" style="font-size:16px;font-weight:800;color:#0a2f66">${escA(orderRef)}</div>
+
+    <div class="lbl">Customer</div>
+    <div class="ibox">
+      <div class="row"><span class="k">Name</span><span class="v">${customerName}</span></div>
+      <div class="row" style="margin-top:4px"><span class="k">Email</span><span class="v">${customerEmail}</span></div>
+      <div class="row" style="margin-top:4px"><span class="k">Delivery</span><span class="v">${deliveryType}</span></div>
+      ${address ? `<div class="row" style="margin-top:4px"><span class="k">Address</span><span class="v">${address}</span></div>` : ''}
+      ${notes ? `<div class="row" style="margin-top:4px"><span class="k">Notes</span><span class="v">${notes}</span></div>` : ''}
+    </div>
+
+    <div class="lbl">Stores in this order (${storeCount}): ${storeNames}</div>
+    ${storesHtml}
+
+    <hr class="divider">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0">
+      <span style="font-size:16px;font-weight:800;color:#0a2f66">Total paid</span>
+      <span style="font-size:22px;font-weight:900;color:#0a2f66">${fmt(total)}</span>
+    </div>
+  </div>
+  <div class="ft">
+    <strong><a href="${escA(SITE_BASE_URL)}">Umzila</a></strong> admin alert
+  </div>
+</div>
+</body>
+</html>`;
+
+    try {
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from:    'Umzila Orders <orders@umzila.store>',
+                to:      adminEmails,
+                subject: `CHA-CHING! New order — ${fmt(total)} — ${orderRef}`,
+                html:    adminHtml
+            })
+        });
+        if (!res.ok) {
+            console.error('ITN admin notify: email failed', res.status, await res.text());
+        } else {
+            console.log('ITN admin notify: CHA-CHING! email sent for order', orderRef);
+        }
+    } catch (e) {
+        console.error('ITN admin notify: error', e);
+    }
 }

@@ -1045,6 +1045,13 @@
 
       /* Initial render */
       filterAndRender();
+
+      /* Auto-search from URL ?q= param (e.g. from hero banner click) */
+      var qParam = new URLSearchParams(window.location.search).get('q');
+      if (qParam) {
+        var searchEl = document.getElementById('shSearch');
+        if (searchEl) { searchEl.value = qParam; filterAndRender(); }
+      }
     }
 
     /* ─────────────────────────────────────────
