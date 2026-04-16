@@ -854,7 +854,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const { count, error } = await supabaseClient
         .from('orders')
         .select('id', { count: 'exact', head: false })
-        .in('order_status', ['Pending', 'Packaging']);
+        .in('order_status', ['paid', 'Packaging']);
       // Some Supabase versions return count as `count` or in the meta; this handles common behavior
       if(error){ console.warn('updatePendingCount select error', error); }
       // If count is available as number use it; else attempt a cheap fetch to count length
@@ -862,7 +862,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         if(el) el.textContent = count;
       } else {
         // fallback: fetch rows and measure
-        const { data, error: dErr } = await supabaseClient.from('orders').select('id').in('order_status', ['Pending', 'Packaging']).limit(1000);
+        const { data, error: dErr } = await supabaseClient.from('orders').select('id').in('order_status', ['paid', 'Packaging']).limit(1000);
         if(!dErr && data) { if(el) el.textContent = data.length; return; }
         // final fallback
         if(el) el.textContent = '0';
