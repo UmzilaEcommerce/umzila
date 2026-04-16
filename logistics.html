@@ -785,7 +785,9 @@ document.addEventListener('supabase-ready', function(event) {
 
 
   /* ---------------- UI code ----------------------------- */
-  document.addEventListener('DOMContentLoaded', () => {
+  /* supabase-ready always fires after await fetch(), so DOM is guaranteed ready.
+     Do NOT nest DOMContentLoaded inside supabase-ready — it will already have fired. */
+  (function(){
     const modalWrap = document.getElementById('modal');
     const modalBody = document.getElementById('modalBody');
     const modalConfirm = document.getElementById('modalConfirm');
@@ -2243,7 +2245,7 @@ document.addEventListener('supabase-ready', function(event) {
       renderOrders('AUTO');
     })();
 
-  });
+  })(); // end UI init — runs immediately since DOM is ready when supabase-ready fires
 });
 
 // Fallback in case Supabase initialization takes time or fails
