@@ -2546,11 +2546,13 @@ function makeCardHTML(p){
   const shouldLazyLoad = true; // We'll use Intersection Observer for all
   
   const favCount = Number(p.favourite_count || 0);
+  const isServiceCard = p.listing_type === 'service';
+  const stockText = isServiceCard ? '' : (totalStock > 0 ? `• ${totalStock} left` : '• Out of stock');
   return `<div class="product-card fade-up" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${p.title}">
       <div class="badges">
-        ${p.listing_type === 'service' ? '<span class="badge" style="background:#7c3aed">🔧 Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:'')}
-        ${isOnSale && !p.badge && p.listing_type !== 'service' ? '<span class="badge sale">Sale</span>' : ''}
+        ${isServiceCard ? '<span class="badge" style="background:#7c3aed">🔧 Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:'')}
+        ${isOnSale && !p.badge && !isServiceCard ? '<span class="badge sale">Sale</span>' : ''}
       </div>
       ${mediaTagForCard(primaryImage, p.title)}
       ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${secondaryImage}" loading="lazy" alt="${p.title} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
@@ -2560,25 +2562,27 @@ function makeCardHTML(p){
     <div class="card-body">
       <div class="title">${p.title}</div>
       <div class="meta">
-        <div style="font-size:13px">${p.color || ''} ${totalStock > 0 ? `• ${totalStock} left` : '• Out of stock'}</div>
+        <div style="font-size:13px">${p.color || ''} ${stockText}</div>
         <div class="price">
-          ${isOnSale && originalPrice ? 
+          ${isOnSale && originalPrice ?
             `<span class="original">${format(originalPrice)}</span>` : ''}
           ${format(displayPrice)}
         </div>
       </div>
       <div class="controls">
-        <select class="size-select">${(p.size||['M']).map(s=>`<option>${s}</option>`).join('')}</select>
+        ${isServiceCard ? '' : `<select class="size-select">${(p.size||['M']).map(s=>`<option>${s}</option>`).join('')}</select>`}
         <select class="qty"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
         <button class="add-btn" data-id="${p.id}">Add</button>
       </div>
     </div>
-  </div>`; 
+  </div>`;
 }
 
 function renderAll(products){
   // Only render products that are visible and in stock
-  const visible = (products || state.products).filter(p => p.visible !== false && (p.stock || 0) > 0);
+  const visible = (products || state.products).filter(p =>
+    p.visible !== false && (p.listing_type === 'service' || (p.stock || 0) > 0)
+  );
   if(resultCount) resultCount.textContent = visible.length;
 
   const userCats = getUserPreferenceCategories();
@@ -2697,10 +2701,10 @@ function renderAll(products){
  * Get variant stock for specific size
  ********************/
 function getVariantStock(product, size) {
+  if (product.listing_type === 'service') return Infinity;
   if (!product.variants || product.variants.length === 0) {
     return product.stock || 0;
   }
-  
   const variant = product.variants.find(v => v.size === size);
   return variant ? (variant.stock || 0) : 0;
 }
@@ -2724,31 +2728,38 @@ function attachProductListeners(){
     const media = card.querySelector('.product-media'); 
     if (media) media.addEventListener('click',()=>openProductModal(card.dataset.id)); 
     
-    card.querySelectorAll('.add-btn').forEach(btn=>btn.addEventListener('click',(ev)=>{ 
-      ev.stopPropagation(); 
-      const id=btn.dataset.id ? Number(btn.dataset.id) : Number(btn.getAttribute('data-id')); 
-      const qty = Number(btn.previousElementSibling.value||1); 
-      const size = btn.parentElement.querySelector('.size-select').value; 
-      
+    card.querySelectorAll('.add-btn').forEach(btn=>btn.addEventListener('click',(ev)=>{
+      ev.stopPropagation();
+      const id=btn.dataset.id ? Number(btn.dataset.id) : Number(btn.getAttribute('data-id'));
+      const qty = Number(btn.previousElementSibling.value||1);
+
       const product = state.products.find(x=>x.id===id);
       if (!product) return;
-      
-      // Check stock
-      const variantStock = getVariantStock(product, size);
-      if (variantStock < qty) {
-        alert(`Only ${variantStock} items available for size ${size}`);
-        return;
+
+      const isService = product.listing_type === 'service';
+      const size = isService ? 'One Size' : (btn.parentElement.querySelector('.size-select')?.value || 'One Size');
+
+      // Check stock (skip for services — unlimited)
+      if (!isService) {
+        const variantStock = getVariantStock(product, size);
+        if (variantStock < qty) {
+          alert(`Only ${variantStock} items available for size ${size}`);
+          return;
+        }
       }
-      
+
       addToCart(product.id, qty, size);
-    })); 
+    }));
     
     const q = card.querySelector('.quick-add');
     if (q) q.addEventListener('click',(ev)=>{
       ev.stopPropagation();
       const id = Number(q.dataset.id);
       const product = state.products.find(x=>x.id===id);
-      if (product) {
+      if (!product) return;
+      if (product.listing_type === 'service') {
+        addToCart(product.id, 1, 'One Size');
+      } else {
         openQuickAddModal(product);
       }
     });
@@ -2948,10 +2959,8 @@ async function openProductModal(id) {
           <h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>
           <select id="modal-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">
             <option value="">No preference</option>
-            <option value="Delivery to address">Delivery to address</option>
-            <option value="Campus pickup">Campus pickup</option>
-            <option value="Meet on campus">Meet on campus</option>
-            <option value="Hostel delivery">Hostel delivery</option>
+            <option value="Pickup from campus">Pickup from campus</option>
+            <option value="Delivery to my address">Delivery to my address / location</option>
           </select>
         </div>` : ''}
 
@@ -3085,14 +3094,19 @@ function setupProductModalEvents(bundleProduct) {
   document.getElementById('modal-add-to-cart').addEventListener('click', function() {
     const productId = this.dataset.id;
     const quantity = parseInt(document.getElementById('quantity-value').textContent);
-    const selectedSize = document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size[0];
+    const isService = currentModalProduct.listing_type === 'service';
+    const selectedSize = isService
+      ? 'One Size'
+      : (document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size?.[0]);
     const preferredDelivery = (document.getElementById('modal-delivery-pref')?.value || '');
 
-    // Check stock
-    const variantStock = getVariantStock(currentModalProduct, selectedSize);
-    if (variantStock < quantity) {
-      alert(`Only ${variantStock} items available for size ${selectedSize}`);
-      return;
+    // Check stock (skip for services — unlimited)
+    if (!isService) {
+      const variantStock = getVariantStock(currentModalProduct, selectedSize);
+      if (variantStock < quantity) {
+        alert(`Only ${variantStock} items available for size ${selectedSize}`);
+        return;
+      }
     }
 
     // Persist preferred delivery to localStorage so checkout-success can update order notes
