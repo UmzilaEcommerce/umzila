@@ -947,7 +947,7 @@ async function sendAdminOrderNotification(supabase, order, pfData) {
     const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
     if (!RESEND_KEY) return;
 
-    const adminEmailsRaw = process.env.ADMIN_EMAILS || 'umzilaecommerce@gmail.com';
+    const adminEmailsRaw = process.env.ADMIN_EMAILS || '';
     const adminEmails = adminEmailsRaw.split(',').map(e => e.trim()).filter(Boolean);
     if (!adminEmails.length) return;
 
