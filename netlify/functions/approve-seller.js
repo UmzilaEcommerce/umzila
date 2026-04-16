@@ -122,10 +122,19 @@ module.exports.handler = async function (event) {
     };
   }
 
+  // ── Check free slot availability ──────────────────────────────────────────
+  const { count: usedFreeSlots } = await admin
+    .from('sellers')
+    .select('id', { count: 'exact', head: true })
+    .eq('free_enrollment', true);
+
+  const freeSlotAvailable = (usedFreeSlots || 0) < 20;
+
   // Send enrollment email via Resend (non-fatal if it fails)
   if (RESEND_KEY && app.email) {
     const applicantName = app.full_name || shopName;
-    const enrollmentLink = `${SITE_BASE_URL}/enroll-seller-free.html?applicationId=${encodeURIComponent(app.id)}&email=${encodeURIComponent(app.email)}&name=${encodeURIComponent(applicantName)}`;
+    const enrollmentPage = freeSlotAvailable ? 'enroll-seller-free.html' : 'enroll-seller.html';
+    const enrollmentLink = `${SITE_BASE_URL}/${enrollmentPage}?applicationId=${encodeURIComponent(app.id)}&email=${encodeURIComponent(app.email)}&name=${encodeURIComponent(applicantName)}`;
 
     try {
       const emailRes = await fetch('https://api.resend.com/emails', {
@@ -137,8 +146,10 @@ module.exports.handler = async function (event) {
         body: JSON.stringify({
           from: 'Umzila <noreply@umzila.store>',
           to: [app.email],
-          subject: "You've been approved to sell on Umzila — for free!",
-          html: buildApprovalEmail(applicantName, shopName.trim(), enrollmentLink, SITE_BASE_URL)
+          subject: freeSlotAvailable
+            ? "You've been approved to sell on Umzila — for free!"
+            : "You've been approved to sell on Umzila!",
+          html: buildApprovalEmail(applicantName, shopName.trim(), enrollmentLink, SITE_BASE_URL, freeSlotAvailable)
         })
       });
 
@@ -146,7 +157,7 @@ module.exports.handler = async function (event) {
         const errText = await emailRes.text();
         console.error('approve-seller: Resend error', emailRes.status, errText);
       } else {
-        console.log('approve-seller: enrollment email sent for application', app.id);
+        console.log('approve-seller: enrollment email sent for application', app.id, freeSlotAvailable ? '(free)' : '(paid)');
       }
     } catch (emailErr) {
       console.error('approve-seller: failed to send email', emailErr);
@@ -166,8 +177,22 @@ function esc(str) {
     .replace(/"/g, '&quot;');
 }
 
-function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl) {
+function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl, isFree) {
   const site = siteUrl || '';
+  const subtitle   = isFree ? "Your application has been approved — you're in!" : "Your application has been approved";
+  const bodyLine   = isFree
+    ? `Click the button below to complete your <strong>free</strong> enrollment and get instant access to your seller dashboard.`
+    : `Click the button below to complete your enrollment, pay the one-time R100 activation fee, and get access to your seller dashboard.`;
+  const stepsHtml  = isFree
+    ? `<li>Click the link below to open your personalised enrollment page</li>
+        <li>Fill in your details and create a password for your seller account</li>
+        <li>Log in to your seller dashboard and finish setting up your shop</li>`
+    : `<li>Click the link below to open your personalised enrollment page</li>
+        <li>Fill in your phone number, delivery method, and create a password</li>
+        <li>Complete the R100 once-off activation payment via PayFast</li>
+        <li>Log in to your seller dashboard and finish setting up your shop</li>`;
+  const btnText    = isFree ? 'Complete Free Enrollment &rarr;' : 'Complete Enrollment &rarr;';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -197,24 +222,22 @@ function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl) {
 <div class="wrap">
   <div class="hdr">
     <h1>Umzila Sellers</h1>
-    <p>Your application has been approved — you're in!</p>
+    <p>${subtitle}</p>
   </div>
   <div class="bd">
     <h2>Congratulations, ${esc(name)}!</h2>
     <p>Great news — your application to sell on Umzila has been <strong>approved</strong>. Your shop <strong>${esc(shopName)}</strong> is ready to be activated.</p>
-    <p>Click the button below to complete your <strong>free</strong> enrollment and get instant access to your seller dashboard.</p>
+    <p>${bodyLine}</p>
 
     <div class="steps">
       <h3>What happens next</h3>
       <ol>
-        <li>Click the link below to open your personalised enrollment page</li>
-        <li>Fill in your details and create a password for your seller account</li>
-        <li>Log in to your seller dashboard and finish setting up your shop</li>
+        ${stepsHtml}
       </ol>
     </div>
 
     <div class="cta">
-      <a href="${esc(enrollmentLink)}" class="btn">Complete Free Enrollment &rarr;</a>
+      <a href="${esc(enrollmentLink)}" class="btn">${btnText}</a>
     </div>
 
     <p class="note">This link is unique to you — it contains your application details. Do not share it with anyone.</p>
