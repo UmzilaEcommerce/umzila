@@ -1103,6 +1103,20 @@
         document.getElementById('sellSubmitSuccess').style.display = 'block';
         document.getElementById('sellModalFooter').style.display = 'none';
         sellFormReset();
+        // Notify admin — fire-and-forget, don't block the success UX
+        fetch('/.netlify/functions/notify-seller-application', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            full_name:       fullName,
+            email:           email,
+            phone:           phone,
+            shop_name:       shopName,
+            category:        category,
+            location:        location,
+            delivery_method: delivery
+          })
+        }).catch(function(){});
       } catch(err) {
         var errEl = document.getElementById('sellSubmitError');
         errEl.textContent = 'Something went wrong. Please try again.';
