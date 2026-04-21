@@ -342,6 +342,7 @@
       <button class="tab-btn"         data-tab="orders"        role="tab">🧾 Orders</button>
       <button class="tab-btn"         data-tab="notifications" role="tab">🔔 Alerts<div class="tab-notif-dot" id="tabNotifDot"></div></button>
       <button class="tab-btn"         data-tab="analytics"     role="tab">📊 Analytics</button>
+      <button class="tab-btn"         data-tab="advertise"     role="tab">📢 Advertise</button>
     </nav>
 
     <!-- ── TAB: My Shop ── -->
@@ -833,6 +834,86 @@
       </div>
     </div>
 
+    <!-- ── TAB: Advertise ── -->
+    <div id="tabAdvertise" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Advertise on Umzila</div>
+        <p style="color:var(--muted);margin:0 0 20px;font-size:14px">Boost your visibility and reach more shoppers. All payments processed securely via PayFast.</p>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:28px">
+
+          <!-- Sponsored Product -->
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#fff">
+            <div style="font-size:24px;margin-bottom:8px">⭐</div>
+            <div style="font-weight:700;font-size:16px;margin-bottom:4px">Sponsored Product</div>
+            <div style="font-size:22px;font-weight:800;color:#0a2f66;margin-bottom:6px">R50<span style="font-size:13px;font-weight:400;color:#6b7280">/week</span></div>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Your product appears first in its category on the home page and shop search — with a "Sponsored" badge.</p>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label" style="font-size:12px">Select product</label>
+              <select id="adSponsoredProduct" class="form-control" style="font-size:13px"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label" style="font-size:12px">Duration</label>
+              <select id="adSponsoredDuration" class="form-control" style="font-size:13px">
+                <option value="1">1 week — R50</option>
+                <option value="2">2 weeks — R100</option>
+                <option value="4">4 weeks — R200</option>
+              </select>
+            </div>
+            <button class="btn" id="adSponsoredBtn" style="width:100%;background:#0a2f66;color:#fff;border:none">Buy Now →</button>
+          </div>
+
+          <!-- Featured Shop -->
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#fff">
+            <div style="font-size:24px;margin-bottom:8px">🏆</div>
+            <div style="font-weight:700;font-size:16px;margin-bottom:4px">Featured Shop</div>
+            <div style="font-size:22px;font-weight:800;color:#0a2f66;margin-bottom:6px">R150<span style="font-size:13px;font-weight:400;color:#6b7280">/month</span></div>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Your shop appears in the Featured Shops row on the home page — seen by every visitor, regardless of product count.</p>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label" style="font-size:12px">Duration</label>
+              <select id="adFeaturedDuration" class="form-control" style="font-size:13px">
+                <option value="4">1 month — R150</option>
+                <option value="12">3 months — R450</option>
+              </select>
+            </div>
+            <button class="btn" id="adFeaturedBtn" style="width:100%;background:#7c3aed;color:#fff;border:none">Buy Now →</button>
+          </div>
+
+          <!-- Hero Banner -->
+          <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#fff">
+            <div style="font-size:24px;margin-bottom:8px">🖼️</div>
+            <div style="font-weight:700;font-size:16px;margin-bottom:4px">Hero Banner</div>
+            <div style="font-size:22px;font-weight:800;color:#0a2f66;margin-bottom:6px">R300<span style="font-size:13px;font-weight:400;color:#6b7280">/week</span></div>
+            <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Your 16:9 image in the hero slider — the first thing every visitor sees. Subject to admin review.</p>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label" style="font-size:12px">Banner image (16:9)</label>
+              <input type="file" id="adBannerFile" accept="image/*" class="form-control" style="font-size:13px">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label" style="font-size:12px">Destination link (optional)</label>
+              <input type="url" id="adBannerLink" class="form-control" placeholder="https://..." style="font-size:13px">
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label" style="font-size:12px">Duration</label>
+              <select id="adBannerDuration" class="form-control" style="font-size:13px">
+                <option value="1">1 week — R300</option>
+                <option value="2">2 weeks — R600</option>
+              </select>
+            </div>
+            <button class="btn" id="adBannerBtn" style="width:100%;background:#ea580c;color:#fff;border:none">Buy Now →</button>
+          </div>
+
+        </div>
+
+        <!-- Active campaigns -->
+        <div style="margin-top:8px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:10px">Your Active Campaigns</div>
+          <div id="myAdCampaigns" style="color:var(--muted);font-size:14px">Loading…</div>
+        </div>
+        <div id="adError" style="display:none;color:#dc2626;font-size:13px;margin-top:10px"></div>
+      </div>
+    </div>
+
   </div><!-- /stateDashboard -->
 
   <!-- Shop picker modal -->
@@ -1022,10 +1103,140 @@
       if (name === 'orders')        loadOrders();
       if (name === 'analytics')     loadAnalytics();
       if (name === 'notifications') loadNotifications();
+      if (name === 'advertise')     loadAdvertiseTab();
     }
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
     });
+
+    /* ── ADVERTISE TAB ─────────────────────────────────────────────────────── */
+    var adTabInitialised = false;
+    async function loadAdvertiseTab() {
+      if (!SD.seller) return;
+      await loadMyCampaigns();
+      if (adTabInitialised) return;
+      adTabInitialised = true;
+
+      // Populate product dropdown for Sponsored Product
+      var prodSel = document.getElementById('adSponsoredProduct');
+      if (prodSel && SD.seller) {
+        try {
+          var { data: prods } = await SD.sb.from('products')
+            .select('id, name').eq('seller_id', SD.seller.id).eq('visible', true).order('name');
+          prodSel.innerHTML = (prods || []).map(p =>
+            `<option value="${p.id}">${p.name || p.id}</option>`).join('') || '<option value="">No visible products</option>';
+        } catch(e) { prodSel.innerHTML = '<option value="">Failed to load products</option>'; }
+      }
+
+      // Handle adSuccess/adCancelled URL params
+      var urlP = new URLSearchParams(window.location.search);
+      if (urlP.get('adSuccess') === '1') {
+        var adErr = document.getElementById('adError');
+        if (adErr) { adErr.style.display = 'block'; adErr.style.color = '#059669'; adErr.textContent = '✓ Payment received! Your campaign will be activated shortly.'; }
+        history.replaceState({}, '', window.location.pathname);
+      }
+      if (urlP.get('adCancelled') === '1') {
+        var adErr2 = document.getElementById('adError');
+        if (adErr2) { adErr2.style.display = 'block'; adErr2.textContent = 'Payment was cancelled. Your campaign was not activated.'; }
+        history.replaceState({}, '', window.location.pathname);
+      }
+
+      // ── Sponsored Product buy ──────────────────────────────────────────────
+      document.getElementById('adSponsoredBtn').addEventListener('click', async function() {
+        var prodId = document.getElementById('adSponsoredProduct').value;
+        var weeks  = parseInt(document.getElementById('adSponsoredDuration').value) || 1;
+        if (!prodId) { showAdError('Please select a product first.'); return; }
+        await initiateAdPayment({ type: 'sponsored_product', product_id: prodId, duration_weeks: weeks });
+      });
+
+      // ── Featured Shop buy ──────────────────────────────────────────────────
+      document.getElementById('adFeaturedBtn').addEventListener('click', async function() {
+        var weeks = parseInt(document.getElementById('adFeaturedDuration').value) || 4;
+        await initiateAdPayment({ type: 'featured_shop', duration_weeks: weeks });
+      });
+
+      // ── Hero Banner buy ───────────────────────────────────────────────────
+      document.getElementById('adBannerBtn').addEventListener('click', async function() {
+        var fileInput = document.getElementById('adBannerFile');
+        var linkInput = document.getElementById('adBannerLink');
+        var weeks     = parseInt(document.getElementById('adBannerDuration').value) || 1;
+        if (!fileInput.files || !fileInput.files[0]) { showAdError('Please upload a banner image first.'); return; }
+        var btn = this; btn.disabled = true; btn.textContent = 'Uploading…';
+        try {
+          var imageUrl = await uploadBannerImage(fileInput.files[0]);
+          await initiateAdPayment({ type: 'hero_banner', image_url: imageUrl, link_url: linkInput.value.trim() || null, duration_weeks: weeks });
+        } catch(e) { showAdError('Image upload failed: ' + e.message); btn.disabled = false; btn.textContent = 'Buy Now →'; }
+      });
+    }
+
+    function showAdError(msg) {
+      var el = document.getElementById('adError');
+      if (el) { el.style.display = 'block'; el.style.color = '#dc2626'; el.textContent = msg; }
+    }
+
+    async function uploadBannerImage(file) {
+      var ext  = file.name.split('.').pop();
+      var path = `banners/${SD.seller.id}-${Date.now()}.${ext}`;
+      var { data, error } = await SD.sb.storage.from('product-images').upload(path, file, { upsert: true });
+      if (error) throw error;
+      var { data: urlData } = SD.sb.storage.from('product-images').getPublicUrl(path);
+      return urlData.publicUrl;
+    }
+
+    async function initiateAdPayment(payload) {
+      var adErr = document.getElementById('adError'); if (adErr) adErr.style.display = 'none';
+      var session = (await SD.sb.auth.getSession()).data.session;
+      if (!session) { showAdError('Please log in again.'); return; }
+      try {
+        var res = await fetch('/.netlify/functions/initiate-ad-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ seller_id: SD.seller.id, ...payload })
+        });
+        if (!res.ok) { var d = await res.json(); showAdError(d.error || 'Failed to initiate payment.'); return; }
+        // Response is an HTML auto-submit form — inject and submit
+        var html = await res.text();
+        var div  = document.createElement('div');
+        div.style.display = 'none';
+        div.innerHTML = html;
+        document.body.appendChild(div);
+        var form = div.querySelector('form');
+        if (form) form.submit(); else showAdError('Could not redirect to PayFast.');
+      } catch(e) { showAdError('Network error: ' + e.message); }
+    }
+
+    async function loadMyCampaigns() {
+      var el = document.getElementById('myAdCampaigns');
+      if (!el || !SD.seller) return;
+      try {
+        var { data: camps } = await SD.sb.from('ad_campaigns')
+          .select('type, status, amount_paid, starts_at, ends_at')
+          .eq('seller_id', SD.seller.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (!camps || !camps.length) { el.textContent = 'No active campaigns yet.'; return; }
+        var typeLabel = { sponsored_product:'Sponsored Product', featured_shop:'Featured Shop', hero_banner:'Hero Banner' };
+        var statusColor = { active:'#059669', pending_review:'#d97706', pending_payment:'#6b7280', expired:'#9ca3af', rejected:'#dc2626' };
+        el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid #e5e7eb">
+            <th style="padding:6px 10px;text-align:left">Type</th>
+            <th style="padding:6px 10px;text-align:left">Status</th>
+            <th style="padding:6px 10px;text-align:left">Paid</th>
+            <th style="padding:6px 10px;text-align:left">Expires</th>
+          </tr></thead>
+          <tbody>${camps.map(c => {
+            var col = statusColor[c.status] || '#374151';
+            var exp = c.ends_at ? new Date(c.ends_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short'}) : '—';
+            return `<tr style="border-bottom:1px solid #f5f5f5">
+              <td style="padding:7px 10px">${typeLabel[c.type]||c.type}</td>
+              <td style="padding:7px 10px;color:${col};font-weight:600">${c.status}</td>
+              <td style="padding:7px 10px">R${Number(c.amount_paid).toFixed(2)}</td>
+              <td style="padding:7px 10px">${exp}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+      } catch(e) { el.textContent = 'Could not load campaigns.'; }
+    }
 
     /* ── AUTH (silent guard — login is on login-admin.html) ── */
     async function checkAuth() {

@@ -456,6 +456,20 @@
   </div>
 
   <!-- ===== UPDATED PRODUCT MODAL (redesigned) ===== -->
+  <!-- Notify Me (back-in-stock) modal -->
+  <div id="notifyModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;width:90%;margin:auto;position:relative">
+      <button id="notifyModalClose" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
+      <div style="font-size:22px;margin-bottom:8px">🔔</div>
+      <h3 style="margin:0 0 6px;font-size:16px" id="notifyModalTitle">Back in stock alert</h3>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Enter your email and we'll notify you the moment this is available again.</p>
+      <input type="email" id="notifyEmailInput" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:10px">
+      <div id="notifyError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px"></div>
+      <button id="notifySubmitBtn" style="width:100%;background:#0a2f66;color:#fff;border:none;padding:11px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer">Notify Me</button>
+      <div id="notifySuccess" style="display:none;color:#059669;font-size:13px;margin-top:10px;text-align:center">✓ You're on the list! We'll email you when it's back.</div>
+    </div>
+  </div>
+
   <div id="productModal" class="product-modal-overlay">
     <div class="product-modal">
       <div class="product-modal-close" id="closeProductModal">&times;</div>
@@ -882,8 +896,18 @@
           if (p.seller_id) countMap[p.seller_id] = (countMap[p.seller_id] || 0) + 1;
         });
 
-        /* sort by product count desc, store all for modal */
-        sellers.sort(function(a, b) { return (countMap[b.id] || 0) - (countMap[a.id] || 0); });
+        /* Boost paid featured shop ads to front, then sort by product count */
+        var now = new Date().toISOString();
+        var featuredAdsRes = await sb.from('ad_campaigns')
+          .select('seller_id').eq('type', 'featured_shop').eq('status', 'active').gt('ends_at', now);
+        var featuredIds = new Set(((featuredAdsRes.data) || []).map(function(a){ return a.seller_id; }));
+
+        sellers.sort(function(a, b) {
+          var aF = featuredIds.has(a.id) ? 1 : 0;
+          var bF = featuredIds.has(b.id) ? 1 : 0;
+          if (bF !== aF) return bF - aF;
+          return (countMap[b.id] || 0) - (countMap[a.id] || 0);
+        });
         window._allSellers = sellers;
         window._sellerCountMap = countMap;
 
@@ -895,13 +919,35 @@
           var logoInner = s.logo_url
             ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
             : '<span>' + initials + '</span>';
+          var featBadge = featuredIds.has(s.id) ? '<div style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:999px;padding:1px 7px;font-weight:700;margin-top:2px">Featured</div>' : '';
           return '<a class="shop-card" href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '">' +
             '<div class="shop-card-logo">' + logoInner + '</div>' +
             '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
             '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
+            featBadge +
           '</a>';
         }).join('');
         document.getElementById('featuredShopsSection').style.display = '';
+
+        /* ── Hero banner ads ── */
+        try {
+          var bannersRes = await sb.from('ad_campaigns')
+            .select('image_url, link_url').eq('type', 'hero_banner').eq('status', 'active').gt('ends_at', now).limit(2);
+          var banners = bannersRes.data || [];
+          if (banners.length) {
+            var slidesEl = document.getElementById('slides');
+            banners.forEach(function(b) {
+              if (!b.image_url) return;
+              var div = document.createElement('div');
+              div.className = 'slide';
+              div.style.backgroundImage = 'url(' + b.image_url + ')';
+              div.style.backgroundSize = 'cover';
+              div.style.backgroundPosition = 'center';
+              if (b.link_url) div.dataset.href = b.link_url;
+              slidesEl.appendChild(div);
+            });
+          }
+        } catch(e) { /* non-fatal */ }
       } catch(e) { /* hide section silently on error */ }
     });
 
@@ -1229,7 +1275,7 @@
     function openMystery()  { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
     function closeMystery() { localStorage.setItem('um_mystery_seen','1'); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
 
-    setTimeout(openMystery, 3000);
+    setTimeout(openMystery, 20000);
     declineBtn.addEventListener('click', closeMystery);
     modal.addEventListener('click', function(e){ if (e.target===modal) closeMystery(); });
 

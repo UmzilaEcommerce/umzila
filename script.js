@@ -1143,6 +1143,19 @@ async function loadProducts() {
       var target = state.products.find(function(p){ return p.id === productParam; });
       if (target) openProductModal(target.id);
     }
+
+    /* Load sponsored product IDs for boosting */
+    if (window.supabase) {
+      window.supabase.from('ad_campaigns')
+        .select('product_id')
+        .eq('type', 'sponsored_product')
+        .eq('status', 'active')
+        .gt('ends_at', new Date().toISOString())
+        .then(function(res) {
+          window._sponsoredProductIds = new Set((res.data || []).map(function(c){ return c.product_id; }));
+          applyFilters(); // re-render with sponsored boosting
+        });
+    }
     
   } catch (e) {
     console.warn('Error loading products:', e);
@@ -2044,6 +2057,74 @@ document.addEventListener('click',(e)=>{
 });
 
 /********************
+ * Notify Me (back-in-stock alerts)
+ ********************/
+var _notifyProductId = null;
+
+function openNotifyModal(productId, title) {
+  _notifyProductId = productId;
+  var modal = document.getElementById('notifyModal');
+  var titleEl = document.getElementById('notifyModalTitle');
+  var emailEl = document.getElementById('notifyEmailInput');
+  var errEl   = document.getElementById('notifyError');
+  var sucEl   = document.getElementById('notifySuccess');
+  if (!modal) return;
+  if (titleEl) titleEl.textContent = title ? 'Notify me when "' + title + '" is back' : 'Back in stock alert';
+  if (emailEl) emailEl.value = '';
+  if (errEl)   errEl.style.display = 'none';
+  if (sucEl)   sucEl.style.display = 'none';
+  modal.style.display = 'flex';
+}
+
+(function initNotifyModal() {
+  document.addEventListener('DOMContentLoaded', function() {
+    var modal     = document.getElementById('notifyModal');
+    var closeBtn  = document.getElementById('notifyModalClose');
+    var submitBtn = document.getElementById('notifySubmitBtn');
+    if (!modal) return;
+
+    function closeNotify() { modal.style.display = 'none'; _notifyProductId = null; }
+    if (closeBtn) closeBtn.addEventListener('click', closeNotify);
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeNotify(); });
+
+    if (submitBtn) {
+      submitBtn.addEventListener('click', async function() {
+        var email = (document.getElementById('notifyEmailInput') || {}).value;
+        var errEl = document.getElementById('notifyError');
+        var sucEl = document.getElementById('notifySuccess');
+        if (!email || !email.includes('@')) {
+          if (errEl) { errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; }
+          return;
+        }
+        if (!_notifyProductId) { closeNotify(); return; }
+        submitBtn.disabled = true; submitBtn.textContent = '…';
+        try {
+          if (window.supabase) {
+            await window.supabase.from('stock_alerts').insert({ product_id: _notifyProductId, email: email.trim().toLowerCase() });
+          }
+          if (sucEl) sucEl.style.display = 'block';
+          if (errEl) errEl.style.display = 'none';
+          setTimeout(closeNotify, 2000);
+        } catch(err) {
+          if (errEl) { errEl.textContent = 'Something went wrong. Please try again.'; errEl.style.display = 'block'; }
+        } finally {
+          submitBtn.disabled = false; submitBtn.textContent = 'Notify Me';
+        }
+      });
+    }
+  });
+})();
+
+// Global click delegation for notify-me-btn on product cards
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('.notify-me-btn');
+  if (btn) {
+    e.stopPropagation();
+    openNotifyModal(btn.dataset.id, btn.dataset.title);
+  }
+});
+
+/********************
  * Filtering / Sorting (updated for new price filters)
  ********************/
 function applyFilters(){
@@ -2556,10 +2637,11 @@ function makeCardHTML(p){
   
   const favCount = Number(p.favourite_count || 0);
   const isServiceCard = p.listing_type === 'service';
-  const stockText = isServiceCard ? '' : (totalStock > 0 ? `• ${totalStock} left` : '• Out of stock');
+  const stockText = isServiceCard ? '' : (totalStock > 0 ? `• ${totalStock} left` : '');
   return `<div class="product-card fade-up" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${p.title}">
       <div class="badges">
+        ${(window._sponsoredProductIds && window._sponsoredProductIds.has(p.id)) ? '<span class="badge" style="background:#ea580c">Sponsored</span>' : ''}
         ${isServiceCard ? '<span class="badge" style="background:#7c3aed">🔧 Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${p.badge}</span>`:'')}
         ${isOnSale && !p.badge && !isServiceCard ? '<span class="badge sale">Sale</span>' : ''}
       </div>
@@ -2578,7 +2660,8 @@ function makeCardHTML(p){
           ${format(displayPrice)}
         </div>
       </div>
-      <div class="controls">
+      ${!isServiceCard && totalStock <= 0 ? `<button class="notify-me-btn" data-id="${p.id}" data-title="${p.title.replace(/"/g,'&quot;')}" style="width:100%;margin-top:6px;padding:7px;background:#fff;border:1px solid #d1d5db;border-radius:999px;font-size:12px;font-weight:600;color:#374151;cursor:pointer">🔔 Notify Me</button>` : ''}
+      <div class="controls"${(!isServiceCard && totalStock <= 0) ? ' style="display:none"' : ''}>
         ${isServiceCard ? '' : `<select class="size-select">${(p.size||['M']).map(s=>`<option>${s}</option>`).join('')}</select>`}
         <select class="qty"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
         <button class="add-btn" data-id="${p.id}">Add</button>
@@ -2597,7 +2680,14 @@ function renderAll(products){
   const userCats = getUserPreferenceCategories();
 
   // helpers
-  function cards(list, minW){ return list.map(p=>`<div style="min-width:${minW||180}px;max-width:${minW||180}px">${makeCardHTML(p)}</div>`).join(''); }
+  function pinSponsored(list) {
+    var ids = window._sponsoredProductIds || new Set();
+    if (!ids.size) return list;
+    var sp   = list.filter(function(p){ return ids.has(p.id); });
+    var rest = list.filter(function(p){ return !ids.has(p.id); });
+    return sp.concat(rest);
+  }
+  function cards(list, minW){ return pinSponsored(list).map(p=>`<div style="min-width:${minW||180}px;max-width:${minW||180}px">${makeCardHTML(p)}</div>`).join(''); }
   function showSection(id, has){ const el=document.getElementById(id); if(el) el.style.display = has ? '' : 'none'; }
   function scored(list, opts){ return list.slice().sort(function(a,b){ return computeScore(b, opts||{}) - computeScore(a, opts||{}); }); }
 

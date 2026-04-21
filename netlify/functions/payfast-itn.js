@@ -196,6 +196,12 @@ exports.handler = async function(event, context) {
                 await activateSellerEnrollment(supabase, pfData);
             }
 
+            // ── Ad campaign activation ─────────────────────────────────────
+            // custom_str1 = 'ad_campaign', custom_str2 = campaign.id
+            if (pfData.custom_str1 === 'ad_campaign' && pfData.custom_str2) {
+                await activateAdCampaign(supabase, pfData);
+            }
+
         } else if (pfData.payment_status === 'CANCELLED') {
             const { error } = await supabase
                 .from('orders')
@@ -1096,5 +1102,41 @@ async function sendAdminOrderNotification(supabase, order, pfData) {
         }
     } catch (e) {
         console.error('ITN admin notify: error', e);
+    }
+}
+
+// ── Ad campaign activation ────────────────────────────────────────────────────
+async function activateAdCampaign(supabase, pfData) {
+    const campaignId = pfData.custom_str2;
+    try {
+        const { data: campaign } = await supabase
+            .from('ad_campaigns')
+            .select('id, type, amount_paid')
+            .eq('id', campaignId)
+            .maybeSingle();
+
+        if (!campaign) {
+            console.warn('ITN ad_campaign: campaign not found', campaignId);
+            return;
+        }
+
+        const pricePerWeek = { sponsored_product: 50, featured_shop: 150, hero_banner: 300 }[campaign.type] || 50;
+        const weeks = Math.max(1, Math.round(Number(campaign.amount_paid) / pricePerWeek));
+        const now   = new Date();
+        const ends  = new Date(now.getTime() + weeks * 7 * 24 * 3600 * 1000);
+
+        // Hero banners require admin approval before going live
+        const newStatus = campaign.type === 'hero_banner' ? 'pending_review' : 'active';
+
+        await supabase.from('ad_campaigns').update({
+            status:         newStatus,
+            payment_status: 'paid',
+            starts_at:      now.toISOString(),
+            ends_at:        ends.toISOString()
+        }).eq('id', campaignId);
+
+        console.log('ITN ad_campaign: activated', campaignId, 'type:', campaign.type, 'status:', newStatus, 'ends:', ends.toISOString());
+    } catch (e) {
+        console.error('ITN ad_campaign: activation error', e);
     }
 }

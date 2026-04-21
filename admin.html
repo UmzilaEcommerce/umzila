@@ -188,6 +188,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="seller-applications">🏪 Seller Applications</li>
           <li data-section="service-orders">🔧 Service Orders</li>
           <li data-section="product-reviews">🔍 Product Reviews</li>
+          <li data-section="ad-campaigns">📢 Ad Campaigns</li>
           <li data-section="settings">⚙️ Settings</li>
           <li id="lsLogout">🚪 Logout</li>
         </ul>
@@ -211,6 +212,12 @@ const supabaseClient = supabase.createClient(
           <div class="card" style="border-left:4px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
           <div class="card" style="border-left:4px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
           <div class="card" style="border-left:4px solid #6366f1"><h3>Carts with Items</h3><p id="kpiCarts">—</p></div>
+        </div>
+        <!-- KPI Row 3 — Revenue breakdown -->
+        <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:0">
+          <div class="card" style="border-left:4px solid #059669;background:#f0fdf4"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#059669">Product Sales</h3><p id="kpiProductRevenue" style="font-size:22px;font-weight:700;color:#059669">—</p></div>
+          <div class="card" style="border-left:4px solid #7c3aed;background:#f5f3ff"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">Enrollment Fees</h3><p id="kpiEnrollRevenue" style="font-size:22px;font-weight:700;color:#7c3aed">—</p></div>
+          <div class="card" style="border-left:4px solid #ea580c;background:#fff7ed"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#ea580c">Ad Revenue</h3><p id="kpiAdRevenue" style="font-size:22px;font-weight:700;color:#ea580c">—</p></div>
         </div>
 
         <!-- Charts row -->
@@ -513,6 +520,24 @@ const supabaseClient = supabase.createClient(
       </section>
 
       <!-- Settings -->
+      <!-- Ad Campaigns Panel -->
+      <section id="section-ad-campaigns" style="display:none">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <h2 style="margin:0">📢 Ad Campaigns</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn ad-filter-btn" data-status="" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">All</button>
+              <button class="btn ad-filter-btn" data-status="pending_review" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">Pending Review</button>
+              <button class="btn ad-filter-btn" data-status="active" style="background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">Active</button>
+              <button class="btn ad-filter-btn" data-status="expired" style="background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">Expired</button>
+            </div>
+          </div>
+          <div id="adCampaignsTable" style="overflow-x:auto">
+            <p style="color:#6b7280">Loading campaigns…</p>
+          </div>
+        </div>
+      </section>
+
       <section id="section-settings" style="display:none">
         <div style="display:flex;gap:18px">
           <div class="card" style="flex:1">
@@ -1537,7 +1562,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     settings: document.getElementById('section-settings'),
     'seller-applications': document.getElementById('section-seller-applications'),
     'service-orders': document.getElementById('section-service-orders'),
-    'product-reviews': document.getElementById('section-product-reviews')
+    'product-reviews': document.getElementById('section-product-reviews'),
+    'ad-campaigns': document.getElementById('section-ad-campaigns')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -1552,6 +1578,87 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(sections[s]) sections[s].style.display = 'block';
     });
   });
+  // ── Ad Campaigns ───────────────────────────────────────────────────────────
+  let adCampaignsLoaded = false;
+  async function loadAdCampaigns(statusFilter) {
+    const tableEl = document.getElementById('adCampaignsTable');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+    try {
+      const session = supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
+      const token   = session && session.access_token;
+      const url     = statusFilter ? `/.netlify/functions/admin-manage-ads?status=${statusFilter}` : '/.netlify/functions/admin-manage-ads';
+      const res     = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const data    = await res.json();
+      const camps   = data.campaigns || [];
+      if (!camps.length) { tableEl.innerHTML = '<p style="color:#6b7280">No campaigns found.</p>'; return; }
+
+      const typeLabel = { sponsored_product:'Sponsored Product', featured_shop:'Featured Shop', hero_banner:'Hero Banner' };
+      const statusBadge = s => {
+        const map = { pending_payment:'#f3f4f6|#374151', pending_review:'#fef3c7|#92400e', active:'#d1fae5|#065f46', expired:'#f3f4f6|#6b7280', rejected:'#fee2e2|#991b1b' };
+        const [bg, fg] = (map[s] || '#f3f4f6|#374151').split('|');
+        return `<span style="background:${bg};color:${fg};padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600">${s}</span>`;
+      };
+
+      tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb">
+          <th style="padding:8px 12px">Type</th><th style="padding:8px 12px">Shop</th>
+          <th style="padding:8px 12px">Status</th><th style="padding:8px 12px">Amount</th>
+          <th style="padding:8px 12px">Starts</th><th style="padding:8px 12px">Ends</th>
+          <th style="padding:8px 12px">Actions</th>
+        </tr></thead>
+        <tbody>${camps.map(c => {
+          const shop = c.sellers && c.sellers.shop_name ? c.sellers.shop_name : '—';
+          const fmtDate = d => d ? new Date(d).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
+          const imgPreview = c.type === 'hero_banner' && c.image_url ? `<a href="${c.image_url}" target="_blank" style="font-size:11px;color:#0a2f66">View image</a>` : '';
+          const actions = c.status === 'pending_review'
+            ? `<button class="ad-action-btn" data-id="${c.id}" data-action="approve" style="background:#059669;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;margin-right:4px">Approve</button>
+               <button class="ad-action-btn" data-id="${c.id}" data-action="reject"  style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px">Reject</button>`
+            : '—';
+          return `<tr style="border-bottom:1px solid #f0f0f5">
+            <td style="padding:10px 12px">${typeLabel[c.type] || c.type}</td>
+            <td style="padding:10px 12px">${shop}</td>
+            <td style="padding:10px 12px">${statusBadge(c.status)}<br>${imgPreview}</td>
+            <td style="padding:10px 12px">R${Number(c.amount_paid).toFixed(2)}</td>
+            <td style="padding:10px 12px">${fmtDate(c.starts_at)}</td>
+            <td style="padding:10px 12px">${fmtDate(c.ends_at)}</td>
+            <td style="padding:10px 12px">${actions}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+
+      // Wire action buttons
+      tableEl.querySelectorAll('.ad-action-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const id = this.dataset.id; const action = this.dataset.action;
+          this.disabled = true; this.textContent = '…';
+          const r = await fetch('/.netlify/functions/admin-manage-ads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ campaign_id: id, action })
+          });
+          if (r.ok) { loadAdCampaigns(statusFilter); }
+          else { this.disabled = false; this.textContent = action === 'approve' ? 'Approve' : 'Reject'; alert('Action failed'); }
+        });
+      });
+    } catch (e) {
+      console.error('loadAdCampaigns error', e);
+      tableEl.innerHTML = '<p style="color:#dc2626">Failed to load campaigns.</p>';
+    }
+  }
+
+  document.querySelector('[data-section="ad-campaigns"]').addEventListener('click', () => {
+    if (!adCampaignsLoaded) { adCampaignsLoaded = true; loadAdCampaigns(''); }
+  });
+
+  document.querySelectorAll('.ad-filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.ad-filter-btn').forEach(b => b.style.fontWeight = '');
+      this.style.fontWeight = '700';
+      loadAdCampaigns(this.dataset.status);
+    });
+  });
+
   // Load intelligence dashboard when tab is clicked
   document.querySelector('[data-section="intelligence"]').addEventListener('click', () => {
     if (typeof intelLoaded === 'undefined') return;
@@ -1772,11 +1879,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       ]);
 
       const el = id => document.getElementById(id);
-      if (el('kpiRevenue'))    el('kpiRevenue').textContent    = fmt(overview.totalRevenue || 0);
-      if (el('kpiOrders'))     el('kpiOrders').textContent     = overview.totalOrders  || 0;
-      if (el('kpiSellers'))    el('kpiSellers').textContent    = overview.activeSellers || 0;
-      if (el('kpiFavourites')) el('kpiFavourites').textContent = (overview.totalFavourites || 0).toLocaleString();
-      if (el('kpiCarts'))      el('kpiCarts').textContent      = (overview.cartsWithItems || 0).toLocaleString();
+      if (el('kpiRevenue'))        el('kpiRevenue').textContent        = fmt(overview.totalRevenue || 0);
+      if (el('kpiOrders'))         el('kpiOrders').textContent         = overview.totalOrders  || 0;
+      if (el('kpiSellers'))        el('kpiSellers').textContent        = overview.activeSellers || 0;
+      if (el('kpiFavourites'))     el('kpiFavourites').textContent     = (overview.totalFavourites || 0).toLocaleString();
+      if (el('kpiCarts'))          el('kpiCarts').textContent          = (overview.cartsWithItems || 0).toLocaleString();
+      if (el('kpiProductRevenue')) el('kpiProductRevenue').textContent = fmt(overview.productRevenue || 0);
+      if (el('kpiEnrollRevenue'))  el('kpiEnrollRevenue').textContent  = fmt(overview.enrollmentRevenue || 0);
+      if (el('kpiAdRevenue'))      el('kpiAdRevenue').textContent      = fmt(overview.adRevenue || 0);
 
       // Revenue line chart
       const revDays = Object.keys(trends.dailyRevenue || {}).sort();

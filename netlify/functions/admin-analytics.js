@@ -83,30 +83,41 @@ async function getOverview(admin) {
     { count: activeSellers },
     { count: totalUsers },
     { data: favSum },
-    { data: carts }
+    { data: carts },
+    { data: adCampaigns }
   ] = await Promise.all([
-    admin.from('orders').select('total, order_status').eq('order_status', 'paid'),
+    admin.from('orders').select('total, payment_status, label').eq('payment_status', 'paid'),
     admin.from('products').select('*', { count: 'exact', head: true }).eq('visible', true),
     admin.from('sellers').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     admin.from('profiles').select('*', { count: 'exact', head: true }),
     admin.from('products').select('favourite_count').not('favourite_count', 'is', null),
-    admin.from('carts').select('items')
+    admin.from('carts').select('items'),
+    admin.from('ad_campaigns').select('amount_paid').eq('payment_status', 'paid')
   ]);
 
-  const paidOrders = orders || [];
-  const totalRevenue = paidOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const paidOrders        = orders || [];
+  const productSales      = paidOrders.filter(o => o.label !== 'seller_enrollment');
+  const enrollmentSales   = paidOrders.filter(o => o.label === 'seller_enrollment');
+  const productRevenue    = productSales.reduce((s, o)   => s + (Number(o.total)       || 0), 0);
+  const enrollmentRevenue = enrollmentSales.reduce((s, o) => s + (Number(o.total)       || 0), 0);
+  const adRevenue         = (adCampaigns || []).reduce((s, c) => s + (Number(c.amount_paid) || 0), 0);
+  const totalRevenue      = productRevenue + enrollmentRevenue + adRevenue;
+
   const totalFavourites = (favSum || []).reduce((s, p) => s + (Number(p.favourite_count) || 0), 0);
-  const cartsWithItems = (carts || []).filter(c => Array.isArray(c.items) && c.items.length > 0).length;
+  const cartsWithItems  = (carts || []).filter(c => Array.isArray(c.items) && c.items.length > 0).length;
 
   return {
-    totalRevenue: Math.round(totalRevenue * 100) / 100,
-    totalOrders: paidOrders.length,
-    totalProducts: productCount || 0,
-    activeSellers: activeSellers || 0,
-    totalUsers: totalUsers || 0,
+    totalRevenue:       Math.round(totalRevenue       * 100) / 100,
+    productRevenue:     Math.round(productRevenue     * 100) / 100,
+    enrollmentRevenue:  Math.round(enrollmentRevenue  * 100) / 100,
+    adRevenue:          Math.round(adRevenue          * 100) / 100,
+    totalOrders:        productSales.length,
+    totalProducts:      productCount || 0,
+    activeSellers:      activeSellers || 0,
+    totalUsers:         totalUsers || 0,
     totalFavourites,
     cartsWithItems,
-    avgOrderValue: paidOrders.length ? Math.round((totalRevenue / paidOrders.length) * 100) / 100 : 0
+    avgOrderValue: productSales.length ? Math.round((productRevenue / productSales.length) * 100) / 100 : 0
   };
 }
 
@@ -194,7 +205,7 @@ async function getSellerIntelligence(admin) {
   const [{ data: sellers }, { data: products }, { data: orders }, { data: clickEvents }] = await Promise.all([
     admin.from('sellers').select('id, shop_name, status').eq('status', 'active').limit(100),
     admin.from('products').select('id, seller_id, favourite_count, name').limit(2000),
-    admin.from('orders').select('items, total, order_status').eq('order_status', 'paid').limit(1000),
+    admin.from('orders').select('items, total, payment_status').eq('payment_status', 'paid').limit(1000),
     admin.from('user_events')
       .select('product_id')
       .eq('event_type', 'product_click')
@@ -335,8 +346,8 @@ async function getTrendsData(admin) {
 
   const [{ data: orders }, { data: events }] = await Promise.all([
     admin.from('orders')
-      .select('created_at, total, order_status')
-      .eq('order_status', 'paid')
+      .select('created_at, total, payment_status')
+      .eq('payment_status', 'paid')
       .gte('created_at', since)
       .order('created_at', { ascending: true })
       .limit(2000),

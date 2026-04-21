@@ -286,6 +286,20 @@
     <a class="sh-back-link" href="index.html">← Back to Umzila</a>
   </div>
 
+  <!-- Notify Me modal (back-in-stock) -->
+  <div id="shNotifyModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;width:90%;margin:auto;position:relative">
+      <button id="shNotifyClose" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
+      <div style="font-size:22px;margin-bottom:8px">🔔</div>
+      <h3 style="margin:0 0 6px;font-size:16px" id="shNotifyTitle">Back in stock alert</h3>
+      <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Enter your email and we'll notify you the moment this is available again.</p>
+      <input type="email" id="shNotifyEmail" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:10px">
+      <div id="shNotifyError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px"></div>
+      <button id="shNotifySubmit" style="width:100%;background:#0a2f66;color:#fff;border:none;padding:11px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer">Notify Me</button>
+      <div id="shNotifySuccess" style="display:none;color:#059669;font-size:13px;margin-top:10px;text-align:center">✓ You're on the list! We'll email you when it's back.</div>
+    </div>
+  </div>
+
   <!-- Product detail modal — same structure as index.html -->
   <div class="product-modal-overlay" id="shProdModal" role="dialog" aria-modal="true">
     <div class="product-modal">
@@ -507,7 +521,9 @@
       var primaryImg   = p.primary_image || svgPlaceholder(p.title, 400, 400);
       var sizes        = (p.size && p.size.length) ? p.size : ['S','M','L','XL'];
       var sizeOpts     = sizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
-      var badgeHtml    = (isOnSale || p.badge) ? '<div class="sh-card-badge">' + escHtml(p.badge || 'Sale') + '</div>' : '';
+      var isSponsored  = (window._sponsoredIds || new Set()).has(p.id);
+      var badgeHtml    = (isSponsored ? '<div class="sh-card-badge" style="background:#ea580c">Sponsored</div>' : '') +
+                         ((isOnSale || p.badge) ? '<div class="sh-card-badge">' + escHtml(p.badge || 'Sale') + '</div>' : '');
       var priceHtml    = (isOnSale && p.price)
         ? '<span class="orig">' + fmt(p.price) + '</span><span class="sale">' + fmt(displayPrice) + '</span>'
         : fmt(displayPrice);
@@ -666,6 +682,7 @@
           '</div></div>' +
           (full.stock < 1 ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Out of stock</div>' :
             (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
+          (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="width:100%;padding:11px;background:#fff;border:1px solid #d1d5db;border-radius:999px;font-size:14px;font-weight:600;color:#374151;cursor:pointer;margin-bottom:8px">🔔 Notify Me</button>' : '') +
           '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid #d9d9df;border-radius:999px;background:#fff;color:#0a2f66;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s">🔗 Copy Link</button>' +
           '<button class="product-modal-add-to-cart" id="sh-modal-add-btn"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
           (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
@@ -770,6 +787,51 @@
       var overlay = document.getElementById('shProdModal');
       document.getElementById('shModalClose').addEventListener('click', closeProductModal);
       overlay.addEventListener('click', function(e) { if (e.target === overlay) closeProductModal(); });
+
+      /* ── Notify Me modal (shop page) ── */
+      var shNotifyModal   = document.getElementById('shNotifyModal');
+      var shNotifyClose   = document.getElementById('shNotifyClose');
+      var shNotifySubmit  = document.getElementById('shNotifySubmit');
+      var shNotifyProdId  = null;
+
+      function openShNotify(productId, title) {
+        shNotifyProdId = productId;
+        var titleEl = document.getElementById('shNotifyTitle');
+        if (titleEl) titleEl.textContent = title ? 'Notify me when "' + title + '" is back' : 'Back in stock alert';
+        document.getElementById('shNotifyEmail').value = '';
+        document.getElementById('shNotifyError').style.display = 'none';
+        document.getElementById('shNotifySuccess').style.display = 'none';
+        shNotifyModal.style.display = 'flex';
+      }
+      function closeShNotify() { shNotifyModal.style.display = 'none'; shNotifyProdId = null; }
+      if (shNotifyClose) shNotifyClose.addEventListener('click', closeShNotify);
+      shNotifyModal.addEventListener('click', function(e){ if (e.target === shNotifyModal) closeShNotify(); });
+
+      if (shNotifySubmit) {
+        shNotifySubmit.addEventListener('click', async function() {
+          var email = document.getElementById('shNotifyEmail').value.trim();
+          var errEl = document.getElementById('shNotifyError');
+          if (!email || !email.includes('@')) {
+            errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; return;
+          }
+          shNotifySubmit.disabled = true; shNotifySubmit.textContent = '…';
+          try {
+            if (window.supabase && shNotifyProdId) {
+              await window.supabase.from('stock_alerts').insert({ product_id: shNotifyProdId, email: email.toLowerCase() });
+            }
+            document.getElementById('shNotifySuccess').style.display = 'block';
+            errEl.style.display = 'none';
+            setTimeout(closeShNotify, 2000);
+          } catch(e) { errEl.textContent = 'Something went wrong. Try again.'; errEl.style.display = 'block'; }
+          finally { shNotifySubmit.disabled = false; shNotifySubmit.textContent = 'Notify Me'; }
+        });
+      }
+
+      // Delegate clicks on notify-me-btn inside the product modal content
+      document.getElementById('shModalContent').addEventListener('click', function(e) {
+        var btn = e.target.closest('.notify-me-btn');
+        if (btn) openShNotify(btn.dataset.id, btn.dataset.title);
+      });
     });
 
     /* ─────────────────────────────────────────
@@ -935,7 +997,10 @@
         noProds.style.display = '';
       } else {
         noProds.style.display = 'none';
-        grid.innerHTML = filtered.map(makeShopCard).join('');
+        var sponsoredIds = window._sponsoredIds || new Set();
+        var sponsored = filtered.filter(function(p){ return sponsoredIds.has(p.id); });
+        var rest      = filtered.filter(function(p){ return !sponsoredIds.has(p.id); });
+        grid.innerHTML = sponsored.concat(rest).map(makeShopCard).join('');
         attachCardListeners();
       }
     }
@@ -1043,6 +1108,13 @@
 
       allProducts = prodRes.data.map(function(row){ return mapProduct(row, seller); });
       document.getElementById('shItemCount').textContent = '(' + allProducts.length + ')';
+
+      /* Load sponsored product IDs for boosting */
+      sb.from('ad_campaigns')
+        .select('product_id')
+        .eq('type', 'sponsored_product').eq('status', 'active')
+        .gt('ends_at', new Date().toISOString())
+        .then(function(res) { window._sponsoredIds = new Set((res.data || []).map(function(c){ return c.product_id; })); filterAndRender(); });
 
       /* Category dropdown */
       var cats = [];
