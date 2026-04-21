@@ -1136,6 +1136,13 @@ async function loadProducts() {
     state.products = filtered;
     window._allProducts = filtered; // expose for back button
     applyFilters();
+
+    /* Auto-open product modal from URL ?product= param */
+    var productParam = new URLSearchParams(window.location.search).get('product');
+    if (productParam) {
+      var target = state.products.find(function(p){ return p.id === productParam; });
+      if (target) openProductModal(target.id);
+    }
     
   } catch (e) {
     console.warn('Error loading products:', e);
@@ -2978,7 +2985,8 @@ async function openProductModal(id) {
         ${bundleSuggestionHTML}
         
         <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}">Add to Cart</button>
-        
+        <button id="modal-share-btn" style="width:100%;padding:10px;border:1px solid #d9d9df;border-radius:999px;background:#fff;color:#0a2f66;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;transition:background 0.15s">🔗 Copy Link</button>
+
         <div class="product-modal-description">
           <h3>Description</h3>
           <div class="description-text ${hasLongDescription ? 'collapsed' : ''}" id="product-description">
@@ -3125,6 +3133,20 @@ function setupProductModalEvents(bundleProduct) {
   }
   if (document.querySelector('.color-option')) {
     document.querySelector('.color-option').classList.add('selected');
+  }
+
+  // Share / Copy Link
+  var shareBtn = document.getElementById('modal-share-btn');
+  if (shareBtn && currentModalProduct) {
+    shareBtn.addEventListener('click', function() {
+      var url = currentModalProduct.seller && currentModalProduct.seller.shop_name
+        ? window.location.origin + '/shop.html?shop=' + encodeURIComponent(currentModalProduct.seller.shop_name) + '&product=' + currentModalProduct.id
+        : window.location.origin + '/?product=' + currentModalProduct.id;
+      navigator.clipboard.writeText(url).then(function() {
+        shareBtn.textContent = '✓ Copied!';
+        setTimeout(function(){ shareBtn.textContent = '🔗 Copy Link'; }, 2000);
+      }).catch(function() { prompt('Copy this link:', url); });
+    });
   }
 }
 

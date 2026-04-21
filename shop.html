@@ -666,6 +666,7 @@
           '</div></div>' +
           (full.stock < 1 ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Out of stock</div>' :
             (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
+          '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid #d9d9df;border-radius:999px;background:#fff;color:#0a2f66;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s">🔗 Copy Link</button>' +
           '<button class="product-modal-add-to-cart" id="sh-modal-add-btn"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
           (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
             '<div class="description-text' + (hasLongDesc ? ' collapsed' : '') + '" id="sh-desc-text">' + escHtml(hasLongDesc ? shortDesc : full.desc) + '</div>' +
@@ -739,6 +740,21 @@
         addToCart(_modalProduct, size, qty, prefDelivery);
         closeProductModal();
       });
+
+      // Share / Copy Link
+      var shareBtn = document.getElementById('sh-share-btn');
+      if (shareBtn) {
+        shareBtn.addEventListener('click', function() {
+          var shopParam = full.seller && full.seller.shop_name
+            ? 'shop.html?shop=' + encodeURIComponent(full.seller.shop_name) + '&product=' + full.id
+            : '?product=' + full.id;
+          var url = window.location.origin + '/' + shopParam;
+          navigator.clipboard.writeText(url).then(function() {
+            shareBtn.textContent = '✓ Copied!';
+            setTimeout(function(){ shareBtn.textContent = '🔗 Copy Link'; }, 2000);
+          }).catch(function() { prompt('Copy this link:', url); });
+        });
+      }
 
       document.getElementById('shProdModal').classList.add('active');
       document.body.style.overflow = 'hidden';
@@ -1051,6 +1067,13 @@
       if (qParam) {
         var searchEl = document.getElementById('shSearch');
         if (searchEl) { searchEl.value = qParam; filterAndRender(); }
+      }
+
+      /* Auto-open product modal from URL ?product= param */
+      var productParam = new URLSearchParams(window.location.search).get('product');
+      if (productParam) {
+        var targetProduct = allProducts.find(function(p){ return p.id === productParam; });
+        if (targetProduct) openProductModal(targetProduct);
       }
     }
 
