@@ -6,98 +6,313 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="icon" href="umzila.webp" type="image/webp">
 <title>Admin Dashboard — Shop Control</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --primary:#0073e6; --secondary:#ff9900; --bg:#f3f4f6; --card:#ffffff; --text:#111827; --muted:#6b7280;
-    font-family:Inter, Arial, sans-serif;
+  /* ── Design Tokens ── */
+  :root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #eff6ff;
+    --secondary: #f97316;
+    --sidebar-bg: #0f172a;
+    --sidebar-w: 240px;
+    --sidebar-collapsed: 68px;
+    --bg: #f1f5f9;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --purple: #8b5cf6;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);height:100vh;overflow:hidden}
-  /* layout */
-  .app{display:grid;grid-template-columns:260px 1fr;min-height:100vh;transition:all .3s ease}
-  .app.collapsed{grid-template-columns:80px 1fr}
-  header{height:64px;background:#fff;display:flex;align-items:center;padding:0 20px;box-shadow:0 1px 0 rgba(0,0,0,0.04);position:fixed;left:0;right:0;top:0;z-index:10}
-  aside{padding-top:80px;background:transparent}
-  main{padding:88px 28px 28px;overflow:auto;height:100vh}
-  .sidebar-panel{background:var(--card);margin:16px;border-radius:12px;padding:12px;box-shadow:0 6px 16px rgba(2,6,23,0.06)}
-  .brand{font-weight:700;color:var(--primary)}
-  .menu{list-style:none;padding:0;margin:12px 0}
-  .menu li{padding:10px;border-radius:8px;cursor:pointer;color:#374151;margin-bottom:6px}
-  .menu li:hover{background:#f1f9ff;color:var(--primary)}
-  .search-box{display:flex;justify-content:center;flex:1}
-  .search-box input{width:560px;max-width:76%;padding:8px;border-radius:10px;border:1px solid #e6eef9}
-  .right-actions{display:flex;align-items:center;gap:8px}
-  .profile-pill{padding:8px 12px;border-radius:999px;border:1px solid #eef2ff;background:#fff;display:flex;gap:10px;align-items:center}
 
-  /* dashboard cards */
-  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
-  .card{background:var(--card);padding:16px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
-  .card h3{margin:0;font-size:14px;color:#374151}
-  .card p{margin:8px 0 0;font-weight:700;font-size:20px}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  /* product form & table */
-  .panel-form{display:flex;gap:18px;margin-bottom:18px}
-  .form{background:var(--card);padding:16px;border-radius:12px;flex:1;box-shadow:0 6px 16px rgba(2,6,23,0.03)}
-  .thumb{width:110px;height:110px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;border:1px dashed #e2e8f0}
-  .form input[type='text'], .form input[type='number'], .form select, .form textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #e6eef9;margin-top:6px}
-  .form label{display:block;font-size:13px;color:var(--muted);margin-top:8px}
-  .form .row{display:flex;gap:12px}
-  .small-btn{background:var(--primary);color:#fff;padding:8px 10px;border-radius:8px;border:0;cursor:pointer}
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: inherit;
+    overflow-x: hidden;
+  }
+  body { overflow: hidden; }
 
-  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:8px;overflow:hidden;box-shadow:0 6px 18px rgba(2,6,23,0.04)}
-  th,td{padding:10px;text-align:left;border-bottom:1px solid #eef2ff}
-  th{background:#f8fafc}
-  tr:hover td{background:#f1fbff}
-  .actions button{margin-right:6px;padding:6px 8px;border-radius:6px;border:0;cursor:pointer}
+  /* ── App Layout ── */
+  .app {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: 100vh;
+    transition: grid-template-columns 0.25s ease;
+  }
+  .app.collapsed { grid-template-columns: var(--sidebar-collapsed) 1fr; }
 
-  .tag-sale{background:var(--secondary);color:#fff;padding:4px 8px;border-radius:6px;font-size:12px}
+  /* ── Header ── */
+  header {
+    height: 64px;
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+    box-shadow: 0 1px 0 var(--border);
+    position: fixed;
+    left: 0; right: 0; top: 0;
+    z-index: 50;
+  }
+  #toggleSidebar {
+    width: 36px; height: 36px;
+    border: none; background: transparent; cursor: pointer;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px; color: var(--muted); flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+  #toggleSidebar:hover { background: var(--border); color: var(--text); }
 
-  /* modal & toasts */
-  .modal-backdrop{position:fixed;inset:0;background:rgba(2,6,23,0.35);display:none;align-items:center;justify-content:center;z-index:60}
-  .modal{background:#fff;padding:18px;border-radius:12px;max-width:520px;width:95%;box-shadow:0 12px 40px rgba(2,6,23,0.2)}
-  .toasts{position:fixed;top:16px;right:16px;z-index:70}
-  .toast{background:#111827;color:#fff;padding:8px 12px;border-radius:8px;margin-top:8px;opacity:0;transform:translateY(-6px);animation:toastIn .22s forwards}
-  @keyframes toastIn{to{opacity:1;transform:none}}
+  .header-brand {
+    font-weight: 800; font-size: 15px;
+    color: var(--primary); white-space: nowrap; letter-spacing: -0.2px;
+  }
 
-  /* responsiveness for desktop sizes */
-  @media (max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} .search-box input{max-width:60%} }
-  @media (max-width:760px){ .grid{grid-template-columns:repeat(1,1fr)} .search-box input{max-width:80%} }
+  .search-box { flex: 1; display: flex; justify-content: center; }
+  .search-box input {
+    width: 100%; max-width: 460px;
+    padding: 9px 16px 9px 38px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px; font-size: 13.5px;
+    background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") 12px center / 14px no-repeat;
+    outline: none; color: var(--text); font-family: inherit;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .search-box input:focus { border-color: var(--primary); background-color: #fff; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
 
-  /* sub-tabs */
-  .sub-tab-bar { display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid #e5e7eb }
-  .sub-tab { padding:10px 20px;border:none;border-bottom:3px solid transparent;background:transparent;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:-2px;transition:color .15s,border-color .15s }
-  .sub-tab.active { border-bottom-color:var(--primary);color:var(--primary) }
-  .sub-tab:hover { color:var(--primary) }
+  .right-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-  /* large detail modals */
-  .detail-modal-backdrop { position:fixed;inset:0;background:rgba(2,6,23,0.5);display:none;align-items:flex-start;justify-content:center;z-index:80;padding:16px;overflow-y:auto }
-  .detail-modal-backdrop.open { display:flex }
-  .detail-modal { background:#fff;border-radius:14px;width:100%;max-width:960px;margin:auto;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(2,6,23,0.25);overflow:hidden }
-  .detail-modal-header { padding:18px 22px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;flex-shrink:0 }
-  .detail-modal-header h3 { margin:0;font-size:17px }
-  .detail-modal-body { flex:1;padding:22px;overflow-y:auto;max-height:calc(92vh - 130px) }
-  .detail-modal-footer { padding:14px 22px;border-top:1px solid #e5e7eb;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;background:#fafafa }
-  .dm-close-btn { border:none;background:none;font-size:24px;cursor:pointer;color:#9ca3af;line-height:1;padding:0 4px }
-  .dm-close-btn:hover { color:#374151 }
+  .profile-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: 999px;
+    background: var(--primary-light); border: 1.5px solid #bfdbfe;
+    font-size: 13px; font-weight: 600; color: var(--primary-dark);
+    max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 
-  /* product review / app modal field groups */
-  .fg { margin-bottom:14px }
-  .fg label { display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px }
-  .fg input,.fg select,.fg textarea { width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;font-family:inherit }
-  .fg textarea { resize:vertical }
-  .fg-row { display:flex;gap:12px }
-  .fg-row .fg { flex:1;min-width:0 }
+  #logoutBtn {
+    padding: 8px 15px; border-radius: 9px;
+    border: 1.5px solid var(--border); background: #fff;
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+    transition: all 0.15s;
+  }
+  #logoutBtn:hover { border-color: var(--danger); color: var(--danger); background: #fff5f5; }
 
-  /* image gallery in product modal */
-  .pr-gallery-main { width:100%;max-height:260px;object-fit:contain;border-radius:10px;background:#f3f4f6;display:block;margin-bottom:10px }
-  .pr-gallery-strip { display:flex;gap:8px;flex-wrap:wrap;align-items:center }
-  .pr-gallery-thumb { width:68px;height:68px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;cursor:pointer;flex-shrink:0 }
-  .pr-gallery-thumb.active { border-color:var(--primary) }
-  .pr-upload-btn { width:68px;height:68px;border-radius:8px;border:2px dashed #d1d5db;display:flex;align-items:center;justify-content:center;font-size:26px;color:#9ca3af;cursor:pointer;flex-shrink:0 }
-  .pr-upload-btn:hover { border-color:var(--primary);color:var(--primary) }
+  /* ── Sidebar ── */
+  aside { padding-top: 64px; }
 
-  /* status badge */
-  .status-pill { display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em }
+  .sidebar-panel {
+    position: fixed; top: 64px; left: 0;
+    width: var(--sidebar-w); height: calc(100vh - 64px);
+    background: var(--sidebar-bg);
+    display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden;
+    transition: width 0.25s ease;
+    scrollbar-width: none;
+    box-shadow: 2px 0 16px rgba(0,0,0,0.12);
+  }
+  .sidebar-panel::-webkit-scrollbar { display: none; }
+  .app.collapsed .sidebar-panel { width: var(--sidebar-collapsed); }
+
+  .sidebar-logo-area {
+    padding: 18px 16px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    flex-shrink: 0;
+  }
+  .brand { font-weight: 800; font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; letter-spacing: -0.2px; }
+  .brand-sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px; white-space: nowrap; overflow: hidden; }
+  .app.collapsed .brand, .app.collapsed .brand-sub { opacity: 0; pointer-events: none; }
+
+  .menu { list-style: none; padding: 10px 10px; margin: 0; flex: 1; }
+  .menu li {
+    display: flex; align-items: center; gap: 11px;
+    padding: 10px 13px; border-radius: 10px; cursor: pointer;
+    color: rgba(255,255,255,0.6); font-size: 13.5px; font-weight: 500;
+    margin-bottom: 2px; overflow: hidden; white-space: nowrap;
+    transition: all 0.15s; user-select: none;
+  }
+  .menu li:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .menu li.active { background: rgba(37,99,235,0.22); color: #93c5fd; font-weight: 700; }
+  .menu-icon { font-size: 15px; flex-shrink: 0; }
+  .menu-label { overflow: hidden; text-overflow: ellipsis; transition: opacity 0.2s; }
+  .app.collapsed .menu-label { opacity: 0; width: 0; }
+
+  /* ── Main ── */
+  main { padding: 88px 26px 32px; overflow-y: auto; height: 100vh; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card); border-radius: 14px; padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .card h3 { margin: 0; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .card p { margin: 8px 0 0; font-size: 28px; font-weight: 800; color: var(--text); letter-spacing: -0.5px; }
+
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04); }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { background: #f8fafc; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f8fbff; }
+  .actions button {
+    padding: 5px 10px; border-radius: 7px;
+    border: 1.5px solid var(--border); cursor: pointer; font-size: 12px; font-weight: 600;
+    background: #fff; color: var(--text); margin-right: 4px; font-family: inherit;
+    transition: all 0.12s;
+  }
+  .actions button:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+  /* ── Forms ── */
+  .panel-form { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+  .form {
+    background: var(--card); padding: 22px; border-radius: 14px; flex: 1; min-width: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  }
+  .form label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-top: 14px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .form input[type='text'], .form input[type='number'], .form select, .form textarea {
+    width: 100%; padding: 9px 12px; border-radius: 9px;
+    border: 1.5px solid var(--border); font-size: 13.5px; outline: none;
+    background: #fff; color: var(--text); font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form input:focus, .form select:focus, .form textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.09); }
+  .form .row { display: flex; gap: 12px; }
+  .thumb { width: 100px; height: 100px; border-radius: 10px; background: var(--bg); display: flex; align-items: center; justify-content: center; border: 2px dashed var(--border); color: var(--muted); font-size: 12px; flex-shrink: 0; }
+
+  .small-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--primary); color: #fff; padding: 9px 16px;
+    border-radius: 9px; border: none; cursor: pointer;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+    transition: background 0.15s;
+  }
+  .small-btn:hover { background: var(--primary-dark); }
+
+  /* ── Tags / Badges ── */
+  .tag-sale { background: #fff7ed; color: #ea580c; border: 1px solid #fed7aa; padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+
+  /* ── Modal (small confirm) ── */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.5); backdrop-filter: blur(4px);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal {
+    background: #fff; padding: 26px; border-radius: 16px;
+    max-width: 480px; width: calc(100% - 32px);
+    box-shadow: 0 24px 64px rgba(15,23,42,0.28);
+  }
+
+  /* ── Toasts ── */
+  .toasts { position: fixed; top: 76px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+  .toast {
+    background: var(--sidebar-bg); color: #fff; padding: 12px 18px;
+    border-radius: 10px; font-size: 13.5px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.22); pointer-events: auto;
+    animation: toastIn 0.24s cubic-bezier(0.16,1,0.3,1) forwards;
+    max-width: 320px;
+  }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+
+  /* ── Sub-tabs ── */
+  .sub-tab-bar { display: flex; margin-bottom: 20px; border-bottom: 2px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  .sub-tab-bar::-webkit-scrollbar { display: none; }
+  .sub-tab { padding: 10px 18px; border: none; border-bottom: 2.5px solid transparent; background: transparent; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: -2px; white-space: nowrap; font-family: inherit; transition: all 0.15s; }
+  .sub-tab.active { border-bottom-color: var(--primary); color: var(--primary); }
+  .sub-tab:hover { color: var(--primary); }
+
+  /* ── Detail Modals ── */
+  .detail-modal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.5); backdrop-filter: blur(4px); display: none; align-items: flex-start; justify-content: center; z-index: 110; padding: 20px 16px; overflow-y: auto; }
+  .detail-modal-backdrop.open { display: flex; }
+  .detail-modal { background: #fff; border-radius: 18px; width: 100%; max-width: 960px; margin: auto; display: flex; flex-direction: column; box-shadow: 0 28px 80px rgba(15,23,42,0.28); overflow: hidden; }
+  .detail-modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; background: #fafbff; }
+  .detail-modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .detail-modal-body { flex: 1; padding: 24px; overflow-y: auto; max-height: calc(90vh - 140px); }
+  .detail-modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; flex-wrap: wrap; align-items: center; flex-shrink: 0; background: #fafbff; }
+  .dm-close-btn { border: none; background: none; font-size: 22px; cursor: pointer; color: var(--muted); line-height: 1; padding: 4px 8px; border-radius: 8px; transition: all 0.12s; }
+  .dm-close-btn:hover { background: var(--border); color: var(--text); }
+
+  /* ── Field Groups (modals) ── */
+  .fg { margin-bottom: 14px; }
+  .fg label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+  .fg input, .fg select, .fg textarea { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-size: 13.5px; font-family: inherit; outline: none; background: #fff; color: var(--text); transition: border-color 0.15s, box-shadow 0.15s; }
+  .fg input:focus, .fg select:focus, .fg textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.09); }
+  .fg textarea { resize: vertical; }
+  .fg-row { display: flex; gap: 12px; }
+  .fg-row .fg { flex: 1; min-width: 0; }
+
+  /* ── Image Gallery ── */
+  .pr-gallery-main { width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; background: var(--bg); display: block; margin-bottom: 12px; }
+  .pr-gallery-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pr-gallery-thumb { width: 68px; height: 68px; object-fit: cover; border-radius: 9px; border: 2.5px solid var(--border); cursor: pointer; flex-shrink: 0; transition: border-color 0.12s; }
+  .pr-gallery-thumb.active { border-color: var(--primary); }
+  .pr-upload-btn { width: 68px; height: 68px; border-radius: 9px; border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--muted); cursor: pointer; flex-shrink: 0; transition: all 0.12s; }
+  .pr-upload-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+  /* ── Status Pill ── */
+  .status-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* ── Generic btn (ad filters etc.) ── */
+  .btn { display: inline-flex; align-items: center; padding: 7px 14px; border-radius: 9px; cursor: pointer; font-size: 13px; font-weight: 600; border: 1.5px solid var(--border); background: #fff; color: var(--text); font-family: inherit; transition: all 0.12s; }
+  .btn:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* ── Mobile Overlay ── */
+  #sidebarOverlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 149; backdrop-filter: blur(2px); }
+  .sidebar-open #sidebarOverlay { display: block; }
+
+  /* ── Muted helper ── */
+  .muted { color: var(--muted); }
+
+  /* ── Section headings ── */
+  .section-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  .section-top h2, .section-top h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+
+  @media (max-width: 900px) {
+    .app, .app.collapsed { grid-template-columns: 0 1fr; }
+    aside { display: block; }
+    .sidebar-panel {
+      width: 260px !important;
+      transform: translateX(-100%);
+      transition: transform 0.28s cubic-bezier(0.16,1,0.3,1), width 0s;
+      z-index: 150;
+      box-shadow: 6px 0 32px rgba(0,0,0,0.35);
+    }
+    .sidebar-open .sidebar-panel { transform: translateX(0); }
+    main { padding: 80px 16px 28px; }
+    .header-brand { display: none; }
+    .profile-pill { display: none; }
+  }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    header { padding: 0 14px; gap: 10px; }
+    .search-box input { font-size: 13px; padding: 8px 12px 8px 34px; }
+    main { padding: 76px 12px 24px; }
+    .card { padding: 16px; }
+    .card p { font-size: 22px; }
+    .panel-form { flex-direction: column; }
+  }
+
+  @media (max-width: 420px) {
+    .grid { grid-template-columns: 1fr; }
+    #logoutBtn { display: none; }
+  }
 </style>
 
 <!-- Chart.js v4 -->
@@ -157,40 +372,39 @@ const supabaseClient = supabase.createClient(
 </head>
 <body>
   <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="sidebarOverlay"></div>
 
   <header>
-    <div style="display:flex;align-items:center;gap:12px;width:100%">
-      <button id="toggleSidebar" aria-label="Toggle sidebar" style="border:0;background:transparent;cursor:pointer;font-size:18px">☰</button>
-      <div class="brand" style="font-weight:700;color:var(--primary)">Admin Dashboard</div>
+    <button id="toggleSidebar" aria-label="Toggle sidebar">☰</button>
+    <div class="header-brand">Admin</div>
 
-      <div class="search-box"><input id="searchProducts" placeholder="Search products by name..." aria-label="Search products" /></div>
+    <div class="search-box">
+      <input id="searchProducts" placeholder="Search products…" aria-label="Search products" />
+    </div>
 
-      <div class="right-actions">
-        <div id="profileName" class="profile-pill">Admin</div>
-        <button id="logoutBtn" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Logout</button>
-      </div>
+    <div class="right-actions">
+      <div id="profileName" class="profile-pill">Admin</div>
+      <button id="logoutBtn">Logout</button>
     </div>
   </header>
 
   <div id="app" class="app" role="application">
     <aside>
       <div class="sidebar-panel" role="navigation" aria-label="Sidebar">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div class="brand">Shop Control</div>
-            <div style="font-size:12px;color:var(--muted)">Inventory & orders</div>
-          </div>
+        <div class="sidebar-logo-area">
+          <div class="brand">Umzila Admin</div>
+          <div class="brand-sub">Shop Control Panel</div>
         </div>
         <ul class="menu" aria-hidden="false">
-          <li data-section="dashboard">📊 Dashboard</li>
-          <li data-section="intelligence">🧠 Intelligence</li>
-          <li data-section="manage">📦 Manage Products</li>
-          <li data-section="seller-applications">🏪 Seller Applications</li>
-          <li data-section="service-orders">🔧 Service Orders</li>
-          <li data-section="product-reviews">🔍 Product Reviews</li>
-          <li data-section="ad-campaigns">📢 Ad Campaigns</li>
-          <li data-section="settings">⚙️ Settings</li>
-          <li id="lsLogout">🚪 Logout</li>
+          <li data-section="dashboard"><span class="menu-icon">📊</span><span class="menu-label">Dashboard</span></li>
+          <li data-section="intelligence"><span class="menu-icon">🧠</span><span class="menu-label">Intelligence</span></li>
+          <li data-section="manage"><span class="menu-icon">📦</span><span class="menu-label">Manage Products</span></li>
+          <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
+          <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
+          <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
+          <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
+          <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
+          <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
       </div>
     </aside>
@@ -199,45 +413,45 @@ const supabaseClient = supabase.createClient(
       <!-- Dashboard -->
       <section id="section-dashboard">
         <!-- KPI Row 1 -->
-        <div class="grid" style="grid-template-columns:repeat(4,1fr)">
-          <div class="card" style="border-left:4px solid #0073e6"><h3>Total Products</h3><p id="statTotal">0</p></div>
-          <div class="card" style="border-left:4px solid #ff9900"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
-          <div class="card" style="border-left:4px solid #ef4444"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
-          <div class="card" style="border-left:4px solid #8b5cf6"><h3>Pending Orders</h3><p id="statPending">0</p></div>
+        <div class="grid">
+          <div class="card" style="border-top:3px solid #2563eb"><h3>Total Products</h3><p id="statTotal">0</p></div>
+          <div class="card" style="border-top:3px solid #f97316"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
+          <div class="card" style="border-top:3px solid #ef4444"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
+          <div class="card" style="border-top:3px solid #8b5cf6"><h3>Pending Orders</h3><p id="statPending">0</p></div>
         </div>
-        <!-- KPI Row 2 (from Intelligence overview) -->
-        <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-top:0">
-          <div class="card" style="border-left:4px solid #10b981"><h3>Total Revenue</h3><p id="kpiRevenue">—</p></div>
-          <div class="card" style="border-left:4px solid #0ea5e9"><h3>Total Orders</h3><p id="kpiOrders">—</p></div>
-          <div class="card" style="border-left:4px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
-          <div class="card" style="border-left:4px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
-          <div class="card" style="border-left:4px solid #6366f1"><h3>Carts with Items</h3><p id="kpiCarts">—</p></div>
+        <!-- KPI Row 2 -->
+        <div class="grid" style="grid-template-columns:repeat(5,1fr)">
+          <div class="card" style="border-top:3px solid #10b981"><h3>Total Revenue</h3><p id="kpiRevenue" style="font-size:20px">—</p></div>
+          <div class="card" style="border-top:3px solid #0ea5e9"><h3>Total Orders</h3><p id="kpiOrders">—</p></div>
+          <div class="card" style="border-top:3px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
+          <div class="card" style="border-top:3px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
+          <div class="card" style="border-top:3px solid #6366f1"><h3>Carts w/ Items</h3><p id="kpiCarts">—</p></div>
         </div>
         <!-- KPI Row 3 — Revenue breakdown -->
-        <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:0">
-          <div class="card" style="border-left:4px solid #059669;background:#f0fdf4"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#059669">Product Sales</h3><p id="kpiProductRevenue" style="font-size:22px;font-weight:700;color:#059669">—</p></div>
-          <div class="card" style="border-left:4px solid #7c3aed;background:#f5f3ff"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#7c3aed">Enrollment Fees</h3><p id="kpiEnrollRevenue" style="font-size:22px;font-weight:700;color:#7c3aed">—</p></div>
-          <div class="card" style="border-left:4px solid #ea580c;background:#fff7ed"><h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#ea580c">Ad Revenue</h3><p id="kpiAdRevenue" style="font-size:22px;font-weight:700;color:#ea580c">—</p></div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="card" style="border-top:3px solid #059669;background:#f0fdf4"><h3 style="color:#059669">Product Sales</h3><p id="kpiProductRevenue" style="font-size:20px;color:#059669">—</p></div>
+          <div class="card" style="border-top:3px solid #7c3aed;background:#f5f3ff"><h3 style="color:#7c3aed">Enrollment Fees</h3><p id="kpiEnrollRevenue" style="font-size:20px;color:#7c3aed">—</p></div>
+          <div class="card" style="border-top:3px solid #ea580c;background:#fff7ed"><h3 style="color:#ea580c">Ad Revenue</h3><p id="kpiAdRevenue" style="font-size:20px;color:#ea580c">—</p></div>
         </div>
 
-        <!-- Charts row -->
-        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:16px">
-          <div class="card" style="padding:18px">
-            <h3 style="margin:0 0 12px">Revenue (last 30 days)</h3>
+        <!-- Charts -->
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px">
+          <div class="card">
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Revenue — last 30 days</h3>
             <canvas id="chartRevenue" height="100"></canvas>
           </div>
-          <div class="card" style="padding:18px">
-            <h3 style="margin:0 0 12px">Orders (last 30 days)</h3>
+          <div class="card">
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Orders — last 30 days</h3>
             <canvas id="chartOrders" height="100"></canvas>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-          <div class="card" style="padding:18px">
-            <h3 style="margin:0 0 12px">Top Categories by Favourites</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+          <div class="card">
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Top Categories by Favourites</h3>
             <canvas id="chartCatFav" height="140"></canvas>
           </div>
-          <div class="card" style="padding:18px">
-            <h3 style="margin:0 0 12px">Event Breakdown (30 days)</h3>
+          <div class="card">
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Event Breakdown (30 days)</h3>
             <canvas id="chartEvents" height="140"></canvas>
           </div>
         </div>
@@ -245,9 +459,10 @@ const supabaseClient = supabase.createClient(
 
       <!-- Manage Products -->
       <section id="section-manage" style="display:none">
+        <div class="section-top"><h2>📦 Manage Products</h2></div>
         <div class="panel-form">
           <div class="form" aria-labelledby="addProductTitle">
-            <h3 id="addProductTitle">Add New Product</h3>
+            <h3 id="addProductTitle" style="font-size:15px;font-weight:800;margin-bottom:4px">Add New Product</h3>
             <div style="display:flex;gap:12px;margin-top:8px">
               <div class="thumb" id="imgPreview">Preview</div>
               <div style="flex:1">
@@ -341,8 +556,8 @@ const supabaseClient = supabase.createClient(
 
       <!-- Intelligence Dashboard -->
       <section id="section-intelligence" style="display:none">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <h2 style="margin:0;font-size:20px">🧠 Intelligence Dashboard</h2>
+        <div class="section-top">
+          <h2>🧠 Intelligence</h2>
           <button id="refreshIntelligence" class="small-btn">↻ Refresh All</button>
         </div>
 
@@ -474,8 +689,8 @@ const supabaseClient = supabase.createClient(
 
       <!-- Seller Applications -->
       <section id="section-seller-applications" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h3 style="margin:0">Seller Applications</h3>
+        <div class="section-top">
+          <h2>🏪 Seller Applications</h2>
           <button id="refreshApplicationsBtn" class="small-btn">↻ Refresh</button>
         </div>
         <div class="sub-tab-bar">
@@ -492,8 +707,8 @@ const supabaseClient = supabase.createClient(
 
       <!-- Service Orders -->
       <section id="section-service-orders" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h3 style="margin:0">🔧 Service Orders</h3>
+        <div class="section-top">
+          <h2>🔧 Service Orders</h2>
           <button id="refreshServiceOrdersBtn" class="small-btn" onclick="loadAdminServiceOrders()">↻ Refresh</button>
         </div>
         <div id="adminServiceOrdersLoading" style="color:var(--muted);padding:20px">Loading…</div>
@@ -503,8 +718,8 @@ const supabaseClient = supabase.createClient(
 
       <!-- Product Reviews -->
       <section id="section-product-reviews" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <h3 style="margin:0">Product Reviews</h3>
+        <div class="section-top">
+          <h2>🔍 Product Reviews</h2>
           <button id="refreshProductReviewsBtn" class="small-btn">↻ Refresh</button>
         </div>
         <div class="sub-tab-bar">
@@ -519,12 +734,11 @@ const supabaseClient = supabase.createClient(
         </div>
       </section>
 
-      <!-- Settings -->
       <!-- Ad Campaigns Panel -->
       <section id="section-ad-campaigns" style="display:none">
         <div class="card">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-            <h2 style="margin:0">📢 Ad Campaigns</h2>
+          <div class="section-top">
+            <h2>📢 Ad Campaigns</h2>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn ad-filter-btn" data-status="" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">All</button>
               <button class="btn ad-filter-btn" data-status="pending_review" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px">Pending Review</button>
@@ -538,22 +752,27 @@ const supabaseClient = supabase.createClient(
         </div>
       </section>
 
+      <!-- Settings -->
       <section id="section-settings" style="display:none">
-        <div style="display:flex;gap:18px">
-          <div class="card" style="flex:1">
-            <h3>Change Password</h3>
-            <label>Current Password</label><input type="password" id="curPass" />
-            <label>New Password</label><input type="password" id="newPass" />
-            <label>Confirm New</label><input type="password" id="confirmPass" />
-            <button class="small-btn" style="margin-top:8px" onclick="alert('Dummy only — no-op')">Change (dummy)</button>
+        <div class="section-top"><h2>⚙️ Settings</h2></div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div class="card" style="flex:1;min-width:260px">
+            <h3 style="font-size:14px;font-weight:700;color:var(--text);text-transform:none;margin-bottom:16px">Change Password</h3>
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Current Password</label>
+            <input type="password" id="curPass" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;margin-bottom:10px;font-family:inherit;outline:none" />
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">New Password</label>
+            <input type="password" id="newPass" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;margin-bottom:10px;font-family:inherit;outline:none" />
+            <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Confirm New</label>
+            <input type="password" id="confirmPass" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;margin-bottom:14px;font-family:inherit;outline:none" />
+            <button class="small-btn" onclick="alert('Dummy only — no-op')">Change Password</button>
           </div>
 
-          <div class="card" style="width:300px">
-            <h3>Inventory</h3>
-            <button id="exportInv" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Export Inventory (JSON)</button>
-            <div style="margin-top:12px">
-              <h4>Users</h4>
-              <button id="addDummyUser" class="small-btn" style="background:#fff;color:var(--primary);border:1px solid #e6eef9">Add Dummy User</button>
+          <div class="card" style="min-width:240px;max-width:320px">
+            <h3 style="font-size:14px;font-weight:700;color:var(--text);text-transform:none;margin-bottom:16px">Inventory</h3>
+            <button id="exportInv" class="btn" style="width:100%;justify-content:center;margin-bottom:10px">📥 Export Inventory (JSON)</button>
+            <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+              <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Users</div>
+              <button id="addDummyUser" class="btn" style="width:100%;justify-content:center">Add Dummy User</button>
             </div>
           </div>
         </div>
@@ -565,9 +784,9 @@ const supabaseClient = supabase.createClient(
   <div id="modalWrap" class="modal-backdrop" role="dialog" aria-modal="true">
     <div class="modal">
       <div id="modalContent"></div>
-      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
-        <button id="modalCancel">Cancel</button>
-        <button id="modalConfirm" style="background:var(--primary);color:#fff;border:0;padding:8px 10px;border-radius:8px">Confirm</button>
+      <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+        <button id="modalCancel" class="btn">Cancel</button>
+        <button id="modalConfirm" class="small-btn">Confirm</button>
       </div>
     </div>
   </div>
@@ -1552,8 +1771,33 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     await createProductFromForm();
   });
 
-  // change sidebar/nav behavior (unchanged)
-  document.getElementById('toggleSidebar').addEventListener('click', ()=>app.classList.toggle('collapsed'));
+  // Sidebar toggle — desktop: collapse/expand; mobile: drawer open/close
+  document.getElementById('toggleSidebar').addEventListener('click', () => {
+    const isMobile = window.innerWidth <= 900;
+    if (isMobile) {
+      document.body.classList.toggle('sidebar-open');
+    } else {
+      app.classList.toggle('collapsed');
+    }
+  });
+  // Mobile overlay closes sidebar
+  document.getElementById('sidebarOverlay').addEventListener('click', () => {
+    document.body.classList.remove('sidebar-open');
+  });
+  // Close mobile sidebar on nav item click
+  document.querySelectorAll('.menu li').forEach(li => {
+    li.addEventListener('click', () => {
+      if (window.innerWidth <= 900) document.body.classList.remove('sidebar-open');
+    }, true);
+  });
+  // Highlight active menu item
+  document.querySelectorAll('.menu li[data-section]').forEach(li => {
+    li.addEventListener('click', () => {
+      document.querySelectorAll('.menu li').forEach(x => x.classList.remove('active'));
+      li.classList.add('active');
+    }, true);
+  });
+  document.querySelector('.menu li[data-section="dashboard"]')?.classList.add('active');
   const menuItems = document.querySelectorAll('.menu li');
   const sections = {
     dashboard: document.getElementById('section-dashboard'),

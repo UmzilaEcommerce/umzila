@@ -251,13 +251,13 @@
       <div class="modal-body">
         <p><strong>Last Updated:</strong> <em>December 2025</em></p>
 
-        <p>Welcome to <strong>Umzila.store</strong>, a retail and wholesale marketplace operated through a partnership between Fynbos Labs, Traders Choice, and Nectelm (Pty) Ltd. These Terms set out the rules and responsibilities that apply when you use our platform. By using Umzila.store you agree to be bound by these Terms.</p>
+        <p>Welcome to <strong>Umzila.store</strong>, a retail and wholesale marketplace operated through a partnership between Fynbos Labs and Nectelm (Pty) Ltd. These Terms set out the rules and responsibilities that apply when you use our platform. By using Umzila.store you agree to be bound by these Terms.</p>
 
         <h3>1. Key Definitions</h3>
         <ul>
           <li><strong>Platform / Website</strong>: Umzila.store and related online services.</li>
           <li><strong>User / Customer</strong>: Anyone browsing, registering, or purchasing on the platform.</li>
-          <li><strong>Partners</strong>: Fynbos Labs, Traders Choice, Nectelm (PTY) Ltd.</li>
+          <li><strong>Partners</strong>: Fynbos Labs, Nectelm (PTY) Ltd.</li>
           <li><strong>Product</strong>: Any item offered for sale on Umzila.store.</li>
         </ul>
 
@@ -365,7 +365,7 @@
     const header=document.getElementById('siteHeader');const changePoint=36;
     window.addEventListener('scroll',()=>{if(window.scrollY>changePoint){header.classList.remove('transparent');header.classList.add('solid')}else{header.classList.add('transparent');header.classList.remove('solid')}});
 
-    const companies=['4.webp','1.webp','2.webp'];
+    const companies=['4.webp','1.webp'];
     const carouselInner=document.getElementById('carouselInner');
     function makeLogoItem(src){const el=document.createElement('div');el.className='logo-item';const img=document.createElement('img');img.src=src;img.alt='partner logo';el.appendChild(img);return el;}
     companies.forEach(c=>carouselInner.appendChild(makeLogoItem(c)));companies.forEach(c=>carouselInner.appendChild(makeLogoItem(c)));
