@@ -2130,9 +2130,9 @@ document.addEventListener('click', function(e) {
 function applyFilters(){
   const f = state.filters;
   let out = state.products.filter(p=>{
-    // Never show hidden or out-of-stock products
+    // Never show hidden products; services don't need physical stock
     if (!p.visible) return false;
-    if ((p.stock || 0) <= 0) return false;
+    if (p.listing_type !== 'service' && (p.stock || 0) <= 0) return false;
     if(f.category!=='All'){
       // Match exact category OR parent group (e.g. "Clothing" matches all sub-cats)
       const group = CATEGORIES.find(g => g.label === f.category);
@@ -3444,6 +3444,7 @@ async function loadFeaturedShops() {
     const { data: sellers, error } = await supabaseClient
       .from('sellers')
       .select('id, shop_name, description, logo_url')
+      .eq('status', 'active')
       .not('user_id', 'is', null)
       .limit(20);
     if(error || !sellers || !sellers.length) return;

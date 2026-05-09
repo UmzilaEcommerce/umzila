@@ -399,6 +399,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="intelligence"><span class="menu-icon">🧠</span><span class="menu-label">Intelligence</span></li>
           <li data-section="manage"><span class="menu-icon">📦</span><span class="menu-label">Manage Products</span></li>
           <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
+          <li data-section="manage-shops"><span class="menu-icon">🏬</span><span class="menu-label">Manage Shops</span></li>
           <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
           <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
@@ -701,6 +702,22 @@ const supabaseClient = supabase.createClient(
         </div>
         <div id="saTabRecent" style="display:none">
           <div id="sellerAppsRecentWrap"><div style="color:var(--muted);padding:20px">Loading recent applications…</div></div>
+        </div>
+      </section>
+
+      <!-- Manage Shops -->
+      <section id="section-manage-shops" style="display:none">
+        <div class="section-top">
+          <h2>🏬 Manage Shops</h2>
+          <button id="refreshShopsBtn" class="small-btn">↻ Refresh</button>
+        </div>
+        <div class="sub-tab-bar">
+          <button class="sub-tab active" data-shtab="active">Active</button>
+          <button class="sub-tab" data-shtab="disabled">Disabled</button>
+          <button class="sub-tab" data-shtab="all">All</button>
+        </div>
+        <div id="shopsTabContent">
+          <div id="shopsListWrap"><div style="color:var(--muted);padding:20px">Loading shops…</div></div>
         </div>
       </section>
 
@@ -1804,6 +1821,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     intelligence: document.getElementById('section-intelligence'),
     settings: document.getElementById('section-settings'),
     'seller-applications': document.getElementById('section-seller-applications'),
+    'manage-shops': document.getElementById('section-manage-shops'),
     'service-orders': document.getElementById('section-service-orders'),
     'product-reviews': document.getElementById('section-product-reviews'),
     'ad-campaigns': document.getElementById('section-ad-campaigns')
@@ -1933,6 +1951,19 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Lazy-load seller applications when that tab is first clicked
   document.querySelector('[data-section="seller-applications"]').addEventListener('click', fetchSellerApplications);
+
+  // Lazy-load manage-shops when that tab is first clicked
+  document.querySelector('[data-section="manage-shops"]').addEventListener('click', loadManageShops);
+  document.getElementById('refreshShopsBtn').addEventListener('click', loadManageShops);
+
+  // Manage-shops sub-tabs
+  document.querySelectorAll('.sub-tab[data-shtab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.sub-tab[data-shtab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderShopsList(btn.dataset.shtab);
+    });
+  });
 
   // Lazy-load service orders when that tab is clicked
   document.querySelector('[data-section="service-orders"]').addEventListener('click', () => window.loadAdminServiceOrders?.());
@@ -2630,6 +2661,81 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   document.getElementById('refreshApplicationsBtn').addEventListener('click', fetchSellerApplications);
   /* ============================================================ end Seller Applications */
+
+  /* ============================================================
+     MANAGE SHOPS — view all sellers, enable / disable
+  ============================================================ */
+  let shopsCache = [];
+  let shopsActiveTab = 'active';
+
+  async function loadManageShops() {
+    const wrap = document.getElementById('shopsListWrap');
+    if (!wrap) return;
+    wrap.innerHTML = '<div style="color:var(--muted);padding:20px">Loading…</div>';
+    if (!supabaseClient) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from('sellers')
+        .select('id, shop_name, email, status, created_at, user_id')
+        .order('created_at', { ascending: false });
+      if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
+      shopsCache = data || [];
+      const activeTab = document.querySelector('.sub-tab[data-shtab].active')?.dataset.shtab || 'active';
+      renderShopsList(activeTab);
+    } catch (e) {
+      wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Failed to load shops.</div>`;
+    }
+  }
+
+  function renderShopsList(tab) {
+    shopsActiveTab = tab;
+    const wrap = document.getElementById('shopsListWrap');
+    if (!wrap) return;
+    let shops = shopsCache;
+    if (tab === 'active')   shops = shopsCache.filter(s => s.status === 'active');
+    if (tab === 'disabled') shops = shopsCache.filter(s => s.status === 'disabled');
+
+    if (!shops.length) {
+      wrap.innerHTML = `<div style="color:var(--muted);padding:20px">No ${tab === 'all' ? '' : tab + ' '}shops found.</div>`;
+      return;
+    }
+
+    wrap.innerHTML = shops.map(s => {
+      const isActive = s.status === 'active';
+      const statusColor = isActive ? '#16a34a' : (s.status === 'disabled' ? '#dc2626' : '#d97706');
+      const btnLabel = isActive ? 'Disable Shop' : 'Enable Shop';
+      const btnColor = isActive ? '#dc2626' : '#16a34a';
+      return `
+      <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:10px;box-shadow:0 2px 8px rgba(2,6,23,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:15px">${escapeHtml(s.shop_name || '—')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(s.email || '—')}</div>
+          <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+          <span style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600">${escapeHtml(s.status || 'unknown')}</span>
+          <button onclick="toggleShopStatus('${escapeHtml(s.id)}','${isActive ? 'disabled' : 'active'}')"
+            style="padding:6px 14px;border-radius:8px;border:none;background:${btnColor};color:#fff;font-size:13px;font-weight:600;cursor:pointer">
+            ${btnLabel}
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.toggleShopStatus = async function(sellerId, newStatus) {
+    if (!supabaseClient) return;
+    try {
+      const { error } = await supabaseClient.rpc('admin_set_seller_status', {
+        p_seller_id: sellerId,
+        p_status: newStatus
+      });
+      if (error) { showToast('Failed: ' + error.message); return; }
+      showToast(newStatus === 'disabled' ? 'Shop disabled — products hidden site-wide' : 'Shop enabled');
+      await loadManageShops();
+    } catch (e) { showToast('Toggle failed'); }
+  };
+  /* ============================================================ end Manage Shops */
 
   /* ============================================================
      PRODUCT REVIEWS — tabs (Pending / Recent 30 days)

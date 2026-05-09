@@ -153,36 +153,77 @@ exports.handler = async function(event, context) {
                         );
                     }
 
-                    // ── Decrement product stock ────────────────────────────
+                    // ── Decrement product stock + populate order_items ─────
                     try {
                         const orderItems = Array.isArray(existingOrder.items)
                             ? existingOrder.items
                             : (typeof existingOrder.items === 'string' ? JSON.parse(existingOrder.items) : []);
 
+                        const orderItemInserts = [];
                         for (const item of orderItems) {
                             const pid = item.product_id || item.id;
                             const qty = Number(item.quantity || item.qty || 1);
                             if (!pid || qty <= 0) continue;
-                            // Services don't have physical stock to decrement
-                            if (item.listing_type === 'service') {
-                                console.log('ITN: skipping stock decrement for service item', pid);
-                                continue;
-                            }
 
-                            const { data: prod } = await supabase
-                                .from('products')
-                                .select('stock')
-                                .eq('id', pid)
-                                .maybeSingle();
-
-                            if (prod != null) {
-                                const newStock = Math.max(0, (Number(prod.stock) || 0) - qty);
-                                const { error: stockErr } = await supabase
+                            if (item.listing_type !== 'service') {
+                                // Decrement product-level stock
+                                const { data: prod } = await supabase
                                     .from('products')
-                                    .update({ stock: newStock })
-                                    .eq('id', pid);
-                                if (stockErr) console.warn('ITN: stock decrement failed for product', pid);
+                                    .select('stock')
+                                    .eq('id', pid)
+                                    .maybeSingle();
+                                if (prod != null) {
+                                    const newStock = Math.max(0, (Number(prod.stock) || 0) - qty);
+                                    const { error: stockErr } = await supabase
+                                        .from('products')
+                                        .update({ stock: newStock })
+                                        .eq('id', pid);
+                                    if (stockErr) console.warn('ITN: stock decrement failed for product', pid);
+                                }
+
+                                // Decrement variant-level stock if variant_id present
+                                const vid = item.variant_id || item.variantId;
+                                if (vid) {
+                                    const { data: variant } = await supabase
+                                        .from('product_variants')
+                                        .select('stock')
+                                        .eq('id', vid)
+                                        .maybeSingle();
+                                    if (variant != null) {
+                                        const newVStock = Math.max(0, (Number(variant.stock) || 0) - qty);
+                                        const { error: vstockErr } = await supabase
+                                            .from('product_variants')
+                                            .update({ stock: newVStock })
+                                            .eq('id', vid);
+                                        if (vstockErr) console.warn('ITN: variant stock decrement failed for variant', vid);
+                                    }
+                                }
+                            } else {
+                                console.log('ITN: skipping stock decrement for service item', pid);
                             }
+
+                            // Collect for order_items batch insert
+                            const unitPrice = parseFloat(item.price || item.unit_price || 0);
+                            orderItemInserts.push({
+                                order_id: existingOrder.id,
+                                product_id: pid,
+                                seller_id: item.seller_id || null,
+                                product_name: item.title || item.name || item.item_name || 'Item',
+                                quantity: qty,
+                                unit_price: unitPrice,
+                                subtotal: unitPrice * qty,
+                                selected_size: item.size || item.variant || null,
+                                fulfillment_status: 'pending'
+                            });
+                        }
+
+                        // Insert order_items rows in one batch
+                        if (orderItemInserts.length) {
+                            const { error: itemsErr } = await supabase
+                                .from('order_items')
+                                .insert(orderItemInserts);
+                            if (itemsErr) console.warn('ITN: order_items insert error:', itemsErr.message);
+                            else console.log('ITN: inserted', orderItemInserts.length, 'order_items for order', existingOrder.id);
                         }
                     } catch (stockError) {
                         console.warn('ITN: stock decrement error:', stockError.message);

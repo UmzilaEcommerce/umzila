@@ -884,7 +884,7 @@
       var sb = ev.detail && ev.detail.supabase;
       if (!sb) return;
       try {
-        var sellersRes = await sb.from('sellers').select('id,shop_name,banner_url,logo_url,description');
+        var sellersRes = await sb.from('sellers').select('id,shop_name,banner_url,logo_url,description').eq('status', 'active');
         var sellers = sellersRes.data || [];
         if (!sellers.length) return;
 

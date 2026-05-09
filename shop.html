@@ -1025,6 +1025,16 @@
         return;
       }
       var seller = sellerRes.data[0];
+
+      // Block disabled shops
+      if (seller.status !== 'active') {
+        document.getElementById('shLoading').style.display = 'none';
+        var notFound = document.getElementById('shNotFound');
+        notFound.innerHTML = '<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">🚫</div><h2 style="margin:0 0 8px">Shop Unavailable</h2><p style="color:#6b7280;margin:0">This shop is temporarily unavailable. Check back later.</p></div>';
+        notFound.style.display = '';
+        return;
+      }
+
       document.title = seller.shop_name + ' — Umzila';
 
       /* Banner */

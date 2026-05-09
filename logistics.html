@@ -1546,6 +1546,16 @@ document.addEventListener('sb-ready', function(e){
           return;
         }
 
+        // Decrement stock + populate order_items for this logistics-created order
+        if(saved.id && items.length){
+          sb.rpc('handle_logistics_order',{
+            p_order_id: saved.id,
+            p_items: items
+          }).then(({error:rpcErr})=>{
+            if(rpcErr) console.warn('handle_logistics_order RPC error',rpcErr);
+          });
+        }
+
         toast(`Order ${id} created`,'success');
         closeModal();
         showPanel('orders');
