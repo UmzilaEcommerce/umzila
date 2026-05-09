@@ -2439,6 +2439,47 @@ function trackEvent(eventType, data) {
     };
     if (typeof currentUser !== 'undefined' && currentUser) payload.user_id = currentUser.id;
     window.supabase.from('user_events').insert(payload).then(function(){}).catch(function(){});
+
+    // Update product engagement counters on the backend (also updates local state)
+    var counterEvents = ['product_click', 'product_view', 'add_to_cart'];
+    if (counterEvents.indexOf(eventType) !== -1 && data && data.product_id) {
+      var engPayload = {
+        product_id:   data.product_id,
+        event_type:   eventType,
+        seller_id:    data.seller_id  || null,
+        category:     data.category   || null,
+        anonymous_id: getAnonId()
+      };
+      var engHeaders = { 'Content-Type': 'application/json' };
+      if (typeof currentUser !== 'undefined' && currentUser && window._supabaseAnonKey) {
+        // Pass auth token so backend can resolve user
+        try {
+          window.supabase.auth.getSession().then(function(r) {
+            if (r.data && r.data.session) engHeaders['Authorization'] = 'Bearer ' + r.data.session.access_token;
+            fetch('/.netlify/functions/track-engagement', { method: 'POST', headers: engHeaders, body: JSON.stringify(engPayload) }).catch(function(){});
+          }).catch(function(){
+            fetch('/.netlify/functions/track-engagement', { method: 'POST', headers: engHeaders, body: JSON.stringify(engPayload) }).catch(function(){});
+          });
+        } catch (_) {
+          fetch('/.netlify/functions/track-engagement', { method: 'POST', headers: engHeaders, body: JSON.stringify(engPayload) }).catch(function(){});
+        }
+      } else {
+        fetch('/.netlify/functions/track-engagement', { method: 'POST', headers: engHeaders, body: JSON.stringify(engPayload) }).catch(function(){});
+      }
+
+      // Also update local product state so ranking changes reflect on next re-render
+      if (state && state.products) {
+        var prod = state.products.find(function(p) { return String(p.id) === String(data.product_id); });
+        if (prod) {
+          if (eventType === 'add_to_cart') {
+            prod.cart_count = (Number(prod.cart_count) || 0) + 1;
+          } else {
+            prod.click_count = (Number(prod.click_count) || 0) + 1;
+          }
+          prod.last_engaged_at = new Date().toISOString();
+        }
+      }
+    }
   } catch (_) {}
 }
 
@@ -2463,21 +2504,65 @@ function getUserPreferenceCategories() {
 }
 
 /********************
- * Weighted product scoring
+ * Weighted product scoring with Bayesian confidence adjustment
+ *
+ * Signal hierarchy (real money > intent > desire > curiosity):
+ *   Orders×10  Carts×4  Favourites×3  Views×1
+ *
+ * Bayesian factor prevents a product with 1 order beating one with 200:
+ *   confidence = n / (C + n)   where n = total interactions, C = 5
+ *   score = raw×confidence + prior×(1−confidence)
+ * New products blend toward the neutral prior (pop×0.5) until they have
+ * enough volume to be trusted at full weight.
  ********************/
 function computeScore(p, opts) {
   opts = opts || {};
-  var fc = Number(p.favourite_count) || 0;
-  var pop = Number(p.popularity) || 50;
-  var clicks = Number(p.click_count) || 0;
+
+  var views  = Number(p.click_count)     || 0;
+  var carts  = Number(p.cart_count)      || 0;
+  var orders = Number(p.order_count)     || 0;
+  var favs   = Number(p.favourite_count) || 0;
+  var pop    = Number(p.popularity)      || 50;
+
+  // Time decay — products idle too long rank progressively lower
+  var decay = 1.0;
+  if (p.last_engaged_at) {
+    var days = (Date.now() - new Date(p.last_engaged_at).getTime()) / 86400000;
+    if      (days > 90) decay = 0.20;
+    else if (days > 30) decay = 0.40;
+    else if (days > 14) decay = 0.70;
+    else if (days > 7)  decay = 0.85;
+  }
+
+  // Per-section weight overrides (defaults: orders dominate, views are weakest)
+  var wO = opts.wOrders !== undefined ? opts.wOrders : 10;
+  var wC = opts.wCarts  !== undefined ? opts.wCarts  : 4;
+  var wF = opts.wFavs   !== undefined ? opts.wFavs   : 3;
+  var wV = opts.wViews  !== undefined ? opts.wViews  : 1;
+
+  var raw = orders*wO + carts*wC + favs*wF + views*wV + pop*0.5;
+
+  // Bayesian confidence: blend raw score toward a neutral prior based on
+  // how much evidence we have. C=5 means 5 total interactions = 50% trusted.
+  var C = opts.bayesC !== undefined ? opts.bayesC : 5;
+  var n = orders + carts + favs + views;
+  var confidence = n > 0 ? n / (C + n) : 0;
+  var prior = pop * 0.5;
+  var score = (raw * confidence + prior * (1 - confidence)) * decay;
+
+  // Section-specific boosts (applied after Bayesian normalisation)
   var hasSale = !!(p.sale && p.salePrice && p.salePrice < p.price);
-  var discountPct = hasSale ? Math.round(100 * (1 - p.salePrice / p.price)) : 0;
-  var score = (fc * 3) + (pop * 1) + (clicks * 1) + (hasSale ? 10 : 0);
-  if (opts.boostSale)   score += discountPct * 3;
-  if (opts.boostAfford) score += (p.price < 200 ? 10 : 0);
+  var discountPct = hasSale ? Math.round(100*(1-p.salePrice/p.price)) : 0;
+  if (opts.boostSale)   score += discountPct * 2;
+  if (opts.boostAfford) score += (p.price < 200 ? 8 : 0);
+  if (opts.boostRecent && p.last_engaged_at) {
+    var d = (Date.now() - new Date(p.last_engaged_at).getTime()) / 86400000;
+    score += d < 3 ? 40 : d < 7 ? 25 : d < 14 ? 10 : 0;
+  }
   if (opts.userCategories && opts.userCategories.length) {
     if (opts.userCategories.indexOf(p.category) !== -1) score += 15;
   }
+
   return score;
 }
 
@@ -2671,7 +2756,6 @@ function makeCardHTML(p){
 }
 
 function renderAll(products){
-  // Only render products that are visible and in stock
   const visible = (products || state.products).filter(p =>
     p.visible !== false && (p.listing_type === 'service' || (p.stock || 0) > 0)
   );
@@ -2679,7 +2763,11 @@ function renderAll(products){
 
   const userCats = getUserPreferenceCategories();
 
-  // helpers
+  // Tracks which product IDs were shown in earlier sections.
+  // Later sections apply a 0.7× score penalty to already-shown products,
+  // pushing fresh items forward without hard-excluding anything.
+  const _shownIds = new Set();
+
   function pinSponsored(list) {
     var ids = window._sponsoredProductIds || new Set();
     if (!ids.size) return list;
@@ -2687,24 +2775,54 @@ function renderAll(products){
     var rest = list.filter(function(p){ return !ids.has(p.id); });
     return sp.concat(rest);
   }
+
   function cards(list, minW){ return pinSponsored(list).map(p=>`<div style="min-width:${minW||180}px;max-width:${minW||180}px">${makeCardHTML(p)}</div>`).join(''); }
   function showSection(id, has){ const el=document.getElementById(id); if(el) el.style.display = has ? '' : 'none'; }
-  function scored(list, opts){ return list.slice().sort(function(a,b){ return computeScore(b, opts||{}) - computeScore(a, opts||{}); }); }
 
-  // HOT DEALS — only sale items, scored by discount size + affordability
+  // Scores a list with section-specific opts and applies shown-ID diversity penalty
+  function scored(list, opts, applyDiversity){
+    var o = opts || {};
+    return list.slice().sort(function(a, b){
+      var sa = computeScore(a, o);
+      var sb = computeScore(b, o);
+      if (applyDiversity !== false) {
+        if (_shownIds.has(a.id)) sa *= 0.7;
+        if (_shownIds.has(b.id)) sb *= 0.7;
+      }
+      return sb - sa;
+    });
+  }
+
+  function markShown(items){ items.forEach(function(p){ _shownIds.add(p.id); }); }
+
+  // Helper: sum of a numeric field across an array of products
+  function sumField(arr, field){ return arr.reduce(function(acc, p){ return acc + (Number(p[field]) || 0); }, 0); }
+
+  // ── HOT DEALS ──────────────────────────────────────────────────────────────
+  // Goal: surface sale items that are actually engaging. Reduce order dominance so a
+  // mildly-ordered item on 40% discount beats a heavily-ordered item on 5% discount.
   const hotItems = scored(
     visible.filter(function(p){ return p.sale && p.salePrice && p.salePrice < p.price; }),
-    { boostSale: true, boostAfford: true }
+    { boostSale: true, boostAfford: true, wOrders: 3, wCarts: 5, wFavs: 3, wViews: 2 },
+    false
   ).slice(0,12);
   if(hotGrid) hotGrid.innerHTML = cards(hotItems, 170) || '<div style="padding:12px;color:var(--muted)">No hot deals right now</div>';
   showSection('hotSection', hotItems.length);
+  markShown(hotItems);
 
-  // TRENDING ON CAMPUS — scored with personalization
-  const trendingItems = scored(visible, { userCategories: userCats }).slice(0,12);
+  // ── TRENDING ON CAMPUS ─────────────────────────────────────────────────────
+  // Goal: catch what's suddenly popular — spikes in views/carts/favs this week.
+  // Orders intentionally excluded (a product ordered 6 months ago isn't "trending").
+  const trendingItems = scored(
+    visible,
+    { boostRecent: true, wOrders: 0, wCarts: 6, wFavs: 5, wViews: 3, bayesC: 3, userCategories: userCats }
+  ).slice(0,12);
   if(trendingScroll) trendingScroll.innerHTML = cards(trendingItems, 170);
   showSection('trendingSection', trendingItems.length);
+  markShown(trendingItems);
 
-  // NEW DROPS — newest first (by created_at if available, fallback id)
+  // ── NEW DROPS ──────────────────────────────────────────────────────────────
+  // Pure recency — no engagement scoring.
   const newDropItems = visible.slice().sort(function(a,b){
     const da = a.created_at ? new Date(a.created_at).getTime() : Number(a.id) || 0;
     const db = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
@@ -2714,83 +2832,137 @@ function renderAll(products){
   if(ndScroll) ndScroll.innerHTML = cards(newDropItems, 170);
   showSection('newDropsSection', newDropItems.length);
 
-  // BACK TO SCHOOL — campus-relevant categories, base score
+  // ── BACK TO SCHOOL ─────────────────────────────────────────────────────────
+  // Goal: campus-relevant items people are buying. Default weights apply (orders dominate).
   const schoolCats = ['Clothing','Accessories & Gadgets','Home & Gifts','Services'];
   const schoolGroup = CATEGORIES.reduce(function(acc,g){
     if(schoolCats.indexOf(g.label) !== -1) return acc.concat([g.label]).concat(g.sub);
     return acc;
   }, []);
   const studentItems = scored(
-    visible.filter(function(p){ return schoolGroup.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return schoolGroup.indexOf(p.category) !== -1; }),
+    { wOrders: 10, wCarts: 5, wFavs: 4, wViews: 2 }
   ).slice(0,12);
   const stScroll = document.getElementById('studentScroll');
   if(stScroll) stScroll.innerHTML = cards(studentItems, 170) || '<div style="padding:12px;color:var(--muted)">Loading…</div>';
   showSection('studentSection', studentItems.length);
+  markShown(studentItems);
 
-  // UNDER R100 — price filtered + affordability boost
+  // ── UNDER R100 ─────────────────────────────────────────────────────────────
+  // Goal: affordable items people actually buy. Orders still dominate but budget
+  // engagement (carts/views) boosts items that haven't been ordered yet.
   const underR100Items = scored(
     visible.filter(function(p){ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<100; }),
-    { boostAfford: true }
+    { boostAfford: true, wOrders: 8, wCarts: 6, wFavs: 3, wViews: 2 }
   ).slice(0,12);
   const ur100 = document.getElementById('underR100Scroll');
   if(ur100) ur100.innerHTML = cards(underR100Items, 170) || '<div style="padding:12px;color:var(--muted)">No products under R100</div>';
   showSection('underR100Section', underR100Items.length);
+  markShown(underR100Items);
 
-  // BEST SELLERS — composite score
-  const bestItems = scored(visible).slice(0,12);
+  // ── BEST SELLERS ───────────────────────────────────────────────────────────
+  // Goal: pure purchase dominance. Orders weigh 20× here and Bayesian prior tightens
+  // so products need fewer orders to qualify — this is explicitly about being bought.
+  const bestItems = scored(
+    visible,
+    { wOrders: 20, wCarts: 3, wFavs: 2, wViews: 1, bayesC: 3 }
+  ).slice(0,12);
   const bsScroll = document.getElementById('bestSellersScroll');
   if(bsScroll) bsScroll.innerHTML = cards(bestItems, 170);
   showSection('bestSellersSection', bestItems.length);
+  markShown(bestItems);
 
-  // POPULAR IN CLOTHING
+  // ── POPULAR IN CLOTHING ────────────────────────────────────────────────────
+  // Goal: best-selling + most-loved fashion. Orders lead, favourites matter here
+  // too because people wishlist clothing before committing to buy.
   const clothingGroup = CATEGORIES.find(function(g){ return g.label==='Clothing'; });
   const clothingSubs = clothingGroup ? [clothingGroup.label].concat(clothingGroup.sub) : ['Clothing'];
   const clothingItems = scored(
-    visible.filter(function(p){ return clothingSubs.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return clothingSubs.indexOf(p.category) !== -1; }),
+    { wOrders: 10, wCarts: 5, wFavs: 5, wViews: 2 },
+    false
   ).slice(0,10);
   const pcScroll = document.getElementById('popularClothingScroll');
   if(pcScroll) pcScroll.innerHTML = cards(clothingItems, 170) || '<div style="padding:12px;color:var(--muted)">No clothing products yet</div>';
   showSection('popularClothingSection', clothingItems.length);
 
-  // POPULAR IN FOOD
+  // ── POPULAR IN FOOD ────────────────────────────────────────────────────────
+  // Goal: most-ordered food. Cart adds also matter because food is impulse-driven.
+  // Favourites barely factor in — people order food, they don't wishlist it.
   const foodGroup = CATEGORIES.find(function(g){ return g.label==='Food'; });
   const foodSubs = foodGroup ? [foodGroup.label].concat(foodGroup.sub) : ['Food'];
   const foodItems = scored(
-    visible.filter(function(p){ return foodSubs.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return foodSubs.indexOf(p.category) !== -1; }),
+    { wOrders: 12, wCarts: 7, wFavs: 2, wViews: 1 },
+    false
   ).slice(0,10);
   const pfScroll = document.getElementById('popularFoodScroll');
   if(pfScroll) pfScroll.innerHTML = cards(foodItems, 170) || '<div style="padding:12px;color:var(--muted)">No food products yet</div>';
   showSection('popularFoodSection', foodItems.length);
 
-  // SERVICES
+  // ── SERVICES ───────────────────────────────────────────────────────────────
+  // Goal: most-booked + most-browsed services. Views matter more here because
+  // people research services carefully before ordering.
   const servicesGroup = CATEGORIES.find(function(g){ return g.label==='Services'; });
   const servicesSubs = servicesGroup ? [servicesGroup.label].concat(servicesGroup.sub) : ['Services'];
   const servicesItems = scored(
-    visible.filter(function(p){ return servicesSubs.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return servicesSubs.indexOf(p.category) !== -1; }),
+    { wOrders: 10, wCarts: 3, wFavs: 3, wViews: 3 },
+    false
   ).slice(0,10);
   const svcScroll = document.getElementById('servicesScroll');
   if(svcScroll) svcScroll.innerHTML = cards(servicesItems, 170) || '<div style="padding:12px;color:var(--muted)">No services yet</div>';
   showSection('servicesSection', servicesItems.length);
 
-  // ACCESSORIES & GADGETS
+  // ── ACCESSORIES & GADGETS ──────────────────────────────────────────────────
+  // Goal: most-bought and most-wishlisted accessories. Orders dominate but
+  // favourites are strong here — people window-shop accessories heavily.
   const accGroup = CATEGORIES.find(function(g){ return g.label==='Accessories & Gadgets'; });
   const accSubs = accGroup ? [accGroup.label].concat(accGroup.sub) : ['Accessories & Gadgets'];
   const accItems = scored(
-    visible.filter(function(p){ return accSubs.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return accSubs.indexOf(p.category) !== -1; }),
+    { wOrders: 10, wCarts: 5, wFavs: 5, wViews: 1 },
+    false
   ).slice(0,10);
   const accScroll = document.getElementById('accessoriesScroll');
   if(accScroll) accScroll.innerHTML = cards(accItems, 170) || '<div style="padding:12px;color:var(--muted)">No accessories yet</div>';
   showSection('accessoriesSection', accItems.length);
 
-  // BEAUTY & SELF-CARE
+  // ── BEAUTY & SELF-CARE ─────────────────────────────────────────────────────
+  // Goal: most-bought and most-desired beauty. Favourites weighted higher than other
+  // categories — beauty is highly aspiration-driven before the purchase decision.
   const beautyGroup = CATEGORIES.find(function(g){ return g.label==='Beauty & Self-Care'; });
   const beautySubs = beautyGroup ? [beautyGroup.label].concat(beautyGroup.sub) : ['Beauty & Self-Care'];
   const beautyItems = scored(
-    visible.filter(function(p){ return beautySubs.indexOf(p.category) !== -1; })
+    visible.filter(function(p){ return beautySubs.indexOf(p.category) !== -1; }),
+    { wOrders: 9, wCarts: 4, wFavs: 6, wViews: 1 },
+    false
   ).slice(0,10);
   const beautyScroll = document.getElementById('beautyScroll');
   if(beautyScroll) beautyScroll.innerHTML = cards(beautyItems, 170) || '<div style="padding:12px;color:var(--muted)">No beauty products yet</div>';
   showSection('beautySection', beautyItems.length);
+
+  // ── DYNAMIC CATEGORY SECTION ORDERING ─────────────────────────────────────
+  // Reorder the 5 category blocks so the highest-demand category floats to top.
+  // Uses order_count as primary signal (matches the new weight philosophy).
+  (function reorderCategorySections() {
+    var catBlocks = [
+      { id: 'popularClothingSection', score: sumField(clothingItems, 'order_count') * 10 + sumField(clothingItems, 'cart_count') * 4 + sumField(clothingItems, 'favourite_count') * 3 },
+      { id: 'popularFoodSection',     score: sumField(foodItems,     'order_count') * 10 + sumField(foodItems,     'cart_count') * 4 + sumField(foodItems,     'favourite_count') * 3 },
+      { id: 'servicesSection',        score: sumField(servicesItems, 'order_count') * 10 + sumField(servicesItems, 'cart_count') * 4 + sumField(servicesItems, 'favourite_count') * 3 },
+      { id: 'accessoriesSection',     score: sumField(accItems,      'order_count') * 10 + sumField(accItems,      'cart_count') * 4 + sumField(accItems,      'favourite_count') * 3 },
+      { id: 'beautySection',          score: sumField(beautyItems,   'order_count') * 10 + sumField(beautyItems,   'cart_count') * 4 + sumField(beautyItems,   'favourite_count') * 3 },
+    ].sort(function(a, b){ return b.score - a.score; });
+
+    var firstEl = document.getElementById(catBlocks[0].id);
+    if (!firstEl) return;
+    var parent = firstEl.parentNode;
+    if (!parent) return;
+    catBlocks.forEach(function(block) {
+      var el = document.getElementById(block.id);
+      if (el) parent.appendChild(el);
+    });
+  })();
 
   attachProductListeners();
   runReveal();

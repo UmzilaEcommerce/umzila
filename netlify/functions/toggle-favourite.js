@@ -132,8 +132,10 @@ exports.handler = async function (event) {
     });
   }
 
-  // Persist updated count to products table
-  await admin.from('products').update({ favourite_count: newCount }).eq('id', product_id);
+  // Persist updated count and engagement timestamp to products table
+  const updateData = { favourite_count: newCount };
+  if (action === 'added') updateData.last_engaged_at = new Date().toISOString();
+  await admin.from('products').update(updateData).eq('id', product_id);
 
   return {
     statusCode: 200,

@@ -165,6 +165,14 @@ exports.handler = async function(event, context) {
                             const qty = Number(item.quantity || item.qty || 1);
                             if (!pid || qty <= 0) continue;
 
+                            // Update order_count ranking signal (fire-and-forget — never blocks ITN)
+                            supabase.rpc('increment_product_engagement', {
+                                p_product_id:  pid,
+                                p_counter_col: 'order_count',
+                                p_increment:   qty,
+                                p_engaged_at:  new Date().toISOString()
+                            }).catch(e => console.warn('ITN: ranking update failed for', pid, e.message));
+
                             if (item.listing_type !== 'service') {
                                 // Decrement product-level stock
                                 const { data: prod } = await supabase

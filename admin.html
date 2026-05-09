@@ -558,7 +558,10 @@ const supabaseClient = supabase.createClient(
       <section id="section-intelligence" style="display:none">
         <div class="section-top">
           <h2>🧠 Intelligence</h2>
-          <button id="refreshIntelligence" class="small-btn">↻ Refresh All</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="recalcRankings" class="small-btn" style="background:var(--accent,#7c3aed);color:#fff">⚡ Recalculate Rankings</button>
+            <button id="refreshIntelligence" class="small-btn">↻ Refresh All</button>
+          </div>
         </div>
 
         <!-- Sub-tabs -->
@@ -2003,105 +2006,34 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // small helper functions
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  /* ------------------ Analytics helpers (kept for updatePopularityFromTop) ------ */
-  // parse order items safely
-  function parseOrderItems(o) {
-    const raw = o.items;
-    if(!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    try { return JSON.parse(raw); } catch(e) { return []; }
-  }
-
-  // fetch orders in date range and compute totals and top products
-  async function fetchOrdersInRange(fromIso, toIso) {
-    if(!supabaseClient) return { orders: [], total: 0, top: [] };
+  // Recalculate Rankings button — syncs order counts from orders table and normalises
+  // popularity (0-100) across all products based on real engagement data.
+  document.getElementById('recalcRankings').addEventListener('click', async () => {
+    const btn = document.getElementById('recalcRankings');
+    btn.disabled = true;
+    btn.textContent = '⏳ Recalculating…';
     try {
-      const { data, error } = await supabaseClient
-        .from('orders')
-        .select('id, created_at, total, items, order_number, customer_name, order_status')
-        .gte('created_at', fromIso)
-        .lte('created_at', toIso)
-        .order('created_at', { ascending: true });
-      if(error){ console.warn('fetchOrdersInRange error', error); return { orders: [], total: 0, top: [] }; }
-      const orders = data || [];
-      // exclude returned orders from revenue & aggregation
-      const validOrders = orders.filter(o => {
-        const st = (o.order_status || '').toString().trim().toLowerCase();
-        return st !== 'returned';
+      const token = await getAdminToken();
+      if (!token) { showToast('Not authenticated', 'error'); return; }
+      const resp = await fetch('/.netlify/functions/recalculate-rankings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
       });
-      const total = validOrders.reduce((s,o) => s + (Number(o.total || 0)), 0);
-      // aggregate top products by name or product_id
-      const agg = {};
-      for(const o of validOrders){
-        const items = parseOrderItems(o);
-        for(const it of items){
-          // handle various shapes: { product_id, quantity, item } or { item, quantity }
-          const qty = Number(it.quantity || it.qty || 0);
-          const name = it.product_name || it.item || it.name || (it.product_id ? `product-${it.product_id}` : 'Unknown');
-          const pid = it.product_id || null;
-          const key = pid ? `id:${pid}` : `name:${name}`;
-          if(!agg[key]) agg[key] = { name, pid, qty: 0, revenue: 0, occurrences: 0 };
-          agg[key].qty += qty;
-          agg[key].revenue += (Number(it.price || 0) * qty) || 0;
-          agg[key].occurrences += 1;
-        }
+      const result = await resp.json().catch(() => ({}));
+      if (resp.ok) {
+        showToast('Rankings recalculated — order counts and popularity scores updated.');
+        // Refresh products list if loaded
+        if (typeof fetchProducts === 'function') fetchProducts();
+      } else {
+        showToast(result.error || 'Recalculation failed', 'error');
       }
-      const top = Object.values(agg).sort((a,b)=> b.qty - a.qty).slice(0, 50); // top 50 for expand
-      return { orders, total, top };
-    } catch(e){
-      console.warn('fetchOrdersInRange failed', e);
-      return { orders: [], total: 0, top: [] };
+    } catch (e) {
+      showToast('Network error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⚡ Recalculate Rankings';
     }
-  }
-
-  // popularity updater: compute new popularity and apply guarded updates (called from analytics)
-  async function updatePopularityFromTop(topArr){
-    if(!Array.isArray(topArr) || topArr.length === 0) return;
-    if(!(await isAdminAuthenticated())){ console.warn('Not admin: skipping popularity updates'); return; }
-
-    // Tunables (feel free to adjust)
-    const alpha = 0.35; // smoothing toward recent score
-    const revenueFactor = 0.02; // convert revenue to "popularity points"
-    const hotThreshold = 60; // popularity threshold for Hot badge
-    const maxPopularity = 1000;
-
-    const updates = [];
-    for(const t of topArr){
-      if(!t.pid) continue;
-      try {
-        const { data: prod, error: prodErr } = await supabaseClient.from('products').select('id,popularity,badge').eq('id', t.pid).maybeSingle();
-        if(prodErr || !prod) { if(prodErr) console.warn('fetch product for popularity error', prodErr); continue; }
-        const oldPop = Number(prod.popularity || 0);
-        const recentScore = Number(t.revenue || 0) * revenueFactor;
-        let newPop = (alpha * recentScore) + ((1 - alpha) * oldPop);
-        newPop = Math.max(0, Math.min(maxPopularity, newPop));
-        let newBadge = prod.badge;
-        if(newPop >= hotThreshold && prod.badge !== 'Hot') newBadge = 'Hot';
-        // only update if noticeable change
-        if(Math.abs(newPop - oldPop) > 0.5 || newBadge !== prod.badge) {
-          updates.push({ id: prod.id, popularity: newPop, badge: newBadge });
-        }
-      } catch(e){
-        console.warn('popularity loop error', e);
-      }
-    }
-
-    // apply updates sequentially (keeps it simple; could batch)
-    for(const u of updates){
-      try {
-        const { error: upErr } = await supabaseClient.from('products').update({ popularity: u.popularity, badge: u.badge }).eq('id', u.id);
-        if(upErr) console.warn('popularity update error', upErr);
-      } catch(e){
-        console.warn('apply popularity update failed', e);
-      }
-    }
-
-    if(updates.length) {
-      // refresh local cache/UI
-      await fetchProducts();
-      showToast(`Popularity updated for ${updates.length} product(s)`);
-    }
-  }
+  });
 
   /* ==================== Intelligence Dashboard ==================== */
   const intelLoaded = { overview: false, 'intel-products': false, 'intel-categories': false, 'intel-sellers': false, 'intel-behaviour': false, 'intel-search': false, 'intel-insights': false };
