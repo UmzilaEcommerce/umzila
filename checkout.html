@@ -2426,9 +2426,7 @@ async function submitToPayFast(cartItems, orderId, total) {
     name_first: (state.shippingInfo?.firstName || '').substring(0, 100),
     name_last: (state.shippingInfo?.lastName || '').substring(0, 100),
     email_address: (state.shippingInfo?.email || '').substring(0, 100),
-    cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100),
-    email_confirmation: '1',
-    confirmation_address: (state.shippingInfo?.email || '').substring(0, 100)
+    cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100)
     // add custom_strX / custom_intX here if you want the server to sign them
   };
 
