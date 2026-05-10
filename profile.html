@@ -828,13 +828,22 @@
     container.innerHTML = '<div class="p-card"><div class="p-empty"><div class="icon">⏳</div><p>Loading your orders…</p></div></div>';
 
     try {
-      // Show all orders that are not just pending payment (i.e. actual paid orders)
-      const { data: orders, error } = await sb.from('orders')
-        .select('*')
-        .eq('user_id', user.id)
-        .neq('order_status', 'pending_payment')
-        .order('created_at', { ascending: false })
-        .limit(100);
+      // Fetch by user_id first; also fetch by customer_email to catch orders placed on the
+      // buyer's behalf (e.g. admin-assisted checkout where user_id was set to a different account).
+      const [byId, byEmail] = await Promise.all([
+        sb.from('orders').select('*').eq('user_id', user.id).neq('order_status', 'pending_payment').order('created_at', { ascending: false }).limit(100),
+        sb.from('orders').select('*').eq('customer_email', user.email).neq('order_status', 'pending_payment').order('created_at', { ascending: false }).limit(100)
+      ]);
+
+      const seen = new Set();
+      const merged = [...(byId.data || []), ...(byEmail.data || [])].filter(o => {
+        if (seen.has(o.id)) return false;
+        seen.add(o.id);
+        return true;
+      }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      const error = byId.error && byEmail.error ? byId.error : null;
+      const orders = merged;
 
       if (error || !orders?.length) {
         container.innerHTML = `<div class="p-card"><div class="p-empty"><div class="icon">📦</div><p>${error ? 'Could not load orders. Please refresh.' : 'No orders yet — start shopping!'}</p></div></div>`;

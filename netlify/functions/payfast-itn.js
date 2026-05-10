@@ -71,6 +71,22 @@ exports.handler = async function(event, context) {
                 // Run post-payment tasks only once (guard against ITN retries)
                 if (!alreadyPaid && existingOrder) {
 
+                    // ── Backfill user_id if order was placed on buyer's behalf ─
+                    const buyerEmailForLookup = (existingOrder.customer_email || pfData.email_address || '').toLowerCase();
+                    if (buyerEmailForLookup) {
+                        try {
+                            const { data: buyerProfile } = await supabase
+                                .from('profiles')
+                                .select('user_id')
+                                .ilike('email', buyerEmailForLookup)
+                                .maybeSingle();
+                            if (buyerProfile?.user_id && buyerProfile.user_id !== existingOrder.user_id) {
+                                await supabase.from('orders').update({ user_id: buyerProfile.user_id }).eq('id', existingOrder.id);
+                                console.log('ITN: user_id corrected to buyer profile for order', existingOrder.id);
+                            }
+                        } catch (e) { console.warn('ITN: user_id backfill error:', e.message); }
+                    }
+
                     // ── Mark coupon as used ────────────────────────────────
                     if (existingOrder.coupon_code) {
                         const { error: dcErr } = await supabase
