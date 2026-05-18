@@ -2010,3 +2010,162 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
   background-size: 1200px 100%;
   animation: sk-shimmer 1.5s ease-in-out infinite;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM MOBILE REVAMP — elevated feel, all functionality intact
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Category icon gradients (all screens) ── */
+.cat-bubble-icon { font-size: 0; }
+.cat-bubble[data-color="clothing"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 4px 18px rgba(99,102,241,0.32);
+}
+.cat-bubble[data-color="food"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  box-shadow: 0 4px 18px rgba(239,68,68,0.32);
+}
+.cat-bubble[data-color="accessories"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  box-shadow: 0 4px 18px rgba(14,165,233,0.32);
+}
+.cat-bubble[data-color="beauty"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #ec4899, #f43f5e);
+  box-shadow: 0 4px 18px rgba(236,72,153,0.32);
+}
+.cat-bubble[data-color="services"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #10b981, #059669);
+  box-shadow: 0 4px 18px rgba(16,185,129,0.32);
+}
+.cat-bubble[data-color="home"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  box-shadow: 0 4px 18px rgba(245,158,11,0.32);
+}
+.cat-bubble[data-color="deals"] .cat-bubble-icon {
+  background: linear-gradient(135deg, #ff6b2c, #ef4444);
+  box-shadow: 0 4px 18px rgba(255,107,44,0.32);
+}
+
+@media (max-width: 768px) {
+  /* ── Background depth ── */
+  body { background: linear-gradient(160deg, #f8f9ff 0%, #f2f3fa 100%); }
+
+  /* ── Main content horizontal breathing room ── */
+  main { padding: 0 12px; }
+
+  /* ── Hero — card feel + pill dots + glassy arrows ── */
+  .hero { border-radius: 20px; margin-top: 10px; }
+
+  .dot {
+    border-radius: 999px;
+    background: rgba(255,255,255,0.45);
+    transition: width 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.25s;
+  }
+  .dot.active {
+    width: 24px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .arrow-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1.5px solid rgba(255,255,255,0.35);
+    font-size: 20px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Category bubbles — rounded gradient tiles ── */
+  .cat-bubbles-row { padding: 18px 0 14px; gap: 14px; }
+  .cat-bubble { gap: 8px; }
+
+  .cat-bubble-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 22px;
+    transition: transform 0.15s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s;
+  }
+  .cat-bubble:hover .cat-bubble-icon { transform: scale(1.06); }
+  .cat-bubble:active .cat-bubble-icon { transform: scale(0.92); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+  .cat-bubble-icon svg { width: 28px; height: 28px; flex-shrink: 0; }
+
+  .cat-bubble-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1a1a2e;
+    letter-spacing: -0.1px;
+  }
+
+  /* ── Section headers — accent bar + bold type ── */
+  .section-header { margin-bottom: 14px; }
+
+  .section-header h2 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    color: #0d0d1a;
+    position: relative;
+    padding-left: 13px;
+    margin: 0;
+  }
+  .section-header h2::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 15%;
+    height: 70%;
+    width: 4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  }
+
+  .section-see-more {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    background: #eef1fc;
+    border: none !important;
+    border-radius: 20px;
+    padding: 5px 14px;
+  }
+  .section-see-more:hover { background: var(--accent); color: #fff; }
+
+  /* ── Product cards — elevated & tactile ── */
+  .product-card {
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05), 0 6px 24px rgba(0,0,0,0.04);
+  }
+  .product-card:active {
+    transform: scale(0.972) !important;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .product-media { border-radius: 12px; }
+  .price { font-weight: 800; }
+  .badge { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; border-radius: 8px; }
+
+  /* ── Carousels ── */
+  .hscroll .product-card { border-radius: 16px; }
+
+  /* ── Featured shops — branded accent ── */
+  .shop-card {
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.04);
+    border-top: 3px solid var(--accent);
+  }
+  .featured-shops-section h2 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    color: #0d0d1a;
+    margin-bottom: 14px;
+  }
+}
