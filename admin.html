@@ -401,6 +401,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
           <li data-section="manage-shops"><span class="menu-icon">🏬</span><span class="menu-label">Manage Shops</span></li>
           <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
+          <li data-section="disputes"><span class="menu-icon">⚠️</span><span class="menu-label">Disputes</span></li>
           <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
@@ -508,6 +509,9 @@ const supabaseClient = supabase.createClient(
                   <option value="medium" selected>Medium — clothing, shoes, tech (R22)</option>
                   <option value="large">Large — bags, large items (R50)</option>
                 </select>
+
+                <label>Units per delivery bag <span style="font-weight:400;color:#6b7280;font-size:12px">(optional — how many fit in one trip before it steps up a size)</span></label>
+                <input type="number" id="prodUnitsPerTrip" min="1" placeholder="e.g. 8" style="width:100%;box-sizing:border-box">
 
                 <label>Sizes</label>
                 <div style="display:flex;gap:8px;margin-top:6px">
@@ -733,6 +737,20 @@ const supabaseClient = supabase.createClient(
         <div id="adminServiceOrdersLoading" style="color:var(--muted);padding:20px">Loading…</div>
         <div id="adminServiceOrdersList"></div>
         <div id="adminServiceOrdersEmpty" style="display:none;color:var(--muted);padding:20px">No service orders yet.</div>
+      </section>
+
+      <!-- Disputes: catches physical-order disputes AND rejected/cancelled service
+           orders, both of which are otherwise dead-end states with no resolution UI.
+           Actual PayFast refunds stay manual/out-of-band — this only records the
+           resolution decision, no payment code involved. -->
+      <section id="section-disputes" style="display:none">
+        <div class="section-top">
+          <h2>⚠️ Disputes</h2>
+          <button id="refreshDisputesBtn" class="small-btn" onclick="loadAdminDisputes()">↻ Refresh</button>
+        </div>
+        <div id="adminDisputesLoading" style="color:var(--muted);padding:20px">Loading…</div>
+        <div id="adminDisputesList"></div>
+        <div id="adminDisputesEmpty" style="display:none;color:var(--muted);padding:20px">No open disputes.</div>
       </section>
 
       <!-- Product Reviews -->
@@ -1160,6 +1178,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           category,
           seller_id,
           delivery_class,
+          free_delivery,
+          units_per_trip,
           sizes,
           stock,
           metadata,
@@ -1204,6 +1224,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           seller_id: r.seller_id || null,
           seller_name: (r.sellers && r.sellers.shop_name) || '',
           delivery_class: r.delivery_class || 'medium',
+          free_delivery: !!(r.free_delivery),
+          units_per_trip: r.units_per_trip || null,
           sizes_arr: (r.sizes || []),
           price: Number(r.price) || 0,
           quantity: totalQty,
@@ -1253,6 +1275,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const visibleBadge = p.visible
         ? `<span style="color:#16a34a;font-size:12px;font-weight:600">● Live</span>`
         : `<span style="color:#dc2626;font-size:12px;font-weight:600">● Hidden</span>`;
+      const freeDelBadge = p.free_delivery
+        ? `<div style="margin-top:4px"><span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;font-size:11px">🚚 Free delivery</span></div>`
+        : '';
       tr.innerHTML = `
         <td></td>
         <td>${escapeHtml(p.name)}<div style="font-size:11px;color:#6b7280;margin-top:4px">SKU: ${escapeHtml(p.sku || '')}</div></td>
@@ -1261,7 +1286,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         <td>${fmt(p.price)}</td>
         <td>${saleCol}${badgeCol}</td>
         <td>${p.quantity}</td>
-        <td>${visibleBadge}</td>
+        <td>${visibleBadge}${freeDelBadge}</td>
         <td class="actions"></td>
       `;
       tr.children[0].replaceWith(imgCell);
@@ -1273,8 +1298,12 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const toggleVis = document.createElement('button');
       toggleVis.textContent = p.visible ? '🙈 Hide' : '👁️ Show';
       toggleVis.onclick = ()=> toggleProductVisible(p.id);
+      const toggleFreeDel = document.createElement('button');
+      toggleFreeDel.textContent = p.free_delivery ? '🚚 Fee: Off' : '🚚 Fee: On';
+      toggleFreeDel.title = 'Toggle free delivery for this product (in-house/residence stock)';
+      toggleFreeDel.onclick = ()=> toggleProductFreeDelivery(p.id);
 
-      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis);
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis); actionsTd.appendChild(toggleFreeDel);
       tbody.appendChild(tr);
     });
   }
@@ -1310,6 +1339,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const categoryId = (document.getElementById('prodCategory').value || '') || null;
     const sellerId = (document.getElementById('prodSeller').value || '') || null;
     const deliveryClass = document.getElementById('prodDeliveryClass').value || 'medium';
+    const unitsPerTripRaw = parseInt(document.getElementById('prodUnitsPerTrip').value, 10);
+    const unitsPerTrip = (!unitsPerTripRaw || unitsPerTripRaw < 1) ? null : unitsPerTripRaw;
     const price = parseFloat(document.getElementById('prodPrice').value || 0);
     const qty = parseInt(document.getElementById('prodQty').value || 0);
     const sizesChecked = Array.from(document.querySelectorAll('.sizeCb:checked')).map(n=>n.value);
@@ -1400,7 +1431,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
             return;
           } else {
             // insert new product with variants
-            await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, stock: totalToAdd, description: desc, metadata, imageUrl: publicImageUrl, sizes: sizeEntries.length ? sizeEntries : [] });
+            await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, units_per_trip: unitsPerTrip, stock: totalToAdd, description: desc, metadata, imageUrl: publicImageUrl, sizes: sizeEntries.length ? sizeEntries : [] });
             await fetchProducts();
             showToast('Product added');
             clearForm();
@@ -1424,7 +1455,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           clearForm();
           return;
         } else {
-          await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, stock: totalToAdd, description: desc, metadata, imageUrl: null, sizes: sizeEntries.length ? sizeEntries : [] });
+          await insertProductToSupabase({ name, sku, price, currency: 'ZAR', badge, featured: false, visible, category_id: categoryId, seller_id: sellerId, delivery_class: deliveryClass, units_per_trip: unitsPerTrip, stock: totalToAdd, description: desc, metadata, imageUrl: null, sizes: sizeEntries.length ? sizeEntries : [] });
           await fetchProducts();
           showToast('Product added');
           clearForm();
@@ -1438,7 +1469,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   }
 
   // Insert product and related rows to supabase
-  async function insertProductToSupabase({ name, sku, price, currency='ZAR', badge=null, featured=false, visible=true, category_id=null, seller_id=null, delivery_class='medium', stock=0, description='', metadata={}, imageUrl=null, sizes=[] }){
+  async function insertProductToSupabase({ name, sku, price, currency='ZAR', badge=null, featured=false, visible=true, category_id=null, seller_id=null, delivery_class='medium', units_per_trip=null, stock=0, description='', metadata={}, imageUrl=null, sizes=[] }){
     // guard: admin required
     if(!(await isAdminAuthenticated())) {
       showToast('Must be signed in as admin to create product');
@@ -1466,6 +1497,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           category_id,
           seller_id,
           delivery_class,
+          units_per_trip,
           stock,
           metadata
         }])
@@ -1613,9 +1645,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
             <option value="large"${p.delivery_class==='large'?' selected':''}>Large (R50)</option>
           </select>
         </div>
-        <div style="display:flex;align-items:center;gap:16px;padding-top:20px">
+        <div>
+          <label>Units per delivery bag <span style="font-weight:400;color:#6b7280;font-size:11px">(optional)</span></label>
+          <input type="number" id="edit_units_per_trip" min="1" placeholder="e.g. 8" value="${p.units_per_trip || ''}" style="width:100%;box-sizing:border-box">
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;padding-top:20px;flex-wrap:wrap">
           <label><input id="edit_sale" type="checkbox"${p.sale ? ' checked' : ''} /> On Sale</label>
           <label><input id="edit_visible" type="checkbox"${p.visible ? ' checked' : ''} /> Visible</label>
+          <label title="Umzila rep stock — no delivery fee charged"><input id="edit_free_delivery" type="checkbox"${p.free_delivery ? ' checked' : ''} /> Free delivery</label>
         </div>
       </div>
       <div id="edit_sale_price_row" style="margin-top:10px;${p.sale ? '' : 'display:none'}">
@@ -1653,8 +1690,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const categoryId = document.getElementById('edit_category').value || null;
       const sellerId = document.getElementById('edit_seller').value || null;
       const deliveryClass = document.getElementById('edit_delivery_class').value || 'medium';
+      const unitsPerTripEditRaw = parseInt(document.getElementById('edit_units_per_trip').value, 10);
+      const unitsPerTripEdit = (!unitsPerTripEditRaw || unitsPerTripEditRaw < 1) ? null : unitsPerTripEditRaw;
       const sale = document.getElementById('edit_sale').checked;
       const visible = document.getElementById('edit_visible').checked;
+      const freeDelivery = document.getElementById('edit_free_delivery').checked;
       const salePrice = sale ? parseFloat(document.getElementById('edit_sale_price').value || 0) : 0;
       const desc = document.getElementById('edit_desc').value.trim();
       const checkedSizes = Array.from(document.querySelectorAll('.edit_size_cb:checked')).map(cb => cb.value);
@@ -1668,6 +1708,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           category_id: categoryId,
           seller_id: sellerId,
           delivery_class: deliveryClass,
+          units_per_trip: unitsPerTripEdit,
+          free_delivery: freeDelivery,
           sale,
           sale_price: sale ? salePrice : null,
           visible,
@@ -1695,6 +1737,20 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(error){ showToast('Toggle failed'); return; }
       await fetchProducts();
       showToast(p.visible ? 'Product hidden' : 'Product visible');
+    } catch(e){ showToast('Toggle failed'); }
+  }
+
+  // toggle per-product free delivery (admin-only — a DB trigger blocks
+  // sellers from setting this directly, since a blanket free-delivery rule
+  // could otherwise be exploited)
+  async function toggleProductFreeDelivery(productId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin'); return; }
+    const p = productsCache.find(x => x.id === productId); if(!p) return;
+    try {
+      const { error } = await supabaseClient.from('products').update({ free_delivery: !p.free_delivery }).eq('id', productId);
+      if(error){ showToast('Toggle failed'); return; }
+      await fetchProducts();
+      showToast(p.free_delivery ? 'Delivery fee re-enabled' : 'Delivery now free for this product');
     } catch(e){ showToast('Toggle failed'); }
   }
 
@@ -1826,6 +1882,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'seller-applications': document.getElementById('section-seller-applications'),
     'manage-shops': document.getElementById('section-manage-shops'),
     'service-orders': document.getElementById('section-service-orders'),
+    'disputes': document.getElementById('section-disputes'),
     'product-reviews': document.getElementById('section-product-reviews'),
     'ad-campaigns': document.getElementById('section-ad-campaigns')
   };
@@ -1970,6 +2027,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Lazy-load service orders when that tab is clicked
   document.querySelector('[data-section="service-orders"]').addEventListener('click', () => window.loadAdminServiceOrders?.());
+  document.querySelector('[data-section="disputes"]').addEventListener('click', () => window.loadAdminDisputes?.());
 
   // Lazy-load product reviews when that tab is first clicked
   document.querySelector('[data-section="product-reviews"]').addEventListener('click', fetchProductReviews);
@@ -3064,16 +3122,25 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const orderNum  = order.order_number || (s.order_id || '').slice(0, 8);
       const status    = s.service_status || 'pending_acceptance';
       const isOverdue = status === 'pending_acceptance' && s.acceptance_deadline && new Date(s.acceptance_deadline) < now;
+      // order.items is the cart-line snapshot stored on the orders row, which already
+      // carries fulfillment_type per line (see script.js cart-line shape) — no extra
+      // query needed. Physical receive/hand-off steps only make sense for item_dropoff;
+      // in_person/digital services never had anything physical for a rep to receive.
+      const fulfillmentType = item.fulfillment_type || null;
+      const isItemDropoff = fulfillmentType === 'item_dropoff';
 
       const actionBtns = [];
-      if (status === 'accepted') {
+      if (isItemDropoff && status === 'accepted') {
         actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'item_received\',\'item_received_at\')" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">📬 Mark Item Received</button>');
       }
-      if (status === 'item_received') {
+      if (isItemDropoff && status === 'item_received') {
         actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'handed_to_seller\',\'handed_to_seller_at\')" style="padding:5px 12px;background:#7c3aed;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">🤝 Hand to Seller</button>');
       }
-      if (status === 'completed') {
+      if (isItemDropoff && status === 'completed') {
         actionBtns.push('<button onclick="adminUpdateServiceStatus(\'' + s.id + '\',\'returned\',\'returned_at\')" style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">📦 Mark Returned</button>');
+      }
+      if (!isItemDropoff && (status === 'accepted' || status === 'item_received' || status === 'completed')) {
+        actionBtns.push('<span style="font-size:11px;color:#6b7280;font-style:italic">No physical hand-off for this service type — waiting on the seller.</span>');
       }
 
       return '<div style="background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border:1px solid' + (isOverdue ? ' #fca5a5' : ' #e5e7eb') + '">' +
@@ -3101,6 +3168,77 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     await loadAdminServiceOrders();
   };
   /* ============================================================ end Service Orders */
+
+  /* ============================================================ Disputes (Admin) */
+  window.loadAdminDisputes = async function() {
+    if (!supabaseClient) return;
+    const loadingEl = document.getElementById('adminDisputesLoading');
+    const listEl    = document.getElementById('adminDisputesList');
+    const emptyEl   = document.getElementById('adminDisputesEmpty');
+    if (loadingEl) loadingEl.style.display = '';
+    if (listEl) listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    // Physical-order disputes (status='disputed') and rejected/cancelled service
+    // orders (service_status) both land here — both were previously dead-end
+    // states with nothing anywhere to resolve them. Already-refunded rows are
+    // excluded since 'refunded' is how this queue marks something as resolved.
+    const { data: rows, error } = await supabaseClient
+      .from('order_item_statuses')
+      .select('id, order_id, item_index, seller_id, status, service_status, listing_type, dispute_reason, created_at')
+      .neq('status', 'refunded')
+      .or('status.eq.disputed,service_status.in.(rejected,cancelled)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (error) { if (listEl) listEl.innerHTML = '<div style="color:#b91c1c;padding:20px">Failed to load disputes: ' + escapeHtml(error.message) + '</div>'; return; }
+    if (!rows || !rows.length) { if (emptyEl) emptyEl.style.display = ''; return; }
+
+    const orderIds  = [...new Set(rows.map(r => r.order_id))];
+    const sellerIds = [...new Set(rows.map(r => r.seller_id).filter(Boolean))];
+    const [ordersRes, sellersRes] = await Promise.all([
+      supabaseClient.from('orders').select('id, order_number, customer_name, items').in('id', orderIds),
+      sellerIds.length ? supabaseClient.from('sellers').select('id, shop_name').in('id', sellerIds) : Promise.resolve({ data: [] })
+    ]);
+    const orderMap = {}; (ordersRes.data || []).forEach(o => { orderMap[o.id] = o; });
+    const sellerMap = {}; (sellersRes.data || []).forEach(s => { sellerMap[s.id] = s; });
+
+    if (listEl) listEl.innerHTML = rows.map(r => {
+      const order  = orderMap[r.order_id] || {};
+      const seller = sellerMap[r.seller_id] || {};
+      const items  = Array.isArray(order.items) ? order.items : [];
+      const item   = items[r.item_index] || {};
+      const itemName = item.name || item.title || ('Item #' + r.item_index);
+      const orderNum = order.order_number || (r.order_id || '').slice(0, 8);
+      const reasonLabel = r.status === 'disputed'
+        ? '⚠ Buyer disputed delivery' + (r.dispute_reason ? ': ' + escapeHtml(r.dispute_reason) : '')
+        : (r.service_status === 'rejected' ? '✗ Seller rejected service request' : '✗ Order cancelled');
+
+      return '<div style="background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.06);border:1px solid #fca5a5">' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">' +
+          '<span style="font-weight:700;font-size:14px">#' + escapeHtml(String(orderNum)) + '</span>' +
+          '<span style="font-size:12px;background:#fee2e2;color:#991b1b;padding:2px 9px;border-radius:999px;font-weight:600">' + reasonLabel + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#374151">' + escapeHtml(itemName) + '</div>' +
+        (order.customer_name ? '<div style="font-size:12px;color:#6b7280;margin-top:2px">👤 ' + escapeHtml(order.customer_name) + '</div>' : '') +
+        (seller.shop_name ? '<div style="font-size:12px;color:#6b7280">🏪 ' + escapeHtml(seller.shop_name) + '</div>' : '') +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' +
+          (r.status === 'disputed' ? '<button onclick="adminResolveDispute(\'' + r.id + '\',\'delivered\')" style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">✓ Resolve as Delivered</button>' : '') +
+          '<button onclick="adminResolveDispute(\'' + r.id + '\',\'refunded\')" style="padding:5px 12px;background:#7c3aed;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">↩ Mark Refunded</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  };
+
+  window.adminResolveDispute = async function(statusId, resolution) {
+    if (!supabaseClient) return;
+    if (!confirm('Mark this item as ' + resolution + '? This only records the resolution — actual PayFast refunds are processed separately.')) return;
+    const { error } = await supabaseClient.from('order_item_statuses').update({ status: resolution, updated_at: new Date().toISOString() }).eq('id', statusId);
+    if (error) { alert('Update failed: ' + error.message); return; }
+    await loadAdminDisputes();
+  };
+  /* ============================================================ end Disputes */
 
   // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();

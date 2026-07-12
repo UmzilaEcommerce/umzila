@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Checkout — Umzila</title>
   <link rel="icon" href="umzila.webp" type="image/webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
   <style>
-    /* ---------- BASE / RESET ---------- */
+    /* ---------- BASE / RESET ----------
+       Tokens aligned with style.css's system (the site-wide premium/minimal
+       language) — old names kept as aliases so nothing here needs rewriting. */
     :root {
       --bg: #f7f7f9;
       --card: #ffffff;
@@ -15,16 +20,24 @@
       --accent-2: #00a0ff;
       --cta: #ff6b2c;
       --success: #28a745;
-      --error: #dc3545;
-      --shadow: 0 6px 18px rgba(11, 13, 20, 0.08);
+      --color-danger: #dc2626;
+      --error: var(--color-danger);
+      --shadow-sm: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.05);
+      --shadow-md: 0 4px 12px rgba(15,23,42,0.08);
+      --shadow-lg: 0 6px 12px rgba(16,24,40,.06), 0 20px 48px rgba(16,24,40,.12);
+      --shadow: var(--shadow-md);
+      --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+      --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+      --radius-sm: 6px; --radius-md: 10px; --radius-lg: 16px;
+      --radius-pill: 999px; --radius-circle: 50%;
       --transition: all 0.3s ease;
     }
-    
+
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
     
     html, body {
@@ -756,19 +769,19 @@
 
   <!-- Checkout Steps -->
   <div class="checkout-steps">
-    <div class="step active" data-step="shipping">
+    <div class="step active" data-step="details">
       <div class="step-number">1</div>
-      <span>Shipping</span>
+      <span>Details</span>
+      <div class="step-line"></div>
+    </div>
+    <div class="step" data-step="shipping">
+      <div class="step-number">2</div>
+      <span>Delivery</span>
       <div class="step-line"></div>
     </div>
     <div class="step" data-step="payment">
-      <div class="step-number">2</div>
-      <span>Payment</span>
-      <div class="step-line"></div>
-    </div>
-    <div class="step" data-step="confirmation">
       <div class="step-number">3</div>
-      <span>Confirmation</span>
+      <span>Pay</span>
     </div>
   </div>
 
@@ -783,18 +796,86 @@
           <p>Loading checkout...</p>
         </div>
 
-        <!-- Shipping Information Section -->
+        <!-- Details Section — contact info + embedded sign-in. No popup: a
+             guest just fills this in and moves on; signing in is one inline
+             expandable link, never a blocking modal. -->
+        <section id="detailsSection" class="checkout-section hidden">
+          <div class="section-header">
+            <h2>Your Details</h2>
+          </div>
+
+          <div id="inlineSigninBox" style="margin-bottom:14px">
+            <button type="button" id="inlineSigninToggle" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:0">Have an account? Sign in</button>
+            <div id="inlineSigninForm" class="hidden" style="margin-top:10px;padding:14px;background:#f8f9fa;border-radius:10px">
+              <div class="form-group" style="margin-bottom:8px">
+                <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
+              </div>
+              <div id="inlineSigninError" class="error-message hidden"></div>
+              <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
+              <button type="button" id="inlineForgotPassword" style="background:none;border:none;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;margin-left:10px">Forgot password?</button>
+            </div>
+          </div>
+          <div id="signedInBox" class="hidden" style="margin-bottom:14px;padding:12px 14px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#166534">
+            Signed in as <span id="signedInEmail" style="font-weight:600"></span> · <button type="button" id="signOutInline" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:13px;padding:0">Not you?</button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Email Address <span class="required">*</span></label>
+            <input type="email" id="customerEmail" class="form-control" required autofocus>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">First Name <span class="required">*</span></label>
+              <input type="text" id="firstName" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last Name <span class="required">*</span></label>
+              <input type="text" id="lastName" class="form-control" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Phone Number <span class="required">*</span></label>
+            <input type="tel" id="phoneNumber" class="form-control" required placeholder="+27 12 345 6789">
+          </div>
+
+          <!-- Account-first: the default, prominent path — an account fixes
+               order tracking, service status, and slot changes permanently.
+               Never a hard requirement though — "Skip" always works, so a
+               Supabase Auth hiccup can never cost a sale. Hidden once signed
+               in (via inline sign-in above, or an existing session). -->
+          <div class="form-group" id="detailsAccountCard" style="background:#f0f4ff;border-radius:10px;padding:14px 16px">
+            <div style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:2px">Create your Umzila account <span style="font-weight:600;color:#16a34a;font-size:12px">Recommended</span></div>
+            <div style="font-size:13px;color:#6b7280;margin-bottom:10px">Track this order, change delivery times, and check out in seconds next time.</div>
+            <input type="password" id="detailsAccountPassword" class="form-control" placeholder="Choose a password (8+ characters)" style="margin-bottom:8px">
+            <div id="detailsAccountError" class="error-message hidden"></div>
+            <div id="detailsAccountMsg" style="font-size:12px;margin-bottom:8px"></div>
+            <div style="font-size:11px;color:#9ca3af">Or just continue below — your order works either way.</div>
+          </div>
+
+          <div id="detailsFormError" class="error-message hidden"></div>
+          <div class="text-center mt-4">
+            <button id="continueToDelivery" class="btn" style="padding: 15px 40px; font-size: 16px;">
+              Continue to Delivery
+            </button>
+          </div>
+        </section>
+
+        <!-- Delivery Section -->
         <section id="shippingSection" class="checkout-section hidden">
           <div class="section-header">
-            <h2>Shipping Information</h2>
+            <h2>Delivery</h2>
             <button class="edit-btn" id="editShipping">Edit</button>
           </div>
-          
-          <!-- Service dropoff banner (shown when cart has item_dropoff services) -->
-          <div id="serviceDropoffBanner" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#166534;line-height:1.6">
-            📦 <strong>This order includes a service.</strong><br>
-            After payment, bring your item(s) to the <strong>Umzila collection point at UKZN Westville campus</strong>. The seller will be notified to accept your service request within 24 hours.
-          </div>
+
+          <!-- Per-service-item summary, shown when cart has one or more services.
+               Content built dynamically by updateServiceBanner() per archetype
+               (item_dropoff / in_person-scheduled / in_person-flexible / digital)
+               instead of one static drop-off-only message. Item_dropoff cards
+               are editable here (Change links) even if choices were already
+               made in the product modal at add-to-cart time. -->
+          <div id="serviceDropoffBanner" style="display:none;margin-bottom:16px"></div>
 
           <div id="shippingForm">
             <!-- Delivery method choice -->
@@ -837,33 +918,6 @@
                   Delivery is only available in selected areas near UKZN Westville.
                 </div>
               </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Email Address <span class="required">*</span></label>
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <input type="email" id="customerEmail" class="form-control" required readonly>
-                <div class="tooltip">
-                  <span style="color: var(--accent); cursor: help;">ℹ️</span>
-                  <div class="tooltip-text">This is the email you logged in with</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">First Name <span class="required">*</span></label>
-                <input type="text" id="firstName" class="form-control" required>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Last Name <span class="required">*</span></label>
-                <input type="text" id="lastName" class="form-control" required>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Phone Number <span class="required">*</span></label>
-              <input type="tel" id="phoneNumber" class="form-control" required placeholder="+27 12 345 6789">
             </div>
 
             <!-- Address fields — hidden when pickup is selected -->
@@ -914,6 +968,7 @@
             </div>
           </div>
 
+          <div id="shippingFormError" class="error-message hidden"></div>
           <div class="text-center mt-4">
             <button id="continueToPayment" class="btn" style="padding: 15px 40px; font-size: 16px;">
               Continue to Payment
@@ -925,7 +980,36 @@
         <section id="paymentSection" class="checkout-section hidden">
           <div class="section-header">
             <h2>Payment Method</h2>
-            <button class="edit-btn" id="editPayment">Edit</button>
+            <div>
+              <button class="edit-btn" id="editDetails">Edit Details</button>
+              <button class="edit-btn" id="editDeliveryFromPay">Edit Delivery</button>
+            </div>
+          </div>
+
+          <!-- Completeness gate — a service left unfinished (e.g. a required
+               file/answer never provided) blocks Pay Now until fixed. This is
+               the only checkout gate that's actually blocking; everything
+               else here is optional. -->
+          <div id="checkoutBlockersCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px">
+            <div style="font-weight:700;font-size:14px;color:#78350f;margin-bottom:2px">Almost there — a couple things to finish</div>
+            <div style="font-size:13px;color:#92400e;margin-bottom:8px">Your order includes a service that still needs some info before you can pay.</div>
+            <div id="checkoutBlockersList"></div>
+          </div>
+
+          <!-- Optional, non-blocking — only shown when checking out as a guest.
+               Never gates Pay Now; skipping this produces a normal guest order. -->
+          <div id="accountCreateCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#f8f9fa;border-radius:10px">
+            <div style="font-weight:600;font-size:14px;margin-bottom:2px">Save your details for next time <span style="font-weight:400;color:#6b7280">(optional)</span></div>
+            <div style="font-size:13px;color:#6b7280;margin-bottom:10px">Create a password to track this order and check out faster later.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input type="password" id="accountCreatePassword" class="form-control" placeholder="At least 8 characters" style="max-width:220px">
+              <button type="button" id="accountCreateBtn" class="btn" style="padding:10px 18px;font-size:14px">Create account</button>
+            </div>
+            <div id="accountCreateMsg" style="font-size:12px;margin-top:8px"></div>
+            <div style="font-size:11px;color:#9ca3af;margin-top:6px">Or skip this — your order works either way.</div>
+          </div>
+          <div id="accountReadyMsg" class="hidden" style="margin-bottom:16px;padding:12px 14px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#166534">
+            ✓ Account ready — this order will be saved to it.
           </div>
 
           <div class="payment-methods">
@@ -1016,6 +1100,14 @@
           <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
             No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
           </div>
+          <div class="summary-row shipping hidden" id="serviceCollectionRow">
+            <span>Item collection</span>
+            <span id="serviceCollectionAmount">R0.00</span>
+          </div>
+          <div class="summary-row shipping hidden" id="serviceReturnRow">
+            <span>Return delivery</span>
+            <span id="serviceReturnAmount">R0.00</span>
+          </div>
           <div class="summary-row total">
             <span>Total</span>
             <span id="totalAmount">R0.00</span>
@@ -1029,60 +1121,6 @@
     </div>
   </div>
 
-  <!-- Authentication Modal -->
-  <div id="authModal" class="modal-overlay">
-    <div class="modal">
-      <button class="modal-close" id="closeAuthModal">×</button>
-      <h3 class="modal-title">Sign in to Checkout</h3>
-      
-      <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="login">Sign In</button>
-        <button class="auth-tab" data-tab="signup">Sign Up</button>
-      </div>
-
-      <!-- Login Form -->
-      <div id="loginForm" class="auth-form active">
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="loginEmail" class="form-control" placeholder="your@email.com">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="loginPassword" class="form-control" placeholder="Your password">
-        </div>
-        <div id="loginError" class="error-message hidden"></div>
-        <button id="loginSubmit" class="btn" style="width: 100%; padding: 12px;">Sign In & Continue</button>
-        <div class="text-center mt-3">
-          <button id="forgotPassword" class="btn ghost" style="font-size: 14px;">Forgot password?</button>
-        </div>
-      </div>
-
-      <!-- Signup Form -->
-      <div id="signupForm" class="auth-form">
-        <div class="form-group">
-          <label class="form-label">Full Name</label>
-          <input type="text" id="signupName" class="form-control" placeholder="Your name">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email Address</label>
-          <input type="email" id="signupEmail" class="form-control" placeholder="your@email.com">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Password</label>
-          <input type="password" id="signupPassword" class="form-control" placeholder="Create a password">
-          <div class="text-muted" style="font-size: 12px; margin-top: 5px;">
-            Must be at least 8 characters with numbers and special characters
-          </div>
-        </div>
-        <div id="signupError" class="error-message hidden"></div>
-        <button id="signupSubmit" class="btn" style="width: 100%; padding: 12px;">Create Account & Continue</button>
-      </div>
-
-      <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
-        By signing in or creating an account, you agree to our Terms and Privacy Policy.
-      </div>
-    </div>
-  </div>
 
   <!-- PayFast Form (Hidden) -->
   <form id="payfastForm" method="post">
@@ -1099,6 +1137,14 @@
     const PER_SELLER_FEE          = 3;
     const FREE_DELIVERY_THRESHOLD = 250; // subtotal >= this → delivery free
     const PICKUP_FEE              = 0;   // fixed fee for campus collection
+    // Quantity-aware fee stepping — must match validate-cart.js exactly.
+    // "How many fit in one delivery trip before it needs a bigger bag" —
+    // most sellers never override units_per_trip, these are the platform
+    // defaults. 6 small items (default cap 8) never step up; only genuinely
+    // bulky quantities do.
+    const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
+    const LARGE_OVERFLOW_FEE      = 10; // per extra trip once already at 'large'
+    const MAX_DELIVERY_FEE        = 80;
 
     // ── Delivery zones — edit this list to add/remove areas ─────────────────
     const DELIVERY_ZONES = [
@@ -1113,6 +1159,129 @@
       { name: 'On/Around Westview',     code: 'westview'         }
     ];
 
+    // SAST (Africa/Johannesburg) time helpers — fixed UTC+2 year-round, no
+    // DST, so this is simple offset math. Copied identically into every file
+    // that needs it (script.js, profile.html, logistics.html) — this
+    // codebase has no shared JS module, matching its existing convention.
+    const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+    function formatSAST(input, opts) {
+      if (!input) return '';
+      const d = input instanceof Date ? input : new Date(input);
+      return d.toLocaleString('en-ZA', Object.assign({ timeZone: 'Africa/Johannesburg' }, opts));
+    }
+    function sastDate(y, m, d, hh, mm) {
+      return new Date(Date.UTC(y, m - 1, d, hh || 0, mm || 0, 0, 0) - SAST_OFFSET_MS);
+    }
+    function sastParts(input) {
+      const d = input instanceof Date ? input : new Date(input);
+      const shifted = new Date(d.getTime() + SAST_OFFSET_MS);
+      return {
+        year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate(),
+        hour: shifted.getUTCHours(), minute: shifted.getUTCMinutes(), dayOfWeek: shifted.getUTCDay()
+      };
+    }
+
+    function computeSlotDayButtons(availability, bookings, durationMin, horizonDays) {
+      const now = new Date();
+      const nowParts = sastParts(now);
+      const todayMidnightSAST = sastDate(nowParts.year, nowParts.month, nowParts.day, 0, 0);
+      function slotsForDay(dayDate) {
+        const dp = sastParts(dayDate);
+        const dayAvail = availability.filter(a => a.day_of_week === dp.dayOfWeek);
+        if (!dayAvail.length) return [];
+        const slots = [];
+        dayAvail.forEach(a => {
+          const [sh, sm] = a.start_time.split(':').map(Number);
+          const [eh, em] = a.end_time.split(':').map(Number);
+          let cursor = sastDate(dp.year, dp.month, dp.day, sh, sm);
+          const end = sastDate(dp.year, dp.month, dp.day, eh, em);
+          while (cursor.getTime() + durationMin * 60000 <= end.getTime()) {
+            const slotStart = new Date(cursor);
+            const slotEnd = new Date(cursor.getTime() + durationMin * 60000);
+            if (slotStart > now) {
+              const overlaps = bookings.some(b => {
+                const bs = new Date(b.start_at), be = new Date(b.end_at);
+                return slotStart < be && slotEnd > bs;
+              });
+              if (!overlaps) slots.push({ start: slotStart, end: slotEnd });
+            }
+            cursor = new Date(cursor.getTime() + durationMin * 60000);
+          }
+        });
+        return slots;
+      }
+      const days = [];
+      for (let i = 0; i < horizonDays; i++) days.push(new Date(todayMidnightSAST.getTime() + i * 24 * 60 * 60 * 1000));
+      return days
+        .map(d => ({ date: d, slots: slotsForDay(d), label: formatSAST(d, { weekday: 'short', day: 'numeric', month: 'short' }) }))
+        .filter(d => d.slots.length);
+    }
+
+    // Rep collection/delivery slot picker for checkout's editable service
+    // cards — visual clone of script.js's loadRepSlotPicker, sourced from
+    // the union of all reps' rep_availability. `existingSlot` pre-selects
+    // whatever was already chosen (e.g. at add-to-cart time).
+    async function loadRepSlotPickerCheckout(mountEl, onPick, existingSlot) {
+      if (!mountEl || !supabaseClient) return;
+      mountEl.innerHTML = 'Loading available times…';
+      const now = new Date();
+      const horizonDays = 14;
+      const rangeEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+      const durationMin = 60;
+      const [availRes, bookingsRes] = await Promise.all([
+        supabaseClient.from('rep_availability').select('day_of_week,start_time,end_time'),
+        supabaseClient.from('service_bookings').select('start_at,end_at,status')
+          .in('status', ['held', 'confirmed']).gte('start_at', now.toISOString()).lte('start_at', rangeEnd.toISOString())
+      ]);
+      const availability = availRes.data || [];
+      const bookings = bookingsRes.data || [];
+      if (!availability.length) { mountEl.innerHTML = 'No collection/delivery hours are set up yet.'; return; }
+      const dayButtons = computeSlotDayButtons(availability, bookings, durationMin, horizonDays);
+      if (!dayButtons.length) { mountEl.innerHTML = 'No upcoming availability in the next 2 weeks.'; return; }
+
+      let selected = existingSlot && existingSlot.start ? { start: existingSlot.start, end: existingSlot.end } : null;
+      let activeDayIdx = 0;
+      if (selected) {
+        const idx = dayButtons.findIndex(d => d.slots.some(s => s.start.toISOString() === selected.start));
+        if (idx > -1) activeDayIdx = idx;
+      }
+      function render() {
+        const day = dayButtons[activeDayIdx];
+        mountEl.innerHTML =
+          '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px" class="rep-slot-days"></div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:8px" class="rep-slot-times"></div>' +
+          '<div class="rep-slot-selected" style="margin-top:8px;font-size:12px;color:#059669;font-weight:600"></div>';
+        const daysEl = mountEl.querySelector('.rep-slot-days');
+        dayButtons.forEach((d, i) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = d.label;
+          const active = i === activeDayIdx;
+          btn.style.cssText = 'flex-shrink:0;padding:8px 12px;border-radius:999px;border:1.5px solid ' + (active ? 'var(--accent)' : '#e5e7eb') + ';background:' + (active ? '#f0f6ff' : '#fff') + ';color:' + (active ? 'var(--accent)' : '#374151') + ';font-size:12px;font-weight:600;cursor:pointer';
+          btn.addEventListener('click', () => { activeDayIdx = i; render(); });
+          daysEl.appendChild(btn);
+        });
+        const timesEl = mountEl.querySelector('.rep-slot-times');
+        day.slots.forEach(slot => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          const timeLabel = formatSAST(slot.start, { hour: '2-digit', minute: '2-digit' });
+          btn.textContent = timeLabel;
+          const isSelected = selected && selected.start === slot.start.toISOString();
+          btn.style.cssText = 'padding:8px 14px;border-radius:8px;border:1.5px solid ' + (isSelected ? 'var(--accent)' : '#e5e7eb') + ';background:' + (isSelected ? 'var(--accent)' : '#fff') + ';color:' + (isSelected ? '#fff' : '#374151') + ';font-size:13px;font-weight:600;cursor:pointer';
+          btn.addEventListener('click', () => {
+            selected = { start: slot.start.toISOString(), end: slot.end.toISOString() };
+            render();
+            const selEl = mountEl.querySelector('.rep-slot-selected');
+            if (selEl) selEl.textContent = 'Selected: ' + day.label + ' at ' + timeLabel;
+            if (onPick) onPick(selected);
+          });
+          timesEl.appendChild(btn);
+        });
+      }
+      render();
+    }
+
     /**
      * calculateDeliveryFee — cart-aware delivery fee
      * Returns { fee, maxClass, uniqueSellers, isFree, isPickup }
@@ -1121,6 +1290,9 @@
       const isPickup = deliveryMethodType === 'pickup';
       // Services never drive delivery fee — only physical products do
       const productItems = (cartItems || []).filter(i => (i.listing_type || 'product') !== 'service');
+      // Admin-flagged free-delivery items (in-house/residence resellers) never
+      // contribute a parcel class or a seller to the surcharge — see admin.html.
+      const feeItems = productItems.filter(i => !i.free_delivery);
       if (isPickup) {
         // Pickup is free for service-only carts (no product to pick up)
         if (!productItems.length) return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: true, serviceOnly: true };
@@ -1128,20 +1300,59 @@
       }
       if (!productItems.length)
         return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false, serviceOnly: true };
+      if (productItems.length && !feeItems.length)
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false, allFreeDelivery: true };
+      // Free-delivery items still count toward the R250 threshold — the
+      // threshold is a subtotal-size signal, unrelated to who ships what.
       if (subtotal >= FREE_DELIVERY_THRESHOLD)
         return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false };
 
       const classOrder = { small: 0, medium: 1, large: 2 };
-      let maxClass = 'small';
+      const classNames = ['small', 'medium', 'large'];
+      let maxClassIdx = 0;
+      let extraTrips = 0;
       const sellerIds = new Set();
-      productItems.forEach(item => {
+      feeItems.forEach(item => {
         const dc = (item.delivery_class || 'small').toLowerCase();
-        if ((classOrder[dc] ?? 0) > classOrder[maxClass]) maxClass = dc;
+        const baseIdx = classOrder[dc] ?? 0;
+        const qty = item.quantity || item.qty || 1;
+        const capacity = item.units_per_trip || DEFAULT_UNITS_PER_TRIP[dc] || DEFAULT_UNITS_PER_TRIP.small;
+        const trips = Math.ceil(qty / capacity);
+        const stepUps = trips - 1;
+        const rawIdx = baseIdx + stepUps;
+        if (rawIdx > maxClassIdx) maxClassIdx = Math.min(rawIdx, 2);
+        // Each line's own overflow past 'large' needs its own extra trip —
+        // these stack across lines rather than taking the max, since one
+        // trip can't physically absorb two different bulky products' overflow.
+        extraTrips += Math.max(0, rawIdx - 2);
         if (item.seller_id) sellerIds.add(item.seller_id);
       });
+      const maxClass = classNames[maxClassIdx];
       const uniqueSellers = Math.max(sellerIds.size, 1);
-      const fee = DELIVERY_CLASS_PRICES[maxClass] + (uniqueSellers - 1) * PER_SELLER_FEE;
-      return { fee: Math.max(0, fee), maxClass, uniqueSellers, isFree: false, isPickup: false };
+      const fee = Math.min(MAX_DELIVERY_FEE, DELIVERY_CLASS_PRICES[maxClass] + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE);
+      return { fee: Math.max(0, fee), maxClass, uniqueSellers, extraTrips, isFree: false, isPickup: false };
+    }
+
+    /**
+     * calculateServiceFees — flat per-line collection/return fees for
+     * item_dropoff services. Never affected by pickup mode or the R250
+     * threshold — those are product-delivery concepts, not service ones.
+     * This is the live/optimistic preview; validate-cart.js prices the
+     * authoritative amount actually charged (see handlePayment).
+     */
+    const SERVICE_COLLECT_FEE = 15; // rep collects buyer's item from their address
+    const SERVICE_RETURN_FEE  = 15; // finished item delivered to an address — must match validate-cart.js, server value wins
+
+    function calculateServiceFees(cartItems) {
+      let collection = 0;
+      let returnDelivery = 0;
+      (cartItems || []).forEach(item => {
+        if (item.fulfillment_type !== 'item_dropoff') return;
+        const opts = item.service_options || {};
+        if (opts.collection_method === 'rep_collect') collection += SERVICE_COLLECT_FEE;
+        if (item.item_returned !== false && opts.return_method === 'deliver') returnDelivery += SERVICE_RETURN_FEE;
+      });
+      return { collection, returnDelivery, total: collection + returnDelivery };
     }
     
     // Configuration will be fetched from environment variables via Netlify Function
@@ -1188,15 +1399,24 @@
       loadingState: document.getElementById('loadingState'),
       
       // Sections
+      detailsSection: document.getElementById('detailsSection'),
       shippingSection: document.getElementById('shippingSection'),
       paymentSection: document.getElementById('paymentSection'),
       confirmationSection: document.getElementById('confirmationSection'),
-      
-      // Shipping Form
+
+      // Details Form
       customerEmail: document.getElementById('customerEmail'),
       firstName: document.getElementById('firstName'),
       lastName: document.getElementById('lastName'),
       phoneNumber: document.getElementById('phoneNumber'),
+      continueToDelivery: document.getElementById('continueToDelivery'),
+      detailsFormError: document.getElementById('detailsFormError'),
+      detailsAccountCard: document.getElementById('detailsAccountCard'),
+      detailsAccountPassword: document.getElementById('detailsAccountPassword'),
+      detailsAccountError: document.getElementById('detailsAccountError'),
+      detailsAccountMsg: document.getElementById('detailsAccountMsg'),
+
+      // Shipping/Delivery Form
       shippingAddress: document.getElementById('shippingAddress'),
       city: document.getElementById('city'),
       postalCode: document.getElementById('postalCode'),
@@ -1204,13 +1424,14 @@
       shippingCost: document.getElementById('shippingCost'),
       deliveryInstructions: document.getElementById('deliveryInstructions'),
       continueToPayment: document.getElementById('continueToPayment'),
-      
+      shippingFormError: document.getElementById('shippingFormError'),
+
       // Payment Form
       orderNotes: document.getElementById('orderNotes'),
       termsAgreement: document.getElementById('termsAgreement'),
       payNowBtn: document.getElementById('payNowBtn'),
       paymentError: document.getElementById('paymentError'),
-      
+
       // Order Summary
       orderItems: document.getElementById('orderItems'),
       subtotalAmount: document.getElementById('subtotalAmount'),
@@ -1221,30 +1442,29 @@
       promoCodeInput: document.getElementById('promoCodeInput'),
       applyPromoCode: document.getElementById('applyPromoCode'),
       promoMessage: document.getElementById('promoMessage'),
-      
+
       // Confirmation
       orderIdDisplay: document.getElementById('orderIdDisplay'),
       confirmationEmail: document.getElementById('confirmationEmail'),
       viewOrderBtn: document.getElementById('viewOrderBtn'),
-      
-      // Authentication
-      authModal: document.getElementById('authModal'),
-      closeAuthModal: document.getElementById('closeAuthModal'),
+
+      // Authentication — embedded inline, no modal
       authBtn: document.getElementById('authBtn'),
-      authTabs: document.querySelectorAll('.auth-tab'),
-      loginForm: document.getElementById('loginForm'),
-      signupForm: document.getElementById('signupForm'),
-      loginEmail: document.getElementById('loginEmail'),
-      loginPassword: document.getElementById('loginPassword'),
-      loginSubmit: document.getElementById('loginSubmit'),
-      loginError: document.getElementById('loginError'),
-      signupName: document.getElementById('signupName'),
-      signupEmail: document.getElementById('signupEmail'),
-      signupPassword: document.getElementById('signupPassword'),
-      signupSubmit: document.getElementById('signupSubmit'),
-      signupError: document.getElementById('signupError'),
-      forgotPassword: document.getElementById('forgotPassword'),
-      
+      inlineSigninToggle: document.getElementById('inlineSigninToggle'),
+      inlineSigninForm: document.getElementById('inlineSigninForm'),
+      inlineSigninPassword: document.getElementById('inlineSigninPassword'),
+      inlineSigninSubmit: document.getElementById('inlineSigninSubmit'),
+      inlineSigninError: document.getElementById('inlineSigninError'),
+      inlineForgotPassword: document.getElementById('inlineForgotPassword'),
+      signedInBox: document.getElementById('signedInBox'),
+      signedInEmail: document.getElementById('signedInEmail'),
+      signOutInline: document.getElementById('signOutInline'),
+      accountCreateCard: document.getElementById('accountCreateCard'),
+      accountCreatePassword: document.getElementById('accountCreatePassword'),
+      accountCreateBtn: document.getElementById('accountCreateBtn'),
+      accountCreateMsg: document.getElementById('accountCreateMsg'),
+      accountReadyMsg: document.getElementById('accountReadyMsg'),
+
       // Steps
       steps: document.querySelectorAll('.step'),
       
@@ -1380,10 +1600,10 @@
         
         if (session?.user) {
           state.user = session.user;
-          
+
           // Verify profile exists (like in index.html)
           await verifyUserProfile(session.user.id);
-          updateAuthUI();
+          updateAuthUI(session.user);
           return true;
         }
         return false;
@@ -1468,17 +1688,32 @@
         elements.authBtn.onclick = () => {
             window.location.href = 'profile.html';
         };
-        
-        // Pre-fill email if user is logged in
+
+        // A real, signed-in session — lock the email to the account's own
+        // (checking out under a different email while signed in would be
+        // confusing). Guests never hit this branch, so their email field
+        // stays editable, matching the frictionless/no-popup design.
         elements.customerEmail.value = user.email;
         elements.customerEmail.readOnly = true;
-        
+        if (elements.signedInBox) {
+          elements.signedInBox.classList.remove('hidden');
+          if (elements.signedInEmail) elements.signedInEmail.textContent = user.email;
+        }
+        if (elements.inlineSigninBox) document.getElementById('inlineSigninBox').classList.add('hidden');
+        if (elements.accountCreateCard) elements.accountCreateCard.classList.add('hidden');
+        if (elements.accountReadyMsg) elements.accountReadyMsg.classList.add('hidden');
+        if (elements.detailsAccountCard) elements.detailsAccountCard.classList.add('hidden');
+
         // Sync cart on login
         syncCartOnLogin(user);
     } else {
         elements.authBtn.textContent = 'Sign In';
-        elements.authBtn.onclick = showAuthModal;
+        elements.authBtn.onclick = () => { goToStep('details'); expandInlineSignin(); };
         elements.customerEmail.readOnly = false;
+        if (elements.signedInBox) elements.signedInBox.classList.add('hidden');
+        const inlineBox = document.getElementById('inlineSigninBox');
+        if (inlineBox) inlineBox.classList.remove('hidden');
+        if (elements.detailsAccountCard) elements.detailsAccountCard.classList.remove('hidden');
     }
 }
 	
@@ -1585,17 +1820,14 @@ async function saveCartToServer() {
     }
 }
 
-    
-    // Show authentication modal
-    function showAuthModal() {
-      elements.authModal.classList.add('active');
-      document.body.style.overflow = 'hidden';
-    }
-    
-    // Hide authentication modal
-    function hideAuthModal() {
-      elements.authModal.classList.remove('active');
-      document.body.style.overflow = '';
+
+    // Expand the inline "Have an account? Sign in" box on the Details step —
+    // replaces the old auto-popping auth modal. Never blocks the page.
+    function expandInlineSignin() {
+      const form = elements.inlineSigninForm;
+      if (!form) return;
+      form.classList.remove('hidden');
+      if (elements.inlineSigninPassword) elements.inlineSigninPassword.focus();
     }
     
     /********************
@@ -1873,6 +2105,25 @@ async function loadFromLocalStorage() {
     }
     
     // Apply coupon code
+    // Applies a mystery-popup free-gift code automatically via the existing
+    // coupon pipeline. Called once at load (works immediately for a signed-in
+    // buyer) and once more after the Details step (works for a guest, once
+    // their email is known — applyCoupon needs an email to match the code
+    // against). Only clears the stored code once it actually applies, so the
+    // second call can still retry after the first one's guest-email attempt
+    // legitimately fails for lack of an email yet.
+    async function applyStoredFreeGiftCode() {
+      try {
+        const code = localStorage.getItem('um_free_gift_code');
+        if (!code) return;
+        if (!state.cart || !state.cart.length) return;
+        const applied = await applyCoupon(code);
+        if (applied) localStorage.removeItem('um_free_gift_code');
+      } catch (e) {
+        console.warn('Free-gift code auto-apply failed', e);
+      }
+    }
+
     async function applyCoupon(code) {
       try {
         if (!supabaseClient) return false;
@@ -1898,11 +2149,15 @@ async function loadFromLocalStorage() {
           return false;
         }
 
-        // Check email ownership — if the code was issued to a specific email, only that user can use it
+        // Check email ownership — if the code was issued to a specific email,
+        // it's usable either by that logged-in account, or by a guest actively
+        // checking out with the exact matching email (same trust level as
+        // being logged in with it — this is what lets a mystery/free-gift
+        // code auto-apply for guests instead of forcing a login).
         if (coupon.email) {
-          const userEmail = state.user?.email || '';
+          const userEmail = state.user?.email || elements.customerEmail?.value || '';
           if (!userEmail) {
-            showPromoMessage('Please log in to use this code.', 'error');
+            showPromoMessage('Enter your email above to use this code.', 'error');
             return false;
           }
           if (coupon.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
@@ -1927,7 +2182,7 @@ async function loadFromLocalStorage() {
         // Calculate discount based on coupon type
         let discount = 0;
         if (coupon.type === 'percentage' || coupon.type === 'mystery_gift') {
-          const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+          const subtotal = state.cart.reduce((sum, item) => sum + (item.price * (item.quantity || item.qty || 1)), 0);
           discount = (subtotal * coupon.amount) / 100;
         } else {
           discount = coupon.amount;
@@ -1978,6 +2233,7 @@ async function validateCheckout() {
         }
         
         // Send cart to server for validation
+        const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
         const response = await fetch('/.netlify/functions/validate-cart', {
             method: 'POST',
             headers: {
@@ -1985,25 +2241,30 @@ async function validateCheckout() {
             },
             body: JSON.stringify({
                 cartItems: state.cart,
-                userId: state.user?.id
+                userId: state.user?.id,
+                deliveryMethod: deliveryMethodType
             })
         });
-        
+
         if (!response.ok) {
             throw new Error('Failed to validate cart');
         }
-        
+
         const result = await response.json();
-        
+
         if (result.hasChanges) {
             // Update cart with validated data
             state.cart = result.validatedCart;
             updateOrderSummary();
-            
+
             // Show notification to user
             showNotification('Cart updated with current prices and availability', 'info');
         }
-        
+
+        // Server-authoritative fees (see validate-cart.js computeFees) — used
+        // by handlePayment instead of recomputing client-side at pay time.
+        state.serverFees = result.fees || null;
+
         return result.validatedCart;
         
     } catch (error) {
@@ -2039,26 +2300,41 @@ async function validateCheckout() {
       }
       
       let subtotal = 0;
-      let itemsHTML = '';
-      
-      state.cart.forEach((item, index) => {
-        const itemTotal = (item.price || 0) * (item.quantity || 1);
+
+      // Cart items store name/image/quantity as title/img/qty (see addToCart
+      // in script.js) — fall back to those so this never renders "undefined".
+      function renderLine(item) {
+        const qty = item.quantity || item.qty || 1;
+        const name = item.name || item.title || 'Item';
+        const image = item.image || item.img || 'https://via.placeholder.com/80x80?text=Product';
+        const itemTotal = (item.price || 0) * qty;
         subtotal += itemTotal;
-        
-        itemsHTML += `
+        return `
           <div class="order-item">
             <div class="item-image">
-              <img src="${item.image || 'https://via.placeholder.com/80x80?text=Product'}" alt="${item.name}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
+              <img src="${escapeHtmlLite(image)}" alt="${escapeHtmlLite(name)}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
             </div>
             <div class="item-details">
-              <div class="item-title">${item.name}</div>
-              <div class="item-variant">Size: ${item.size || 'One Size'} • Qty: ${item.quantity}</div>
+              <div class="item-title">${escapeHtmlLite(name)}</div>
+              <div class="item-variant">Size: ${escapeHtmlLite(item.size || 'One Size')} • Qty: ${qty}</div>
               <div class="item-price">${formatCurrency(itemTotal)}</div>
             </div>
           </div>
         `;
-      });
-      
+      }
+
+      // One bundled order — but products and services are visually grouped
+      // so a buyer can tell at a glance what's a normal item vs. a service,
+      // without it looking like two separate orders.
+      const productLines = state.cart.filter(i => (i.listing_type || 'product') !== 'service');
+      const serviceLines = state.cart.filter(i => i.listing_type === 'service');
+      const showHeadings = productLines.length && serviceLines.length;
+      let itemsHTML = '';
+      if (showHeadings) itemsHTML += '<div class="order-group-heading" style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px">Items</div>';
+      itemsHTML += productLines.map(renderLine).join('');
+      if (showHeadings) itemsHTML += '<div class="order-group-heading" style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;margin:14px 0 4px">Services</div>';
+      itemsHTML += serviceLines.map(renderLine).join('');
+
       elements.orderItems.innerHTML = itemsHTML;
       updateServiceBanner();
 
@@ -2079,14 +2355,24 @@ async function validateCheckout() {
       const cartForFee = (state.validatedCart && state.validatedCart.length) ? state.validatedCart : state.cart;
       const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
       state.deliveryMethodType = deliveryMethodType;
-      const { fee, maxClass, uniqueSellers, isFree, isPickup } = calculateDeliveryFee(cartForFee, subtotal, deliveryMethodType);
-      state.deliveryFee       = fee;
+      const { fee, maxClass, uniqueSellers, isFree, isPickup, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal, deliveryMethodType);
+      const svcFees = calculateServiceFees(cartForFee);
+      state.deliveryFee       = fee + svcFees.total;
       state.deliveryClass     = maxClass;
       state.uniqueSellerCount = uniqueSellers;
 
       const discount = state.discount || 0;
-      const total    = Math.max(0, subtotal - discount + fee);
+      const total    = Math.max(0, subtotal - discount + fee + svcFees.total);
       state.orderTotal = total;
+
+      const collectionRow = document.getElementById('serviceCollectionRow');
+      const collectionAmt = document.getElementById('serviceCollectionAmount');
+      const returnRow = document.getElementById('serviceReturnRow');
+      const returnAmt = document.getElementById('serviceReturnAmount');
+      if (collectionRow) collectionRow.classList.toggle('hidden', svcFees.collection <= 0);
+      if (collectionAmt) collectionAmt.textContent = formatCurrency(svcFees.collection);
+      if (returnRow) returnRow.classList.toggle('hidden', svcFees.returnDelivery <= 0);
+      if (returnAmt) returnAmt.textContent = formatCurrency(svcFees.returnDelivery);
 
       elements.subtotalAmount.textContent = formatCurrency(subtotal);
 
@@ -2105,7 +2391,10 @@ async function validateCheckout() {
         const cartNow = state.validatedCart || state.cart;
         const svcOnly = cartHasServices(cartNow) && !cartHasProducts(cartNow);
         shippingEl.textContent = svcOnly ? 'R0' : 'Free 🎉';
-        if (breakdownEl) { breakdownEl.textContent = svcOnly ? 'Service order — no delivery fee' : 'Free delivery on this order'; breakdownEl.style.display = 'block'; }
+        if (breakdownEl) {
+          breakdownEl.textContent = svcOnly ? 'Service order — no delivery fee' : (allFreeDelivery ? 'Free delivery on these items' : 'Free delivery on this order');
+          breakdownEl.style.display = 'block';
+        }
       } else {
         shippingEl.textContent = formatCurrency(fee);
         if (breakdownEl) {
@@ -2200,45 +2489,285 @@ async function validateCheckout() {
     function cartHasServices(cart) { return (cart || []).some(i => i.listing_type === 'service'); }
     function cartHasProducts(cart) { return (cart || []).some(i => (i.listing_type || 'product') !== 'service'); }
 
-    function updateServiceBanner() {
-      const cart = state.validatedCart || state.cart;
-      const hasItemDropoff = (cart || []).some(i => i.listing_type === 'service' && i.fulfillment_type === 'item_dropoff');
-      const banner = document.getElementById('serviceDropoffBanner');
-      if (banner) banner.style.display = hasItemDropoff ? '' : 'none';
+    // Intake answers can be plain text or {type:'file', url, name} (a buyer
+    // upload) — render file answers as a link instead of the raw object.
+    function renderIntakeAnswers(intake) {
+      if (!intake || !Object.keys(intake).length) return '';
+      const parts = Object.entries(intake).map(function(e) {
+        var val = e[1];
+        if (val && typeof val === 'object' && val.type === 'file') {
+          return '<strong>' + e[0] + ':</strong> 📄 <a href="' + escapeHtmlLite(val.url) + '" target="_blank" rel="noopener" style="color:#166534">' + escapeHtmlLite(val.name || 'view file') + '</a>';
+        }
+        return '<strong>' + e[0] + ':</strong> ' + escapeHtmlLite(val);
+      });
+      return '<div style="margin-top:6px;font-size:12px">' + parts.join(' &middot; ') + '</div>';
     }
 
-    // Validate shipping form - ADD THIS FUNCTION
+    // Item_dropoff cards are editable here — "decide later at checkout" from
+    // the product modal lands on this exact UI, so a buyer who skipped the
+    // choice at add-to-cart (or wants to change it) can still set it before
+    // paying. Edits write back to state.cart (matched by product id) and
+    // persist to localStorage, then re-trigger the fee preview.
+    function updateServiceBanner() {
+      const cart = state.validatedCart || state.cart;
+      const banner = document.getElementById('serviceDropoffBanner');
+      if (!banner) return;
+      const services = (cart || []).filter(i => i.listing_type === 'service');
+      if (!services.length) { banner.style.display = 'none'; banner.innerHTML = ''; return; }
+
+      const cardStyle = 'background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:10px;font-size:13px;color:#166534;line-height:1.6';
+      banner.innerHTML = services.map(function(item) {
+        var title = item.title || 'Service';
+        var body = '';
+        if (item.fulfillment_type === 'item_dropoff') {
+          var intakeLines = renderIntakeAnswers(item.intake);
+          var opts = item.service_options || {};
+          var intakeKind = item.intake_kind || 'item';
+          var showCollection = intakeKind === 'item';
+          var collectLabel = opts.collection_method === 'rep_collect'
+            ? 'Rep collects from ' + escapeHtmlLite(opts.collection_address || '') + (opts.collection_slot_start ? ' · ' + formatSAST(opts.collection_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
+            : 'Drop off at campus collection point — Free';
+          var showReturn = item.item_returned !== false;
+          var returnLabel = opts.return_method === 'deliver'
+            ? 'Deliver to ' + escapeHtmlLite(opts.return_address || '') + (opts.return_slot_start ? ' · ' + formatSAST(opts.return_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
+            : 'Pick up at campus collection point — Free';
+          body = (showCollection
+              ? '<div style="margin-top:6px">Handoff: <strong>' + collectLabel + '</strong> <button type="button" class="svc-change-btn" data-svc-id="' + item.id + '" data-svc-field="collection" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:12px;padding:0">Change</button></div>'
+              : '<div style="margin-top:6px">' + (intakeKind === 'file' ? '📄 No collection — buyer sent a file' : '🙌 Nothing to collect — seller makes it') + '</div>')
+            + (showReturn ? '<div style="margin-top:2px">Return: <strong>' + returnLabel + '</strong> <button type="button" class="svc-change-btn" data-svc-id="' + item.id + '" data-svc-field="return" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:12px;padding:0">Change</button></div>' : '')
+            + '<div class="svc-edit-panel hidden" data-svc-panel="' + item.id + '" style="margin-top:8px;padding:10px;background:#fff;border-radius:8px;border:1px solid #d1fae5"></div>'
+            + intakeLines;
+        } else if (item.fulfillment_type === 'in_person' && item.booking_start_at) {
+          var when = formatSAST(item.booking_start_at, { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+          body = 'Your appointment is booked for <strong>' + when + '</strong>. The seller will confirm and share contact details once they accept.';
+        } else if (item.fulfillment_type === 'in_person') {
+          body = "You'll be connected with the seller to arrange a time once they accept your request.";
+        } else if (item.fulfillment_type === 'digital') {
+          body = 'This is a digital service — your deliverable will appear in your order once the seller completes it.'
+            + '<div class="svc-edit-panel hidden" data-svc-panel="' + item.id + '" style="margin-top:8px;padding:10px;background:#fff;border-radius:8px;border:1px solid #d1fae5"></div>'
+            + renderIntakeAnswers(item.intake);
+        } else {
+          body = 'The seller will be notified to accept your service request.';
+        }
+        return '<div style="' + cardStyle + '">📦 <strong>' + title + '</strong><br>' + body + '</div>';
+      }).join('');
+      banner.style.display = '';
+      wireServiceBannerEdits();
+    }
+
+    function escapeHtmlLite(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    }
+
+    // Inline intake-answer editing, opened from a completeness-gate blocker's
+    // "Complete now" button — reuses the same .svc-edit-panel container the
+    // handoff/return "Change" links already use.
+    function openIntakeEditPanel(itemId) {
+      const panel = document.querySelector('.svc-edit-panel[data-svc-panel="' + itemId + '"]');
+      const cartItem = state.cart.find(i => String(i.id) === String(itemId));
+      if (!panel || !cartItem) return;
+      const fields = Array.isArray(cartItem.intake_fields) ? cartItem.intake_fields : [];
+      const answers = Object.assign({}, cartItem.intake || {});
+
+      panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Answer required questions</div>'
+        + fields.map((f, i) => {
+            const existing = answers[f.label];
+            if (f.type === 'file') {
+              const fileUrl = existing && typeof existing === 'object' ? existing.url : '';
+              const fileName = existing && typeof existing === 'object' ? existing.name : '';
+              return '<div style="margin-bottom:8px" data-field-idx="' + i + '" data-field-type="file" data-field-label="' + escapeHtmlLite(f.label) + '" data-field-required="' + !!f.required + '">'
+                + '<label style="display:block;font-size:12px;color:#374151;margin-bottom:4px">' + escapeHtmlLite(f.label) + (f.required ? ' <span style="color:#dc2626">*</span>' : '') + '</label>'
+                + '<label class="svc-edit-dropzone" style="display:block;border:1.5px dashed #d9d9df;border-radius:6px;padding:10px;text-align:center;font-size:12px;color:#6b7280;cursor:pointer">'
+                + '<span class="svc-edit-dropzone-text">' + (fileUrl ? ('✓ ' + escapeHtmlLite(fileName || 'file') + ' · Replace') : 'Tap to upload — PDF, image or doc, max 10 MB') + '</span>'
+                + '<input type="file" class="svc-edit-file-input" data-url="' + escapeHtmlLite(fileUrl || '') + '" data-name="' + escapeHtmlLite(fileName || '') + '" accept=".pdf,.doc,.docx,.txt,image/*" style="display:none">'
+                + '</label></div>';
+            }
+            return '<div style="margin-bottom:8px" data-field-idx="' + i + '" data-field-type="text" data-field-label="' + escapeHtmlLite(f.label) + '" data-field-required="' + !!f.required + '">'
+              + '<label style="display:block;font-size:12px;color:#374151;margin-bottom:4px">' + escapeHtmlLite(f.label) + (f.required ? ' <span style="color:#dc2626">*</span>' : '') + '</label>'
+              + '<input type="text" class="svc-edit-text-input" value="' + escapeHtmlLite(typeof existing === 'string' ? existing : '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d9d9df;border-radius:6px;font-size:13px">'
+              + '</div>';
+          }).join('')
+        + '<button type="button" class="svc-save-btn" style="margin-top:4px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Save</button>';
+      panel.classList.remove('hidden');
+
+      panel.querySelectorAll('.svc-edit-file-input').forEach(input => {
+        input.addEventListener('change', async () => {
+          const file = input.files && input.files[0];
+          if (!file || !supabaseClient) return;
+          const dropzone = input.closest('.svc-edit-dropzone');
+          const textEl = dropzone.querySelector('.svc-edit-dropzone-text');
+          textEl.textContent = 'Uploading…';
+          try {
+            const path = `intake/${crypto.randomUUID()}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+            const { error } = await supabaseClient.storage.from('service-intake').upload(path, file, { upsert: false });
+            if (error) throw error;
+            const { data: pub } = supabaseClient.storage.from('service-intake').getPublicUrl(path);
+            input.dataset.url = pub.publicUrl;
+            input.dataset.name = file.name;
+            textEl.textContent = '✓ ' + file.name + ' · Replace';
+          } catch (e) {
+            console.error('Intake file upload failed', e);
+            textEl.textContent = 'Upload failed — tap to retry';
+          }
+        });
+      });
+
+      panel.querySelector('.svc-save-btn').addEventListener('click', () => {
+        const newIntake = Object.assign({}, cartItem.intake || {});
+        let ok = true;
+        panel.querySelectorAll('[data-field-label]').forEach(row => {
+          const label = row.dataset.fieldLabel;
+          const required = row.dataset.fieldRequired === 'true';
+          if (row.dataset.fieldType === 'file') {
+            const input = row.querySelector('.svc-edit-file-input');
+            const url = input.dataset.url;
+            if (required && !url) { row.querySelector('.svc-edit-dropzone').style.borderColor = '#dc2626'; ok = false; return; }
+            if (url) newIntake[label] = { type: 'file', url, name: input.dataset.name || 'file' };
+          } else {
+            const input = row.querySelector('.svc-edit-text-input');
+            const val = input.value.trim();
+            if (required && !val) { input.style.borderColor = '#dc2626'; ok = false; return; }
+            if (val) newIntake[label] = val;
+          }
+        });
+        if (!ok) return;
+        cartItem.intake = newIntake;
+        localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+        updateServiceBanner();
+        renderCheckoutBlockers();
+      });
+    }
+
+    function wireServiceBannerEdits() {
+      document.querySelectorAll('.svc-change-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const svcId = btn.dataset.svcId;
+          const field = btn.dataset.svcField; // 'collection' | 'return'
+          const panel = document.querySelector('.svc-edit-panel[data-svc-panel="' + svcId + '"]');
+          if (!panel) return;
+          const cartItem = state.cart.find(i => String(i.id) === String(svcId));
+          if (!cartItem) return;
+          const opts = cartItem.service_options || {};
+          const showReturn = cartItem.item_returned !== false;
+
+          let pickedSlot = field === 'collection'
+            ? (opts.collection_slot_start ? { start: opts.collection_slot_start, end: opts.collection_slot_end } : null)
+            : (opts.return_slot_start ? { start: opts.return_slot_start, end: opts.return_slot_end } : null);
+
+          if (field === 'collection') {
+            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Getting your item to us</div>'
+              + '<label style="display:block;margin-bottom:4px;cursor:pointer"><input type="radio" name="svc-collect-' + svcId + '" value="dropoff"' + (opts.collection_method !== 'rep_collect' ? ' checked' : '') + '> I\'ll drop it off — Free</label>'
+              + '<label style="display:block;cursor:pointer"><input type="radio" name="svc-collect-' + svcId + '" value="rep_collect"' + (opts.collection_method === 'rep_collect' ? ' checked' : '') + '> Collect it from me — R15</label>'
+              + '<div class="svc-slot-fields" style="display:' + (opts.collection_method === 'rep_collect' ? 'block' : 'none') + '">'
+              + '<input type="text" class="svc-collect-addr" placeholder="e.g. Santa Cruz Res, Block B, Room 214" value="' + escapeHtmlLite(opts.collection_address || '') + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:8px 10px;border:1px solid #d9d9df;border-radius:6px;font-size:13px">'
+              + '<label style="display:block;font-size:12px;color:#374151;margin:8px 0 4px">When should they come?</label>'
+              + '<div class="svc-slot-picker" style="font-size:13px;color:#6b7280">Loading available times…</div>'
+              + '</div>'
+              + '<button type="button" class="svc-save-btn" style="margin-top:8px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Save</button>';
+          } else {
+            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Getting it back to you</div>'
+              + '<label style="display:block;margin-bottom:4px;cursor:pointer"><input type="radio" name="svc-return-' + svcId + '" value="pickup_point"' + (opts.return_method !== 'deliver' ? ' checked' : '') + '> I\'ll pick it up — Free</label>'
+              + '<label style="display:block;cursor:pointer"><input type="radio" name="svc-return-' + svcId + '" value="deliver"' + (opts.return_method === 'deliver' ? ' checked' : '') + '> Deliver it to me — R15</label>'
+              + '<div class="svc-slot-fields" style="display:' + (opts.return_method === 'deliver' ? 'block' : 'none') + '">'
+              + '<input type="text" class="svc-return-addr" placeholder="e.g. Santa Cruz Res, Block B, Room 214" value="' + escapeHtmlLite(opts.return_address || '') + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:8px 10px;border:1px solid #d9d9df;border-radius:6px;font-size:13px">'
+              + '<label style="display:block;font-size:12px;color:#374151;margin:8px 0 4px">When should we deliver?</label>'
+              + '<div class="svc-slot-picker" style="font-size:13px;color:#6b7280">Loading available times…</div>'
+              + '</div>'
+              + '<button type="button" class="svc-save-btn" style="margin-top:8px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Save</button>';
+          }
+          panel.classList.remove('hidden');
+
+          let slotPickerLoaded = false;
+          const maybeLoadSlotPicker = () => {
+            if (slotPickerLoaded) return;
+            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
+            if (checked !== 'rep_collect' && checked !== 'deliver') return;
+            slotPickerLoaded = true;
+            loadRepSlotPickerCheckout(panel.querySelector('.svc-slot-picker'), slot => { pickedSlot = slot; }, pickedSlot);
+          };
+          maybeLoadSlotPicker();
+
+          panel.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => {
+            const slotFields = panel.querySelector('.svc-slot-fields');
+            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
+            if (slotFields) slotFields.style.display = (checked === 'rep_collect' || checked === 'deliver') ? 'block' : 'none';
+            maybeLoadSlotPicker();
+          }));
+
+          panel.querySelector('.svc-save-btn').addEventListener('click', () => {
+            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
+            const addrInput = panel.querySelector('.svc-collect-addr, .svc-return-addr');
+            const addr = addrInput ? addrInput.value.trim() : '';
+            const isPaid = checked === 'rep_collect' || checked === 'deliver';
+            if (isPaid && !addr) { addrInput.style.borderColor = '#dc2626'; addrInput.focus(); return; }
+            if (isPaid && !pickedSlot) {
+              panel.querySelector('.svc-slot-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              showNotification('Please pick a time first.');
+              return;
+            }
+            const newOpts = Object.assign({}, cartItem.service_options || {});
+            if (field === 'collection') {
+              newOpts.collection_method = checked === 'rep_collect' ? 'rep_collect' : 'dropoff';
+              newOpts.collection_address = checked === 'rep_collect' ? addr : null;
+              newOpts.collection_slot_start = checked === 'rep_collect' ? pickedSlot?.start : null;
+              newOpts.collection_slot_end = checked === 'rep_collect' ? pickedSlot?.end : null;
+            } else {
+              newOpts.return_method = checked === 'deliver' ? 'deliver' : 'pickup_point';
+              newOpts.return_address = checked === 'deliver' ? addr : null;
+              newOpts.return_slot_start = checked === 'deliver' ? pickedSlot?.start : null;
+              newOpts.return_slot_end = checked === 'deliver' ? pickedSlot?.end : null;
+            }
+            cartItem.service_options = newOpts;
+            localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+            updateServiceBanner();
+            updateShippingAndTotal();
+            renderCheckoutBlockers();
+          });
+        });
+      });
+    }
+
+    // Validate the Details step (contact info) — its own Continue button.
+    function validateDetailsForm() {
+        const contactFields = [
+            { element: elements.firstName, name: 'First Name' },
+            { element: elements.lastName, name: 'Last Name' },
+            { element: elements.customerEmail, name: 'Email Address' },
+            { element: elements.phoneNumber, name: 'Phone Number' }
+        ];
+
+        for (const field of contactFields) {
+            if (!field.element.value.trim()) {
+                showError(elements.detailsFormError, `Please fill in the ${field.name} field.`);
+                field.element.focus();
+                return false;
+            }
+        }
+
+        if (!isValidEmail(elements.customerEmail.value)) {
+            showError(elements.detailsFormError, 'Please enter a valid email address.');
+            elements.customerEmail.focus();
+            return false;
+        }
+
+        if (!isValidPhone(elements.phoneNumber.value)) {
+            showError(elements.detailsFormError, 'Please enter a valid South African phone number (e.g., 0821234567 or +27821234567).');
+            elements.phoneNumber.focus();
+            return false;
+        }
+
+        return true;
+    }
+
+    // Validate the Delivery step — address/zone + service handoff choices.
+    // Re-checks contact fields too as a safety net (defense in depth, in
+    // case this step is ever reached without going through Details first).
 function validateShippingForm() {
+    if (!validateDetailsForm()) return false;
+
     const cart = state.validatedCart || state.cart;
     const serviceOnly = cartHasServices(cart) && !cartHasProducts(cart);
     const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
-
-    const contactFields = [
-        { element: elements.firstName, name: 'First Name' },
-        { element: elements.lastName, name: 'Last Name' },
-        { element: elements.customerEmail, name: 'Email Address' },
-        { element: elements.phoneNumber, name: 'Phone Number' }
-    ];
-
-    for (const field of contactFields) {
-        if (!field.element.value.trim()) {
-            alert(`Please fill in the ${field.name} field.`);
-            field.element.focus();
-            return false;
-        }
-    }
-
-    if (!isValidEmail(elements.customerEmail.value)) {
-        alert('Please enter a valid email address.');
-        elements.customerEmail.focus();
-        return false;
-    }
-
-    if (!isValidPhone(elements.phoneNumber.value)) {
-        alert('Please enter a valid South African phone number (e.g., 0821234567 or +27821234567).');
-        elements.phoneNumber.focus();
-        return false;
-    }
 
     if (!isPickup && !serviceOnly) {
         const addressFields = [
@@ -2249,7 +2778,7 @@ function validateShippingForm() {
         ];
         for (const field of addressFields) {
             if (!field.element.value.trim()) {
-                alert(`Please fill in the ${field.name} field.`);
+                showError(elements.shippingFormError, `Please fill in the ${field.name} field.`);
                 field.element.focus();
                 return false;
             }
@@ -2275,9 +2804,92 @@ function validateShippingForm() {
         }
     }
 
+    // Item_dropoff service handoff/return — a paid method left with a blank
+    // address blocks this step (mirrors the same check in the product modal).
+    for (const item of cart) {
+        if (item.fulfillment_type !== 'item_dropoff') continue;
+        const opts = item.service_options || {};
+        if (opts.collection_method === 'rep_collect' && !opts.collection_address) {
+            showError(elements.shippingFormError, 'Add the collection address for your service item before continuing.');
+            return false;
+        }
+        if (opts.return_method === 'deliver' && !opts.return_address) {
+            showError(elements.shippingFormError, 'Add the return address for your service item before continuing.');
+            return false;
+        }
+    }
+
     return true;
 }
-    
+
+// Completeness gate — the actual fix for "I'll finish setting up my service
+// at checkout, then just pays without finishing it." Handoff/collection
+// choices are NOT checked here — they already default to a valid free state
+// even if untouched, so there's nothing incomplete about leaving them alone.
+// Only genuinely missing required data (an answer, an uploaded file, a
+// booked slot) blocks payment. Returns [] when nothing is missing.
+function getCheckoutBlockers() {
+    const cart = state.validatedCart || state.cart;
+    const blockers = [];
+    for (const item of cart) {
+        if (item.listing_type !== 'service') continue;
+        const title = item.title || item.name || 'Service';
+        const fields = Array.isArray(item.intake_fields) ? item.intake_fields : [];
+        const answers = item.intake || {};
+        fields.forEach(f => {
+            if (!f.required) return;
+            const val = answers[f.label];
+            const missing = f.type === 'file' ? !(val && typeof val === 'object' && val.url) : !val;
+            if (missing) blockers.push({ itemId: item.id, title, message: `Answer required: ${f.label}` });
+        });
+        if (item.fulfillment_type === 'in_person' && item.booking_mode === 'scheduled' && !item.booking_id) {
+            blockers.push({ itemId: item.id, title, message: 'Pick an appointment time' });
+        }
+        // A paid collection/return leg needs a committed time, not just an
+        // address — the "Change" panel already requires one when set, but a
+        // buyer could still arrive here with a stale/cleared slot.
+        const opts = item.service_options || {};
+        if (opts.collection_method === 'rep_collect' && !opts.collection_slot_start) {
+            blockers.push({ itemId: item.id, title, message: 'Choose a collection time', svcField: 'collection' });
+        }
+        if (opts.return_method === 'deliver' && !opts.return_slot_start) {
+            blockers.push({ itemId: item.id, title, message: 'Choose a return delivery time', svcField: 'return' });
+        }
+    }
+    return blockers;
+}
+
+function renderCheckoutBlockers() {
+    const blockers = getCheckoutBlockers();
+    const card = document.getElementById('checkoutBlockersCard');
+    const list = document.getElementById('checkoutBlockersList');
+    if (!card || !list) return blockers;
+    if (!blockers.length) { card.classList.add('hidden'); list.innerHTML = ''; return blockers; }
+    list.innerHTML = blockers.map(b => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">
+        <span style="font-size:13px;color:#78350f"><strong>${b.title}</strong> — ${b.message}</span>
+        <button type="button" class="checkout-blocker-fix" data-item-id="${b.itemId}" data-svc-field="${b.svcField || ''}" style="flex-shrink:0;padding:6px 14px;background:#f59e0b;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">Complete now</button>
+      </div>`).join('');
+    card.classList.remove('hidden');
+    list.querySelectorAll('.checkout-blocker-fix').forEach(btn => {
+      btn.addEventListener('click', () => {
+        goToStep('shipping');
+        const panel = document.querySelector('.svc-edit-panel[data-svc-panel="' + btn.dataset.itemId + '"]');
+        const target = panel || document.getElementById('serviceDropoffBanner');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (btn.dataset.svcField) {
+          // A missing collection/return slot — trigger the existing "Change"
+          // link for that leg instead of the intake-answer panel.
+          const changeBtn = document.querySelector('.svc-change-btn[data-svc-id="' + btn.dataset.itemId + '"][data-svc-field="' + btn.dataset.svcField + '"]');
+          if (changeBtn) changeBtn.click();
+        } else {
+          openIntakeEditPanel(btn.dataset.itemId);
+        }
+      });
+    });
+    return blockers;
+}
+
  // Save shipping information - ADD THIS FUNCTION
 async function saveShippingInfo() {
     try {
@@ -2297,7 +2909,7 @@ async function saveShippingInfo() {
               const cart = state.validatedCart || state.cart;
               const hasProducts = cart.some(i => (i.listing_type || 'product') !== 'service');
               const hasServices = cart.some(i => i.listing_type === 'service');
-              if (isPickup) return 'Pickup - UKZN Westville';
+              if (isPickup) return 'Pickup — UKZN Westville';
               if (hasProducts && hasServices) return 'Mixed: Products + Services';
               if (hasServices && !hasProducts) return 'Service Order';
               return 'Standard Delivery';
@@ -2369,36 +2981,39 @@ function showNotification(message, type = 'info') {
 
    
     // Go to step
+    // Step order: details -> shipping (Delivery) -> payment (Pay). Confirmation
+    // isn't a fourth dot (real confirmation happens on checkout-success.html) —
+    // reaching it just marks all three dots completed.
+    const STEP_ORDER = ['details', 'shipping', 'payment'];
     function goToStep(step) {
       elements.steps.forEach(s => {
         s.classList.remove('active', 'completed');
       });
-      
-      let stepReached = false;
+
+      const targetIdx = step === 'confirmation' ? STEP_ORDER.length : STEP_ORDER.indexOf(step);
       elements.steps.forEach(s => {
-        if (s.dataset.step === step) {
-          s.classList.add('active');
-          stepReached = true;
-        } else if (step === 'confirmation' && s.dataset.step !== 'confirmation') {
-          s.classList.add('completed');
-        } else if (step === 'payment' && s.dataset.step === 'shipping') {
-          s.classList.add('completed');
-        }
+        const idx = STEP_ORDER.indexOf(s.dataset.step);
+        if (s.dataset.step === step) s.classList.add('active');
+        else if (idx > -1 && idx < targetIdx) s.classList.add('completed');
       });
-      
+
+      elements.detailsSection.classList.add('hidden');
       elements.shippingSection.classList.add('hidden');
       elements.paymentSection.classList.add('hidden');
       elements.confirmationSection.classList.add('hidden');
-      
-      if (step === 'shipping') {
+
+      if (step === 'details') {
+        elements.detailsSection.classList.remove('hidden');
+      } else if (step === 'shipping') {
         elements.shippingSection.classList.remove('hidden');
       } else if (step === 'payment') {
         elements.paymentSection.classList.remove('hidden');
       } else if (step === 'confirmation') {
         elements.confirmationSection.classList.remove('hidden');
       }
-      
+
       state.currentStep = step;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
     
     /********************
@@ -2507,15 +3122,32 @@ async function submitToPayFast(cartItems, orderId, total) {
             return;
         }
         
-        // Store enriched validated cart and recompute delivery fee from server-validated items
+        // Store enriched validated cart. The delivery/service fee actually
+        // charged comes from validate-cart.js's computeFees() (state.serverFees,
+        // set inside validateCheckout() above) — never recomputed client-side
+        // here, since client math is only ever a preview.
         state.validatedCart = validatedCart;
+
+        // Hard completeness gate — the buyer cannot pay for a service they
+        // never finished setting up, even if they skipped past the soft
+        // checklist shown when they first reached this step.
+        const blockers = renderCheckoutBlockers();
+        if (blockers.length) {
+            document.getElementById('checkoutBlockersCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showError(elements.paymentError, 'Please finish setting up your service before paying.');
+            elements.payNowBtn.disabled = false;
+            elements.payNowBtn.textContent = 'Pay Now';
+            return;
+        }
+
         const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
         state.deliveryMethodType = deliveryMethodType;
-        const { fee: computedFee, maxClass, uniqueSellers } = calculateDeliveryFee(validatedCart, subtotal, deliveryMethodType);
+        const fees = state.serverFees || { productDelivery: 0, serviceCollection: 0, serviceReturn: 0, total: 0, deliveryClass: 'small', sellerCount: 0 };
+        const computedFee = fees.total;
         state.deliveryFee       = computedFee;
-        state.deliveryClass     = maxClass;
-        state.uniqueSellerCount = uniqueSellers;
+        state.deliveryClass     = fees.deliveryClass;
+        state.uniqueSellerCount = fees.sellerCount;
         if (state.shippingInfo) state.shippingInfo.shippingCost = computedFee;
         await updateEstimatedDelivery();
 
@@ -2548,12 +3180,12 @@ async function submitToPayFast(cartItems, orderId, total) {
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
-                label: state.shippingInfo.label || (deliveryMethodType === 'pickup' ? 'Pickup - UKZN Westville' : 'Standard Delivery'),
+                label: state.shippingInfo.label || (deliveryMethodType === 'pickup' ? 'Pickup — UKZN Westville' : 'Standard Delivery'),
                 notes: elements.orderNotes.value.trim() || '',
                 // Store applied coupon code so payfast-itn.js can mark it used after confirmed payment
                 coupon_code: state.appliedPromoCode?.code || null,
-                delivery_class: maxClass || null,
-                seller_count:   uniqueSellers || null,
+                delivery_class: fees.deliveryClass || null,
+                seller_count:   fees.sellerCount || null,
                 delivery_zone:  state.selectedZone || null
             };
 
@@ -2589,29 +3221,67 @@ async function submitToPayFast(cartItems, orderId, total) {
     async function continueInitialization() {
       try {
         await loadCart();
-        
-        // Check authentication
-        const isAuthenticated = await checkAuth();
-        
-        if (!isAuthenticated) {
-          // Show auth modal if not logged in
-          showAuthModal();
-        }
-        
+
+        // Check authentication — no auto-popup either way. Signed-in users
+        // see their details prefilled; guests just start filling the form.
+        await checkAuth();
+
+        // Mystery-popup free-gift follow-through (see applyStoredFreeGiftCode)
+        // — for a signed-in buyer we already know their email now, so this
+        // can succeed immediately; guests retry once they enter theirs
+        // (Continue-to-Delivery handler).
+        await applyStoredFreeGiftCode();
+
         // Hide loading state
         elements.loadingState.classList.add('hidden');
-        elements.shippingSection.classList.remove('hidden');
-        
+        goToStep('details');
+
+        // Now that the cart is loaded, set the Delivery step's initial
+        // visibility (service-only carts skip the method/address fields
+        // entirely) — previously this only ran on a radio's change event,
+        // so a service-only cart briefly showed irrelevant delivery UI.
+        applyDeliveryMethodUI();
+
         // Check for successful payment return
         checkPaymentStatus();
-        
+
       } catch (error) {
         console.error('Initialization error:', error);
         elements.loadingState.classList.add('hidden');
-        elements.shippingSection.classList.remove('hidden');
+        goToStep('details');
       }
     }
-    
+
+    // Delivery method radio — show/hide address fields + recalculate fee.
+    // Top-level (not nested in setupEventListeners) so continueInitialization
+    // can call it once the cart is actually loaded, not just on radio change.
+    function applyDeliveryMethodUI() {
+      const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
+      const cart = state.validatedCart || state.cart;
+      const serviceOnly = cartHasServices(cart) && !cartHasProducts(cart);
+      const zoneSection = document.getElementById('zoneSection');
+      const addressSection = document.getElementById('addressSection');
+      const deliveryMethodGroup = document.getElementById('deliveryMethodGroup');
+      const radioLabelPickup = document.getElementById('radioLabelPickup');
+      const radioLabelDeliver = document.getElementById('radioLabelDeliver');
+      // Service-only: hide delivery method choice and address sections entirely
+      if (serviceOnly) {
+        if (deliveryMethodGroup) deliveryMethodGroup.style.display = 'none';
+        if (zoneSection) zoneSection.style.display = 'none';
+        if (addressSection) addressSection.style.display = 'none';
+      } else {
+        if (deliveryMethodGroup) deliveryMethodGroup.style.display = '';
+        if (zoneSection) zoneSection.style.display = isPickup ? 'none' : '';
+        if (addressSection) addressSection.style.display = isPickup ? 'none' : '';
+        if (radioLabelPickup) radioLabelPickup.style.borderColor = isPickup ? 'var(--accent)' : '#e5e7eb';
+        if (radioLabelDeliver) radioLabelDeliver.style.borderColor = isPickup ? '#e5e7eb' : 'var(--accent)';
+      }
+      state.deliveryMethodType = serviceOnly ? 'deliver' : (isPickup ? 'pickup' : 'deliver');
+      updateServiceBanner();
+      updateShippingAndTotal();
+      refreshEstimatedTime();
+    }
+
     // Check payment status from URL
     function checkPaymentStatus() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -2646,34 +3316,6 @@ async function submitToPayFast(cartItems, orderId, total) {
         });
       }
 
-      // Delivery method radio — show/hide address fields + recalculate fee
-      function applyDeliveryMethodUI() {
-        const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
-        const cart = state.validatedCart || state.cart;
-        const serviceOnly = cartHasServices(cart) && !cartHasProducts(cart);
-        const zoneSection = document.getElementById('zoneSection');
-        const addressSection = document.getElementById('addressSection');
-        const deliveryMethodGroup = document.getElementById('deliveryMethodGroup');
-        const radioLabelPickup = document.getElementById('radioLabelPickup');
-        const radioLabelDeliver = document.getElementById('radioLabelDeliver');
-        // Service-only: hide delivery method choice and address sections entirely
-        if (serviceOnly) {
-          if (deliveryMethodGroup) deliveryMethodGroup.style.display = 'none';
-          if (zoneSection) zoneSection.style.display = 'none';
-          if (addressSection) addressSection.style.display = 'none';
-        } else {
-          if (deliveryMethodGroup) deliveryMethodGroup.style.display = '';
-          if (zoneSection) zoneSection.style.display = isPickup ? 'none' : '';
-          if (addressSection) addressSection.style.display = isPickup ? 'none' : '';
-          if (radioLabelPickup) radioLabelPickup.style.borderColor = isPickup ? 'var(--accent)' : '#e5e7eb';
-          if (radioLabelDeliver) radioLabelDeliver.style.borderColor = isPickup ? '#e5e7eb' : 'var(--accent)';
-        }
-        state.deliveryMethodType = serviceOnly ? 'deliver' : (isPickup ? 'pickup' : 'deliver');
-        updateServiceBanner();
-        updateShippingAndTotal();
-        refreshEstimatedTime();
-      }
-
       document.querySelectorAll('input[name="deliveryMethod"]').forEach(radio => {
         radio.addEventListener('change', applyDeliveryMethodUI);
       });
@@ -2683,28 +3325,83 @@ async function submitToPayFast(cartItems, orderId, total) {
         selectProvince(e.target.value);
       });
       
+      // Continue to delivery button (Details step)
+      elements.continueToDelivery.addEventListener('click', async (e) => {
+        e.preventDefault();
+        if (!validateDetailsForm()) return;
+
+        // Account-first, but never a gate: attempt signup only if a password
+        // was actually entered, and fail open on any error so a guest can
+        // never be blocked from continuing by an auth hiccup.
+        const acctPassword = elements.detailsAccountPassword?.value || '';
+        if (acctPassword && !state.user) {
+          elements.detailsAccountError.classList.add('hidden');
+          elements.detailsAccountMsg.textContent = '';
+          const email = elements.customerEmail.value.trim();
+          const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
+          try {
+            if (supabaseClient) {
+              const { data, error } = await supabaseClient.auth.signUp({
+                email, password: acctPassword, options: { data: { full_name: fullName } }
+              });
+              if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
+                // They already have an account — hand off to the inline
+                // sign-in instead of failing; never a dead end.
+                expandInlineSignin();
+                showError(elements.inlineSigninError, 'Looks like you already have an account — sign in above to continue.');
+                return;
+              } else if (error) {
+                console.warn('Account creation failed, continuing as guest', error);
+                elements.detailsAccountMsg.style.color = '#6b7280';
+                elements.detailsAccountMsg.textContent = "Couldn't create your account right now — continuing as guest, your order is unaffected.";
+              } else if (data.user && data.session) {
+                state.user = data.user;
+                await verifyUserProfile(data.user.id);
+                updateAuthUI(data.user);
+              } else {
+                elements.detailsAccountMsg.style.color = '#166534';
+                elements.detailsAccountMsg.textContent = '✓ Account created — check your email to verify it. Your order will still go through as normal.';
+              }
+            }
+          } catch (err) {
+            console.warn('Account creation error, continuing as guest', err);
+          }
+        }
+
+        // Now that we know the buyer's email (guest or signed-in), retry the
+        // free-gift auto-apply — at page load a guest's email field is still
+        // empty, so the first attempt in continueInitialization can't match it.
+        await applyStoredFreeGiftCode();
+        goToStep('shipping');
+      });
+
       // Continue to payment button
       elements.continueToPayment.addEventListener('click', (e) => {
         e.preventDefault();
-        
+
         if (!validateShippingForm()) return;
-        
+
         saveShippingInfo();
+        // Only guests get the optional "create a password" card — a signed-in
+        // buyer already has an account, nothing to offer them here.
+        if (elements.accountCreateCard) elements.accountCreateCard.classList.toggle('hidden', !!state.user);
         goToStep('payment');
+        renderCheckoutBlockers();
       });
-      
+
       // Pay now button
       elements.payNowBtn.addEventListener('click', (e) => {
         e.preventDefault();
         processPayment();
       });
-      
+
       // Apply promo code button
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
-      
+
       // Edit buttons
       document.getElementById('editShipping')?.addEventListener('click', () => goToStep('shipping'));
-      document.getElementById('editPayment')?.addEventListener('click', () => goToStep('payment'));
+      document.getElementById('editDetails')?.addEventListener('click', () => goToStep('details'));
+      document.getElementById('editDeliveryFromPay')?.addEventListener('click', () => goToStep('shipping'));
       
       // View order button
       elements.viewOrderBtn.addEventListener('click', () => {
@@ -2715,116 +3412,116 @@ async function submitToPayFast(cartItems, orderId, total) {
         }
       });
       
-      // Authentication
-      elements.authBtn.addEventListener('click', showAuthModal);
-      elements.closeAuthModal.addEventListener('click', hideAuthModal);
-      elements.authModal.addEventListener('click', (e) => {
-        if (e.target === elements.authModal) {
-          hideAuthModal();
-        }
-      });
-      
-      // Auth tabs
-      elements.authTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-          elements.authTabs.forEach(t => t.classList.remove('active'));
-          tab.classList.add('active');
-          
-          elements.loginForm.classList.toggle('active', tab.dataset.tab === 'login');
-          elements.signupForm.classList.toggle('active', tab.dataset.tab === 'signup');
-        });
-      });
-      
-      // Login
-      elements.loginSubmit.addEventListener('click', async () => {
-        const email = elements.loginEmail.value.trim();
-        const password = elements.loginPassword.value;
-        
-        if (!email || !password) {
-          showError(elements.loginError, 'Please enter both email and password.');
+      // Authentication — embedded inline on the Details step, no modal.
+      elements.authBtn.addEventListener('click', () => { goToStep('details'); expandInlineSignin(); });
+
+      elements.inlineSigninToggle.addEventListener('click', expandInlineSignin);
+
+      elements.inlineSigninSubmit.addEventListener('click', async () => {
+        const email = elements.customerEmail.value.trim();
+        const password = elements.inlineSigninPassword.value;
+
+        if (!email || !isValidEmail(email)) {
+          showError(elements.inlineSigninError, 'Enter your email above first, then your password here.');
           return;
         }
-        
-        if (!isValidEmail(email)) {
-          showError(elements.loginError, 'Please enter a valid email address.');
+        if (!password) {
+          showError(elements.inlineSigninError, 'Please enter your password.');
           return;
         }
-        
+
         try {
           if (supabaseClient) {
-            const { data, error } = await supabaseClient.auth.signInWithPassword({
-              email,
-              password
-            });
-            
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            
+
             state.user = data.user;
             await verifyUserProfile(data.user.id);
-            elements.customerEmail.value = state.user.email;
-            updateAuthUI();
-            hideAuthModal();
+            updateAuthUI(data.user);
           }
         } catch (error) {
-          showError(elements.loginError, error.message || 'Login failed.');
+          showError(elements.inlineSigninError, error.message || 'Wrong email or password. You can also just continue as a guest.');
         }
       });
-      
-      // Signup
-      elements.signupSubmit.addEventListener('click', async () => {
-        const name = elements.signupName.value.trim();
-        const email = elements.signupEmail.value.trim();
-        const password = elements.signupPassword.value;
-        
-        if (!name || !email || !password) {
-          showError(elements.signupError, 'Please complete all fields.');
-          return;
-        }
-        
-        if (!isValidEmail(email)) {
-          showError(elements.signupError, 'Please enter a valid email address.');
-          return;
-        }
-        
-        try {
-          if (supabaseClient) {
-            const { data, error } = await supabaseClient.auth.signUp({
-              email,
-              password,
-              options: {
-                data: {
-                  full_name: name
-                }
-              }
-            });
-            
-            if (error) throw error;
-            
-            state.user = data.user;
-            await verifyUserProfile(data.user.id);
-            elements.customerEmail.value = state.user.email;
-            updateAuthUI();
-            hideAuthModal();
-            
-            showError(elements.signupError, 'Account created! Please check your email for verification.');
-            elements.signupError.style.color = 'green';
-          }
-        } catch (error) {
-          showError(elements.signupError, error.message || 'Signup failed.');
-        }
-      });
-      
-      // Forgot password
-      elements.forgotPassword.addEventListener('click', () => {
-        const email = elements.loginEmail.value.trim();
-        if (email && supabaseClient) {
+
+      elements.inlineForgotPassword.addEventListener('click', () => {
+        const email = elements.customerEmail.value.trim();
+        if (email && isValidEmail(email) && supabaseClient) {
           supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: `${CONFIG.siteUrl}/reset-password.html`
           }).then(() => {
-            alert('Password reset email sent! Check your inbox.');
+            showError(elements.inlineSigninError, 'Password reset email sent — check your inbox.');
           });
         } else {
-          alert('Please enter your email address first.');
+          showError(elements.inlineSigninError, 'Enter your email above first.');
+        }
+      });
+
+      elements.signOutInline.addEventListener('click', async () => {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+        state.user = null;
+        state.profile = null;
+        elements.customerEmail.value = '';
+        updateAuthUI(null);
+      });
+
+      // Embedded, optional account creation — Pay step, explicit button only
+      // (never implicit on Pay Now, so Pay itself stays fast and predictable).
+      // Guest checkout is entirely unaffected by anything in this handler.
+      elements.accountCreateBtn.addEventListener('click', async () => {
+        const email = elements.customerEmail.value.trim();
+        const password = elements.accountCreatePassword.value;
+        const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
+
+        if (!password || password.length < 8) {
+          elements.accountCreateMsg.style.color = '#dc3545';
+          elements.accountCreateMsg.textContent = 'Use at least 8 characters.';
+          return;
+        }
+        if (!supabaseClient) return;
+
+        elements.accountCreateBtn.disabled = true;
+        try {
+          const { data, error } = await supabaseClient.auth.signUp({
+            email, password, options: { data: { full_name: fullName } }
+          });
+
+          // Supabase's wording for "this email already has an account" varies
+          // by version — match loosely and fall back to signing in instead
+          // of surfacing a dead-end error.
+          if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
+            const signInRes = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (signInRes.error) {
+              elements.accountCreateMsg.style.color = '#dc3545';
+              elements.accountCreateMsg.textContent = 'This email already has an account, but that password didn\'t match. Try "Sign in" at the top, or just continue as a guest.';
+              elements.accountCreateBtn.disabled = false;
+              return;
+            }
+            state.user = signInRes.data.user;
+            await verifyUserProfile(state.user.id);
+            updateAuthUI(state.user);
+            return;
+          }
+
+          if (error) throw error;
+
+          // Only a real session counts — an unconfirmed signup with no
+          // session must not get attached to the order (same class of bug
+          // already fixed once this session for a different flow).
+          if (data.user && data.session) {
+            state.user = data.user;
+            await verifyUserProfile(data.user.id);
+            updateAuthUI(data.user);
+          } else {
+            elements.accountCreateCard.classList.add('hidden');
+            elements.accountReadyMsg.classList.remove('hidden');
+            elements.accountReadyMsg.textContent = '✓ Account created — check your email to verify it. Your order will still go through as normal.';
+          }
+        } catch (error) {
+          elements.accountCreateMsg.style.color = '#dc3545';
+          elements.accountCreateMsg.textContent = error.message || 'Could not create account — you can still pay as a guest.';
+        } finally {
+          elements.accountCreateBtn.disabled = false;
         }
       });
       

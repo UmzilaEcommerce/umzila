@@ -1,5 +1,91 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Must match checkout.html's client-side copies — this server copy is authoritative.
+const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
+const PER_SELLER_FEE          = 3;
+const FREE_DELIVERY_THRESHOLD = 250;
+const PICKUP_FEE              = 0;
+const SERVICE_COLLECT_FEE     = 15; // rep collects buyer's item from their address
+const SERVICE_RETURN_FEE      = 15; // finished item delivered to an address
+// Quantity-aware fee stepping — must match checkout.html exactly.
+const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
+const LARGE_OVERFLOW_FEE      = 10;
+const MAX_DELIVERY_FEE        = 80;
+
+// A client-supplied slot is only trusted if it parses to a real, future
+// instant — anything else (missing, malformed, already past) is treated as
+// "no slot", which downgrades the paid leg to the free default below.
+function validSlotIso(val) {
+  if (!val) return null;
+  const d = new Date(val);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  return d.toISOString();
+}
+
+// Server mirror of checkout.html's calculateDeliveryFee() + calculateServiceFees().
+// validatedCart items already carry seller_id/delivery_class/free_delivery/service_fees
+// as clamped/priced by this file, so this just sums them up authoritatively.
+function computeFees(validatedCart, deliveryMethod) {
+    const isPickup = deliveryMethod === 'pickup';
+    const productItems = validatedCart.filter(i => (i.listing_type || 'product') !== 'service');
+    const subtotal = productItems.reduce((s, i) => s + i.price * i.quantity, 0);
+    const feeItems = productItems.filter(i => !i.free_delivery);
+
+    let productDelivery = 0;
+    let deliveryClass = 'small';
+    let sellerCount = 0;
+    let allFreeDelivery = false;
+
+    if (isPickup) {
+        productDelivery = productItems.length ? PICKUP_FEE : 0;
+    } else if (!productItems.length) {
+        // service-only cart — no product delivery fee
+    } else if (!feeItems.length) {
+        allFreeDelivery = true;
+    } else if (subtotal >= FREE_DELIVERY_THRESHOLD) {
+        // free — still counts free_delivery items toward the threshold
+    } else {
+        const classOrder = { small: 0, medium: 1, large: 2 };
+        const classNames = ['small', 'medium', 'large'];
+        const sellerIds = new Set();
+        let maxClassIdx = 0;
+        let extraTrips = 0;
+        feeItems.forEach(item => {
+            const dc = (item.delivery_class || 'small').toLowerCase();
+            const baseIdx = classOrder[dc] ?? 0;
+            const capacity = item.units_per_trip || DEFAULT_UNITS_PER_TRIP[dc] || DEFAULT_UNITS_PER_TRIP.small;
+            const trips = Math.ceil(item.quantity / capacity);
+            const rawIdx = baseIdx + (trips - 1);
+            if (rawIdx > maxClassIdx) maxClassIdx = Math.min(rawIdx, 2);
+            extraTrips += Math.max(0, rawIdx - 2);
+            if (item.seller_id) sellerIds.add(item.seller_id);
+        });
+        deliveryClass = classNames[maxClassIdx];
+        sellerCount = Math.max(sellerIds.size, 1);
+        productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, DELIVERY_CLASS_PRICES[deliveryClass] + (sellerCount - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
+    }
+
+    // Service collection/return fees are flat, per line, and never waived by
+    // pickup mode or the R250 threshold — those are product-delivery concepts.
+    let serviceCollection = 0;
+    let serviceReturn = 0;
+    validatedCart.forEach(item => {
+        if (!item.service_fees) return;
+        serviceCollection += item.service_fees.collection || 0;
+        serviceReturn += item.service_fees.return_delivery || 0;
+    });
+
+    return {
+        productDelivery,
+        serviceCollection,
+        serviceReturn,
+        total: productDelivery + serviceCollection + serviceReturn,
+        deliveryClass,
+        sellerCount,
+        allFreeDelivery
+    };
+}
+
 exports.handler = async function(event, context) {
     // Only allow POST requests
     if (event.httpMethod !== 'POST') {
@@ -8,10 +94,11 @@ exports.handler = async function(event, context) {
             body: JSON.stringify({ error: 'Method not allowed' })
         };
     }
-    
+
     try {
-        const { cartItems, userId } = JSON.parse(event.body);
-        
+        const { cartItems, userId, deliveryMethod } = JSON.parse(event.body);
+        const method = deliveryMethod === 'pickup' ? 'pickup' : 'deliver';
+
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
                 statusCode: 400,
@@ -48,7 +135,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -155,7 +242,10 @@ variants.forEach(v => {
     hasChanges = true;
   }
 
-  validatedCart.push({
+  const isItemDropoff = isService && product.fulfillment_type === 'item_dropoff';
+  const itemReturned = rawItem.item_returned !== false;
+
+  const validated = {
     id: product.id,
     product_id: product.id,
     name: item.name || product.name,
@@ -171,8 +261,68 @@ variants.forEach(v => {
     listing_type: product.listing_type || 'product',
     fulfillment_type: product.fulfillment_type || null,
     service_turnaround: product.service_turnaround || null,
-    acceptance_deadline_hours: product.acceptance_deadline_hours || 24
-  });
+    acceptance_deadline_hours: product.acceptance_deadline_hours || 24,
+    free_delivery: !!product.free_delivery,
+    units_per_trip: product.units_per_trip || null,
+    // Carried through from the client cart item — previously dropped here,
+    // which silently discarded intake answers and left paid scheduled-service
+    // bookings unconfirmed (never flipped from 'held' to 'confirmed').
+    intake: rawItem.intake || null,
+    booking_id: rawItem.booking_id || null,
+    booking_start_at: rawItem.booking_start_at || null,
+    item_returned: itemReturned,
+    intake_kind: isService ? (product.intake_kind || 'item') : null,
+    intake_fields: isService ? (Array.isArray(product.intake_fields) ? product.intake_fields : []) : null,
+    booking_mode: isService ? (product.booking_mode || null) : null
+  };
+
+  if (isItemDropoff) {
+    // Never trust client-chosen methods/fees — clamp to known values and
+    // price server-side. A paid method with no address is downgraded to the
+    // free default rather than rejecting the whole cart.
+    const intakeKind = product.intake_kind || 'item';
+    const rawOpts = (rawItem.service_options && typeof rawItem.service_options === 'object') ? rawItem.service_options : {};
+    // Nothing physical to collect when the buyer sends a file or nothing —
+    // that leg simply doesn't exist for this archetype.
+    let collectionMethod = (intakeKind === 'item' && rawOpts.collection_method === 'rep_collect') ? 'rep_collect' : (intakeKind === 'item' ? 'dropoff' : 'none');
+    let collectionAddress = (rawOpts.collection_address || '').toString().trim().slice(0, 300) || null;
+    let collectionSlotStart = validSlotIso(rawOpts.collection_slot_start);
+    let collectionSlotEnd = validSlotIso(rawOpts.collection_slot_end);
+    // A paid leg with no address, or no valid future slot, downgrades to the
+    // free default rather than rejecting the whole cart.
+    if (collectionMethod === 'rep_collect' && (!collectionAddress || !collectionSlotStart)) {
+      collectionMethod = 'dropoff';
+      hasChanges = true;
+    }
+    if (collectionMethod !== 'rep_collect') { collectionAddress = null; collectionSlotStart = null; collectionSlotEnd = null; }
+
+    let returnMethod = (itemReturned && rawOpts.return_method === 'deliver') ? 'deliver' : 'pickup_point';
+    let returnAddress = (rawOpts.return_address || '').toString().trim().slice(0, 300) || null;
+    let returnSlotStart = validSlotIso(rawOpts.return_slot_start);
+    let returnSlotEnd = validSlotIso(rawOpts.return_slot_end);
+    if (returnMethod === 'deliver' && (!returnAddress || !returnSlotStart)) {
+      returnMethod = 'pickup_point';
+      hasChanges = true;
+    }
+    if (returnMethod !== 'deliver') { returnAddress = null; returnSlotStart = null; returnSlotEnd = null; }
+
+    validated.service_options = {
+      collection_method: collectionMethod,
+      collection_address: collectionAddress,
+      collection_slot_start: collectionSlotStart,
+      collection_slot_end: collectionSlotEnd,
+      return_method: returnMethod,
+      return_address: returnAddress,
+      return_slot_start: returnSlotStart,
+      return_slot_end: returnSlotEnd
+    };
+    validated.service_fees = {
+      collection: collectionMethod === 'rep_collect' ? SERVICE_COLLECT_FEE : 0,
+      return_delivery: returnMethod === 'deliver' ? SERVICE_RETURN_FEE : 0
+    };
+  }
+
+  validatedCart.push(validated);
 
   total += itemPrice * qty;
 }
@@ -213,6 +363,7 @@ variants.forEach(v => {
                 validatedCart,
                 total,
                 hasChanges,
+                fees: computeFees(validatedCart, method),
                 message: hasChanges ? 'Cart has been updated with current prices and stock' : 'Cart is valid'
             })
         };

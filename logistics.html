@@ -248,6 +248,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   .form-grid,.form-grid.cols3{grid-template-columns:1fr}
   .analytics-metrics{grid-template-columns:1fr}
 }
+
+/* Weekly availability grid — same pattern as seller-dashboard.html's
+   service-listing scheduler, reused here for rep delivery/collection hours. */
+.svc-availability-grid { display: flex; flex-direction: column; gap: 6px; }
+.svc-avail-day { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #f9f9fb; border-radius: 8px; border: 1px solid #ebebf0; }
+.svc-avail-day label.day-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; width: 90px; flex-shrink: 0; cursor: pointer; }
+.svc-avail-day .time-inputs { display: flex; align-items: center; gap: 6px; flex: 1; }
+.svc-avail-day .time-inputs input[type=time] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+.svc-avail-day.disabled .time-inputs { opacity: .4; pointer-events: none; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
@@ -292,6 +301,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
       <span>Baskets</span>
     </button>
+    <button class="nav-item" data-panel="services">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
+      <span>Service Tasks</span>
+    </button>
     <button class="nav-item" data-panel="stores">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Stores</span>
@@ -330,6 +343,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   <button class="bnav-item" data-panel="baskets">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
     <span>Baskets</span>
+  </button>
+  <button class="bnav-item" data-panel="services">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
+    <span>Services</span>
   </button>
   <button class="bnav-item" data-panel="analytics">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -456,6 +473,38 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
       <button class="btn btn-ghost btn-sm" id="refreshBaskets">Refresh</button>
     </div>
     <div id="baskets-list"><div class="orders-empty">Loading baskets…</div></div>
+  </section>
+
+  <!-- Service Tasks: drop-off services only — nothing physical to collect
+       for in_person/digital, so those never appear here. Claim model: a
+       task starts unassigned in "Available" and moves to "My Tasks" once a
+       rep claims it. -->
+  <section id="panel-services" class="panel">
+    <div class="panel-title">
+      Service Tasks
+      <button class="btn btn-ghost btn-sm" id="refreshServiceTasks">Refresh</button>
+    </div>
+
+    <!-- Rep delivery hours — buyers can only pick collection/delivery
+         time slots inside the hours a rep sets here. Reuses the exact
+         availability-grid pattern from seller-dashboard.html. -->
+    <div class="item-card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" id="repHoursToggle">
+        <div style="font-weight:700;font-size:14px">🗓 My delivery hours</div>
+        <button class="btn btn-ghost btn-sm" type="button">Edit</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Buyers can only pick collection/delivery times inside the hours you set here.</div>
+      <div id="repHoursBody" style="display:none;margin-top:12px">
+        <div class="svc-availability-grid" id="repAvailabilityGrid"></div>
+        <button class="btn btn-primary btn-sm" id="saveRepHoursBtn" style="margin-top:10px">Save hours</button>
+        <span id="repHoursMsg" style="font-size:12px;margin-left:8px"></span>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--muted)">MY TASKS</div>
+    <div id="my-service-tasks-list"><div class="orders-empty">Loading…</div></div>
+    <div style="margin:20px 0 8px;font-size:13px;font-weight:700;color:var(--muted)">AVAILABLE TO CLAIM</div>
+    <div id="available-service-tasks-list"><div class="orders-empty">Loading…</div></div>
   </section>
 
   <!-- Stores -->
@@ -802,6 +851,7 @@ document.addEventListener('sb-ready', function(e){
     if(name==='overview') renderOverview();
     if(name==='stores') loadStores();
     if(name==='baskets') loadBaskets();
+    if(name==='services') renderServiceTasks();
     if(name==='analytics') initAnalytics();
     if(name==='settings') renderSettings();
   }
@@ -1053,11 +1103,15 @@ document.addEventListener('sb-ready', function(e){
       const sis=existing.find(s=>s.item_index===i);
       const st=sis?.status||'pending';
       const stColor=st==='delivered'?'#14532d':st==='disputed'?'#7f1d1d':st==='refunded'?'#5b21b6':'#854d0e';
+      // 'delivered' can only be set by the buyer's own confirmation (profile.html) —
+      // logistics only ever advances an item to 'fulfilled' (processed/handed off),
+      // so once it's delivered/disputed/refunded there's nothing left for a rep to mark.
+      const canMarkFulfilled = rawId && !['delivered','disputed','refunded'].includes(st);
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f4f4f5">
         <div>${esc(it.item||it.name||'Item')} ${it.size?`<span style="color:var(--muted)">· ${esc(it.size)}</span>`:''}</div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="background:#f3f4f6;padding:2px 8px;border-radius:6px;color:${stColor};font-weight:600;font-size:11px">${esc(st)}</span>
-          ${rawId?`<button class="btn btn-ghost btn-sm" data-order-id="${rawId}" data-idx="${i}" data-sis-id="${sis?.id||''}">Mark Received</button>`:''}
+          ${canMarkFulfilled?`<button class="btn btn-ghost btn-sm" data-order-id="${rawId}" data-idx="${i}" data-sis-id="${sis?.id||''}">Mark Fulfilled</button>`:''}
         </div>
       </div>`;
     }).join('');
@@ -1068,13 +1122,16 @@ document.addEventListener('sb-ready', function(e){
         const idx=Number(btn.dataset.idx);
         const ordId=btn.dataset.orderId;
         const sisId=btn.dataset.sisId;
+        // Only the buyer's own confirmation (profile.html) may set status:'delivered'
+        // + buyer_confirmed_at — logistics marking an item "received/processed" is not
+        // the same event and must never forge that confirmation.
         if(sisId){
-          await sb.from('order_item_statuses').update({status:'delivered',buyer_confirmed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',sisId);
+          await sb.from('order_item_statuses').update({status:'fulfilled',updated_at:new Date().toISOString()}).eq('id',sisId);
         } else {
           const it=o.items[idx];
-          await sb.from('order_item_statuses').insert([{order_id:ordId,item_index:idx,product_id:it?.product_id||null,status:'delivered',buyer_confirmed_at:new Date().toISOString()}]);
+          await sb.from('order_item_statuses').insert([{order_id:ordId,item_index:idx,product_id:it?.product_id||null,status:'fulfilled'}]);
         }
-        toast('Item marked received','success');
+        toast('Item marked fulfilled','success');
         loadItemStatuses(o);
       });
     });
@@ -1685,6 +1742,313 @@ document.addEventListener('sb-ready', function(e){
   }
 
   document.getElementById('refreshBaskets')?.addEventListener('click',()=>{_basketsLoaded=false;loadBaskets(true);});
+
+  /* ═══════════════════════════════════════════
+     REP DELIVERY HOURS — same weekly-grid pattern as seller-dashboard.html's
+     service-listing scheduler, copied in (no shared module in this codebase).
+     Buyers pick collection/delivery slots from the union of all reps' hours.
+  ═══════════════════════════════════════════ */
+  const SVC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let repHoursLoaded = false;
+
+  function buildRepAvailabilityGrid(gridId) {
+    const grid = document.getElementById(gridId);
+    if (!grid || grid.dataset.built === 'true') return;
+    grid.innerHTML = SVC_DAYS.map((day, i) =>
+      '<div class="svc-avail-day disabled" data-day="' + i + '">' +
+        '<label class="day-toggle"><input type="checkbox" class="svc-avail-toggle"> ' + day.slice(0,3) + '</label>' +
+        '<div class="time-inputs"><input type="time" class="svc-avail-start" value="09:00"> to <input type="time" class="svc-avail-end" value="17:00"></div>' +
+      '</div>'
+    ).join('');
+    grid.dataset.built = 'true';
+    grid.querySelectorAll('.svc-avail-toggle').forEach(cb => {
+      cb.addEventListener('change', () => cb.closest('.svc-avail-day').classList.toggle('disabled', !cb.checked));
+    });
+  }
+
+  function getRepAvailabilityRows(gridId) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return [];
+    const rows = [];
+    grid.querySelectorAll('.svc-avail-day').forEach(dayEl => {
+      const toggle = dayEl.querySelector('.svc-avail-toggle');
+      if (!toggle.checked) return;
+      const start = dayEl.querySelector('.svc-avail-start').value;
+      const end = dayEl.querySelector('.svc-avail-end').value;
+      if (!start || !end || start >= end) return;
+      rows.push({ day_of_week: parseInt(dayEl.dataset.day, 10), start_time: start, end_time: end });
+    });
+    return rows;
+  }
+
+  async function loadRepHours() {
+    if (repHoursLoaded || !CURRENT_USER_ID) return;
+    buildRepAvailabilityGrid('repAvailabilityGrid');
+    const { data: rows } = await sb.from('rep_availability').select('day_of_week, start_time, end_time').eq('rep_id', CURRENT_USER_ID);
+    const grid = document.getElementById('repAvailabilityGrid');
+    (rows || []).forEach(r => {
+      const dayEl = grid.querySelector('.svc-avail-day[data-day="' + r.day_of_week + '"]');
+      if (!dayEl) return;
+      dayEl.querySelector('.svc-avail-toggle').checked = true;
+      dayEl.classList.remove('disabled');
+      dayEl.querySelector('.svc-avail-start').value = (r.start_time || '09:00').slice(0,5);
+      dayEl.querySelector('.svc-avail-end').value = (r.end_time || '17:00').slice(0,5);
+    });
+    repHoursLoaded = true;
+  }
+
+  document.getElementById('repHoursToggle')?.addEventListener('click', () => {
+    const body = document.getElementById('repHoursBody');
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : '';
+    if (!open) loadRepHours();
+  });
+
+  document.getElementById('saveRepHoursBtn')?.addEventListener('click', async () => {
+    const msgEl = document.getElementById('repHoursMsg');
+    if (!CURRENT_USER_ID) return;
+    const rows = getRepAvailabilityRows('repAvailabilityGrid');
+    msgEl.textContent = 'Saving…'; msgEl.style.color = 'var(--muted)';
+    await sb.from('rep_availability').delete().eq('rep_id', CURRENT_USER_ID);
+    if (rows.length) {
+      const { error } = await sb.from('rep_availability').insert(rows.map(r => Object.assign({ rep_id: CURRENT_USER_ID }, r)));
+      if (error) { msgEl.textContent = 'Save failed: ' + error.message; msgEl.style.color = 'var(--danger)'; return; }
+    }
+    msgEl.textContent = 'Saved ✓'; msgEl.style.color = '#16a34a';
+    setTimeout(() => { msgEl.textContent = ''; }, 3000);
+  });
+
+  /* ═══════════════════════════════════════════
+     SERVICE TASKS (rep claim queue — item_dropoff only; in_person/digital
+     services never need a rep, so they never appear here)
+  ═══════════════════════════════════════════ */
+  async function renderServiceTasks(){
+    const myEl = document.getElementById('my-service-tasks-list');
+    const availEl = document.getElementById('available-service-tasks-list');
+    myEl.innerHTML = '<div class="orders-empty">Loading…</div>';
+    availEl.innerHTML = '<div class="orders-empty">Loading…</div>';
+
+    const { data: statuses, error } = await sb.from('order_item_statuses')
+      .select('id, order_id, item_index, seller_id, service_status, accepted_at, item_received_at, handed_to_seller_at, service_completed_at, returned_to_umzila_at, returned_at, fulfillment_type, item_returned, intake_kind, intake_response, assigned_rep_id, proof_urls, completion_note, created_at, collection_method, collection_address, return_method, return_address, otw_collect_sent_at, otw_deliver_sent_at')
+      .eq('listing_type', 'service')
+      .eq('fulfillment_type', 'item_dropoff')
+      .not('service_status', 'in', '(rejected,cancelled,returned)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) { myEl.innerHTML = availEl.innerHTML = `<div class="orders-empty">Error: ${esc(error.message)}</div>`; return; }
+    if (!statuses || !statuses.length) { myEl.innerHTML = availEl.innerHTML = '<div class="orders-empty">No drop-off service tasks right now.</div>'; return; }
+
+    const orderIds = [...new Set(statuses.map(s=>s.order_id))];
+    const sellerIds = [...new Set(statuses.map(s=>s.seller_id).filter(Boolean))];
+    const [ordersRes, sellersRes] = await Promise.all([
+      sb.from('orders').select('id, order_number, customer_name, customer_phone, items').in('id', orderIds),
+      sellerIds.length ? sb.from('sellers').select('id, shop_name, whatsapp_number').in('id', sellerIds) : Promise.resolve({data:[]})
+    ]);
+    const orderMap = {}; (ordersRes.data||[]).forEach(o=>orderMap[o.id]=o);
+    const sellerMap = {}; (sellersRes.data||[]).forEach(s=>sellerMap[s.id]=s);
+
+    const mine = statuses.filter(s => s.assigned_rep_id === CURRENT_USER_ID);
+    // Nothing to collect for file/none intake — there's no rep action at all
+    // until the seller finishes, so don't clutter "available" before then.
+    const available = statuses.filter(s => !s.assigned_rep_id && (!s.intake_kind || s.intake_kind === 'item' || s.service_status === 'completed'));
+
+    myEl.innerHTML = mine.length ? mine.map(s=>renderServiceTaskCard(s, orderMap, sellerMap, true)).join('') : '<div class="orders-empty">You haven\'t claimed any tasks yet.</div>';
+    availEl.innerHTML = available.length ? available.map(s=>renderServiceTaskCard(s, orderMap, sellerMap, false)).join('') : '<div class="orders-empty">Nothing waiting to be claimed.</div>';
+
+    wireServiceTaskActions();
+  }
+
+  function renderServiceTaskCard(s, orderMap, sellerMap, isMine){
+    const order = orderMap[s.order_id] || {};
+    const seller = sellerMap[s.seller_id] || {};
+    const items = Array.isArray(order.items) ? order.items : [];
+    const item = items[s.item_index] || {};
+    const itemName = item.name || item.title || ('Service item #' + s.item_index);
+    const orderNum = order.order_number || (s.order_id||'').slice(0,8);
+    const status = s.service_status || 'pending_acceptance';
+    const intake = s.intake_response && Object.keys(s.intake_response).length
+      ? `<div style="font-size:12px;color:var(--text2);margin-top:6px;background:#f8fafc;border-radius:8px;padding:8px 10px">${Object.entries(s.intake_response).map(([k,v])=>{
+          if (v && typeof v === 'object' && v.type === 'file') return `<strong>${esc(k)}:</strong> 📄 <a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.name||'view file')}</a>`;
+          return `<strong>${esc(k)}:</strong> ${esc(v)}`;
+        }).join(' &middot; ')}</div>` : '';
+    const proofs = Array.isArray(s.proof_urls) ? s.proof_urls : [];
+    const beforePhotos = proofs.filter(p=>p.stage==='before');
+    const afterPhotos = proofs.filter(p=>p.stage==='after');
+    const photoStrip = (list,label) => list.length ? `<div style="margin-top:6px"><div style="font-size:11px;font-weight:700;color:var(--muted)">${label}</div><div style="display:flex;gap:6px;margin-top:4px">${list.map(p=>`<img src="${esc(p.url)}" style="width:52px;height:52px;object-fit:cover;border-radius:6px">`).join('')}</div></div>` : '';
+
+    const isRepCollect = s.collection_method === 'rep_collect';
+    const isDeliverReturn = s.return_method === 'deliver';
+    // Nothing physical comes from the buyer when they sent a file or nothing
+    // at all — no collection leg exists for these archetypes.
+    const noCollection = s.intake_kind && s.intake_kind !== 'item';
+    const handoffLine = noCollection
+      ? `<div style="font-size:12px;margin-top:2px;color:var(--muted)">${s.intake_kind === 'file' ? '📄 No collection — buyer sent a file' : '🙌 Nothing to collect — seller makes it'}</div>`
+      : `<div style="font-size:12px;margin-top:2px;${isRepCollect?'color:var(--accent);font-weight:700':'color:var(--muted)'}">📍 ${isRepCollect ? `Collect from: ${esc(s.collection_address||'')}` : 'Buyer drops off at collection point'}</div>`;
+    const returnLine = s.item_returned !== false
+      ? `<div style="font-size:12px;margin-top:2px;${isDeliverReturn?'color:var(--accent);font-weight:700':'color:var(--muted)'}">🏁 ${isDeliverReturn ? `Deliver to: ${esc(s.return_address||'')}` : 'Buyer collects at collection point'}</div>` : '';
+
+    // "On my way" ping — only meaningful when a rep is actually the one
+    // travelling (rep_collect / deliver legs), at the exact moment they'd
+    // set off, and it can't be re-sent once already fired.
+    let otwHtml = '';
+    if (isMine) {
+      if (isRepCollect && status === 'accepted') {
+        otwHtml = s.otw_collect_sent_at
+          ? `<button class="btn btn-ghost btn-sm" disabled style="margin-top:6px;opacity:.6">✓ Buyer notified</button>`
+          : `<button class="btn btn-ghost btn-sm" data-otw="collect" data-otw-id="${s.id}" style="margin-top:6px">📣 On my way — tell the buyer</button>`;
+      } else if (isDeliverReturn && status === 'returned_to_umzila') {
+        otwHtml = s.otw_deliver_sent_at
+          ? `<button class="btn btn-ghost btn-sm" disabled style="margin-top:6px;opacity:.6">✓ Buyer notified</button>`
+          : `<button class="btn btn-ghost btn-sm" data-otw="deliver" data-otw-id="${s.id}" style="margin-top:6px">📣 On my way — tell the buyer</button>`;
+      }
+    }
+
+    let actionHtml;
+    if (!isMine) {
+      actionHtml = `<button class="btn btn-primary btn-sm" data-claim="${s.id}">Claim task</button>`;
+    } else if (noCollection && (status === 'pending_acceptance' || status === 'accepted' || status === 'in_progress')) {
+      // No rep action at all until the seller finishes — there's nothing to
+      // collect and the seller starts work directly (see seller dashboard's
+      // "Start work" action for this archetype).
+      actionHtml = `<span style="font-size:12px;color:var(--muted)">Waiting on seller</span>`;
+    } else if (status === 'accepted') {
+      const label = isRepCollect ? '🚗 Collected from buyer (add before-photo)' : '📬 Item received (add before-photo)';
+      actionHtml = `<button class="btn btn-primary btn-sm" data-action="item_received" data-id="${s.id}">${label}</button>`;
+    } else if (status === 'item_received') {
+      actionHtml = `<button class="btn btn-primary btn-sm" data-action="handed_to_seller" data-id="${s.id}">🤝 Hand to seller</button>`;
+    } else if (status === 'completed' && s.item_returned !== false) {
+      actionHtml = `<button class="btn btn-primary btn-sm" data-action="returned_to_umzila" data-id="${s.id}">📦 Collect from seller (add after-photo)</button>`;
+    } else if (status === 'returned_to_umzila') {
+      const label = isDeliverReturn ? '🚚 Delivered to buyer' : '✅ Returned to buyer';
+      actionHtml = `<button class="btn btn-primary btn-sm" data-action="returned" data-id="${s.id}">${label}</button>`;
+    } else if (status === 'completed') {
+      actionHtml = `<span style="font-size:12px;color:var(--muted)">Not returned to buyer — nothing further to do</span>`;
+    } else {
+      actionHtml = `<span style="font-size:12px;color:var(--muted)">Waiting on seller</span>`;
+    }
+
+    return `<div class="item-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:14px">#${esc(String(orderNum))} — ${esc(itemName)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${badge(status)}${seller.shop_name?` · 🏪 ${esc(seller.shop_name)}`:''}</div>
+          ${order.customer_name ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">👤 ${esc(order.customer_name)}${order.customer_phone?` · ${esc(order.customer_phone)}`:''}</div>`:''}
+          ${handoffLine}
+          ${returnLine}
+          ${intake}
+          ${photoStrip(beforePhotos,'Before')}
+          ${photoStrip(afterPhotos,'After')}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end">${actionHtml}${otwHtml}</div>
+      </div>
+    </div>`;
+  }
+
+  function wireServiceTaskActions(){
+    document.querySelectorAll('[data-claim]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        btn.disabled = true;
+        const { error } = await sb.from('order_item_statuses').update({ assigned_rep_id: CURRENT_USER_ID }).eq('id', btn.dataset.claim).is('assigned_rep_id', null);
+        if (error) toast('Could not claim — someone else may have just taken it', 'error');
+        else toast('Task claimed');
+        renderServiceTasks();
+      });
+    });
+    document.querySelectorAll('[data-action]').forEach(btn=>{
+      btn.addEventListener('click', ()=> handleServiceTaskAction(btn.dataset.action, btn.dataset.id));
+    });
+    document.querySelectorAll('[data-otw]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          const { data: { session } } = await sb.auth.getSession();
+          const res = await fetch('/.netlify/functions/send-on-the-way', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+            body: JSON.stringify({ status_id: btn.dataset.otwId, leg: btn.dataset.otw })
+          });
+          if (!res.ok) throw new Error((await res.json().catch(()=>({}))).error || 'Failed');
+          toast('Buyer notified');
+          renderServiceTasks();
+        } catch(err) {
+          toast(err.message || 'Could not send notification', 'error');
+          btn.disabled = false; btn.textContent = '📣 On my way — tell the buyer';
+        }
+      });
+    });
+  }
+
+  async function uploadServiceProof(statusId, file){
+    const path = `${statusId}/${Date.now()}-${file.name}`;
+    const { error } = await sb.storage.from('service-proofs').upload(path, file, { upsert:false });
+    if (error) throw error;
+    const { data } = sb.storage.from('service-proofs').getPublicUrl(path);
+    return data.publicUrl;
+  }
+
+  async function handleServiceTaskAction(action, statusId){
+    const needsPhoto = action === 'item_received' || action === 'returned_to_umzila';
+    const stage = action === 'item_received' ? 'before' : 'after';
+
+    if (needsPhoto) {
+      openModal(action === 'item_received' ? 'Item received — add a photo' : 'Collected from seller — add a photo', `
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">Photograph the item's condition before continuing. Buyers can see this photo on their order.</div>
+        <input type="file" id="proofPhotoInput" accept="image/*" capture="environment" style="margin-bottom:10px"/>
+        <div id="proofMsg" style="font-size:12px;color:#dc2626"></div>
+      `, `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button><button class="btn btn-primary" id="proofSubmit">Continue</button>`);
+      document.getElementById('proofSubmit').addEventListener('click', async ()=>{
+        const fileInput = document.getElementById('proofPhotoInput');
+        const file = fileInput.files[0];
+        if (!file) { document.getElementById('proofMsg').textContent = 'Please choose a photo.'; return; }
+        const submitBtn = document.getElementById('proofSubmit');
+        submitBtn.disabled = true; submitBtn.textContent = 'Uploading…';
+        try {
+          const url = await uploadServiceProof(statusId, file);
+          await advanceServiceStatus(statusId, action, { stage, url });
+          closeModal();
+          toast('Updated');
+          renderServiceTasks();
+        } catch(err) {
+          document.getElementById('proofMsg').textContent = err.message || 'Upload failed';
+          submitBtn.disabled = false; submitBtn.textContent = 'Continue';
+        }
+      });
+    } else {
+      try { await advanceServiceStatus(statusId, action, null); toast('Updated'); renderServiceTasks(); } catch(_) {}
+    }
+  }
+
+  async function advanceServiceStatus(statusId, newStatus, photo){
+    const timestampField = {
+      item_received: 'item_received_at',
+      handed_to_seller: 'handed_to_seller_at',
+      returned_to_umzila: 'returned_to_umzila_at',
+      returned: 'returned_at'
+    }[newStatus];
+
+    const update = { service_status: newStatus };
+    if (timestampField) update[timestampField] = new Date().toISOString();
+
+    // Fetch current proof_urls/confirmations to append to (both are
+    // append-only, never overwritten).
+    const { data: current } = await sb.from('order_item_statuses').select('proof_urls, confirmations').eq('id', statusId).single();
+
+    if (photo) {
+      const existingProofs = Array.isArray(current?.proof_urls) ? current.proof_urls : [];
+      update.proof_urls = existingProofs.concat([{ stage: photo.stage, url: photo.url, uploaded_by: CURRENT_USER_ID, uploaded_at: new Date().toISOString() }]);
+    }
+
+    const stepMap = { item_received: 'receive_item', handed_to_seller: 'handoff_to_seller', returned_to_umzila: 'handback_to_umzila', returned: 'return_to_buyer' };
+    const ledger = Array.isArray(current?.confirmations) ? current.confirmations : [];
+    ledger.push({ step: stepMap[newStatus] || newStatus, party: 'rep', user_id: CURRENT_USER_ID, at: new Date().toISOString() });
+    update.confirmations = ledger;
+
+    const { error } = await sb.from('order_item_statuses').update(update).eq('id', statusId);
+    if (error) { toast('Update failed: ' + error.message, 'error'); throw error; }
+  }
+
+  document.getElementById('refreshServiceTasks')?.addEventListener('click', renderServiceTasks);
 
   function openEngagementModal(email,userId,cartItems){
     openModal('Send Nudge Email',`

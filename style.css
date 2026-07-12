@@ -1,34 +1,94 @@
-/* ---------- BASE / RESET ---------- */
+/* ---------- DESIGN TOKENS ----------
+   Breakpoint scale (reference only — CSS vars can't be used inside @media):
+     --bp-sm: 480px   small phone
+     --bp-md: 768px   tablet / mobile-desktop boundary
+     --bp-lg: 1024px  desktop boundary
+------------------------------------- */
 :root{
-  --bg:#f7f7f9;
+  /* --- legacy tokens (still consumed throughout the file directly and via
+     the semantic aliases below — updated in place for the "warm gallery,
+     navy ink" redesign pass so every consumer warms up together) --- */
+  --bg:#f6f4f0;
   --card:#ffffff;
-  --muted:#6b6b74;
+  --muted:#6d6a63;
   --accent:#0a2f66;
   --accent-2:#00a0ff;
   --cta:#ff6b2c;
   --success:#28a745;
-  --shadow: 0 6px 18px rgba(11,13,20,0.08);
-  --glass: rgba(255,255,255,0.6);
+  --shadow: 0 2px 4px rgba(16,24,40,.04), 0 10px 24px rgba(16,24,40,.08);
   --sidebar-w: 220px; /* central sidebar width variable */
+  --mobile-breakpoint: 768px; /* documentation only, see note above */
+
+  /* --- semantic color tokens --- */
+  --color-bg: var(--bg);
+  --color-surface: var(--card);
+  --color-text: #16181d;
+  --color-text-muted: var(--muted);
+  --color-accent: var(--accent);       /* navy — primary brand */
+  --color-accent-soft: var(--accent-2);/* sky blue — reserved for a couple of info/gradient spots */
+  --color-cta: var(--cta);             /* orange — the single accent for commerce moments */
+  --color-success: var(--success);
+  --color-danger: #dc2626;
+  --color-border: #e9e6df;
+  --color-ink-navy: #0e1b2e;           /* heading ink — darker than brand navy */
+  --color-accent-tint: #eef2f8;        /* navy @ ~6%, hovers/active pills */
+  --color-cta-tint: #fff1e8;           /* orange wash, sale chips */
+  --glass: rgba(255,255,255,0.6);      /* frosted overlay surfaces (hero gradient, arrow buttons) */
+
+  /* --- typography --- */
+  --font-sans: 'Inter', 'Segoe UI', Roboto, system-ui, -apple-system, Arial, sans-serif;
+  --font-display: 'Playfair Display', Georgia, serif; /* section headings + shop-name premium voice */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+  --fs-display: 34px;
+
+  /* --- spacing scale (4px base) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* --- radius scale --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* --- shadow scale — layered tight+ambient, not single heavy blurs ---
+     rule of thumb: resting surfaces use -sm, hover/lifted use -md,
+     overlays (modals/dropdowns) use -lg. */
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.05);
+  --shadow-md: var(--shadow);
+  --shadow-lg: 0 6px 12px rgba(16,24,40,.06), 0 20px 48px rgba(16,24,40,.12);
 }
-*{box-sizing:border-box;margin:0;padding:0;font-family:Inter, "Segoe UI", Roboto, system-ui, -apple-system, Arial, sans-serif}
-html,body{height:100%;background:var(--bg);color:#111}
+*{box-sizing:border-box;margin:0;padding:0;font-family:var(--font-sans)}
+html{scroll-behavior:smooth}
+html,body{height:100%;background:var(--color-bg);color:var(--color-text)}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:0.01ms !important;animation-iteration-count:1 !important;transition-duration:0.01ms !important;}
+}
 body{overflow-x:hidden;}
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
 button{font-family:inherit}
 
-/* ---------- MOBILE SPECIFIC VARIABLES ---------- */
-:root {
-  --mobile-breakpoint: 768px;
-}
-
 /* ---------- LAYOUT ---------- */
 header{
   position:sticky;top:0;z-index:1100;
-  background:linear-gradient(180deg,rgba(255,255,255,0.8),rgba(255,255,255,0.95));
-  backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(10,15,30,0.04);
+  background:rgba(255,255,255,.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom:1px solid var(--color-border);
   padding:10px 18px;display:flex;align-items:center;gap:16px;
 }
 
@@ -43,25 +103,47 @@ header{
 .container{max-width:1200px;margin:0 auto;width:100%}
 .header-inner{display:flex;align-items:center;gap:14px;width:100%}
 
+/* Desktop: Amazon-style centered search — capped width, not edge-to-edge */
+@media (min-width: 769px){
+  .header-inner{ gap:24px; }
+  .search-bar{ max-width:640px; margin:0 auto; }
+  .search-input{ transition:box-shadow .18s ease-out, border-color .18s ease-out, transform .12s ease-out; }
+  .search-input:focus{ transform:translateY(-1px); }
+  .header-right .btn.icon-only,
+  .header-right .icon-btn{ transition:background .15s ease-out, transform .12s ease-out; border-radius:var(--radius-circle); }
+  .header-right .btn.icon-only:hover,
+  .header-right .icon-btn:hover{ background:var(--color-bg); transform:translateY(-1px); }
+  .cart{ transition:transform .12s ease-out; }
+  .cart:hover{ transform:translateY(-1px); }
+}
+
 /* Mobile header inner adjustments - REORDERED FOR MOBILE */
 @media (max-width: 768px) {
   .header-inner {
     gap: 12px;
     justify-content: space-between;
     flex-wrap: nowrap;
+    position: relative; /* logo centers against this, not the flex flow */
   }
 }
 
 .logo{display:flex;align-items:center;gap:10px}
-.logo img{height:68px;width:auto;border-radius:6px;object-fit:cover}
+.logo img{height:48px;width:auto;border-radius:6px;object-fit:cover}
 .logo .brand{display:none} /* removed StreetSale text as requested */
 
-/* Mobile logo adjustments */
+/* Mobile logo: centered absolutely so it stays dead-center regardless of
+   hamburger width — the bottom nav now owns cart/search/profile, so the
+   mobile header is just [hamburger] ... [centered logo]. */
 @media (max-width: 768px) {
+  .logo {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
   .logo img {
-    height: 48px;
-    order: 1; /* Logo comes after hamburger */
-    margin-left: 8px;
+    height: 36px;
+    margin-left: 0;
   }
 }
 
@@ -91,7 +173,7 @@ header{
 .search-bar{flex:1;position:relative}
 
 /* icon-only header button */
-.btn.icon-only{padding:7px 10px;font-size:18px;line-height:1}
+.btn.icon-only{padding:9px;line-height:1;display:flex;align-items:center;justify-content:center}
 
 /* Mobile search bar adjustments */
 @media (max-width: 768px) {
@@ -114,9 +196,9 @@ header{
 }
 
 .search-input{
-  width:100%;padding:10px 36px 10px 14px;border-radius:999px;border:1px solid #e3e3e8;
-  box-shadow:0 1px 2px rgba(0,0,0,0.03);font-size:14px;
-  transition:box-shadow .18s, border-color .18s;
+  width:100%;padding:11px 40px 11px 18px;border-radius:999px;border:1px solid transparent;
+  background:#f0eee9;font-size:14px;color:var(--color-text);
+  transition:box-shadow .18s ease-out, border-color .18s ease-out, background .18s ease-out;
 }
 
 /* Mobile search input */
@@ -127,7 +209,7 @@ header{
   }
 }
 
-.search-input:focus{outline:none;border-color:var(--accent);box-shadow:0 6px 20px rgba(10,47,102,0.06)}
+.search-input:focus{outline:none;background:#fff;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,47,102,.12)}
 .search-suggestions{
   position:absolute;left:0;right:0;background:#fff;border:1px solid #e9e9ee;border-radius:8px;margin-top:8px;box-shadow:var(--shadow);
   display:none;max-height:240px;overflow:auto;z-index:1200;
@@ -177,30 +259,68 @@ header{
 /* header right - UPDATED FOR MOBILE SPACING */
 .header-right{display:flex;gap:12px;align-items:center}
 
-/* Mobile header right adjustments - REORDERED */
+/* Mobile header right: hidden entirely — the bottom nav is now the sole
+   owner of cart/profile/search on mobile, so showing them twice (header +
+   bottom nav) was pure duplication. Stays in the DOM (not display:none via
+   JS, just visually hidden) because initMobileBottomNav's Search/Cart/
+   Profile tabs proxy-click these exact buttons — removing them would break
+   that wiring, hiding them via CSS keeps .click() working. */
 @media (max-width: 768px) {
   .header-right {
-    gap: 8px;
-    flex-shrink: 0;
-    order: 3; /* Place at the end */
-    margin-left: auto;
+    display: none !important;
   }
-  
-  /* Mobile hamburger menu icon - MOVED TO FAR LEFT */
+
+  /* Mobile hamburger: now the header's only control (identity + secondary
+     menu access), so full-strength ink color rather than de-emphasized —
+     the bottom nav owns primary actions, this just gates categories/about. */
   .mobile-menu-icon {
-    display: block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
-    font-size: 20px;
+    color: var(--color-text);
     padding: 8px;
-    order: 0; /* First item on mobile */
-    margin-right: 4px;
+    cursor: pointer;
   }
-  
-  /* Ensure cart is on far right on mobile */
-  .cart {
-    margin-left: auto;
+  .mobile-menu-icon svg { width: 22px; height: 22px; }
+}
+
+/* ---------- MOBILE BOTTOM NAVIGATION (app-style) ---------- */
+.mobile-bottom-nav{ display:none; }
+@media (max-width: 768px){
+  .mobile-bottom-nav{
+    display:flex;
+    position:fixed; left:0; right:0; bottom:0; z-index:1150;
+    background:rgba(255,255,255,0.96);
+    backdrop-filter:blur(10px);
+    border-top:1px solid var(--color-border);
+    box-shadow:0 -2px 16px rgba(11,13,20,0.06);
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom));
   }
+  .mbn-item{
+    flex:1; min-height:48px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    background:transparent; border:none; position:relative;
+    color:var(--color-text-muted); cursor:pointer;
+    padding:4px 2px; border-radius:var(--radius-sm);
+    transition:color .18s ease-out, transform .15s ease-out;
+  }
+  .mbn-item svg{ width:22px; height:22px; }
+  .mbn-item span{ font-size:10px; font-weight:600; letter-spacing:.1px; }
+  .mbn-item:active{ transform:scale(0.92); }
+  .mbn-item.active{ color:var(--color-accent); }
+  .mbn-badge{
+    position:absolute; top:2px; right:calc(50% - 20px);
+    background:var(--color-cta); color:#fff; font-size:9px; font-weight:800;
+    min-width:16px; height:16px; border-radius:var(--radius-pill);
+    display:flex; align-items:center; justify-content:center; padding:0 3px;
+  }
+
+  /* keep last section / footer clear of the fixed bottom nav */
+  body{ padding-bottom:calc(58px + env(safe-area-inset-bottom)); }
+
+  /* lift the floating WhatsApp button above the bottom nav */
+  #waFab{ bottom:calc(70px + env(safe-area-inset-bottom)) !important; }
 }
 
 .btn{padding:8px 14px;border-radius:999px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
@@ -218,19 +338,22 @@ header{
 }
 
 .icon-btn{background:transparent;border:1px solid transparent;padding:8px;border-radius:8px;cursor:pointer}
-.cart{position:relative;font-size:18px;cursor:pointer}
+.cart{position:relative;cursor:pointer;display:flex;align-items:center;color:var(--color-text)}
+.cart svg{width:22px;height:22px}
 
 /* Mobile cart adjustments */
 @media (max-width: 768px) {
   .cart {
-    font-size: 20px;
     order: 3; /* Ensures cart is on far right */
   }
 }
 
 .cart-count{
-  position:absolute;top:-6px;right:-6px;background:var(--accent-2);color:#fff;padding:2px 6px;border-radius:999px;font-size:12px;font-weight:700;
+  position:absolute;top:-6px;right:-8px;background:var(--color-cta);color:#fff;
+  min-width:18px;height:18px;padding:0 4px;border-radius:999px;border:2px solid #fff;
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
 }
+.btn.icon-only svg, .mobile-search-icon svg{width:20px;height:20px;color:var(--color-text)}
 /* Mini cart removed - redirecting directly to checkout.html */
 
 /* ---------- MAIN LAYOUT ---------- */
@@ -245,12 +368,14 @@ header{
   }
 }
 
-/* SIDEBAR: now fixed to leftmost viewport and no horizontal scroll */
+/* SIDEBAR: now fixed to leftmost viewport and no horizontal scroll.
+   Hairline border instead of a drop shadow — it's docked to the viewport
+   edge, not floating, so a shadow reads as noise. */
 .sidebar{
   --w:var(--sidebar-w);
   position:fixed;left:0;top:86px; /* sits under header */
   width:var(--w);height:calc(100vh - 86px);z-index:1200;
-  background:var(--card);border-radius:0 10px 10px 0;padding:14px;box-shadow:var(--shadow);
+  background:var(--color-surface);border-radius:0;border-right:1px solid var(--color-border);box-shadow:none;padding:14px;
   overflow-y:auto;overflow-x:hidden; /* strictly NO horizontal scroll */
   transition:transform .28s ease, width .2s ease, opacity .18s ease;
   will-change:transform,width,opacity;
@@ -283,10 +408,20 @@ header{
   transform:translateX(calc(-1 * var(--w)));opacity:0;pointer-events:none;
 }
 
-.sidebar h3{color:var(--accent);margin-bottom:10px}
+.sidebar h3{
+  font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--color-text-muted);margin-bottom:10px;
+}
 .categories ul{list-style:none;padding:0;margin:0}
-.categories li{padding:8px 6px;border-radius:6px;cursor:pointer;color:#333;font-weight:600}
-.categories li:hover,.categories li.active{background:linear-gradient(90deg,var(--accent-2),#bfeaff);color:var(--accent)}
+.categories li{
+  padding:9px 10px;border-radius:8px;cursor:pointer;color:var(--color-text);font-weight:600;font-size:14px;
+  transition:background .15s ease-out,color .15s ease-out,box-shadow .15s ease-out;
+}
+.categories li:hover{background:var(--color-accent-tint)}
+.categories li.active{
+  background:var(--color-accent-tint);color:var(--accent);
+  box-shadow:inset 3px 0 0 var(--color-cta);
+}
 .filter-section{margin-top:14px}
 .filter-section label{display:block;font-size:13px;margin:8px 0;color:var(--muted)}
 .price-range{display:flex;gap:8px;align-items:center}
@@ -335,14 +470,15 @@ main.full{
 }
 
 .breadcrumb{font-size:13px;color:var(--muted);margin-bottom:12px}
-/* hero */
-.hero{position:relative;border-radius:12px;overflow:hidden;min-height:340px;background:#ddd}
+/* hero — chrome styled for premium feel regardless of uploaded banner
+   content (the images themselves are seller-supplied marketing banners) */
+.hero{position:relative;border-radius:20px;overflow:hidden;min-height:340px;background:#ddd;border:1px solid var(--color-border);box-shadow:var(--shadow-md)}
 
 /* Mobile hero adjustments */
 @media (max-width: 768px) {
   .hero {
     min-height: 280px;
-    border-radius: 10px;
+    border-radius: 16px;
     margin-top: 8px;
   }
 }
@@ -361,10 +497,11 @@ main.full{
 .hero .slide { cursor: pointer; }
 .hero .slide .overlay{ display:none; } /* text overlays removed per design */
 .hero .slide .content{ display:none; } /* text overlays removed per design */
-/* Subtle bottom gradient for aesthetic depth only */
+/* Bottom scrim — guarantees dot/arrow legibility over any uploaded banner
+   and adds depth to otherwise-flat seller photos */
 .hero .slide::after{
   content:'';position:absolute;inset:0;
-  background:linear-gradient(180deg,transparent 60%,rgba(0,0,0,0.18) 100%);
+  background:linear-gradient(180deg,transparent 55%,rgba(10,15,26,0.32) 100%);
   pointer-events:none;
 }
 
@@ -406,12 +543,28 @@ main.full{
   }
 }
 
-.hero .nav{position:absolute;left:18px;right:18px;bottom:14px;display:flex;align-items:center;justify-content:space-between;z-index:3}
-.hero .dots{display:flex;gap:6px}
-.dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.45);cursor:pointer}
-.dot.active{background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
-.hero .arrows{display:flex;gap:8px}
-.arrow-btn{background:rgba(255,255,255,0.15);backdrop-filter: blur(4px);border-radius:8px;padding:6px 8px;color:#fff;border:none;cursor:pointer}
+/* .nav is no longer itself the positioning context — dots and arrows each
+   position independently against .hero, so the arrows can sit at the
+   vertical-center side edges instead of the bottom-right corner, which
+   used to collide with CTA text baked into some banner images at narrow
+   widths (e.g. 360px). */
+.hero .nav{position:static;z-index:3}
+.hero .dots{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:6px;z-index:3}
+.dot{width:6px;height:6px;border-radius:999px;background:rgba(255,255,255,0.55);cursor:pointer;transition:width .25s ease-out,background .2s ease-out}
+.dot.active{width:18px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.hero .arrows{position:absolute;top:50%;left:12px;right:12px;transform:translateY(-50%);display:flex;justify-content:space-between;z-index:3;pointer-events:none}
+.arrow-btn{
+  pointer-events:auto;width:38px;height:38px;border-radius:50%;
+  background:rgba(255,255,255,.85);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  box-shadow:var(--shadow-sm);color:var(--color-text);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  transition:background .15s ease-out,transform .15s ease-out;
+}
+.arrow-btn:hover{background:#fff;transform:scale(1.06)}
+@media (min-width:769px){
+  .hero .arrows{opacity:0;transition:opacity .2s ease-out}
+  .hero:hover .arrows{opacity:1}
+}
 
 /* sections */
 section{margin-top:18px}
@@ -423,7 +576,7 @@ section{margin-top:18px}
   }
 }
 
-section h2{display:flex;justify-content:space-between;align-items:center;font-size:18px;color:var(--accent);margin-bottom:10px}
+section h2{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--color-ink-navy);margin-bottom:14px}
 
 /* Mobile section h2 */
 @media (max-width: 768px) {
@@ -447,9 +600,10 @@ section h2{display:flex;justify-content:space-between;align-items:center;font-si
 @media (max-width:780px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:520px){.grid{grid-template-columns:1fr}}
 
-.product-card{background:var(--card);border-radius:12px;padding:10px;box-shadow:0 4px 12px rgba(12,16,25,0.04);overflow:hidden;position:relative;transition:transform .18s,box-shadow .18s}
-.product-card:hover{transform:translateY(-6px);box-shadow:0 10px 30px rgba(12,16,25,0.07)}
-.product-media{position:relative;border-radius:8px;overflow:hidden;aspect-ratio:3/4;height:auto}
+.product-card{background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);padding:8px 8px 12px;box-shadow:var(--shadow-sm);overflow:hidden;position:relative;transition:transform .25s ease-out,box-shadow .25s ease-out}
+.product-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.product-card:active{transform:scale(0.98);transition:transform .12s ease-out}
+.product-media{position:relative;border-radius:var(--radius-md);overflow:hidden;aspect-ratio:3/4;height:auto;background:#f0eee9}
 
 /* Mobile product media — keep aspect ratio, no fixed height */
 @media (max-width: 768px) {
@@ -459,33 +613,35 @@ section h2{display:flex;justify-content:space-between;align-items:center;font-si
   }
 }
 
-.product-media img{width:100%;height:100%;object-fit:cover;transition:opacity .25s}
+.product-media img{width:100%;height:100%;object-fit:cover;transition:opacity .25s,transform .45s cubic-bezier(.2,.6,.2,1)}
 .product-media img.secondary{position:absolute;inset:0;opacity:0}
+.product-card:hover .product-media img{transform:scale(1.045)}
 .product-card:hover .product-media img.secondary{opacity:1}
 .badges{position:absolute;top:10px;left:10px;display:flex;gap:6px;z-index:4}
-.badge{background:var(--accent-2);color:#fff;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:700}
-.badge.sale{background:#ff6b2c;}
-.card-body{padding-top:8px;display:flex;flex-direction:column;gap:8px}
-.title{font-weight:700;font-size:15px;color:#222}
+.badge{background:var(--color-ink-navy);color:#fff;padding:4px 9px;border-radius:var(--radius-pill);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+.badge.sale{background:var(--color-cta);}
+.badge-sponsored{background:rgba(255,255,255,0.92)!important;color:var(--color-text-muted)!important;backdrop-filter:blur(4px)}
+.badge-service{background:#6d4fc9!important}
+.card-body{padding-top:9px;display:flex;flex-direction:column;gap:4px}
+.title{
+  font-weight:600;font-size:14px;color:var(--color-text);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  line-height:1.35;min-height:calc(1.35em * 2);
+}
 
 /* Mobile title */
 @media (max-width: 768px) {
   .title {
-    font-size: 14px;
+    font-size: 13.5px;
   }
 }
 
-.meta{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.meta-sub{font-size:12px;font-weight:500;color:var(--color-text-muted)}
 
-/* Mobile meta */
-@media (max-width: 768px) {
-  .meta {
-    font-size: 12px;
-  }
-}
-
-.price{font-weight:800;color:var(--cta);font-size:16px}
-.price .original{text-decoration:line-through;color:#9ca3af;font-size:13px;font-weight:normal;margin-right:5px}
+.price-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:2px}
+.price{font-weight:700;color:var(--color-text);font-size:15px;display:flex;align-items:baseline;gap:5px}
+.price.price-sale{color:#e2551c}
+.price .original{text-decoration:line-through;color:#9a968e;font-size:12.5px;font-weight:400}
 
 /* Mobile price */
 @media (max-width: 768px) {
@@ -494,30 +650,38 @@ section h2{display:flex;justify-content:space-between;align-items:center;font-si
   }
 }
 
-.actions{display:flex;gap:8px;align-items:center}
-.quick-add{position:absolute;right:8px;bottom:50px;background:var(--accent);color:#fff;padding:8px 10px;border-radius:10px;cursor:pointer;opacity:0;transform:translateY(8px);transition:all .18s}
-.product-card:hover .quick-add{opacity:1;transform:translateY(0)}
-.fav-btn{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.9);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;line-height:1;transition:transform .15s,background .15s;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,0.12)}
-.fav-btn:hover{transform:scale(1.15);background:#fff}
-.fav-btn.active{background:#fff}
-.fav-btn .fav-icon{transition:transform .15s}
-.fav-btn:active .fav-icon{transform:scale(1.3)}
-.controls{display:flex;gap:8px;align-items:center}
-select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;background:#fff}
+.fav-btn{position:absolute;top:8px;right:8px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.92);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,background .15s;z-index:2;box-shadow:0 2px 6px rgba(0,0,0,0.12);backdrop-filter:blur(4px)}
+.fav-btn:hover{transform:scale(1.1);background:#fff}
+.fav-icon{width:16px;height:16px;stroke:#16181d;fill:none;transition:transform .15s}
+.fav-btn.active .fav-icon{stroke:#ef4444;fill:#ef4444}
+.fav-btn:active .fav-icon{transform:scale(1.25)}
 
-/* Mobile controls */
-@media (max-width: 768px) {
-  .controls {
-    gap: 6px;
-  }
-  
-  select.qty, .size-select {
-    padding: 4px;
-    font-size: 12px;
-  }
+.add-circle{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:var(--accent);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(10,47,102,.28);transition:transform .12s ease-out,background .18s ease-out,box-shadow .18s ease-out}
+.add-circle svg{width:17px;height:17px}
+.add-circle:hover{background:#0c3a7d;transform:scale(1.06)}
+.add-circle:active{transform:scale(0.92)}
+
+/* Service cards get a labelled Book/Request pill instead of the bare "+"
+   circle, so the CTA verb itself signals this isn't an instant add-to-cart. */
+.add-circle.add-pill{width:auto;height:32px;border-radius:999px;padding:0 14px 0 12px;gap:6px}
+.add-circle.add-pill svg{width:14px;height:14px}
+.add-circle.add-pill span{font-size:12.5px;font-weight:700;letter-spacing:.01em;white-space:nowrap}
+
+.notify-me-btn{
+  width:100%;margin-top:6px;padding:8px;display:flex;align-items:center;justify-content:center;gap:6px;
+  background:#fff;border:1px solid var(--color-border);border-radius:var(--radius-pill);
+  font-size:12px;font-weight:600;color:var(--color-text-muted);cursor:pointer;
+  transition:border-color .15s ease-out,color .15s ease-out;
 }
+.notify-me-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-.add-btn{flex:1;padding:8px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid var(--color-border);background:#fff;transition:border-color .15s ease-out}
+select.qty:focus, .size-select:focus{outline:none;border-color:var(--accent)}
+
+.add-btn{flex:1;padding:8px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;transition:transform .12s ease-out,background .18s ease-out}
+.add-btn:active{transform:scale(0.95)}
+.btn{transition:transform .12s ease-out,background .18s ease-out,opacity .18s ease-out}
+.btn:active{transform:scale(0.96)}
 
 /* Mobile add button */
 @media (max-width: 768px) {
@@ -533,7 +697,9 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 .product-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(12,15,22,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;       /* sheet sticks to bottom on mobile */
   justify-content: center;
@@ -555,7 +721,8 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   width: 100%;
   max-height: 92dvh;            /* dynamic viewport height — avoids keyboard issues */
   max-height: 92vh;             /* fallback for older browsers */
-  border-radius: 20px 20px 0 0; /* rounded top, flush bottom on mobile */
+  border-radius: 24px 24px 0 0; /* rounded top, flush bottom on mobile */
+  box-shadow: var(--shadow-lg);
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -573,23 +740,26 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 .product-modal::before {
   content: '';
   display: block;
-  width: 40px;
+  width: 36px;
   height: 4px;
-  background: #d1d5db;
+  background: #d8d5cd;
   border-radius: 2px;
   margin: 10px auto 0;
   flex-shrink: 0;
 }
 
-/* Close button */
+/* Close button — "on-image" variant: sits over the photo panel, so it stays
+   a translucent dark circle regardless of image content. Hover darkens
+   rather than turning destructive-red (red implies delete, not close). */
 .product-modal-close {
   position: absolute;
   top: 14px;
   right: 14px;
-  background: rgba(45,55,72,0.85);
+  background: rgba(20,24,32,.55);
+  backdrop-filter: blur(4px);
   color: #fff;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -602,7 +772,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   line-height: 1;
 }
 
-.product-modal-close:hover { background: #e63946; }
+.product-modal-close:hover { background: rgba(20,24,32,.75); }
 
 /* Content: mobile = stacked column */
 .product-modal-content {
@@ -614,7 +784,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 .product-modal-images {
   width: 100%;
   padding: 10px 14px 8px;
-  background: #f0f4f8;
+  background: #f0eee9;
   flex-shrink: 0;
 }
 
@@ -670,11 +840,12 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 }
 
 .product-modal-title {
-  font-size: 1.2rem;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.25;
   margin-bottom: 6px;
-  color: #2d3748;
+  color: var(--color-ink-navy);
 }
 
 .product-modal-rating {
@@ -688,15 +859,17 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 .product-modal-price {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #ff6b2c;
+  color: var(--color-ink-navy);
   margin-bottom: 14px;
 }
+.product-modal-price.price-sale { color: #e2551c; }
 
 .product-modal-original-price {
   text-decoration: line-through;
-  color: #a0aec0;
+  color: #9a968e;
   margin-left: 8px;
   font-size: 1rem;
+  font-weight: 400;
 }
 
 .product-modal-sizes {
@@ -717,17 +890,18 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 
 .size-option {
   padding: 8px 14px;
-  border: 1px solid #a0aec0;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   cursor: pointer;
   font-size: 0.9rem;
+  color: var(--color-text);
   transition: all 0.2s;
 }
 
 .size-option.selected {
-  background: #0a2f66;
+  background: var(--accent);
   color: #fff;
-  border-color: #0a2f66;
+  border-color: var(--accent);
 }
 
 .product-modal-colors {
@@ -756,7 +930,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 }
 
 .color-option.selected {
-  border-color: #2d3748;
+  border-color: var(--color-ink-navy);
   transform: scale(1.15);
 }
 
@@ -777,43 +951,49 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid #a0aec0;
+  border: 1px solid var(--color-border);
   background: #fff;
+  color: var(--color-text);
   cursor: pointer;
   font-size: 1.1rem;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: border-color .15s ease-out, transform .12s ease-out;
 }
+.quantity-btn:hover { border-color: var(--accent); }
+.quantity-btn:active { transform: scale(0.92); }
 
 .quantity-value {
   font-size: 1.1rem;
   font-weight: 600;
   min-width: 28px;
   text-align: center;
+  color: var(--color-text);
 }
 
 .product-modal-add-to-cart {
-  background: #2d3748;
+  background: var(--accent);
   color: #fff;
   border: none;
   padding: 15px 24px;
   font-size: 1rem;
   font-weight: 600;
-  border-radius: 30px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s ease-out, transform .12s ease-out;
   width: 100%;
   margin-bottom: 16px;
 }
 
-.product-modal-add-to-cart:hover { background: #0a2f66; }
+.product-modal-add-to-cart:hover { background: #0c3a7d; }
+.product-modal-add-to-cart:active { transform: scale(0.98); }
 
 /* Bundle suggestion */
 .bundle-suggestion {
   margin: 14px 0;
   padding: 14px;
-  background: #edf2f7;
+  background: #f0eee9;
   border-radius: 12px;
   display: flex;
   align-items: center;
@@ -848,13 +1028,13 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 }
 
 .bundle-text {
-  color: #4a5568;
+  color: var(--color-text-muted);
   font-size: 0.82rem;
   margin-bottom: 8px;
 }
 
 .bundle-button {
-  background: #0a2f66;
+  background: var(--accent);
   color: #fff;
   border: none;
   padding: 8px 16px;
@@ -862,27 +1042,28 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s ease-out;
 }
 
-.bundle-button:hover { background: #00a0ff; }
+.bundle-button:hover { background: #0c3a7d; }
 
 /* Description */
 .product-modal-description {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid #edf2f7;
+  border-top: 1px solid var(--color-border);
 }
 
 .product-modal-description h3 {
   margin-bottom: 10px;
   font-size: 1rem;
   font-weight: 700;
+  color: var(--color-ink-navy);
 }
 
 .description-text {
   line-height: 1.7;
-  color: #4a5568;
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   margin-bottom: 10px;
 }
@@ -906,7 +1087,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 .see-more-btn {
   background: none;
   border: none;
-  color: #00a0ff;
+  color: var(--accent);
   font-weight: 600;
   cursor: pointer;
   font-size: 0.9rem;
@@ -923,7 +1104,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
   .product-modal {
     max-width: 1000px;
     max-height: 88vh;
-    border-radius: 16px;
+    border-radius: 20px;
     transform: translateY(24px) scale(0.98);
   }
 
@@ -951,7 +1132,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
     flex: 1;
     min-width: 280px;
     padding: 32px;
-    background: #edf2f7;
+    background: #f0eee9;
   }
 
   .product-modal-main-image {
@@ -1023,16 +1204,18 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 }
 .hscroll::-webkit-scrollbar { display: none; }
 
-/* Cards inside horizontal carousels get a fixed width so they look right on all screens */
+/* Cards inside horizontal carousels get a fixed width so they look right on
+   all screens — widened from the original 190/160px now that the card body
+   no longer needs to fit a size-select + qty-select + text button. */
 .hscroll .product-card {
-  flex: 0 0 190px;              /* desktop: comfortable card width */
+  flex: 0 0 200px;              /* desktop: comfortable card width */
   min-width: 0;
   scroll-snap-align: start;
 }
 
 @media (max-width: 768px) {
   .hscroll { gap: 10px; }
-  .hscroll .product-card { flex: 0 0 160px; } /* slightly narrower on mobile */
+  .hscroll .product-card { flex: 0 0 172px; }
 }
 
 @media (max-width: 480px) {
@@ -1041,7 +1224,7 @@ select.qty, .size-select{padding:6px;border-radius:8px;border:1px solid #eee;bac
 }
 
 /* Footer */
-footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;border-radius:10px}
+footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;border-radius:16px}
 @media(max-width:768px){footer{padding:20px 16px}}
 .footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;align-items:start}
 @media(max-width:768px){.footer-grid{grid-template-columns:1fr;gap:20px}}
@@ -1050,8 +1233,8 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .footer-col a:hover{color:#fff;text-decoration:underline}
 .footer-newsletter{display:flex;gap:6px;margin-top:8px}
 .footer-newsletter input{flex:1;padding:9px 12px;border-radius:999px;border:none;font-size:13px;min-width:0;outline:none}
-.footer-newsletter button{padding:9px 16px;border-radius:999px;border:none;background:#e0284f;color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
-.footer-newsletter button:hover{background:#c41f40}
+.footer-newsletter button{padding:9px 16px;border-radius:999px;border:none;background:var(--color-cta);color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .15s ease-out}
+.footer-newsletter button:hover{background:#e2551c}
 .footer-tagline{color:rgba(255,255,255,0.75);font-size:13px;line-height:1.5;margin:4px 0 10px}
 .footer-copyright{font-size:12px;color:rgba(255,255,255,0.45);margin-top:12px;margin-bottom:0}
 .socials{display:flex;gap:10px;align-items:center}
@@ -1290,37 +1473,88 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
   max-height: 300px;
 }
 
+/* ── Shared small-modal system (fade + scale, centered) — used for
+   notifyModal/shNotifyModal today; a candidate base for other simple
+   dialogs later. Distinct class names from .modal/.product-modal so it
+   can be adopted incrementally. ── */
+.um-modal-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(12,15,22,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 16px;
+  opacity: 0;
+  transition: opacity .2s ease-out;
+}
+.um-modal-overlay.active { display: flex; opacity: 1; }
+.um-modal-card {
+  background: var(--color-surface, #fff);
+  border-radius: var(--radius-lg, 14px);
+  padding: 28px 24px;
+  max-width: 340px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: var(--shadow-lg, 0 20px 50px rgba(0,0,0,0.25));
+  transform: scale(0.94) translateY(10px);
+  transition: transform .3s cubic-bezier(.32,.72,0,1);
+}
+.um-modal-overlay.active .um-modal-card { transform: scale(1) translateY(0); }
+/* "on-surface" close variant: light chip, for modals not sitting over a
+   photo (quick-add, um-modal) — the product modal's close button stays the
+   dark on-image variant defined above since it floats over a photo. */
+.um-modal-close {
+  position: absolute; top: 12px; right: 14px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #f0eee9; border: none; font-size: 18px; cursor: pointer; color: var(--color-text);
+  transition: background .15s ease-out;
+}
+.um-modal-close:hover { background: #e6e3db; }
+
 /* Quick add modal — mobile-first bottom sheet */
 .quick-add-modal {
   position: fixed;
   inset: 0;
-  background: rgba(4,6,12,0.55);
+  background: rgba(12,15,22,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: none;
   align-items: flex-end;       /* bottom sheet on mobile */
   justify-content: center;
   z-index: 1400;
   padding: 0;
+  opacity: 0;
+  transition: opacity .2s ease-out;
 }
 .quick-add-modal.open { display: flex; }
+.quick-add-modal.open.visible { opacity: 1; }
 
 .quick-add-modal-card {
   background: #fff;
-  border-radius: 20px 20px 0 0;
+  border-radius: 24px 24px 0 0;
   width: 100%;
   max-width: 100%;
   padding: 8px 16px 28px;
   max-height: 80vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  box-shadow: var(--shadow-lg);
+  transform: scale(0.96) translateY(12px);
+  transition: transform .3s cubic-bezier(.32,.72,0,1);
 }
+.quick-add-modal.open.visible .quick-add-modal-card { transform: scale(1) translateY(0); }
 
 /* drag handle */
 .quick-add-modal-card::before {
   content: '';
   display: block;
-  width: 40px;
+  width: 36px;
   height: 4px;
-  background: #d1d5db;
+  background: #d8d5cd;
   border-radius: 2px;
   margin: 0 auto 14px;
 }
@@ -1357,7 +1591,7 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
     padding: 20px;
   }
   .quick-add-modal-card {
-    border-radius: 14px;
+    border-radius: 20px;
     max-width: 480px;
     padding: 20px;
   }
@@ -1368,7 +1602,9 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.6);
+  background: rgba(12,15,22,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: none;
   align-items: flex-end;       /* bottom sheet on mobile */
   justify-content: center;
@@ -1380,12 +1616,13 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 
 .modal-card {
   background: #fff;
-  border-radius: 20px 20px 0 0;
+  border-radius: 24px 24px 0 0;
   width: 100%;
   max-width: 100%;
   max-height: 92vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  box-shadow: var(--shadow-lg);
   position: relative;
 }
 
@@ -1393,16 +1630,16 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .modal-card::before {
   content: '';
   display: block;
-  width: 40px;
+  width: 36px;
   height: 4px;
-  background: #d1d5db;
+  background: #d8d5cd;
   border-radius: 2px;
   margin: 10px auto 0;
 }
 
 .modal-header {
   padding: 14px 18px 14px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1410,8 +1647,10 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 
 .modal-header h3 {
   margin: 0;
-  font-size: 1rem;
-  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-ink-navy);
 }
 
 .modal-close {
@@ -1442,13 +1681,13 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
     padding: 20px;
   }
   .modal-card {
-    border-radius: 14px;
+    border-radius: 20px;
     max-width: 500px;
     max-height: 90vh;
   }
   .modal-card::before { display: none; }
   .modal-header { padding: 18px 20px; }
-  .modal-header h3 { font-size: 1.1rem; }
+  .modal-header h3 { font-size: 1.3rem; }
   .modal-body { padding: 20px; }
   .modal-footer { padding: 18px 20px; }
 }
@@ -1587,11 +1826,16 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .featured-shops-section { margin-top: 18px; }
 .featured-shops-section h2 {
   display: flex;
-  align-items: center;
-  font-size: 18px;
-  color: var(--accent);
-  margin-bottom: 10px;
+  align-items: baseline;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-ink-navy);
+  margin-bottom: 14px;
   gap: 8px;
+}
+@media (max-width: 768px) {
+  .featured-shops-section h2 { font-size: 19px; }
 }
 
 .shops-top3 {
@@ -1759,39 +2003,45 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 #filteredView {
   display: none;
   margin-top: 14px;
+  animation: umFadeIn .22s ease-out;
 }
 #filteredView.active { display: block; }
+@keyframes umFadeIn { from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:translateY(0);} }
+
 .filtered-view-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+  padding: 10px 0;
 }
 .back-to-home-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1.5px solid var(--accent);
-  background: #fff;
-  color: var(--accent);
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-accent);
+  background: var(--color-surface);
+  color: var(--color-accent);
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  box-shadow: var(--shadow-sm);
+  transition: background .18s ease-out, color .18s ease-out, transform .12s ease-out;
   flex-shrink: 0;
 }
-.back-to-home-btn:hover { background: var(--accent); color: #fff; }
+.back-to-home-btn:hover { background: var(--color-accent); color: #fff; }
+.back-to-home-btn:active { transform: scale(0.96); }
 .filtered-view-label {
   font-size: 16px;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--color-accent);
 }
 .filtered-count {
   font-size: 13px;
-  color: var(--muted);
+  color: var(--color-text-muted);
   margin-left: auto;
 }
 .filtered-grid {
@@ -1819,28 +2069,25 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 }
 #catList li.cat-parent {
   font-weight: 700;
-  border-left: 2px solid transparent;
 }
-#catList li.cat-parent.active,
-#catList li.cat-parent:hover {
-  border-left-color: var(--accent);
-}
+/* .cat-parent active/hover now share the same tint + inset-bar treatment
+   as every other .categories li — no separate border-left needed. */
 
 /* ── Mobile Accordion Category Nav ── */
 .mobile-cat-accordion {
   list-style: none; padding: 0; margin: 0;
 }
 .mobile-cat-group {
-  border-bottom: 1px solid #f0f0f5;
+  border-bottom: 1px solid var(--color-border);
 }
 .mobile-cat-group-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 13px 4px;
-  cursor: pointer; font-size: 15px; font-weight: 700; color: var(--accent);
+  cursor: pointer; font-size: 15px; font-weight: 700; color: var(--color-ink-navy);
   user-select: none;
 }
 .mobile-cat-group-header .arrow {
-  font-size: 11px; color: var(--muted);
+  font-size: 11px; color: var(--color-text-muted);
   transition: transform 0.2s;
 }
 .mobile-cat-group.open .mobile-cat-group-header .arrow {
@@ -1855,35 +2102,46 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
   max-height: 600px;
 }
 .mobile-cat-sub-list li {
-  padding: 9px 4px 9px 20px;
-  font-size: 14px; color: #333; cursor: pointer;
-  border-bottom: 1px solid #f7f7fa;
+  padding: 9px 4px 9px 20px; border-radius: 8px;
+  font-size: 14px; color: var(--color-text); cursor: pointer;
+  transition: background .15s ease-out, color .15s ease-out, box-shadow .15s ease-out;
 }
-.mobile-cat-sub-list li:hover,
+.mobile-cat-sub-list li:hover {
+  background: var(--color-accent-tint);
+}
 .mobile-cat-sub-list li.active {
-  color: var(--accent-2); font-weight: 600;
+  background: var(--color-accent-tint); color: var(--accent); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--color-cta);
 }
 /* "All" item at top of accordion */
 .mobile-cat-all {
   padding: 13px 4px;
-  font-size: 15px; font-weight: 700; color: var(--accent);
-  cursor: pointer; border-bottom: 1px solid #f0f0f5;
+  font-size: 15px; font-weight: 700; color: var(--color-ink-navy);
+  cursor: pointer; border-bottom: 1px solid var(--color-border);
 }
-.mobile-cat-all.active { color: var(--accent-2); }
+.mobile-cat-all.active { color: var(--accent); }
 
-/* ── Section row headers ── */
+/* ── Section row headers — Playfair Display promoted from shop-names-only
+   to every section heading; the single cheapest change that kills the
+   "generic HTML" look. Text links instead of bordered pill buttons for
+   "See more" — quieter, more editorial. ── */
 .section-header {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+  display: flex; align-items: baseline; gap: 10px; margin: 8px 0 14px;
 }
-.section-header h2 { margin: 0; font-size: 18px; color: var(--accent); }
+.section-header h2 {
+  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 700;
+  line-height: 1.2; color: var(--color-ink-navy);
+}
+@media (max-width: 768px) {
+  .section-header h2 { font-size: 19px; }
+}
 .section-see-more {
-  margin-left: auto; font-size: 13px; font-weight: 700;
-  color: var(--accent-2); cursor: pointer; white-space: nowrap;
-  background: none; border: none; padding: 4px 10px;
-  border-radius: 999px; border: 1px solid var(--accent-2);
-  text-decoration: none;
+  margin-left: auto; font-size: 13px; font-weight: 600;
+  color: var(--accent); cursor: pointer; white-space: nowrap;
+  background: none; border: none; padding: 4px 0;
+  text-decoration: none; transition: color .15s ease-out;
 }
-.section-see-more:hover { background: var(--accent-2); color: #fff; }
+.section-see-more:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* ── Search suggestion categories ── */
 .suggestions-cat {
@@ -1912,19 +2170,22 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
    ═══════════════════════════════════════════════════════════════ */
 @media (min-width: 769px) {
 
-  /* ── Sidebar accordion ── */
-  .sidebar-cat-group { border-bottom: 1px solid #f0f0f5; }
+  /* ── Sidebar accordion — this is the actual rendered desktop category
+     nav (populateCategories() builds this markup, not the plain
+     .categories li list above), so it gets the same tint+inset-bar
+     treatment as everything else in the sidebar. ── */
+  .sidebar-cat-group { border-bottom: 1px solid var(--color-border); }
 
   .sidebar-cat-group-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 11px 6px; cursor: pointer;
-    font-size: 13px; font-weight: 700; color: var(--accent);
-    user-select: none; transition: color 0.15s;
+    padding: 10px 8px; cursor: pointer; border-radius: 8px;
+    font-size: 13px; font-weight: 700; color: var(--color-ink-navy);
+    user-select: none; transition: background 0.15s ease-out;
   }
-  .sidebar-cat-group-header:hover { color: var(--accent-2); }
+  .sidebar-cat-group-header:hover { background: var(--color-accent-tint); }
 
   .sidebar-arrow {
-    font-size: 10px; color: var(--muted);
+    font-size: 10px; color: var(--color-text-muted);
     transition: transform 0.2s;
     display: inline-block;
   }
@@ -1938,16 +2199,18 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
   .sidebar-cat-group.open .sidebar-cat-sub-list { max-height: 600px; }
 
   .sidebar-cat-sub-list li {
-    padding: 8px 6px 8px 18px;
-    font-size: 13px; color: #333; cursor: pointer;
-    border-bottom: 1px solid #f7f7fa;
-    transition: color 0.12s;
+    padding: 9px 8px 9px 20px; border-radius: 8px;
+    font-size: 13px; color: var(--color-text); cursor: pointer;
+    transition: background .15s ease-out, color .15s ease-out, box-shadow .15s ease-out;
   }
-  .sidebar-cat-sub-list li:hover { color: var(--accent-2); }
-  .sidebar-cat-sub-list li.active { color: var(--accent-2); font-weight: 600; }
+  .sidebar-cat-sub-list li:hover { background: var(--color-accent-tint); }
+  .sidebar-cat-sub-list li.active {
+    background: var(--color-accent-tint); color: var(--accent); font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--color-cta);
+  }
 
   .sidebar-cat-sub-list li.sidebar-cat-parent {
-    font-weight: 700; color: var(--accent); padding-left: 10px;
+    font-weight: 700; color: var(--color-ink-navy); padding-left: 10px;
   }
 
   /* Safety net — hide any old flat-list nodes if JS produces them */
@@ -2047,40 +2310,17 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
 }
 
 @media (max-width: 768px) {
-  /* ── Background depth ── */
-  body { background: linear-gradient(160deg, #f8f9ff 0%, #f2f3fa 100%); }
+  /* ── Background depth (warm, matches --color-bg direction) ── */
+  body { background: linear-gradient(160deg, #f9f7f3 0%, #f3f1ec 100%); }
 
   /* ── Main content horizontal breathing room ── */
   main { padding: 0 12px; }
 
-  /* ── Hero — card feel + pill dots + glassy arrows ── */
-  .hero { border-radius: 20px; margin-top: 10px; }
+  /* .hero radius/margin now live with the base rule + its own mobile
+     media query above — no need to redeclare here. */
 
-  .dot {
-    border-radius: 999px;
-    background: rgba(255,255,255,0.45);
-    transition: width 0.35s cubic-bezier(0.34,1.56,0.64,1), background 0.25s;
-  }
-  .dot.active {
-    width: 24px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  }
-
-  .arrow-btn {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.18);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1.5px solid rgba(255,255,255,0.35);
-    font-size: 20px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  /* .dot / .arrow-btn now share one universal treatment defined with the
+     base hero rules — no mobile-specific override needed. */
 
   /* ── Category bubbles — rounded gradient tiles ── */
   .cat-bubbles-row { padding: 18px 0 14px; gap: 14px; }
@@ -2104,56 +2344,13 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
     letter-spacing: -0.1px;
   }
 
-  /* ── Section headers — accent bar + bold type ── */
-  .section-header { margin-bottom: 14px; }
+  /* Section header size/color/see-more now live in the base .section-header
+     rules above — Playfair Display everywhere, no accent-bar pseudo-element. */
 
-  .section-header h2 {
-    font-size: 19px;
-    font-weight: 800;
-    letter-spacing: -0.4px;
-    color: #0d0d1a;
-    position: relative;
-    padding-left: 13px;
-    margin: 0;
-  }
-  .section-header h2::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 15%;
-    height: 70%;
-    width: 4px;
-    border-radius: 999px;
-    background: linear-gradient(180deg, var(--accent), var(--accent-2));
-  }
-
-  .section-see-more {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--accent);
-    background: #eef1fc;
-    border: none !important;
-    border-radius: 20px;
-    padding: 5px 14px;
-  }
-  .section-see-more:hover { background: var(--accent); color: #fff; }
-
-  /* ── Product cards — elevated & tactile ── */
-  .product-card {
-    border-radius: 16px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.05), 0 6px 24px rgba(0,0,0,0.04);
-  }
-  .product-card:active {
-    transform: scale(0.972) !important;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.08);
-    transition: transform 0.1s, box-shadow 0.1s;
-  }
-  .product-media { border-radius: 12px; }
-  .price { font-weight: 800; }
-  .badge { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; border-radius: 8px; }
-
-  /* ── Carousels ── */
-  .hscroll .product-card { border-radius: 16px; }
+  /* Product card radius/shadow/press-state, price weight, badge sizing,
+     and carousel-card radius now all live in the token-driven base rules
+     (.product-card, .product-media, .price, .badge, .hscroll .product-card)
+     — this block no longer needs to redeclare them per-breakpoint. */
 
   /* ── Featured shops — branded accent ── */
   .shop-card {
@@ -2161,11 +2358,5 @@ footer{margin-top:20px;background:var(--accent);color:#fff;padding:28px 24px;bor
     box-shadow: 0 2px 10px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.04);
     border-top: 3px solid var(--accent);
   }
-  .featured-shops-section h2 {
-    font-size: 19px;
-    font-weight: 800;
-    letter-spacing: -0.4px;
-    color: #0d0d1a;
-    margin-bottom: 14px;
-  }
+  /* .featured-shops-section h2 mobile size now lives with the base rule above. */
 }

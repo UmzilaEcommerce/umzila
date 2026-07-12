@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Shop — Umzila</title>
   <link rel="icon" href="umzila.webp" type="image/webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
   <style>
@@ -19,8 +22,8 @@
       background-size: cover; background-position: center;
       position: relative;
     }
-    @media (min-width: 600px) { .sh-banner { height: 240px; } }
-    @media (min-width: 960px) { .sh-banner { height: 300px; } }
+    @media (min-width: 768px) { .sh-banner { height: 240px; } }
+    @media (min-width: 1024px) { .sh-banner { height: 300px; } }
 
     .sh-banner-overlay {
       position: absolute; inset: 0;
@@ -41,7 +44,7 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 22px; font-weight: 800; color: #fff;
     }
-    @media (min-width: 600px) {
+    @media (min-width: 768px) {
       .sh-logo-wrap { width: 80px; height: 80px; bottom: -40px; }
       .sh-logo-initials { font-size: 28px; }
     }
@@ -74,8 +77,9 @@
       background: #fff; padding: 44px 18px 16px;
       border-bottom: 1px solid #eaecf0;
     }
-    @media (min-width: 600px) { .sh-info { padding-top: 54px; } }
-    .sh-shop-name { font-size: 22px; font-weight: 800; color: var(--accent); margin: 0 0 4px; }
+    @media (min-width: 768px) { .sh-info { padding-top: 54px; } }
+    .sh-shop-name { font-family: var(--font-display, Georgia, serif); font-size: 26px; font-weight: 700; color: var(--accent); margin: 0 0 4px; }
+    @media (min-width: 768px) { .sh-shop-name { font-size: 32px; } }
     .sh-shop-desc { font-size: 14px; color: var(--muted); margin: 0 0 8px; line-height: 1.5; max-width: 560px; }
     .sh-shop-meta {
       display: flex; flex-wrap: wrap; gap: 8px 18px;
@@ -122,20 +126,26 @@
       display: grid; grid-template-columns: repeat(2, 1fr);
       gap: 10px; padding: 12px 10px;
     }
-    @media (min-width: 600px) {
+    @media (min-width: 768px) {
       .sh-products-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px; }
     }
-    @media (min-width: 960px) { .sh-products-grid { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 1024px) { .sh-products-grid { grid-template-columns: repeat(4, 1fr); } }
 
-    /* Product card */
+    /* Product card — same visual language as the main index cards
+       (parallel implementation: shop.html has no script.js include, so
+       the markup/JS stay local, but tokens/radii/shadows stay in sync) */
     .sh-card {
-      background: #fff; border-radius: 10px; overflow: hidden;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      background: var(--color-surface, #fff); border-radius: var(--radius-lg, 16px); overflow: hidden;
+      box-shadow: var(--shadow-lg, 0 6px 24px rgba(0,0,0,0.04), 0 2px 10px rgba(0,0,0,0.05));
       display: flex; flex-direction: column;
+      transition: transform .2s ease-out, box-shadow .2s ease-out;
     }
+    .sh-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(12,16,25,0.1); }
+    .sh-card:active { transform: scale(0.98); transition: transform .12s ease-out; }
     .sh-card-media {
       position: relative; aspect-ratio: 1/1;
-      background: #f0f0f0; overflow: hidden;
+      background: var(--color-bg, #f0f0f0); overflow: hidden;
+      border-radius: var(--radius-md, 10px);
     }
     .sh-card-media img {
       width: 100%; height: 100%; object-fit: cover;
@@ -184,7 +194,7 @@
       font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
       transition: background 0.15s;
     }
-    .sh-add-btn:hover:not(:disabled) { background: var(--accent-2, #00a0ff); }
+    .sh-add-btn:hover:not(:disabled) { background: #0c3a7d; }
     .sh-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
     /* About tab */
@@ -231,6 +241,15 @@
 
     /* Product detail modal */
     /* Shop product modal uses shared product-modal-overlay classes from style.css */
+
+    /* style.css hides .header-right on mobile site-wide because index.html's
+       bottom nav (#mobileBottomNav) now owns cart/search/profile there —
+       shop.html has no such bottom nav, so it needs cart/sign-in/profile
+       kept visible in its own header on mobile. */
+    @media (max-width: 768px) {
+      .header-right { display: flex !important; }
+      .mobile-search-icon { display: none !important; } /* shop's own .sh-search covers this */
+    }
   </style>
 </head>
 <body>
@@ -253,12 +272,19 @@
         <button class="mobile-search-close" id="mobileSearchClose" style="display:none">✕</button>
       </div>
       <div class="header-right">
-        <button class="mobile-search-icon" id="mobileSearchIcon" aria-label="Search">🔍</button>
-        <button class="btn ghost icon-only" id="signBtn" aria-label="Sign In / Sign Up">👤</button>
-        <button id="profileBtnHeader" class="btn ghost icon-only" style="display:none" aria-label="Profile">👤</button>
-        <span id="orderUpdatesBadge" style="display:none;background:#ff6b2c;color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
+        <button class="mobile-search-icon" id="mobileSearchIcon" aria-label="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <button class="btn ghost icon-only" id="signBtn" aria-label="Sign In / Sign Up">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
+        </button>
+        <button id="profileBtnHeader" class="btn ghost icon-only" style="display:none" aria-label="Profile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
+        </button>
+        <span id="orderUpdatesBadge" style="display:none;background:var(--color-cta);color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
         <div class="cart" id="cartBtn" aria-haspopup="false">
-          🛒 <span class="cart-count" id="cartCount">0</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 12.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6"/><circle cx="10" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>
+          <span class="cart-count" id="cartCount">0</span>
         </div>
         <button class="icon-btn sidebar-toggle" id="sidebarToggleBtn" title="Toggle categories" style="display:none">☰</button>
       </div>
@@ -287,11 +313,11 @@
   </div>
 
   <!-- Notify Me modal (back-in-stock) -->
-  <div id="shNotifyModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
-    <div style="background:#fff;border-radius:14px;padding:28px 24px;max-width:340px;width:90%;margin:auto;position:relative">
-      <button id="shNotifyClose" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:#999">&times;</button>
-      <div style="font-size:22px;margin-bottom:8px">🔔</div>
-      <h3 style="margin:0 0 6px;font-size:16px" id="shNotifyTitle">Back in stock alert</h3>
+  <div id="shNotifyModal" class="um-modal-overlay" role="dialog" aria-modal="true">
+    <div class="um-modal-card">
+      <button id="shNotifyClose" class="um-modal-close" aria-label="Close">&times;</button>
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="26" height="26" style="margin-bottom:8px"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <h3 style="margin:0 0 6px;font-size:16px;font-family:var(--font-display);font-weight:700;color:var(--color-ink-navy)" id="shNotifyTitle">Back in stock alert</h3>
       <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Enter your email and we'll notify you the moment this is available again.</p>
       <input type="email" id="shNotifyEmail" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:10px">
       <div id="shNotifyError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px"></div>
@@ -537,7 +563,7 @@
         '<div class="sh-card-media">' +
           '<img src="' + svgPlaceholder(p.title,400,400,'#f0f0f0','#999') + '" data-src="' + primaryImg + '" loading="lazy" alt="' + escHtml(p.title) + '">' +
           badgeHtml +
-          '<button class="sh-card-fav fav-btn" data-product-id="' + p.id + '" data-fav-count="' + Number(p.favourite_count||0) + '" aria-label="Favourite"><span class="fav-icon">🤍</span></button>' +
+          '<button class="sh-card-fav fav-btn" data-product-id="' + p.id + '" data-fav-count="' + Number(p.favourite_count||0) + '" aria-label="Favourite"><svg class="fav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.1c0-3-2.4-5.4-5.4-5.4-1.8 0-3.4.9-4.4 2.3-1-1.4-2.6-2.3-4.4-2.3-3 0-5.4 2.4-5.4 5.4 0 5.5 9.8 11.5 9.8 11.5s9.8-6 9.8-11.5z"/></svg></button>' +
         '</div>' +
         '<div class="sh-card-body">' +
           '<div class="sh-card-name">' + escHtml(p.title) + '</div>' +
@@ -567,8 +593,8 @@
       btn.dataset.pending = 'true';
       var productId = btn.dataset.productId;
       var isFaved   = btn.classList.contains('active');
+      // The SVG heart's filled/unfilled state is driven purely by .active in CSS.
       btn.classList.toggle('active', !isFaved);
-      btn.querySelector('.fav-icon').textContent = isFaved ? '🤍' : '❤️';
       try {
         var headers = { 'Content-Type': 'application/json' };
         if (window.supabase) {
@@ -584,14 +610,11 @@
         var data = await res.json();
         if (data.success) {
           btn.classList.toggle('active', data.action === 'added');
-          btn.querySelector('.fav-icon').textContent = data.action === 'added' ? '❤️' : '🤍';
         } else {
           btn.classList.toggle('active', isFaved);
-          btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
         }
       } catch(_) {
         btn.classList.toggle('active', isFaved);
-        btn.querySelector('.fav-icon').textContent = isFaved ? '❤️' : '🤍';
       }
       btn.dataset.pending = 'false';
     }
@@ -682,8 +705,8 @@
           '</div></div>' +
           (full.stock < 1 ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Out of stock</div>' :
             (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
-          (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="width:100%;padding:11px;background:#fff;border:1px solid #d1d5db;border-radius:999px;font-size:14px;font-weight:600;color:#374151;cursor:pointer;margin-bottom:8px">🔔 Notify Me</button>' : '') +
-          '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid #d9d9df;border-radius:999px;background:#fff;color:#0a2f66;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s">🔗 Copy Link</button>' +
+          (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="margin-bottom:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notify Me</button>' : '') +
+          '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>' +
           '<button class="product-modal-add-to-cart" id="sh-modal-add-btn"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
           (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
             '<div class="description-text' + (hasLongDesc ? ' collapsed' : '') + '" id="sh-desc-text">' + escHtml(hasLongDesc ? shortDesc : full.desc) + '</div>' +
@@ -767,8 +790,9 @@
             : '?product=' + full.id;
           var url = window.location.origin + '/' + shopParam;
           navigator.clipboard.writeText(url).then(function() {
+            var originalHTML = shareBtn.innerHTML;
             shareBtn.textContent = '✓ Copied!';
-            setTimeout(function(){ shareBtn.textContent = '🔗 Copy Link'; }, 2000);
+            setTimeout(function(){ shareBtn.innerHTML = originalHTML; }, 2000);
           }).catch(function() { prompt('Copy this link:', url); });
         });
       }
@@ -801,11 +825,18 @@
         document.getElementById('shNotifyEmail').value = '';
         document.getElementById('shNotifyError').style.display = 'none';
         document.getElementById('shNotifySuccess').style.display = 'none';
-        shNotifyModal.style.display = 'flex';
+        shNotifyModal.classList.add('active');
       }
-      function closeShNotify() { shNotifyModal.style.display = 'none'; shNotifyProdId = null; }
+      function closeShNotify() { shNotifyModal.classList.remove('active'); shNotifyProdId = null; }
       if (shNotifyClose) shNotifyClose.addEventListener('click', closeShNotify);
       shNotifyModal.addEventListener('click', function(e){ if (e.target === shNotifyModal) closeShNotify(); });
+
+      // Escape key closes whichever modal is open — matches index.html's behavior.
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        if (overlay.classList.contains('active')) closeProductModal();
+        else if (shNotifyModal.classList.contains('active')) closeShNotify();
+      });
 
       if (shNotifySubmit) {
         shNotifySubmit.addEventListener('click', async function() {

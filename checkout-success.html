@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="umzila.webp" type="image/webp">
-  <title>Order Successful - Umzila</title>
+  <title>Order Successful — Umzila</title>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
@@ -77,17 +77,10 @@
     
     <p>We're processing your order and will notify you when it ships.</p>
 
-    <!-- Service next steps (shown if order has service items) -->
-    <div id="serviceNextSteps" style="display:none;margin-top:20px;background:#f0fdf4;border-radius:10px;padding:20px;text-align:left">
-      <h3 style="margin-top:0;color:#166534">🔧 Your Service Order — Next Steps</h3>
-      <ol style="color:#374151;line-height:1.8;padding-left:20px">
-        <li>The seller will <strong>accept your order within 24 hours</strong>. You'll receive an email confirmation.</li>
-        <li id="dropoffStep" style="display:none">Once accepted, <strong>bring your item to the Umzila collection point at UKZN Westville campus</strong>.</li>
-        <li>Umzila will hand your item to the seller when ready.</li>
-        <li>The seller completes the service and submits proof of completion.</li>
-        <li>Your item is returned to the campus collection point. You can <strong>collect it</strong> or have it <strong>delivered to your address</strong>.</li>
-      </ol>
-    </div>
+    <!-- Service next steps (shown if order has service items). Content is
+         built per-item by archetype in the script below, since the steps
+         genuinely differ between drop-off / appointment / digital services. -->
+    <div id="serviceNextSteps" style="display:none;margin-top:20px;text-align:left"></div>
 
     <a href="index.html" class="btn">Continue Shopping</a>
     <a href="profile.html" class="btn" style="background: #6c757d; margin-left: 10px;">View Orders</a>
@@ -102,6 +95,41 @@
     const displayId    = mPaymentId || pfPaymentId || 'N/A';
 
     document.getElementById('orderId').textContent = displayId;
+
+    // Per-archetype "next steps" list — item_dropoff/in_person-scheduled/
+    // in_person-flexible/digital genuinely differ, so this is no longer one
+    // fixed 5-step list with a single step conditionally hidden.
+    function renderServiceNextSteps(services) {
+      const wrap = document.getElementById('serviceNextSteps');
+      if (!wrap) return;
+      const cardStyle = 'background:#f0fdf4;border-radius:10px;padding:20px;margin-bottom:12px';
+      wrap.innerHTML = services.map(function(item) {
+        var title = item.title || 'Service';
+        var steps = [];
+        steps.push('The seller will <strong>accept your order</strong> (usually within their stated acceptance window). You\'ll get an email confirmation.');
+        if (item.fulfillment_type === 'item_dropoff') {
+          steps.push('Once accepted, <strong>bring your item to the Umzila collection point at UKZN Westville campus</strong>.');
+          steps.push('An Umzila rep will collect it, photograph its condition, and hand it to the seller.');
+          steps.push('The seller completes the service and marks it done.');
+          steps.push(item.item_returned === false
+            ? 'Since this item isn\'t returned, you\'ll see the completion photos in your order once finished.'
+            : 'Your item comes back through Umzila (with before/after photos) — collect it or have it delivered.');
+        } else if (item.fulfillment_type === 'in_person') {
+          if (item.booking_start_at) {
+            var when = new Date(item.booking_start_at).toLocaleString('en-ZA', { weekday: 'long', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            steps.push('Your appointment is booked for <strong>' + when + '</strong>.');
+          }
+          steps.push('Once accepted, you and the seller get each other\'s contact details to coordinate.');
+          steps.push('Meet at the agreed time — the seller marks the service complete afterward.');
+        } else if (item.fulfillment_type === 'digital') {
+          steps.push('The seller works on your request and attaches the finished file/deliverable.');
+          steps.push('You\'ll see the deliverable in this order once it\'s marked complete.');
+        }
+        return '<div style="' + cardStyle + '"><h3 style="margin-top:0;color:#166534">Your Service — ' + title + '</h3>' +
+          '<ol style="color:#374151;line-height:1.8;padding-left:20px">' + steps.map(function(s) { return '<li>' + s + '</li>'; }).join('') + '</ol></div>';
+      }).join('');
+      wrap.style.display = '';
+    }
 
     // Read seller enrollment data saved in sessionStorage on enroll-seller.html
     const enrollData = JSON.parse(sessionStorage.getItem('seller_enrollment') || '{}');
@@ -156,12 +184,8 @@
                 try {
                   const { data: fullOrder } = await sb.from('orders').select('items').eq('m_payment_id', mPaymentId).maybeSingle();
                   const items = Array.isArray(fullOrder && fullOrder.items) ? fullOrder.items : [];
-                  const hasService = items.some(i => i.listing_type === 'service');
-                  if (hasService) {
-                    document.getElementById('serviceNextSteps').style.display = '';
-                    const hasDropoff = items.some(i => i.listing_type === 'service' && i.fulfillment_type === 'item_dropoff');
-                    if (hasDropoff) document.getElementById('dropoffStep').style.display = '';
-                  }
+                  const services = items.filter(i => i.listing_type === 'service');
+                  if (services.length) renderServiceNextSteps(services);
                 } catch (_) {}
                 break;
               }

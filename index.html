@@ -692,28 +692,160 @@
 </div>
 
   <!-- Mystery Gift Popup -->
+  <style>.mystery-pane{display:none}.mystery-pane.active{display:block}</style>
 <div id="mysteryModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
-  <div class="modal-card" style="max-width:420px;text-align:center">
+  <div class="modal-card" style="max-width:440px">
     <div class="modal-body" style="padding-top:24px">
-      <div style="font-size:40px;margin-bottom:10px">🎁</div>
-      <h2 style="color:#0a2f66;margin:0 0 10px;font-size:22px">Mystery Gift Inside</h2>
-      <p style="color:#555;font-size:15px;line-height:1.6;margin-bottom:18px">
-        First-time visitor? We've hidden a special discount just for you. Claim it before it's gone.
-      </p>
-      <div id="mysteryInitialButtons" style="display:flex;flex-direction:column;gap:10px">
-        <button class="btn" id="mysteryClaimBtn" style="width:100%;padding:14px">Claim my mystery gift</button>
-        <button class="btn ghost" id="mysteryDeclineBtn" style="width:100%;padding:12px;font-size:13px">No thanks, I don't like saving money</button>
+
+      <!-- S1: intro -->
+      <div class="mystery-pane active" id="myP1" style="text-align:center">
+        <div style="font-size:40px;margin-bottom:10px">🎁</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:22px">Mystery Gift Inside</h2>
+        <p style="color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:18px">
+          First-time visitor? We've hidden something for you — a genuine discount, unlocked in about 10 seconds. Ready?
+        </p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn" id="myBtnClaim" style="width:100%;padding:14px">Yes, show me</button>
+          <button class="btn ghost" id="myBtnDecline" style="width:100%;padding:12px;font-size:13px">No thanks, I don't like saving money</button>
+        </div>
       </div>
-      <div id="mysteryEmailForm" style="display:none">
-        <p style="color:#555;font-size:14px;margin-bottom:10px">Enter your email and we'll send it right over:</p>
-        <input type="email" id="mysteryEmailInput" placeholder="your@email.com"
-          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:8px;box-sizing:border-box">
-        <div id="mysteryEmailError" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn" id="mysterySendBtn" style="width:100%;padding:14px">Send my gift</button>
+
+      <!-- S2: email -->
+      <div class="mystery-pane" id="myP2" style="text-align:center">
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Where should we send it?</h2>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Pop in your email — we'll check if you're new around here and take it from there.</p>
+        <input type="email" id="myEmailInput" placeholder="your@email.com"
+          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:8px;box-sizing:border-box">
+        <div id="myEmailErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn" id="myBtnEmailContinue" style="width:100%;padding:14px">Continue</button>
+        <p style="color:var(--muted);font-size:12px;margin-top:10px">We'll only use this for your gift. No spam, promise.</p>
       </div>
-      <div id="mysterySuccess" style="display:none;color:#28a745;font-size:15px;font-weight:600;padding:12px 0">
-        Check your inbox! We've sent your mystery gift. 📬
+
+      <!-- S3a: no profile — create password (or skip) -->
+      <div class="mystery-pane" id="myP3a" style="text-align:center">
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Lock in your gift</h2>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:12px" id="myP3aDesc"></p>
+        <input type="password" id="myPwInput" placeholder="Create a password"
+          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:6px;box-sizing:border-box">
+        <p style="color:var(--muted);font-size:12px;margin:0 0 8px">At least 8 characters, with a number and a symbol.</p>
+        <div id="myPwErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn" id="myBtnCreateAcct" style="width:100%;padding:14px">Create my account &amp; continue</button>
+        <button class="btn-link" id="myBtnSkipPw" style="width:100%;background:none;border:none;color:var(--accent-2);font-size:13px;margin-top:12px;cursor:pointer;text-decoration:underline">Just email me the gift instead</button>
       </div>
+
+      <!-- S3b: profile exists — inline sign-in -->
+      <div class="mystery-pane" id="myP3b" style="text-align:center">
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Welcome back!</h2>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Looks like <strong id="myP3bEmail"></strong> already has an Umzila account. Sign in to grab your gift.</p>
+        <input type="password" id="mySigninPwInput" placeholder="Your password"
+          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:8px;box-sizing:border-box">
+        <div class="forgot-password" style="text-align:right;margin-bottom:8px">
+          <a href="#" id="myForgotLink" style="font-size:13px">Forgot password?</a>
+        </div>
+        <div id="mySigninErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
+        <button class="btn" id="myBtnSignin" style="width:100%;padding:14px">Sign in &amp; continue</button>
+        <button class="btn-link" id="myWrongEmailLink" style="width:100%;background:none;border:none;color:var(--accent-2);font-size:13px;margin-top:12px;cursor:pointer;text-decoration:underline">Not you? Use a different email</button>
+      </div>
+
+      <!-- S4: fun fact prompt -->
+      <div class="mystery-pane" id="myP4" style="text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">🤔</div>
+        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px">Want a fun fact about us for a little extra value?</h2>
+        <div style="display:flex;gap:10px">
+          <button class="btn ghost" id="myBtnFunNo" style="flex:1;padding:12px">No, just the gift</button>
+          <button class="btn" id="myBtnFunYes" style="flex:1;padding:12px">Yes, tell me</button>
+        </div>
+      </div>
+
+      <!-- S4 reveal: fun fact shown briefly -->
+      <div class="mystery-pane" id="myP4r" style="text-align:center">
+        <div style="font-size:32px;margin-bottom:8px">✨</div>
+        <div style="background:var(--color-accent-tint);border-radius:var(--radius-lg);padding:18px 20px">
+          <p style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;font-weight:700">Little-known Umzila fact</p>
+          <p id="myFunFactText" style="color:var(--color-accent);font-size:15px;line-height:1.6;margin:0;font-weight:600"></p>
+        </div>
+      </div>
+
+      <!-- S6: plain claim success -->
+      <div class="mystery-pane" id="myP6claimed" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">📬</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Check your inbox!</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">We've sent your mystery gift. The reveal happens at checkout — enter the code and see what you got.</p>
+        <button class="btn" id="myBtnClaimedContinue" style="width:100%;padding:14px">Continue</button>
+      </div>
+
+      <!-- S6-active -->
+      <div class="mystery-pane" id="myP6active" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🎁</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">You've already got one!</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">You already have a mystery discount waiting in your inbox. No need for a new one — just grab that code at checkout.</p>
+        <button class="btn" id="myBtnActiveContinue" style="width:100%;padding:14px">Got it, continue</button>
+      </div>
+
+      <!-- S6-back (reinstated) -->
+      <div class="mystery-pane" id="myP6back" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🧟</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Good news — it's back.</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">Your mystery code had expired, unused and lonely, so we brought it back to life. Check your inbox — same code, two more weeks to use it.</p>
+        <button class="btn" id="myBtnBackContinue" style="width:100%;padding:14px">Nice, continue</button>
+      </div>
+
+      <!-- S6-gift (free item) -->
+      <div class="mystery-pane" id="myP6gift" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🍦</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">You've used your gift — so here's ice cream.</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px" id="myGiftDesc">Looks like your mystery gift is already spent — smart move. So here's something sweeter: a free Milky Pie Ice Cream, R0 at checkout, already added to your cart. No code needed.</p>
+        <button class="btn" id="myBtnGiftContinue" style="width:100%;padding:14px">Sweet — take me to my cart</button>
+      </div>
+
+      <!-- S6 fallback: gift unavailable -->
+      <div class="mystery-pane" id="myP6nogift" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">🙈</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Your gift's getting a refresh</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">Our mystery gift item is temporarily unavailable — our team's on it. Check back soon, or reach out at <a href="mailto:support@umzila.store">support@umzila.store</a>.</p>
+        <button class="btn" id="myBtnNoGiftContinue" style="width:100%;padding:14px">Okay</button>
+      </div>
+
+      <!-- fallback: something went wrong -->
+      <div class="mystery-pane" id="myP6error" style="text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">😅</div>
+        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Something hiccuped</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">We couldn't finish that on our end. Drop us a line at <a href="mailto:support@umzila.store">support@umzila.store</a> and we'll sort your gift out personally.</p>
+        <button class="btn" id="myBtnErrorContinue" style="width:100%;padding:14px">Continue</button>
+      </div>
+
+      <!-- S7: pickup explainer — shown after every successful/terminal branch -->
+      <div class="mystery-pane" id="myP7">
+        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px;text-align:center">How pickup works</h2>
+        <div style="display:flex;gap:10px;margin-bottom:16px">
+          <!-- OWNER: swap this placeholder for a real photo -->
+          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Collection point">
+            <rect width="160" height="100" rx="10" fill="#f0f4ff"/>
+            <rect x="34" y="46" width="54" height="34" rx="2" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
+            <rect x="44" y="56" width="10" height="12" fill="none" stroke="#0a2f66" stroke-width="2"/>
+            <rect x="66" y="56" width="10" height="12" fill="none" stroke="#0a2f66" stroke-width="2"/>
+            <path d="M34 46l27-16 27 16" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M112 30c0-9.4 7.6-17 17-17s17 7.6 17 17c0 12.7-17 30-17 30s-17-17.3-17-30z" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
+            <circle cx="129" cy="30" r="6" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
+          </svg>
+          <!-- OWNER: swap this placeholder for a real photo -->
+          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Receiving your order">
+            <rect width="160" height="100" rx="10" fill="#f0f4ff"/>
+            <rect x="66" y="34" width="30" height="26" rx="2" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
+            <path d="M66 44h30M81 34v26" stroke="#0a2f66" stroke-width="2"/>
+            <path d="M60 78c8-12 16-16 22-16h20c6 0 10 3 10 3" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M46 84c-3-10 2-18 10-20 6-1.5 10 1 14 4l14 4c4 1 5 6 1 8-3 1.7-6 1-9 0l-9-2" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <ol style="color:var(--muted);font-size:14px;line-height:1.7;margin:0 0 18px;padding-left:20px">
+          <li><strong style="color:var(--color-accent)">Choose pickup at checkout</strong> — it's free.</li>
+          <li>Come to the <strong style="color:var(--color-accent)">Umzila collection point, UKZN Westville</strong>, at the time you picked.</li>
+          <li>Show your order number, grab your stuff, go.</li>
+        </ol>
+        <a href="cart.html" id="myCartLink" style="display:none;text-align:center;font-size:13px;color:var(--accent-2);margin-bottom:10px">View my cart &rarr;</a>
+        <button class="btn" id="myBtnGotIt" style="width:100%;padding:14px">Got it</button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1275,60 +1407,326 @@
   // Mystery Gift Popup
   (function() {
     if (localStorage.getItem('um_mystery_seen')) return;
-    var modal      = document.getElementById('mysteryModal');
-    var claimBtn   = document.getElementById('mysteryClaimBtn');
-    var declineBtn = document.getElementById('mysteryDeclineBtn');
-    var emailForm  = document.getElementById('mysteryEmailForm');
-    var initBtns   = document.getElementById('mysteryInitialButtons');
-    var emailInput = document.getElementById('mysteryEmailInput');
-    var emailError = document.getElementById('mysteryEmailError');
-    var sendBtn    = document.getElementById('mysterySendBtn');
-    var successMsg = document.getElementById('mysterySuccess');
+    var modal = document.getElementById('mysteryModal');
     if (!modal) return;
+
+    // ---- element refs ----
+    var panes = {};
+    ['myP1','myP2','myP3a','myP3b','myP4','myP4r','myP6claimed','myP6active','myP6back','myP6gift','myP6nogift','myP6error','myP7']
+      .forEach(function(id){ panes[id] = document.getElementById(id); });
+
+    var myBtnClaim        = document.getElementById('myBtnClaim');
+    var myBtnDecline      = document.getElementById('myBtnDecline');
+
+    var myEmailInput      = document.getElementById('myEmailInput');
+    var myEmailErr        = document.getElementById('myEmailErr');
+    var myBtnEmailContinue= document.getElementById('myBtnEmailContinue');
+
+    var myP3aDesc         = document.getElementById('myP3aDesc');
+    var myPwInput         = document.getElementById('myPwInput');
+    var myPwErr           = document.getElementById('myPwErr');
+    var myBtnCreateAcct   = document.getElementById('myBtnCreateAcct');
+    var myBtnSkipPw       = document.getElementById('myBtnSkipPw');
+
+    var myP3bEmail        = document.getElementById('myP3bEmail');
+    var mySigninPwInput   = document.getElementById('mySigninPwInput');
+    var mySigninErr       = document.getElementById('mySigninErr');
+    var myBtnSignin       = document.getElementById('myBtnSignin');
+    var myForgotLink      = document.getElementById('myForgotLink');
+    var myWrongEmailLink  = document.getElementById('myWrongEmailLink');
+
+    var myBtnFunYes       = document.getElementById('myBtnFunYes');
+    var myBtnFunNo        = document.getElementById('myBtnFunNo');
+    var myFunFactText     = document.getElementById('myFunFactText');
+
+    var myBtnClaimedContinue = document.getElementById('myBtnClaimedContinue');
+    var myBtnActiveContinue  = document.getElementById('myBtnActiveContinue');
+    var myBtnBackContinue    = document.getElementById('myBtnBackContinue');
+    var myGiftDesc           = document.getElementById('myGiftDesc');
+    var myBtnGiftContinue    = document.getElementById('myBtnGiftContinue');
+    var myBtnNoGiftContinue  = document.getElementById('myBtnNoGiftContinue');
+    var myBtnErrorContinue   = document.getElementById('myBtnErrorContinue');
+
+    var myCartLink        = document.getElementById('myCartLink');
+    var myBtnGotIt         = document.getElementById('myBtnGotIt');
+
+    var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    // ---- flow state ----
+    var currentPane      = 'myP1';
+    var currentEmail     = '';
+    var currentCodeState = 'none'; // none | active | expired | used
+    var viaProfileSignin = false;  // true once S3b sign-in succeeds
+    var authToken         = '';
+    var arrivedViaGift    = false;
+
+    var FUN_FACTS = [
+      "Umzila is isiZulu for “trail” or “path” — fitting, since every order here starts as a small trail between a UKZN Westville student and their next customer.",
+      "Every seller on Umzila is a UKZN Westville student running their own small business between lectures.",
+      "Most Umzila deliveries aren't driven — they're walked across campus by the sellers themselves.",
+      "Umzila started small: a handful of students trading snacks and prints between res blocks before it became a proper site."
+    ];
+
+    function showPane(id) {
+      Object.keys(panes).forEach(function(k){ if (panes[k]) panes[k].classList.remove('active'); });
+      if (panes[id]) panes[id].classList.add('active');
+      currentPane = id;
+    }
 
     function openMystery()  { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
     function closeMystery() { localStorage.setItem('um_mystery_seen','1'); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+    function hideMysteryOnly() { modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
 
-    setTimeout(openMystery, 20000);
-    declineBtn.addEventListener('click', closeMystery);
-    modal.addEventListener('click', function(e){ if (e.target===modal) closeMystery(); });
+    // Gate: never show if a Supabase session already exists at open-time, regardless of localStorage.
+    async function maybeOpenMystery() {
+      try {
+        var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
+        if (client && client.auth) {
+          var sessRes = await client.auth.getSession();
+          if (sessRes && sessRes.data && sessRes.data.session) return; // logged in — never show
+        }
+      } catch (e) { /* ignore — fall through to showing the popup */ }
+      openMystery();
+    }
+    setTimeout(maybeOpenMystery, 20000);
 
-    claimBtn.addEventListener('click', function() {
-      initBtns.style.display = 'none';
-      emailForm.style.display = 'block';
-      emailInput.focus();
+    myBtnDecline.addEventListener('click', closeMystery);
+    modal.addEventListener('click', function(e){
+      if (e.target !== modal) return;
+      if (currentPane === 'myP4') { advanceAfterFunFact(false); return; } // backdrop-click on fun-fact pane == "No"
+      closeMystery();
     });
 
-    sendBtn.addEventListener('click', async function() {
-      var email = emailInput.value.trim();
-      emailError.style.display = 'none';
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        emailError.textContent = 'Please enter a valid email address.';
-        emailError.style.display = 'block'; return;
+    myBtnClaim.addEventListener('click', function() {
+      showPane('myP2');
+      myEmailInput.focus();
+    });
+
+    // ---- S2: email -> check ----
+    myBtnEmailContinue.addEventListener('click', async function() {
+      var email = myEmailInput.value.trim();
+      myEmailErr.style.display = 'none';
+      if (!email || !EMAIL_RE.test(email)) {
+        myEmailErr.textContent = 'Please enter a valid email address.';
+        myEmailErr.style.display = 'block';
+        return;
       }
-      sendBtn.disabled = true; sendBtn.textContent = 'Sending...';
+      myBtnEmailContinue.disabled = true; myBtnEmailContinue.textContent = 'Checking...';
       try {
-        var res = await fetch('/.netlify/functions/claim-mystery-gift', {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ email: email })
-        });
-        var data = await res.json();
-        if (data.success) {
-          emailForm.style.display = 'none';
-          successMsg.style.display = 'block';
-          localStorage.setItem('um_mystery_seen','1');
-          setTimeout(closeMystery, 2200);
+        var data = await apiCall({ action: 'check', email: email });
+        if (!data || data.error) {
+          myEmailErr.textContent = (data && data.error) || 'Something went wrong. Please try again.';
+          myEmailErr.style.display = 'block';
+          return;
+        }
+        currentEmail = email;
+        currentCodeState = data.code_state || 'none';
+        if (data.has_profile) {
+          myP3bEmail.textContent = currentEmail;
+          mySigninPwInput.value = '';
+          mySigninErr.style.display = 'none';
+          showPane('myP3b');
         } else {
-          emailError.textContent = data.error || 'Something went wrong. Please try again.';
-          emailError.style.display = 'block';
-          sendBtn.disabled = false; sendBtn.textContent = 'Send my gift';
+          myP3aDesc.textContent = (currentCodeState === 'none')
+            ? "One more thing — set a password and we'll save this account so your gift (and your next order) is ready to go. Or skip it and we'll just email you the gift."
+            : "Looks like you've been here before. Set a password to officially own your free gift — or skip and we'll sort it by email.";
+          myPwInput.value = '';
+          myPwErr.style.display = 'none';
+          showPane('myP3a');
         }
       } catch (err) {
-        emailError.textContent = 'Network error. Please try again.';
-        emailError.style.display = 'block';
-        sendBtn.disabled = false; sendBtn.textContent = 'Send my gift';
+        myEmailErr.textContent = 'Network error. Please try again.';
+        myEmailErr.style.display = 'block';
+      } finally {
+        myBtnEmailContinue.disabled = false; myBtnEmailContinue.textContent = 'Continue';
       }
     });
+
+    // ---- S3a: no profile — create password or skip ----
+    myBtnCreateAcct.addEventListener('click', async function() {
+      var pw = myPwInput.value;
+      myPwErr.style.display = 'none';
+      if (typeof checkPasswordRules !== 'function' || !checkPasswordRules(pw)) {
+        myPwErr.textContent = 'Password needs 8+ characters, a number, and a symbol.';
+        myPwErr.style.display = 'block';
+        return;
+      }
+      myBtnCreateAcct.disabled = true; myBtnCreateAcct.textContent = 'Creating account...';
+      try {
+        var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
+        if (client && client.auth) {
+          var res = await client.auth.signUp({ email: currentEmail, password: pw });
+          if (!res.error && res.data && res.data.user && res.data.user.id && client.from) {
+            try {
+              await client.from('profiles').upsert([{
+                user_id: res.data.user.id,
+                email: currentEmail
+              }], { onConflict: 'user_id', returning: 'minimal' });
+            } catch (profErr) { console.warn('mystery gift: profile upsert failed', profErr); }
+          } else if (res.error) {
+            console.warn('mystery gift: signUp failed', res.error);
+          }
+        }
+      } catch (err) {
+        console.warn('mystery gift: account creation error', err);
+      }
+      myBtnCreateAcct.disabled = false; myBtnCreateAcct.textContent = 'Create my account & continue';
+      proceedAfterNoProfile();
+    });
+
+    myBtnSkipPw.addEventListener('click', function() { proceedAfterNoProfile(); });
+
+    function proceedAfterNoProfile() {
+      if (currentCodeState === 'none') { showPane('myP4'); }
+      else { doClaim(false); }
+    }
+
+    // ---- S3b: profile exists — sign in ----
+    myBtnSignin.addEventListener('click', async function() {
+      var pw = mySigninPwInput.value;
+      mySigninErr.style.display = 'none';
+      if (!pw) {
+        mySigninErr.textContent = 'Please enter your password.';
+        mySigninErr.style.display = 'block';
+        return;
+      }
+      myBtnSignin.disabled = true; myBtnSignin.textContent = 'Signing in...';
+      try {
+        var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
+        if (!client || !client.auth) throw new Error('Auth client not available.');
+        var res = await client.auth.signInWithPassword({ email: currentEmail, password: pw });
+        if (res.error) {
+          mySigninErr.textContent = res.error.message || 'Wrong password. Please try again.';
+          mySigninErr.style.display = 'block';
+          return;
+        }
+        authToken = (res.data && res.data.session && res.data.session.access_token) || '';
+        viaProfileSignin = true;
+        if (currentCodeState === 'none') { showPane('myP4'); }
+        else { await doPostLogin(false); }
+      } catch (err) {
+        mySigninErr.textContent = err.message || 'Unexpected error signing in.';
+        mySigninErr.style.display = 'block';
+      } finally {
+        myBtnSignin.disabled = false; myBtnSignin.textContent = 'Sign in & continue';
+      }
+    });
+
+    myForgotLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      hideMysteryOnly();
+      var fpModal = document.getElementById('forgotPasswordModal');
+      var fpEmail = document.getElementById('modalForgotPasswordEmail');
+      if (fpEmail) fpEmail.value = currentEmail;
+      if (fpModal && typeof showModal === 'function') showModal(fpModal);
+    });
+
+    myWrongEmailLink.addEventListener('click', function(e) {
+      e.preventDefault();
+      currentEmail = ''; viaProfileSignin = false; authToken = '';
+      myEmailInput.value = '';
+      showPane('myP2');
+      myEmailInput.focus();
+    });
+
+    // ---- S4: fun fact prompt ----
+    myBtnFunYes.addEventListener('click', function() {
+      var fact = FUN_FACTS[Math.floor(Math.random() * FUN_FACTS.length)];
+      myFunFactText.textContent = fact;
+      showPane('myP4r');
+      setTimeout(function(){ advanceAfterFunFact(true, fact); }, 2500);
+    });
+    myBtnFunNo.addEventListener('click', function() { advanceAfterFunFact(false); });
+
+    function advanceAfterFunFact(funFact, factText) {
+      if (viaProfileSignin) { doPostLogin(funFact, factText); }
+      else { doClaim(funFact, factText); }
+    }
+
+    // ---- server calls ----
+    async function apiCall(payload, token) {
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      try {
+        var res = await fetch('/.netlify/functions/claim-mystery-gift', {
+          method: 'POST', headers: headers, body: JSON.stringify(payload)
+        });
+        return await res.json();
+      } catch (err) {
+        return { error: 'Network error. Please try again.' };
+      }
+    }
+
+    async function doClaim(funFact, factText) {
+      var body = { action: 'claim', email: currentEmail, fun_fact: !!funFact };
+      if (funFact && factText) body.fact_text = factText;
+      var data = await apiCall(body);
+      handleOutcome(data);
+    }
+
+    async function doPostLogin(funFact, factText) {
+      var body = { action: 'post_login', email: currentEmail, fun_fact: !!funFact };
+      if (funFact && factText) body.fact_text = factText;
+      var data = await apiCall(body, authToken);
+      handleOutcome(data);
+    }
+
+    function handleOutcome(data) {
+      if (!data || data.error) { showPane('myP6error'); return; }
+      switch (data.state) {
+        case 'claimed':    showPane('myP6claimed'); break;
+        case 'active':      showPane('myP6active'); break;
+        case 'reinstated':  showPane('myP6back'); break;
+        case 'free_gift':
+          arrivedViaGift = true;
+          addGiftToCart(data.gift, data.code);
+          if (data.gift && data.gift.name) {
+            myGiftDesc.textContent = "Looks like your mystery gift is already spent — smart move. So here's something sweeter: a free " + data.gift.name + ", R0 at checkout, already added to your cart. No code needed.";
+          }
+          showPane('myP6gift');
+          break;
+        case 'used_no_gift': showPane('myP6nogift'); break;
+        default: showPane('myP6error');
+      }
+    }
+
+    function addGiftToCart(gift, code) {
+      if (!gift || !gift.product_id) return;
+      try {
+        if (typeof addToCart === 'function' && window.state && Array.isArray(state.products) &&
+            state.products.some(function(p){ return p.id === gift.product_id; })) {
+          addToCart(gift.product_id, 1);
+        } else if (window.state && Array.isArray(state.cart)) {
+          var already = state.cart.some(function(i){ return i.id === gift.product_id; });
+          if (!already) {
+            state.cart.push({
+              id: gift.product_id, title: gift.name || 'Free gift', price: gift.price || 0, qty: 1,
+              size: 'One Size', img: gift.image || '', variantId: null, stock: null, maxQuantity: null,
+              preferred_delivery: '', seller_id: null, listing_type: 'product', fulfillment_type: null,
+              service_turnaround: null, item_returned: null, intake: null, booking_id: null,
+              booking_start_at: null, service_options: null
+            });
+            localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+            if (typeof updateCartBadge === 'function') updateCartBadge();
+          }
+        }
+      } catch (e) { console.warn('mystery gift: could not add gift to cart automatically', e); }
+      try { if (code) localStorage.setItem('um_free_gift_code', code); } catch (e) {}
+    }
+
+    // ---- terminal S6 panes -> S7 ----
+    myBtnClaimedContinue.addEventListener('click', function() { showPane('myP7'); });
+    myBtnActiveContinue.addEventListener('click', function() { showPane('myP7'); });
+    myBtnBackContinue.addEventListener('click', function() { showPane('myP7'); });
+    myBtnNoGiftContinue.addEventListener('click', function() { showPane('myP7'); });
+    myBtnErrorContinue.addEventListener('click', function() { showPane('myP7'); });
+    myBtnGiftContinue.addEventListener('click', function() {
+      if (myCartLink) myCartLink.style.display = 'block';
+      showPane('myP7');
+    });
+
+    // ---- S7: pickup explainer ----
+    myBtnGotIt.addEventListener('click', closeMystery);
   })();
   </script>
 
@@ -1354,5 +1752,26 @@
   <a href="https://wa.me/27797662768?text=Hi%20Umzila!%20I%20have%20a%20question." target="_blank" rel="noopener noreferrer" id="waFab" aria-label="Chat on WhatsApp" style="position:fixed;bottom:22px;right:18px;z-index:1500;background:#25d366;color:#fff;border-radius:50%;width:54px;height:54px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(37,211,102,0.45);text-decoration:none;transition:transform .18s,box-shadow .18s" onmouseenter="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 24px rgba(37,211,102,0.55)'" onmouseleave="this.style.transform='';this.style.boxShadow='0 4px 18px rgba(37,211,102,0.45)'">
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
   </a>
+
+  <!-- Mobile app-style bottom navigation (Home / Search / Cart / Profile) -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary">
+    <button class="mbn-item active" id="mbnHome" data-mbn="home" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mbn-item" id="mbnSearch" data-mbn="search" aria-label="Search">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+    </button>
+    <button class="mbn-item" id="mbnCart" data-mbn="cart" aria-label="Cart">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      <span class="mbn-badge cart-count" id="mbnCartBadge" style="display:none">0</span>
+      <span>Cart</span>
+    </button>
+    <button class="mbn-item" id="mbnProfile" data-mbn="profile" aria-label="Profile">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </button>
+  </nav>
 </body>
 </html>

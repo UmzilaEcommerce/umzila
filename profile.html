@@ -715,6 +715,92 @@
     el.className = 'p-status' + (ok ? '' : ' err');
   }
 
+  // ── SAST (Africa/Johannesburg, fixed UTC+2, no DST) ─────────────
+  const SAST_OFFSET_MS = 2 * 60 * 60 * 1000;
+  function formatSAST(input, opts) {
+    if (!input) return '';
+    const d = input instanceof Date ? input : new Date(input);
+    return d.toLocaleString('en-ZA', Object.assign({ timeZone: 'Africa/Johannesburg' }, opts));
+  }
+  function sastParts(input) {
+    const d = input instanceof Date ? input : new Date(input);
+    const shifted = new Date(d.getTime() + SAST_OFFSET_MS);
+    return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth()+1, day: shifted.getUTCDate(), hour: shifted.getUTCHours(), minute: shifted.getUTCMinutes(), dayOfWeek: shifted.getUTCDay() };
+  }
+
+  // ── Rep slot picker (buyer change-time flow) ────────────────────
+  // Mirrors loadRepSlotPicker in script.js / loadRepSlotPickerCheckout in
+  // checkout.html — copied in per this codebase's no-shared-module convention.
+  function computeSlotDayButtons(availability, bookings, durationMin, horizonDays) {
+    const byDow = {};
+    (availability || []).forEach(a => { (byDow[a.day_of_week] = byDow[a.day_of_week] || []).push(a); });
+    const days = [];
+    const now = new Date();
+    for (let i = 0; i < (horizonDays || 7); i++) {
+      const cursor = new Date(now.getTime() + i * 86400000);
+      const parts = sastParts(cursor);
+      const windows = byDow[parts.dayOfWeek] || [];
+      if (!windows.length) continue;
+      const slots = [];
+      windows.forEach(w => {
+        const [sh, sm] = w.start_time.split(':').map(Number);
+        const [eh, em] = w.end_time.split(':').map(Number);
+        let slotStart = sastDate(parts.year, parts.month, parts.day, sh, sm);
+        const windowEnd = sastDate(parts.year, parts.month, parts.day, eh, em);
+        while (slotStart.getTime() + durationMin * 60000 <= windowEnd.getTime()) {
+          const slotEnd = new Date(slotStart.getTime() + durationMin * 60000);
+          if (slotStart.getTime() > Date.now()) {
+            const overlaps = (bookings || []).some(b => {
+              const bs = new Date(b.slot_start || b.collection_slot_start || b.return_slot_start || b.start_at).getTime();
+              return bs === slotStart.getTime();
+            });
+            if (!overlaps) slots.push({ start: slotStart, end: slotEnd });
+          }
+          slotStart = slotEnd;
+        }
+      });
+      if (slots.length) days.push({ date: cursor, parts, slots });
+    }
+    return days;
+  }
+  function sastDate(y, m, d, hh, mm) {
+    return new Date(Date.UTC(y, m - 1, d, hh || 0, mm || 0, 0, 0) - SAST_OFFSET_MS);
+  }
+  async function loadRepSlotPickerProfile(mountEl, onPick, existingSlot) {
+    mountEl.innerHTML = '<div style="font-size:12px;color:#9ca3af">Loading available times…</div>';
+    const [{ data: availability }, { data: bookings }] = await Promise.all([
+      sb.from('rep_availability').select('*'),
+      sb.from('order_item_statuses').select('collection_slot_start,return_slot_start').or('collection_slot_start.not.is.null,return_slot_start.not.is.null')
+    ]);
+    if (!availability || !availability.length) {
+      mountEl.innerHTML = '<div style="font-size:12px;color:#9ca3af">No collection/delivery hours are set up yet.</div>';
+      return;
+    }
+    const days = computeSlotDayButtons(availability, bookings || [], 60, 7);
+    if (!days.length) {
+      mountEl.innerHTML = '<div style="font-size:12px;color:#9ca3af">No upcoming times available — please check back soon.</div>';
+      return;
+    }
+    let selectedDayIdx = 0;
+    let selectedSlot = null;
+    function render() {
+      const day = days[selectedDayIdx];
+      const dayBtns = days.map((d, i) => `<button type="button" data-day-idx="${i}" style="flex-shrink:0;padding:8px 12px;border-radius:999px;border:1.5px solid ${i===selectedDayIdx?'var(--accent)':'#e5e7eb'};background:${i===selectedDayIdx?'#f0f6ff':'#fff'};color:${i===selectedDayIdx?'var(--accent)':'#374151'};font-size:12px;font-weight:600;cursor:pointer">${formatSAST(d.date,{weekday:'short',day:'numeric',month:'short'})}</button>`).join('');
+      const timeBtns = day.slots.map(s => {
+        const isSel = selectedSlot && selectedSlot.start.getTime() === s.start.getTime();
+        return `<button type="button" data-slot-start="${s.start.toISOString()}" data-slot-end="${s.end.toISOString()}" style="padding:8px 14px;border-radius:8px;border:1.5px solid ${isSel?'var(--accent)':'#e5e7eb'};background:${isSel?'var(--accent)':'#fff'};color:${isSel?'#fff':'#374151'};font-size:13px;font-weight:600;cursor:pointer">${formatSAST(s.start,{hour:'2-digit',minute:'2-digit',hour12:false})}</button>`;
+      }).join('');
+      mountEl.innerHTML = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px">${dayBtns}</div><div style="display:flex;flex-wrap:wrap;gap:8px">${timeBtns}</div><div class="rep-slot-selected" style="margin-top:8px;font-size:12px;color:#059669;font-weight:600">${selectedSlot ? 'Selected: ' + formatSAST(selectedSlot.start,{weekday:'short',day:'numeric',month:'short'}) + ' at ' + formatSAST(selectedSlot.start,{hour:'2-digit',minute:'2-digit',hour12:false}) : ''}</div>`;
+      mountEl.querySelectorAll('[data-day-idx]').forEach(btn => btn.addEventListener('click', () => { selectedDayIdx = Number(btn.dataset.dayIdx); selectedSlot = null; render(); }));
+      mountEl.querySelectorAll('[data-slot-start]').forEach(btn => btn.addEventListener('click', () => {
+        selectedSlot = { start: new Date(btn.dataset.slotStart), end: new Date(btn.dataset.slotEnd) };
+        render();
+        onPick(selectedSlot);
+      }));
+    }
+    render();
+  }
+
   // ── auth ─────────────────────────────────────────────────────
   async function getUser() {
     const { data } = await sb.auth.getSession();
@@ -889,12 +975,165 @@
       container.querySelectorAll('.dispute-btn').forEach(btn => {
         btn.addEventListener('click', e => { e.stopPropagation(); handleItemDispute(btn.dataset.statusId, btn.dataset.orderId, btn.dataset.itemName, Number(btn.dataset.itemIdx||0)); });
       });
+      container.querySelectorAll('.dropoff-confirm-btn').forEach(btn => {
+        btn.addEventListener('click', async e => {
+          e.stopPropagation();
+          btn.disabled = true; btn.textContent = 'Confirmed ✓';
+          await confirmDropoff(btn.dataset.statusId);
+        });
+      });
+      container.querySelectorAll('.slot-change-btn').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); openSlotChangePanel(btn.dataset.statusId, btn.dataset.leg); });
+      });
       container.querySelectorAll('.refund-timer[data-created]').forEach(el => startRefundTimer(el));
 
     } catch(e) {
       console.warn('loadOrders error', e);
       container.innerHTML = '<div class="p-card"><div class="p-empty"><div class="icon">❌</div><p>Unable to load orders. Please refresh.</p></div></div>';
     }
+  }
+
+  // ── Service order timeline (buyer-facing) ──────────────────────────────
+  // profile.html previously only read the generic `status` column, so a
+  // service that was accepted/in_progress on the seller/rep side showed the
+  // buyer a plain "Pending" badge with zero visibility into real progress.
+  const SERVICE_STEP_LABELS = {
+    pending_acceptance: 'Waiting for seller to accept',
+    accepted: 'Accepted',
+    item_received: 'Item with Umzila ✓',
+    handed_to_seller: 'With the seller',
+    in_progress: 'In progress',
+    completed: 'Completed',
+    returned_to_umzila: 'Ready to come back to you',
+    returned: 'Returned to you'
+  };
+  const SERVICE_BADGE_LABELS = {
+    pending_acceptance: ['ib-pending', 'Pending'],
+    accepted: ['ib-pending', 'Accepted'],
+    item_received: ['ib-pending', 'In progress'],
+    handed_to_seller: ['ib-pending', 'In progress'],
+    in_progress: ['ib-pending', 'In progress'],
+    completed: ['ib-pending', 'Completed — confirm?'],
+    returned_to_umzila: ['ib-pending', 'On its way back'],
+    returned: ['ib-delivered', '✓ Delivered'],
+    rejected: ['ib-disputed', 'Declined'],
+    cancelled: ['ib-disputed', 'Cancelled']
+  };
+
+  function serviceStepsForArchetype(st) {
+    if (st.fulfillment_type === 'item_dropoff') {
+      // Nothing physical comes from the buyer when they sent a file or
+      // nothing at all — no item_received/handed_to_seller steps exist.
+      if (st.intake_kind && st.intake_kind !== 'item') {
+        return ['pending_acceptance', 'accepted', 'in_progress', 'completed', 'returned_to_umzila', 'returned'];
+      }
+      return st.item_returned === false
+        ? ['pending_acceptance', 'accepted', 'item_received', 'handed_to_seller', 'in_progress', 'completed']
+        : ['pending_acceptance', 'accepted', 'item_received', 'handed_to_seller', 'in_progress', 'completed', 'returned_to_umzila', 'returned'];
+    }
+    return ['pending_acceptance', 'accepted', 'in_progress', 'completed'];
+  }
+
+  function renderServiceTimeline(st) {
+    if (!st) return '';
+    const status = st.service_status || 'pending_acceptance';
+    if (status === 'rejected' || status === 'cancelled') {
+      return `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px;font-size:12px;color:#991b1b">This service was ${status === 'rejected' ? 'declined by the seller' : 'cancelled'}. A refund will be processed.</div>`;
+    }
+    const steps = serviceStepsForArchetype(st);
+    const currentIdx = steps.indexOf(status);
+    const stepsHtml = steps.map((s, i) => {
+      const done = currentIdx >= 0 && i <= currentIdx;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+        <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${done ? '#0a2f66' : '#e5e7eb'}"></div>
+        <div style="font-size:12px;color:${done ? '#111' : '#9ca3af'};font-weight:${i===currentIdx?'700':'500'}">${SERVICE_STEP_LABELS[s] || s}</div>
+      </div>`;
+    }).join('');
+
+    const intake = st.intake_response && Object.keys(st.intake_response).length
+      ? `<div style="margin-top:8px;font-size:12px;color:#374151;background:#fff;border-radius:8px;padding:8px 10px">${Object.entries(st.intake_response).map(([k,v]) => {
+          if (v && typeof v === 'object' && v.type === 'file') return `<strong>${esc(k)}:</strong> 📄 <a href="${esc(v.url)}" target="_blank" rel="noopener">${esc(v.name||'view file')}</a>`;
+          return `<strong>${esc(k)}:</strong> ${esc(v)}`;
+        }).join(' &middot; ')}</div>` : '';
+
+    const proofs = Array.isArray(st.proof_urls) ? st.proof_urls : [];
+    const before = proofs.filter(p => p.stage === 'before');
+    const after = proofs.filter(p => p.stage === 'after');
+    const deliverable = proofs.filter(p => p.stage === 'deliverable');
+    const photoStrip = (list, label) => list.length ? `<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:4px">${label}</div><div style="display:flex;gap:6px">${list.map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb"></a>`).join('')}</div></div>` : '';
+    const deliverableLink = deliverable.length ? `<div style="margin-top:8px"><a href="${esc(deliverable[0].url)}" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:var(--accent)">⬇ View your deliverable</a></div>` : '';
+
+    const dropoffAction = (status === 'accepted' && st.fulfillment_type === 'item_dropoff')
+      ? `<button class="dropoff-confirm-btn" data-status-id="${esc(st.id)}" style="margin-top:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">I've dropped my item off ✓</button>` : '';
+
+    const slotLeg = (label, field, changeableStatuses) => {
+      const start = st[field + '_slot_start'];
+      if (!start) return '';
+      const startMs = new Date(start).getTime();
+      const changeable = changeableStatuses.includes(status) && (startMs - Date.now()) > 3600000;
+      return `<div style="margin-top:8px;font-size:12px;color:#374151;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span>📅 ${label}: <strong>${esc(formatSAST(start,{weekday:'short',day:'numeric',month:'short'}))} at ${esc(formatSAST(start,{hour:'2-digit',minute:'2-digit',hour12:false}))}</strong></span>
+        ${changeable ? `<button class="slot-change-btn" data-status-id="${esc(st.id)}" data-leg="${field}" style="padding:4px 10px;border-radius:999px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer">Change time</button>` : ''}
+      </div>
+      <div class="slot-change-panel" id="slot-panel-${esc(st.id)}-${field}" style="display:none;margin-top:8px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px"></div>`;
+    };
+    const slotSection = slotLeg('Collection', 'collection', ['pending_acceptance','accepted','item_received'])
+      + slotLeg('Return delivery', 'return', ['accepted','item_received','handed_to_seller','in_progress','completed']);
+
+    return `<div style="margin-top:8px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px">
+      ${stepsHtml}
+      ${intake}
+      ${photoStrip(before, 'Before')}
+      ${photoStrip(after, 'After')}
+      ${deliverableLink}
+      ${st.completion_note ? `<div style="margin-top:8px;font-size:12px;color:#166534;background:#f0fdf4;border-radius:6px;padding:6px 8px">📝 ${esc(st.completion_note)}</div>` : ''}
+      ${dropoffAction}
+      ${slotSection}
+    </div>`;
+  }
+
+  function openSlotChangePanel(statusId, leg) {
+    const panel = document.getElementById(`slot-panel-${statusId}-${leg}`);
+    if (!panel) return;
+    if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+    panel.innerHTML = '<div class="slot-picker-mount"></div><div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="slot-save-btn" style="flex:1;padding:8px;border-radius:999px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer">Save new time</button><button type="button" class="slot-cancel-btn" style="padding:8px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;color:#374151;font-size:12px;font-weight:600;cursor:pointer">Cancel</button></div><div class="slot-save-status" style="margin-top:6px;font-size:12px"></div>';
+    const mount = panel.querySelector('.slot-picker-mount');
+    let picked = null;
+    loadRepSlotPickerProfile(mount, (slot) => { picked = slot; }, null);
+    panel.querySelector('.slot-cancel-btn').addEventListener('click', () => { panel.style.display = 'none'; });
+    panel.querySelector('.slot-save-btn').addEventListener('click', async () => {
+      const statusEl = panel.querySelector('.slot-save-status');
+      if (!picked) { statusEl.textContent = 'Please pick a time first.'; statusEl.style.color = '#b91c1c'; return; }
+      statusEl.textContent = 'Saving…'; statusEl.style.color = '#6b7280';
+      const { error } = await sb.from('order_item_statuses').update({
+        [leg + '_slot_start']: picked.start.toISOString(),
+        [leg + '_slot_end']: picked.end.toISOString()
+      }).eq('id', statusId);
+      if (error) {
+        statusEl.textContent = "Too close to the original time to change — please contact support on WhatsApp.";
+        statusEl.style.color = '#b91c1c';
+        return;
+      }
+      toast('Time updated ✓');
+      panel.style.display = 'none';
+      loadOrders();
+    });
+  }
+
+  async function confirmDropoff(statusId) {
+    const { data: current } = await sb.from('order_item_statuses').select('confirmations').eq('id', statusId).single();
+    const ledger = Array.isArray(current?.confirmations) ? current.confirmations : [];
+    ledger.push({ step: 'dropoff', party: 'buyer', user_id: (await sb.auth.getUser()).data?.user?.id || null, at: new Date().toISOString() });
+    await sb.from('order_item_statuses').update({ confirmations: ledger }).eq('id', statusId);
+    // Notify the rep pool an item is waiting — does not advance service_status
+    // itself; the rep's photo-verified receipt is what actually does that.
+    await sb.from('seller_notifications').insert([{
+      seller_id: null, recipient_role: 'rep', recipient_user_id: null,
+      type: 'service_dropoff_confirmed', title: '📦 Buyer says item was dropped off',
+      body: 'A buyer has confirmed dropping off their item — check the collection point.',
+      metadata: { status_id: statusId }, is_read: false
+    }]).catch(() => {});
   }
 
   function statusBadge(s) {
@@ -941,6 +1180,21 @@
       const qty = it.quantity || it.qty || 1;
       const price = it.price || 0;
       const st = statuses.find(s => s.item_index === idx);
+      const isService = it.listing_type === 'service' || st?.listing_type === 'service';
+
+      if (isService && st) {
+        const svcStatus = st.service_status || 'pending_acceptance';
+        const [bc, bl] = SERVICE_BADGE_LABELS[svcStatus] || ['ib-pending', 'Pending'];
+        return `<div class="order-item-line">
+          <img class="order-item-img" src="${esc(img?.url||'https://placehold.co/52?text=•')}" onerror="this.src='https://placehold.co/52?text=•'" alt="${esc(name)}">
+          <div class="order-item-info">
+            <div class="order-item-name">${esc(name)}<span class="item-badge ${bc}">${bl}</span></div>
+            <div class="order-item-sub">Service &middot; Qty ${qty} &middot; ${fmt(price*qty)}</div>
+            ${renderServiceTimeline(st)}
+          </div>
+        </div>`;
+      }
+
       const status = st?.status || 'pending';
       const badgeMap = { delivered:['ib-delivered','✓ Delivered'], disputed:['ib-disputed','⚠ Disputed'], refunded:['ib-refunded','↩ Refunded'], fulfilled:['ib-pending','Fulfilled — confirm?'] };
       const [bc, bl] = badgeMap[status] || ['ib-pending','Pending'];

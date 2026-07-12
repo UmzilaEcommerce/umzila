@@ -686,11 +686,26 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
                  <div style="width:68px;height:68px;background:#f0f4ff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:22px">${typeIcon}</div>
                </td>`;
 
+        let handoffLine = '';
+        if (item.fulfillment_type === 'item_dropoff') {
+            const opts = item.service_options || {};
+            const collectPart = opts.collection_method === 'rep_collect'
+                ? `rep collects from ${esc(opts.collection_address || 'your address')}`
+                : 'drop off at the campus collection point';
+            const returnPart = item.item_returned === false
+                ? null
+                : (opts.return_method === 'deliver'
+                    ? `delivered to ${esc(opts.return_address || 'your address')}`
+                    : 'collect at the campus collection point');
+            handoffLine = `<div style="font-size:12px;color:#166534;margin-top:3px">Handoff: ${collectPart}.${returnPart ? ` Return: ${returnPart}.` : ''}</div>`;
+        }
+
         return `<tr>
           ${imgHtml}
           <td style="padding:10px 0;vertical-align:top">
             <div style="font-size:14px;font-weight:600;color:#1a1a2e;line-height:1.4">${name}${size}</div>
             <div style="font-size:13px;color:#666;margin-top:3px">${qty} × ${fmt(price)}</div>
+            ${handoffLine}
           </td>
           <td style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;white-space:nowrap">
             <div style="font-size:14px;font-weight:700;color:#0a2f66">${line}</div>
@@ -719,9 +734,21 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
         ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Discount${order.coupon_code ? ` (${esc(order.coupon_code)})` : ''}</td><td style="padding:4px 0;text-align:right;color:#28a745;font-weight:600;font-size:14px">-${fmt(discount)}</td></tr>`
         : '';
 
-    const shippingRow = shipping > 0
-        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Delivery fee</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(shipping)}</td></tr>`
-        : `<tr><td style="padding:4px 0;color:#555;font-size:14px">Delivery fee</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">Included</td></tr>`;
+    // Split the single logistics total into up to three rows — product
+    // delivery, item collection, return delivery — each shown only when
+    // nonzero, computed from the per-item service_fees snapshot.
+    const serviceCollectionTotal = items.reduce((s, i) => s + ((i.service_fees && i.service_fees.collection) || 0), 0);
+    const serviceReturnTotal     = items.reduce((s, i) => s + ((i.service_fees && i.service_fees.return_delivery) || 0), 0);
+    const productDeliveryFee     = Math.max(0, shipping - serviceCollectionTotal - serviceReturnTotal);
+
+    const feeRow = (label, amount) => amount > 0
+        ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">${label}</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(amount)}</td></tr>`
+        : '';
+    const shippingRow = productDeliveryFee > 0
+        ? feeRow('Delivery fee', productDeliveryFee)
+        : `<tr><td style="padding:4px 0;color:#555;font-size:14px">Delivery fee</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">Free</td></tr>`;
+    const collectionRow = feeRow('Item collection', serviceCollectionTotal);
+    const returnDeliveryRow = feeRow('Return delivery', serviceReturnTotal);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -774,6 +801,8 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
         <tr><td style="padding:4px 0;color:#555;font-size:14px">Subtotal</td><td style="padding:4px 0;text-align:right;color:#555;font-size:14px">${fmt(subtotal)}</td></tr>
         ${discountRow}
         ${shippingRow}
+        ${collectionRow}
+        ${returnDeliveryRow}
         <tr class="total-row"><td>Total paid</td><td style="text-align:right">${fmt(total)}</td></tr>
       </tbody>
     </table>
@@ -892,7 +921,7 @@ async function createServiceOrderRecords(supabase, order) {
         const deadlineHours = item.acceptance_deadline_hours || 24;
         const deadline = new Date(now.getTime() + deadlineHours * 60 * 60 * 1000);
 
-        const { error: insErr } = await supabase.from('order_item_statuses').insert([{
+        const { data: statusRow, error: insErr } = await supabase.from('order_item_statuses').insert([{
             order_id: order.id,
             item_index: idx,
             product_id: item.product_id || item.id || null,
@@ -900,9 +929,36 @@ async function createServiceOrderRecords(supabase, order) {
             listing_type: 'service',
             service_status: 'pending_acceptance',
             acceptance_deadline: deadline.toISOString(),
-            status: 'pending_acceptance'
-        }]);
+            status: 'pending', // generic status enum is pending/fulfilled/delivered/disputed/refunded — 'pending_acceptance' is only valid for service_status
+            // Snapshot the fulfillment shape at order time so a later seller
+            // edit to the listing can't mutate an order already in flight.
+            fulfillment_type: item.fulfillment_type || null,
+            item_returned: item.item_returned !== false,
+            intake_kind: item.intake_kind || 'item',
+            intake_response: item.intake || null,
+            // Handoff/return choices, already clamped+priced server-side by
+            // validate-cart.js (order.items is the checked-out snapshot) —
+            // this stays a dumb copy, no re-validation logic added here.
+            collection_method: (item.service_options && item.service_options.collection_method) || 'dropoff',
+            collection_address: (item.service_options && item.service_options.collection_address) || null,
+            collection_slot_start: (item.service_options && item.service_options.collection_slot_start) || null,
+            collection_slot_end: (item.service_options && item.service_options.collection_slot_end) || null,
+            return_method: item.item_returned === false ? 'pickup_point' : ((item.service_options && item.service_options.return_method) || 'pickup_point'),
+            return_address: item.item_returned === false ? null : ((item.service_options && item.service_options.return_address) || null),
+            return_slot_start: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_start) || null),
+            return_slot_end: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_end) || null)
+        }]).select().single();
         if (insErr) console.error('ITN: service record insert error', insErr);
+
+        // Confirm any appointment slot hold taken at add-to-cart time — turns
+        // the 30-minute hold into a real booking now that payment succeeded.
+        if (item.booking_id) {
+            await supabase.from('service_bookings')
+                .update({ status: 'confirmed', order_id: order.id, order_item_status_id: statusRow ? statusRow.id : null, hold_expires_at: null })
+                .eq('id', item.booking_id)
+                .eq('status', 'held')
+                .catch(e => console.error('ITN: booking confirm error', e));
+        }
 
         // In-app notification for seller
         if (item.seller_id) {
@@ -915,6 +971,26 @@ async function createServiceOrderRecords(supabase, order) {
                 metadata: { order_number: order.order_number, item_index: idx },
                 is_read: false
             }]).catch(e => console.error('ITN: service notification insert error', e));
+        }
+
+        // Rep-pool broadcast for item_dropoff services only — nothing physical
+        // to collect for in_person/digital, so no rep task is created for those.
+        if (item.fulfillment_type === 'item_dropoff') {
+            const collectionMethod = (item.service_options && item.service_options.collection_method) || 'dropoff';
+            const dropoffBody = collectionMethod === 'rep_collect'
+                ? `"${item.name || item.title || 'service'}" — rep collection from buyer's address. Available once the seller accepts.`
+                : `"${item.name || item.title || 'service'}" — available once the seller accepts.`;
+            await supabase.from('seller_notifications').insert([{
+                seller_id: null,
+                recipient_role: 'rep',
+                recipient_user_id: null,
+                type: 'service_dropoff_pending',
+                title: '📦 New drop-off service to claim',
+                body: dropoffBody,
+                related_order_id: order.id,
+                metadata: { order_number: order.order_number, item_index: idx },
+                is_read: false
+            }]).catch(e => console.error('ITN: rep notification insert error', e));
         }
     }
     console.log('ITN: created service order records for order', order.id);

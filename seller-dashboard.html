@@ -257,6 +257,26 @@
     .shop-picker-card .sp-status { font-size: 12px; color: #6b7280; margin-top: 2px; }
     #switchShopBtn { background: none; border: 1px solid rgba(255,255,255,.4); color: #fff; border-radius: 20px; padding: 4px 12px; font-size: 12px; cursor: pointer; margin-right: 8px; transition: background .15s; }
     #switchShopBtn:hover { background: rgba(255,255,255,.15); }
+
+    /* ── Service listing quiz ── */
+    .svc-type-cards { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 6px; }
+    @media (min-width: 600px) { .svc-type-cards { grid-template-columns: repeat(3, 1fr); } }
+    .svc-type-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; cursor: pointer; transition: border-color .15s, background .15s; }
+    .svc-type-card input { position: absolute; opacity: 0; pointer-events: none; }
+    .svc-type-card:has(input:checked) { border-color: var(--accent); background: #f0f6ff; }
+    .svc-type-title { font-weight: 700; font-size: 13.5px; }
+    .svc-type-sub { font-size: 11.5px; color: var(--muted); }
+    .svc-branch { margin-top: 14px; padding-top: 14px; border-top: 1px dashed #e5e7eb; }
+    .svc-intake-rows { display: flex; flex-direction: column; gap: 8px; }
+    .svc-intake-row { display: flex; gap: 10px; align-items: center; }
+    .svc-intake-row .form-control { flex: 1; }
+    .svc-intake-row label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+    .svc-availability-grid { display: flex; flex-direction: column; gap: 6px; }
+    .svc-avail-day { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #f9f9fb; border-radius: 8px; border: 1px solid #ebebf0; }
+    .svc-avail-day label.day-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; width: 90px; flex-shrink: 0; cursor: pointer; }
+    .svc-avail-day .time-inputs { display: flex; align-items: center; gap: 6px; flex: 1; }
+    .svc-avail-day .time-inputs input[type=time] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+    .svc-avail-day.disabled .time-inputs { opacity: .4; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -551,6 +571,11 @@
             </select>
           </div>
           <div class="form-group">
+            <label class="form-label">Units per delivery bag <span style="font-weight:400;color:#6b7280">(optional)</span></label>
+            <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">How many fit in one delivery trip before it needs a bigger bag? Leave blank unless your item is unusually bulky for its size.</small>
+            <input type="number" id="newProdUnitsPerTrip" class="form-control" min="1" placeholder="e.g. 8">
+          </div>
+          <div class="form-group">
             <label class="form-label">Available Sizes</label>
             <div class="sizes-grid" id="newProdSizes">
               <span class="size-chip" data-size="XS">XS</span>
@@ -565,17 +590,107 @@
             <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
           </div>
           </div><!-- /newProductOnlyFields -->
-          <!-- Service-only fields (hidden for products) -->
+          <!-- Service-only fields (hidden for products) — guided quiz -->
           <div id="newServiceFields" style="display:none">
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Service Type <span style="color:var(--error)">*</span></label>
-                <select id="newFulfillmentType" class="form-control">
-                  <option value="item_dropoff">📦 Item Drop-off (e.g. shoe cleaning)</option>
-                  <option value="in_person">📍 In-person (e.g. tutoring)</option>
-                  <option value="digital">💻 Digital (e.g. CV writing)</option>
-                </select>
+            <div class="form-group">
+              <label class="form-label">What kind of service is this? <span style="color:var(--error)">*</span></label>
+              <div class="svc-type-cards" data-svc-cards="new">
+                <label class="svc-type-card"><input type="radio" name="newFulfillmentType" value="item_dropoff" checked>
+                  <span class="svc-type-title">📦 Buyer gives me an item</span>
+                  <span class="svc-type-sub">e.g. shoe cleaning, repairs</span>
+                </label>
+                <label class="svc-type-card"><input type="radio" name="newFulfillmentType" value="in_person">
+                  <span class="svc-type-title">📍 I meet the buyer</span>
+                  <span class="svc-type-sub">e.g. hair &amp; nails, tutoring, photography</span>
+                </label>
+                <label class="svc-type-card"><input type="radio" name="newFulfillmentType" value="digital">
+                  <span class="svc-type-title">💻 I deliver online</span>
+                  <span class="svc-type-sub">e.g. graphic design, CV writing</span>
+                </label>
               </div>
+            </div>
+
+            <!-- item_dropoff branch -->
+            <div id="newSvcBranchDropoff" class="svc-branch">
+              <div class="form-group">
+                <label class="form-label">What does the buyer give you to start?</label>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newIntakeKind" value="item" checked> 📦 A physical item — they hand it over</label>
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newIntakeKind" value="file"> 📄 A file or document — they upload it</label>
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newIntakeKind" value="none"> 🙌 Nothing — I just make it</label>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" id="newItemReturnedLabel">Does the buyer get their item back when you're done?</label>
+                <div style="display:flex;gap:16px;margin-top:4px">
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newItemReturned" value="true" checked> Yes, I return it</label>
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newItemReturned" value="false"> No, it's consumed/kept</label>
+                </div>
+                <div id="newIntakeKindRouteNote" style="display:none;margin-top:8px;font-size:12px;color:#0a2f66;background:#eef2f8;border-radius:8px;padding:8px 10px">Then this is an online service — we've switched you to "💻 I deliver online" so buyers see it correctly.</div>
+              </div>
+              <div class="form-group" id="newIntakeFieldsGroupDropoff">
+                <label class="form-label" id="newIntakeFieldsLabelDropoff">What do you need to know about the buyer's item? <span class="opt">(up to 3)</span></label>
+                <div class="svc-intake-rows" data-intake-rows="newIntakeDropoff">
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Brand & model"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Colour"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Condition / notes"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+                </div>
+                <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Tick "file upload" on a row to let buyers attach a document or photo instead of typing (up to 2 file rows).</small>
+              </div>
+            </div>
+
+            <!-- in_person branch -->
+            <div id="newSvcBranchInPerson" class="svc-branch" style="display:none">
+              <div class="form-group">
+                <label class="form-label">How do buyers book you?</label>
+                <div style="display:flex;gap:16px;margin-top:4px">
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newBookingMode" value="scheduled" checked> They pick a time slot from my calendar</label>
+                  <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="newBookingMode" value="flexible"> We arrange the time after purchase</label>
+                </div>
+              </div>
+              <div id="newSvcScheduledFields">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Session length</label>
+                    <select id="newSlotDuration" class="form-control">
+                      <option value="30">30 minutes</option>
+                      <option value="45">45 minutes</option>
+                      <option value="60" selected>60 minutes</option>
+                      <option value="90">90 minutes</option>
+                      <option value="120">120 minutes</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Where?</label>
+                    <input type="text" id="newServiceLocationScheduled" class="form-control" placeholder="e.g. Res room 214, or a campus spot">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Your weekly working hours</label>
+                  <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">This becomes your booking calendar — buyers can only pick times you set here.</small>
+                  <div class="svc-availability-grid" id="newAvailabilityGrid"></div>
+                </div>
+              </div>
+              <div class="form-group" id="newSvcFlexibleFields" style="display:none">
+                <label class="form-label">Where do you usually meet buyers?</label>
+                <input type="text" id="newServiceLocationFlexible" class="form-control" placeholder="e.g. UKZN Westville campus, or your area">
+                <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">The buyer's contact details are shared with you once you accept, and yours with them, so you can arrange the time yourselves.</small>
+              </div>
+            </div>
+
+            <!-- digital branch -->
+            <div id="newSvcBranchDigital" class="svc-branch" style="display:none">
+              <div class="form-group">
+                <label class="form-label">What do you need from the buyer to start? <span class="opt">(up to 3)</span></label>
+                <div class="svc-intake-rows" data-intake-rows="newIntakeDigital">
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Link to your current CV"><label><input type="checkbox"> required</label></div>
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Design brief"><label><input type="checkbox"> required</label></div>
+                  <div class="svc-intake-row"><input type="text" class="form-control" placeholder=""><label><input type="checkbox"> required</label></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Turnaround Time <span style="color:var(--error)">*</span></label>
                 <select id="newServiceTurnaround" class="form-control">
@@ -583,13 +698,15 @@
                   <option value="Same day (order before 12pm)">Same day (order before 12pm)</option>
                   <option value="Next business day">Next business day</option>
                   <option value="2–3 days">2–3 days</option>
+                  <option value="3–5 days">3–5 days</option>
+                  <option value="1 week+">1 week+</option>
                 </select>
               </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Acceptance window (hours)</label>
-              <input type="number" id="newAcceptanceDeadline" class="form-control" value="24" min="1" max="72" style="max-width:120px">
-              <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept this service order before it auto-cancels</small>
+              <div class="form-group">
+                <label class="form-label">Acceptance window (hours)</label>
+                <input type="number" id="newAcceptanceDeadline" class="form-control" value="24" min="1" max="72">
+                <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept before it auto-cancels</small>
+              </div>
             </div>
           </div>
           <div id="addProdMsg" class="msg"></div>
@@ -668,6 +785,11 @@
               <option value="large">Large — bags, large items, bulk</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Units per delivery bag <span style="font-weight:400;color:#6b7280">(optional)</span></label>
+            <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">How many fit in one delivery trip before it needs a bigger bag? Leave blank unless your item is unusually bulky for its size.</small>
+            <input type="number" id="editProdUnitsPerTrip" class="form-control" min="1" placeholder="e.g. 8">
+          </div>
           </div><!-- /editPackageSizeGroup -->
           <div class="form-group">
             <label class="form-label">Badge</label>
@@ -703,17 +825,103 @@
           <div id="editProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
           <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
         </div>
-        <!-- Service-only fields (hidden for products) -->
+        <!-- Service-only fields (hidden for products) — guided quiz -->
         <div id="editServiceFields" style="display:none">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Service Type <span style="color:var(--error)">*</span></label>
-              <select id="editFulfillmentType" class="form-control">
-                <option value="item_dropoff">📦 Item Drop-off (e.g. shoe cleaning)</option>
-                <option value="in_person">📍 In-person (e.g. tutoring)</option>
-                <option value="digital">💻 Digital (e.g. CV writing)</option>
-              </select>
+          <div class="form-group">
+            <label class="form-label">What kind of service is this? <span style="color:var(--error)">*</span></label>
+            <div class="svc-type-cards" data-svc-cards="edit">
+              <label class="svc-type-card"><input type="radio" name="editFulfillmentType" value="item_dropoff" checked>
+                <span class="svc-type-title">📦 Buyer gives me an item</span>
+                <span class="svc-type-sub">e.g. shoe cleaning, repairs</span>
+              </label>
+              <label class="svc-type-card"><input type="radio" name="editFulfillmentType" value="in_person">
+                <span class="svc-type-title">📍 I meet the buyer</span>
+                <span class="svc-type-sub">e.g. hair &amp; nails, tutoring, photography</span>
+              </label>
+              <label class="svc-type-card"><input type="radio" name="editFulfillmentType" value="digital">
+                <span class="svc-type-title">💻 I deliver online</span>
+                <span class="svc-type-sub">e.g. graphic design, CV writing</span>
+              </label>
             </div>
+          </div>
+
+          <div id="editSvcBranchDropoff" class="svc-branch">
+            <div class="form-group">
+              <label class="form-label">What does the buyer give you to start?</label>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editIntakeKind" value="item" checked> 📦 A physical item — they hand it over</label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editIntakeKind" value="file"> 📄 A file or document — they upload it</label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editIntakeKind" value="none"> 🙌 Nothing — I just make it</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" id="editItemReturnedLabel">Does the buyer get their item back when you're done?</label>
+              <div style="display:flex;gap:16px;margin-top:4px">
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editItemReturned" value="true" checked> Yes, I return it</label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editItemReturned" value="false"> No, it's consumed/kept</label>
+              </div>
+              <div id="editIntakeKindRouteNote" style="display:none;margin-top:8px;font-size:12px;color:#0a2f66;background:#eef2f8;border-radius:8px;padding:8px 10px">Then this is an online service — we've switched you to "💻 I deliver online" so buyers see it correctly.</div>
+            </div>
+            <div class="form-group" id="editIntakeFieldsGroupDropoff">
+              <label class="form-label" id="editIntakeFieldsLabelDropoff">What do you need to know about the buyer's item? <span class="opt">(up to 3)</span></label>
+              <div class="svc-intake-rows" data-intake-rows="editIntakeDropoff">
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Brand & model"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Colour"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Condition / notes"><label><input type="checkbox" class="svc-intake-file"> file upload</label><label><input type="checkbox"> required</label></div>
+              </div>
+              <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Tick "file upload" on a row to let buyers attach a document or photo instead of typing (up to 2 file rows).</small>
+            </div>
+          </div>
+
+          <div id="editSvcBranchInPerson" class="svc-branch" style="display:none">
+            <div class="form-group">
+              <label class="form-label">How do buyers book you?</label>
+              <div style="display:flex;gap:16px;margin-top:4px">
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editBookingMode" value="scheduled" checked> They pick a time slot from my calendar</label>
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:14px"><input type="radio" name="editBookingMode" value="flexible"> We arrange the time after purchase</label>
+              </div>
+            </div>
+            <div id="editSvcScheduledFields">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Session length</label>
+                  <select id="editSlotDuration" class="form-control">
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60" selected>60 minutes</option>
+                    <option value="90">90 minutes</option>
+                    <option value="120">120 minutes</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Where?</label>
+                  <input type="text" id="editServiceLocationScheduled" class="form-control" placeholder="e.g. Res room 214, or a campus spot">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Your weekly working hours</label>
+                <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">This becomes your booking calendar — buyers can only pick times you set here.</small>
+                <div class="svc-availability-grid" id="editAvailabilityGrid"></div>
+              </div>
+            </div>
+            <div class="form-group" id="editSvcFlexibleFields" style="display:none">
+              <label class="form-label">Where do you usually meet buyers?</label>
+              <input type="text" id="editServiceLocationFlexible" class="form-control" placeholder="e.g. UKZN Westville campus, or your area">
+            </div>
+          </div>
+
+          <div id="editSvcBranchDigital" class="svc-branch" style="display:none">
+            <div class="form-group">
+              <label class="form-label">What do you need from the buyer to start? <span class="opt">(up to 3)</span></label>
+              <div class="svc-intake-rows" data-intake-rows="editIntakeDigital">
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Link to your current CV"><label><input type="checkbox"> required</label></div>
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder="e.g. Design brief"><label><input type="checkbox"> required</label></div>
+                <div class="svc-intake-row"><input type="text" class="form-control" placeholder=""><label><input type="checkbox"> required</label></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label">Turnaround Time <span style="color:var(--error)">*</span></label>
               <select id="editServiceTurnaround" class="form-control">
@@ -721,13 +929,15 @@
                 <option value="Same day (order before 12pm)">Same day (order before 12pm)</option>
                 <option value="Next business day">Next business day</option>
                 <option value="2–3 days">2–3 days</option>
+                <option value="3–5 days">3–5 days</option>
+                <option value="1 week+">1 week+</option>
               </select>
             </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Acceptance window (hours)</label>
-            <input type="number" id="editAcceptanceDeadline" class="form-control" value="24" min="1" max="72" style="max-width:120px">
-            <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept this service order before it auto-cancels</small>
+            <div class="form-group">
+              <label class="form-label">Acceptance window (hours)</label>
+              <input type="number" id="editAcceptanceDeadline" class="form-control" value="24" min="1" max="72">
+              <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">How long you have to accept before it auto-cancels</small>
+            </div>
           </div>
         </div>
         <div id="editProdMsg" class="msg"></div>
@@ -797,7 +1007,7 @@
         <div class="analytics-grid">
           <div class="stat-card"><div class="stat-value" id="statProducts">—</div><div class="stat-label">Products Listed</div></div>
           <div class="stat-card"><div class="stat-value" id="statOrders">—</div><div class="stat-label">Total Orders</div></div>
-          <div class="stat-card alt"><div class="stat-value" id="statRevenue">—</div><div class="stat-label">Revenue (ZAR)</div></div>
+          <div class="stat-card alt"><div class="stat-value" id="statRevenue">—</div><div class="stat-label">Revenue (ZAR)</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Product sales only — delivery is charged and handled by Umzila</div></div>
           <div class="stat-card green"><div class="stat-value" id="statFavourites">—</div><div class="stat-label">Total Favourites</div></div>
         </div>
 
@@ -1379,6 +1589,7 @@
       SD.products = [];
       SD.orders = [];
       SD.notifications = [];
+      productsLoaded = false;
       ordersLoaded = false;
       serviceOrdersLoaded = false;
       notifsLoaded = false;
@@ -1455,11 +1666,11 @@
         { label: 'About story',     done: !!(s.about_story),       weight: 8  },
       ];
 
-      // Product readiness
-      if (!SD.products.length) {
-        var { data: pData } = await SD.sb.from('products').select('id,name,description,price,stock,category,image,metadata').eq('seller_id', s.id);
-        SD.products = pData || [];
-      }
+      // Product readiness — reuse the Products tab's own (fully-guarded,
+      // fully-columned) loader rather than a separate narrower fetch, so
+      // whichever tab loads first can't poison the shared SD.products cache
+      // with a partial row shape for the others.
+      await loadProducts();
       var hasProduct = SD.products.length > 0;
       var approvedProduct = SD.products.some(function(p) { return getProductStatus(p) === 'approved'; });
       var hasFullProduct = SD.products.some(function(p) {
@@ -1784,7 +1995,7 @@
 
       var { data, error } = await SD.sb
         .from('products')
-        .select('id, name, price, sale_price, sale, visible, badge, category, category_id, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
+        .select('id, name, description, price, sale_price, sale, visible, badge, category, category_id, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
         .eq('seller_id', SD.seller.id)
         .order('created_at', { ascending: false });
 
@@ -1849,6 +2060,142 @@
       });
     });
 
+    /* ── Service quiz helpers (shared by Add + Edit forms) ── */
+    var SVC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+    function buildAvailabilityGrid(gridId) {
+      var grid = document.getElementById(gridId);
+      if (!grid || grid.dataset.built === 'true') return;
+      grid.innerHTML = SVC_DAYS.map(function(day, i) {
+        return '<div class="svc-avail-day disabled" data-day="' + i + '">' +
+          '<label class="day-toggle"><input type="checkbox" class="svc-avail-toggle"> ' + day.slice(0,3) + '</label>' +
+          '<div class="time-inputs"><input type="time" class="svc-avail-start" value="09:00"> to <input type="time" class="svc-avail-end" value="17:00"></div>' +
+        '</div>';
+      }).join('');
+      grid.dataset.built = 'true';
+      grid.querySelectorAll('.svc-avail-toggle').forEach(function(cb) {
+        cb.addEventListener('change', function() {
+          cb.closest('.svc-avail-day').classList.toggle('disabled', !cb.checked);
+        });
+      });
+    }
+
+    function getAvailabilityRows(gridId) {
+      var grid = document.getElementById(gridId);
+      if (!grid) return [];
+      var rows = [];
+      grid.querySelectorAll('.svc-avail-day').forEach(function(dayEl) {
+        var toggle = dayEl.querySelector('.svc-avail-toggle');
+        if (!toggle.checked) return;
+        var start = dayEl.querySelector('.svc-avail-start').value;
+        var end   = dayEl.querySelector('.svc-avail-end').value;
+        if (!start || !end || start >= end) return;
+        rows.push({ day_of_week: parseInt(dayEl.dataset.day, 10), start_time: start, end_time: end });
+      });
+      return rows;
+    }
+
+    function getIntakeFields(rowsAttr) {
+      var container = document.querySelector('[data-intake-rows="' + rowsAttr + '"]');
+      if (!container) return [];
+      var fields = [];
+      var fileCount = 0;
+      container.querySelectorAll('.svc-intake-row').forEach(function(row) {
+        var label = row.querySelector('input[type=text]').value.trim();
+        var checkboxes = row.querySelectorAll('input[type=checkbox]');
+        // Row markup is [fileCheckbox?, requiredCheckbox] — rows without a
+        // file checkbox (the digital branch) only have the required box.
+        var fileCb = row.querySelector('.svc-intake-file');
+        var requiredCb = checkboxes[checkboxes.length - 1];
+        var isFile = !!(fileCb && fileCb.checked && fileCount < 2);
+        if (fileCb && fileCb.checked) fileCount++;
+        if (label) fields.push({ label: label, required: requiredCb.checked, type: isFile ? 'file' : 'text' });
+      });
+      return fields.slice(0, 3);
+    }
+
+    function wireServiceQuiz(prefix) {
+      var cardsWrap = document.querySelector('[data-svc-cards="' + prefix + '"]');
+      if (!cardsWrap) return;
+      var branchDropoff = document.getElementById(prefix + 'SvcBranchDropoff');
+      var branchInPerson = document.getElementById(prefix + 'SvcBranchInPerson');
+      var branchDigital = document.getElementById(prefix + 'SvcBranchDigital');
+
+      function updateBranch() {
+        var val = cardsWrap.querySelector('input:checked').value;
+        if (branchDropoff) branchDropoff.style.display = val === 'item_dropoff' ? '' : 'none';
+        if (branchInPerson) branchInPerson.style.display = val === 'in_person' ? '' : 'none';
+        if (branchDigital) branchDigital.style.display = val === 'digital' ? '' : 'none';
+      }
+      // wireServiceQuiz('edit') is re-run each time openEditProduct() populates a
+      // (possibly different) listing, but listeners should only ever bind once.
+      if (cardsWrap.dataset.wired !== 'true') {
+        cardsWrap.querySelectorAll('input[type=radio]').forEach(function(r) { r.addEventListener('change', updateBranch); });
+        cardsWrap.dataset.wired = 'true';
+      }
+      updateBranch();
+
+      // intake_kind (what the buyer gives the seller to start) — reword the
+      // "does the buyer get it back" question per kind, and if a seller picks
+      // "no physical item back" for a file/none intake, that's a dead combo
+      // (it's really just a digital service) — auto-route them there instead
+      // of letting a dead-end quiz state get saved.
+      var intakeKindRadios = document.querySelectorAll('input[name="' + prefix + 'IntakeKind"]');
+      var itemReturnedLabel = document.getElementById(prefix + 'ItemReturnedLabel');
+      var itemReturnedRadios = document.querySelectorAll('input[name="' + prefix + 'ItemReturned"]');
+      var intakeFieldsLabel = document.getElementById(prefix + 'IntakeFieldsLabelDropoff');
+      var routeNote = document.getElementById(prefix + 'IntakeKindRouteNote');
+      function currentIntakeKind() {
+        var checked = document.querySelector('input[name="' + prefix + 'IntakeKind"]:checked');
+        return checked ? checked.value : 'item';
+      }
+      function updateIntakeKindUI() {
+        var kind = currentIntakeKind();
+        if (itemReturnedLabel) {
+          itemReturnedLabel.textContent = kind === 'item'
+            ? "Does the buyer get their item back when you're done?"
+            : 'Does the buyer receive a physical item when you\'re done?';
+        }
+        if (intakeFieldsLabel) {
+          intakeFieldsLabel.innerHTML = kind === 'file'
+            ? 'What files or info do you need from the buyer? <span class="opt">(up to 3, up to 2 files)</span>'
+            : kind === 'none'
+              ? 'Anything you need to know before you start? <span class="opt">(optional, up to 3)</span>'
+              : "What do you need to know about the buyer's item? <span class=\"opt\">(up to 3)</span>";
+        }
+        var returnedEl = document.querySelector('input[name="' + prefix + 'ItemReturned"]:checked');
+        var deadCombo = kind !== 'item' && returnedEl && returnedEl.value === 'false';
+        if (routeNote) routeNote.style.display = deadCombo ? '' : 'none';
+        if (deadCombo) {
+          var digitalCard = cardsWrap.querySelector('input[value="digital"]');
+          if (digitalCard) { digitalCard.checked = true; updateBranch(); }
+        }
+      }
+      if (intakeKindRadios[0] && intakeKindRadios[0].dataset.wired !== 'true') {
+        intakeKindRadios.forEach(function(r) { r.addEventListener('change', updateIntakeKindUI); r.dataset.wired = 'true'; });
+      }
+      if (itemReturnedRadios[0] && itemReturnedRadios[0].dataset.kindWired !== 'true') {
+        itemReturnedRadios.forEach(function(r) { r.addEventListener('change', updateIntakeKindUI); r.dataset.kindWired = 'true'; });
+      }
+      updateIntakeKindUI();
+
+      var bookingModeRadios = document.querySelectorAll('input[name="' + prefix + 'BookingMode"]');
+      var scheduledFields = document.getElementById(prefix + 'SvcScheduledFields');
+      var flexibleFields = document.getElementById(prefix + 'SvcFlexibleFields');
+      function updateBookingMode() {
+        var checked = document.querySelector('input[name="' + prefix + 'BookingMode"]:checked');
+        var isScheduled = !checked || checked.value === 'scheduled';
+        if (scheduledFields) scheduledFields.style.display = isScheduled ? '' : 'none';
+        if (flexibleFields) flexibleFields.style.display = isScheduled ? 'none' : '';
+        if (isScheduled) buildAvailabilityGrid(prefix + 'AvailabilityGrid');
+      }
+      if (!bookingModeRadios[0] || bookingModeRadios[0].dataset.wired !== 'true') {
+        bookingModeRadios.forEach(function(r) { r.addEventListener('change', updateBookingMode); r.dataset.wired = 'true'; });
+      }
+      updateBookingMode();
+    }
+    wireServiceQuiz('new');
+
     document.getElementById('submitProductBtn').addEventListener('click', async function() {
       var name       = (document.getElementById('newProdName').value || '').trim();
       var desc       = (document.getElementById('newProdDesc').value || '').trim();
@@ -1864,9 +2211,33 @@
       var coverImg = (document.getElementById('newProdImage').value || '').trim();
       var listingType = document.querySelector('input[name="newListingType"]:checked').value || 'product';
       var isService   = listingType === 'service';
-      var fulfillmentType  = isService ? (document.getElementById('newFulfillmentType').value || null) : null;
+      var fulfillmentTypeEl = document.querySelector('input[name="newFulfillmentType"]:checked');
+      var fulfillmentType  = isService ? (fulfillmentTypeEl ? fulfillmentTypeEl.value : null) : null;
       var serviceTurnaround = isService ? (document.getElementById('newServiceTurnaround').value || null) : null;
       var acceptanceDeadline = isService ? (parseInt(document.getElementById('newAcceptanceDeadline').value, 10) || 24) : 24;
+
+      // Quiz branch answers
+      var itemReturnedEl = document.querySelector('input[name="newItemReturned"]:checked');
+      var itemReturned = itemReturnedEl ? itemReturnedEl.value === 'true' : true;
+      var intakeKindEl = document.querySelector('input[name="newIntakeKind"]:checked');
+      // Dead combo (no physical item back, but intake is file/none) already
+      // auto-routes the fulfillment-type card to 'digital' in the UI — this
+      // is the same guard applied again at save time as a safety net.
+      var intakeKind = (fulfillmentType === 'item_dropoff' && intakeKindEl && itemReturned) ? intakeKindEl.value : 'item';
+      var bookingModeEl = document.querySelector('input[name="newBookingMode"]:checked');
+      var bookingMode = bookingModeEl ? bookingModeEl.value : null;
+      var slotDuration = fulfillmentType === 'in_person' && bookingMode === 'scheduled'
+        ? parseInt(document.getElementById('newSlotDuration').value, 10) : null;
+      var serviceLocation = fulfillmentType === 'in_person'
+        ? ((bookingMode === 'scheduled'
+            ? document.getElementById('newServiceLocationScheduled').value
+            : document.getElementById('newServiceLocationFlexible').value) || '').trim() || null
+        : null;
+      var intakeFields = fulfillmentType === 'item_dropoff' ? getIntakeFields('newIntakeDropoff')
+                        : fulfillmentType === 'digital' ? getIntakeFields('newIntakeDigital')
+                        : [];
+      var availabilityRows = (fulfillmentType === 'in_person' && bookingMode === 'scheduled')
+        ? getAvailabilityRows('newAvailabilityGrid') : [];
 
       setMsg('addProdMsg', '');
       if (!name)         { setMsg('addProdMsg', 'Product name is required.');   return; }
@@ -1876,9 +2247,14 @@
         if (!isNaN(origPrice) && origPrice > 0 && salePrice >= origPrice) { setMsg('addProdMsg', 'Sale price must be less than original price.'); return; }
       }
       if (isService && !serviceTurnaround) { setMsg('addProdMsg', 'Please select a turnaround time.'); return; }
+      if (isService && fulfillmentType === 'in_person' && bookingMode === 'scheduled' && !availabilityRows.length) {
+        setMsg('addProdMsg', 'Set at least one day of working hours so buyers can book you.'); return;
+      }
 
       setBtnLoading('submitProductBtn', true, 'Submit for Review');
       var deliveryClassNew = isService ? null : (document.getElementById('newProdDeliveryClass').value || 'medium');
+      var unitsPerTripNewRaw = parseInt(document.getElementById('newProdUnitsPerTrip').value, 10);
+      var unitsPerTripNew = isService || !unitsPerTripNewRaw || unitsPerTripNewRaw < 1 ? null : unitsPerTripNewRaw;
       var { data, error } = await SD.sb.from('products').insert({
         seller_id:      SD.seller.id,
         name:           name,
@@ -1892,16 +2268,33 @@
         image:          coverImg|| null,
         sizes:          isService ? [] : (sizes.length ? sizes : ['S','M','L','XL']),
         delivery_class: deliveryClassNew,
+        units_per_trip: unitsPerTripNew,
         listing_type:   listingType,
         fulfillment_type: fulfillmentType,
         service_turnaround: serviceTurnaround,
         acceptance_deadline_hours: acceptanceDeadline,
+        item_returned:  isService ? itemReturned : true,
+        intake_kind:    isService ? intakeKind : 'item',
+        booking_mode:   isService ? bookingMode : null,
+        slot_duration_minutes: slotDuration,
+        service_location: serviceLocation,
+        intake_fields:  intakeFields,
         visible:        false,
         metadata:    { review_status: 'pending_review' }
       }).select().single();
 
       setBtnLoading('submitProductBtn', false, 'Submit for Review');
       if (error) { setMsg('addProdMsg', error.message); return; }
+
+      // A seller's working hours serve every scheduled listing they have —
+      // replace-all rather than append, so editing hours in a later listing's
+      // quiz doesn't create duplicate/conflicting day rows.
+      if (availabilityRows.length) {
+        await SD.sb.from('seller_availability').delete().eq('seller_id', SD.seller.id);
+        await SD.sb.from('seller_availability').insert(
+          availabilityRows.map(function(r) { return Object.assign({ seller_id: SD.seller.id }, r); })
+        );
+      }
 
       // Upsert product_variants rows with per-size price overrides
       if (data && sizePrices.length) {
@@ -1962,16 +2355,71 @@
 
       // Service fields
       if (isService) {
-        var ftEl = document.getElementById('editFulfillmentType');
-        if (ftEl) ftEl.value = p.fulfillment_type || 'item_dropoff';
+        var ftVal = p.fulfillment_type || 'item_dropoff';
+        var ftEl = document.querySelector('input[name="editFulfillmentType"][value="' + ftVal + '"]');
+        if (ftEl) ftEl.checked = true;
         var stEl = document.getElementById('editServiceTurnaround');
         if (stEl) stEl.value = p.service_turnaround || '';
         var adEl = document.getElementById('editAcceptanceDeadline');
         if (adEl) adEl.value = p.acceptance_deadline_hours || 24;
+
+        var irEl = document.querySelector('input[name="editItemReturned"][value="' + (p.item_returned === false ? 'false' : 'true') + '"]');
+        if (irEl) irEl.checked = true;
+        var ikEl = document.querySelector('input[name="editIntakeKind"][value="' + (p.intake_kind || 'item') + '"]');
+        if (ikEl) ikEl.checked = true;
+        var bmVal = p.booking_mode || 'scheduled';
+        var bmEl = document.querySelector('input[name="editBookingMode"][value="' + bmVal + '"]');
+        if (bmEl) bmEl.checked = true;
+        var sdEl = document.getElementById('editSlotDuration');
+        if (sdEl) sdEl.value = p.slot_duration_minutes || 60;
+        var locSchedEl = document.getElementById('editServiceLocationScheduled');
+        var locFlexEl = document.getElementById('editServiceLocationFlexible');
+        if (locSchedEl) locSchedEl.value = bmVal === 'scheduled' ? (p.service_location || '') : '';
+        if (locFlexEl) locFlexEl.value = bmVal === 'flexible' ? (p.service_location || '') : '';
+
+        var intakeRowsAttr = ftVal === 'digital' ? 'editIntakeDigital' : 'editIntakeDropoff';
+        ['editIntakeDropoff','editIntakeDigital'].forEach(function(attr) {
+          var container = document.querySelector('[data-intake-rows="' + attr + '"]');
+          if (!container) return;
+          var rows = container.querySelectorAll('.svc-intake-row');
+          var fields = attr === intakeRowsAttr ? (p.intake_fields || []) : [];
+          rows.forEach(function(row, i) {
+            var f = fields[i];
+            row.querySelector('input[type=text]').value = f ? f.label : '';
+            var checkboxes = row.querySelectorAll('input[type=checkbox]');
+            checkboxes[checkboxes.length - 1].checked = !!(f && f.required);
+            var fileCb = row.querySelector('.svc-intake-file');
+            if (fileCb) fileCb.checked = !!(f && f.type === 'file');
+          });
+        });
+
+        // Re-run the quiz's show/hide logic now that values are populated
+        wireServiceQuiz('edit');
+        if (bmVal === 'scheduled') {
+          buildAvailabilityGrid('editAvailabilityGrid');
+          SD.sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', SD.seller.id).then(function(res) {
+            var rows = (res && res.data) || [];
+            var grid = document.getElementById('editAvailabilityGrid');
+            if (!grid) return;
+            grid.querySelectorAll('.svc-avail-day').forEach(function(dayEl) {
+              var day = parseInt(dayEl.dataset.day, 10);
+              var match = rows.find(function(r) { return r.day_of_week === day; });
+              var toggle = dayEl.querySelector('.svc-avail-toggle');
+              if (match) {
+                toggle.checked = true;
+                dayEl.classList.remove('disabled');
+                dayEl.querySelector('.svc-avail-start').value = (match.start_time || '09:00').slice(0,5);
+                dayEl.querySelector('.svc-avail-end').value = (match.end_time || '17:00').slice(0,5);
+              }
+            });
+          });
+        }
       }
 
       var dcEl = document.getElementById('editProdDeliveryClass');
       if (dcEl && !isService) dcEl.value = p.delivery_class || 'medium';
+      var uptEl = document.getElementById('editProdUnitsPerTrip');
+      if (uptEl) uptEl.value = p.units_per_trip || '';
 
       // Sale fields
       var saleCb = document.getElementById('editProdSale');
@@ -2027,10 +2475,36 @@
       var ltEdit = document.getElementById('editListingType').value || 'product';
       var isServiceEdit = ltEdit === 'service';
       var deliveryClassEdit = isServiceEdit ? null : (document.getElementById('editProdDeliveryClass').value || 'medium');
-      var fulfillmentTypeEdit  = isServiceEdit ? (document.getElementById('editFulfillmentType').value || null) : null;
+      var unitsPerTripEditRaw = parseInt(document.getElementById('editProdUnitsPerTrip').value, 10);
+      var unitsPerTripEdit = isServiceEdit || !unitsPerTripEditRaw || unitsPerTripEditRaw < 1 ? null : unitsPerTripEditRaw;
+      var fulfillmentTypeEditEl = document.querySelector('input[name="editFulfillmentType"]:checked');
+      var fulfillmentTypeEdit  = isServiceEdit ? (fulfillmentTypeEditEl ? fulfillmentTypeEditEl.value : null) : null;
       var serviceTurnaroundEdit = isServiceEdit ? (document.getElementById('editServiceTurnaround').value || null) : null;
       var acceptanceDeadlineEdit = isServiceEdit ? (parseInt(document.getElementById('editAcceptanceDeadline').value, 10) || 24) : 24;
       if (isServiceEdit && !serviceTurnaroundEdit) { setMsg('editProdMsg', 'Please select a turnaround time.'); return; }
+
+      var itemReturnedEditEl = document.querySelector('input[name="editItemReturned"]:checked');
+      var itemReturnedEdit = itemReturnedEditEl ? itemReturnedEditEl.value === 'true' : true;
+      var intakeKindEditEl = document.querySelector('input[name="editIntakeKind"]:checked');
+      var intakeKindEdit = (fulfillmentTypeEdit === 'item_dropoff' && intakeKindEditEl && itemReturnedEdit) ? intakeKindEditEl.value : 'item';
+      var bookingModeEditEl = document.querySelector('input[name="editBookingMode"]:checked');
+      var bookingModeEdit = bookingModeEditEl ? bookingModeEditEl.value : null;
+      var slotDurationEdit = fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled'
+        ? parseInt(document.getElementById('editSlotDuration').value, 10) : null;
+      var serviceLocationEdit = fulfillmentTypeEdit === 'in_person'
+        ? ((bookingModeEdit === 'scheduled'
+            ? document.getElementById('editServiceLocationScheduled').value
+            : document.getElementById('editServiceLocationFlexible').value) || '').trim() || null
+        : null;
+      var intakeFieldsEdit = fulfillmentTypeEdit === 'item_dropoff' ? getIntakeFields('editIntakeDropoff')
+                            : fulfillmentTypeEdit === 'digital' ? getIntakeFields('editIntakeDigital')
+                            : [];
+      var availabilityRowsEdit = (fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled')
+        ? getAvailabilityRows('editAvailabilityGrid') : [];
+      if (isServiceEdit && fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled' && !availabilityRowsEdit.length) {
+        setMsg('editProdMsg', 'Set at least one day of working hours so buyers can book you.'); return;
+      }
+
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
       var { data, error } = await SD.sb.from('products').update({
         name:           name,
@@ -2044,14 +2518,28 @@
         image:          image   || null,
         sizes:          isServiceEdit ? [] : (sizes.length ? sizes : ['S','M','L','XL']),
         delivery_class: deliveryClassEdit,
+        units_per_trip: unitsPerTripEdit,
         listing_type:   ltEdit,
         fulfillment_type: fulfillmentTypeEdit,
         service_turnaround: serviceTurnaroundEdit,
-        acceptance_deadline_hours: acceptanceDeadlineEdit
+        acceptance_deadline_hours: acceptanceDeadlineEdit,
+        item_returned:  isServiceEdit ? itemReturnedEdit : true,
+        intake_kind:    isServiceEdit ? intakeKindEdit : 'item',
+        booking_mode:   isServiceEdit ? bookingModeEdit : null,
+        slot_duration_minutes: slotDurationEdit,
+        service_location: serviceLocationEdit,
+        intake_fields:  intakeFieldsEdit
       }).eq('id', id).select().single();
 
       setBtnLoading('saveEditProdBtn', false, 'Save Changes');
       if (error) { setMsg('editProdMsg', error.message); return; }
+
+      if (availabilityRowsEdit.length) {
+        await SD.sb.from('seller_availability').delete().eq('seller_id', SD.seller.id);
+        await SD.sb.from('seller_availability').insert(
+          availabilityRowsEdit.map(function(r) { return Object.assign({ seller_id: SD.seller.id }, r); })
+        );
+      }
 
       // Upsert product_variants with per-size price overrides
       if (sizePricesEdit.length) {
@@ -2080,11 +2568,10 @@
       document.getElementById('ordersLoading').style.display = '';
       document.getElementById('ordersEmpty').style.display = 'none';
 
-      // Get seller's product IDs
-      if (!SD.products.length) {
-        var { data: pd } = await SD.sb.from('products').select('id').eq('seller_id', SD.seller.id);
-        SD.products = pd || [];
-      }
+      // Get seller's product IDs — via the shared, fully-columned loader
+      // (see loadProgressBar's comment) rather than an id-only fetch that
+      // would poison SD.products for every other tab reading fuller fields.
+      await loadProducts();
       var myProductIds = SD.products.map(function(p) { return p.id; });
       if (!myProductIds.length) {
         document.getElementById('ordersLoading').style.display = 'none';
@@ -2110,6 +2597,36 @@
         return items.some(function(i) {
           return myProductIds.includes(i.id || i.product_id);
         });
+      });
+
+      // A multi-seller order shares one `orders.order_status` column, so it
+      // can't be trusted as *this* seller's own fulfillment progress — another
+      // seller's items may be in a completely different state. Pull this
+      // seller's own order_item_statuses rows and derive a per-seller status
+      // from those instead (see updateOrderFulfillment for the write side).
+      var orderIds = myOrders.map(function(o) { return o.id; });
+      var myStatuses = [];
+      if (orderIds.length) {
+        var { data: statusRows } = await SD.sb.from('order_item_statuses')
+          .select('order_id, item_index, status, buyer_confirmed_at')
+          .eq('seller_id', SD.seller.id)
+          .in('order_id', orderIds);
+        myStatuses = statusRows || [];
+      }
+      myOrders.forEach(function(o) {
+        var rows = myStatuses.filter(function(s) { return s.order_id === o.id; });
+        var myItemCount = (Array.isArray(o.items) ? o.items : []).filter(function(i) {
+          return myProductIds.includes(i.id || i.product_id);
+        }).length;
+        if (!rows.length) {
+          o._mySellerStatus = 'Pending';
+          o._buyerAllConfirmed = false;
+        } else {
+          var allDelivered = rows.length >= myItemCount && rows.every(function(s) { return ['delivered','refunded'].includes(s.status); });
+          var allFulfilled = rows.length >= myItemCount && rows.every(function(s) { return ['fulfilled','delivered','refunded'].includes(s.status); });
+          o._mySellerStatus = allDelivered ? 'Delivered' : (allFulfilled ? 'Fulfilled' : 'Packaging');
+          o._buyerAllConfirmed = rows.length >= myItemCount && rows.every(function(s) { return !!s.buyer_confirmed_at; });
+        }
       });
 
       SD.orders   = myOrders;
@@ -2151,7 +2668,7 @@
       // Split: past = Delivered orders where buyer confirmed all items
       // Active = everything else
       var activeOrders = orders.filter(function(o) {
-        return o.order_status !== 'Delivered' || !o._buyerAllConfirmed;
+        return o._mySellerStatus !== 'Delivered' || !o._buyerAllConfirmed;
       });
 
       if (!activeOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
@@ -2177,8 +2694,10 @@
         var payPillClass = payStatus === 'paid' ? 'paid' : (payStatus === 'cancelled' ? 'cancelled' : 'pending');
         var payLabel = payStatus === 'paid' ? '✓ Paid' : (payStatus === 'cancelled' ? '✗ Cancelled' : '⏳ Pending');
 
-        var fulfillStatus = ['Pending','Packaging','Fulfilled','Delivered','Returned'].includes(order.order_status)
-          ? order.order_status : 'Pending';
+        // 'Returned' has no order_item_statuses equivalent (it's a manual,
+        // order_status-only override), so it can't be derived — everything
+        // else uses this seller's own item-status rows, not the shared column.
+        var fulfillStatus = order.order_status === 'Returned' ? 'Returned' : (order._mySellerStatus || 'Pending');
 
         // Buyer address — show full details until buyer confirms delivery
         var buyerAddressHtml = '';
@@ -2219,7 +2738,7 @@
       var list  = document.getElementById('pastOrdersList');
       var empty = document.getElementById('pastOrdersEmpty');
       if (!list) return;
-      var pastOrders = (SD.orders || []).filter(function(o) { return o.order_status === 'Delivered'; });
+      var pastOrders = (SD.orders || []).filter(function(o) { return o._mySellerStatus === 'Delivered'; });
       if (!pastOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
       var myProductIds = SD.products.map(function(p) { return p.id; });
@@ -2248,12 +2767,24 @@
     window.updateOrderFulfillment = async function(select) {
       var orderId = select.dataset.orderId;
       var newStatus = select.value;
-      var { error } = await SD.sb.from('orders').update({ order_status: newStatus }).eq('id', orderId);
-      if (error) { toast('Update failed: ' + error.message); return; }
-      toast('Order status updated to ' + newStatus + ' ✓');
+      var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
+
+      // 'Returned' has no per-item representation — it's the only case where
+      // a direct, order-wide write is unavoidable. Everything else derives
+      // orders.order_status from ALL sellers' order_item_statuses rows below,
+      // so one seller's update can no longer clobber another seller's
+      // already-recorded progress on the same order (each seller only ever
+      // writes rows scoped to their own seller_id/items).
+      if (newStatus === 'Returned') {
+        var { error: retErr } = await SD.sb.from('orders').update({ order_status: 'Returned' }).eq('id', orderId);
+        if (retErr) { toast('Update failed: ' + retErr.message); return; }
+        toast('Order status updated to Returned ✓');
+        if (order) order.order_status = 'Returned';
+        return;
+      }
+
       // If marking as Fulfilled or Delivered, create/update order_item_statuses for this seller's items
       if (newStatus === 'Fulfilled' || newStatus === 'Delivered') {
-        var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
         if (order) {
           var myProductIds = SD.products.map(function(p){ return p.id; });
           var myItems = (Array.isArray(order.items)?order.items:[]).filter(function(i){ return myProductIds.includes(i.id||i.product_id); });
@@ -2269,6 +2800,34 @@
           }
         }
       }
+
+      // Derive the shared orders.order_status from every seller's own
+      // order_item_statuses rows on this order (not just the acting
+      // seller's dropdown pick), so admin/logistics views see genuine
+      // aggregate progress instead of whichever seller clicked last.
+      var totalItems = order && Array.isArray(order.items) ? order.items.length : 0;
+      var { data: allRows } = await SD.sb.from('order_item_statuses').select('status').eq('order_id', orderId);
+      allRows = allRows || [];
+      var derived;
+      if (!allRows.length) {
+        derived = 'Pending';
+      } else if (allRows.length >= totalItems && allRows.every(function(s){ return ['delivered','refunded'].includes(s.status); })) {
+        derived = 'Delivered';
+      } else if (allRows.length >= totalItems && allRows.every(function(s){ return ['fulfilled','delivered','refunded'].includes(s.status); })) {
+        derived = 'Fulfilled';
+      } else {
+        derived = 'Packaging';
+      }
+
+      var { error } = await SD.sb.from('orders').update({ order_status: derived }).eq('id', orderId);
+      if (error) { toast('Update failed: ' + error.message); return; }
+      toast('Order status updated ✓');
+
+      // Refetch so this seller's own _mySellerStatus (and any other seller's
+      // concurrent progress) is reflected accurately, not assumed locally.
+      ordersLoaded = false;
+      await loadOrders();
+      if (document.getElementById('ordersSubPastPanel').style.display !== 'none') renderPastOrders();
     };
 
     /* ─────────────────────────────────────────
@@ -2284,7 +2843,7 @@
 
       var { data: statuses, error } = await SD.sb
         .from('order_item_statuses')
-        .select('id, order_id, item_index, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, proof_urls, completion_note, listing_type, product_id, status, created_at')
+        .select('id, order_id, item_index, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, proof_urls, completion_note, listing_type, intake_kind, product_id, status, created_at')
         .eq('seller_id', SD.seller.id)
         .eq('listing_type', 'service')
         .order('created_at', { ascending: false });
@@ -2349,9 +2908,14 @@
 
         // Action buttons
         var actions = '';
+        var noCollection = s.intake_kind && s.intake_kind !== 'item';
         if (status === 'pending_acceptance') {
           actions = '<button class="btn success sm" onclick="acceptServiceOrder(\'' + s.id + '\')">Accept</button>' +
                     '<button class="btn danger sm" onclick="rejectServiceOrder(\'' + s.id + '\')">Reject</button>';
+        } else if (status === 'accepted' && noCollection) {
+          // Nothing physical to collect (buyer sent a file, or nothing at
+          // all) — start work directly instead of waiting on a rep handoff.
+          actions = '<button class="btn primary sm" onclick="markServiceInProgress(\'' + s.id + '\')">▶ Start work</button>';
         } else if (status === 'handed_to_seller') {
           actions = '<button class="btn primary sm" onclick="markServiceInProgress(\'' + s.id + '\')">Mark In Progress</button>';
         } else if (status === 'in_progress') {
@@ -2511,13 +3075,8 @@
        TAB 5 — ANALYTICS
     ───────────────────────────────────────── */
     async function loadAnalytics() {
-      // Ensure products loaded
-      if (!SD.products.length) {
-        var { data: pd } = await SD.sb.from('products')
-          .select('id, name, visible, metadata, favourite_count')
-          .eq('seller_id', SD.seller.id);
-        SD.products = pd || [];
-      }
+      // Ensure products loaded — shared loader, see loadProgressBar's comment.
+      await loadProducts();
       var myProductIds = SD.products.map(function(p) { return p.id; });
       var totalProducts = SD.products.length;
       var pendingCount  = SD.products.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
