@@ -73,6 +73,7 @@ exports.handler = async function(event, context) {
 
                     // ── Backfill user_id if order was placed on buyer's behalf ─
                     const buyerEmailForLookup = (existingOrder.customer_email || pfData.email_address || '').toLowerCase();
+                    let resolvedUserId = existingOrder.user_id || null;
                     if (buyerEmailForLookup) {
                         try {
                             const { data: buyerProfile } = await supabase
@@ -84,7 +85,21 @@ exports.handler = async function(event, context) {
                                 await supabase.from('orders').update({ user_id: buyerProfile.user_id }).eq('id', existingOrder.id);
                                 console.log('ITN: user_id corrected to buyer profile for order', existingOrder.id);
                             }
+                            if (buyerProfile?.user_id) resolvedUserId = buyerProfile.user_id;
                         } catch (e) { console.warn('ITN: user_id backfill error:', e.message); }
+                    }
+
+                    // ── Capture PayFast token for one-click future checkouts ──
+                    // Additive/best-effort only — never blocks order fulfillment.
+                    if (pfData.token && resolvedUserId) {
+                        try {
+                            await supabase.from('profiles')
+                                .update({ payfast_token: pfData.token, payfast_token_added_at: new Date().toISOString() })
+                                .eq('user_id', resolvedUserId);
+                            console.log('ITN: payfast_token saved for user_id', resolvedUserId);
+                        } catch (tokenErr) {
+                            console.warn('ITN: payfast_token save error:', tokenErr.message);
+                        }
                     }
 
                     // ── Mark coupon as used ────────────────────────────────
@@ -689,14 +704,10 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
         let handoffLine = '';
         if (item.fulfillment_type === 'item_dropoff') {
             const opts = item.service_options || {};
-            const collectPart = opts.collection_method === 'rep_collect'
-                ? `rep collects from ${esc(opts.collection_address || 'your address')}`
-                : 'drop off at the campus collection point';
+            const collectPart = `rep collects from ${esc(opts.collection_address || 'your address')}`;
             const returnPart = item.item_returned === false
                 ? null
-                : (opts.return_method === 'deliver'
-                    ? `delivered to ${esc(opts.return_address || 'your address')}`
-                    : 'collect at the campus collection point');
+                : `delivered to ${esc(opts.return_address || 'your address')}`;
             handoffLine = `<div style="font-size:12px;color:#166534;margin-top:3px">Handoff: ${collectPart}.${returnPart ? ` Return: ${returnPart}.` : ''}</div>`;
         }
 
@@ -723,9 +734,9 @@ function buildOrderConfirmationEmail(order, pfData, siteUrl) {
       <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:10px">🔧 Your Service Order — What happens next</div>
       <ol style="margin:0;padding-left:20px;color:#374151;font-size:13px;line-height:2">
         <li>The seller will <strong>review and accept your service request within 24 hours</strong>.</li>
-        ${hasItemDropoff ? `<li>Once accepted, <strong>bring your item to the Umzila collection point at UKZN Westville campus</strong>. Umzila will hand it to the seller.</li>` : ''}
+        ${hasItemDropoff ? `<li>Once accepted, <strong>an Umzila rep will collect your item from your address</strong> and hand it to the seller.</li>` : ''}
         <li>The seller completes the service and marks it done with proof.</li>
-        <li>Your item is returned to the campus collection point for you to collect or have delivered.</li>
+        <li>Your item is delivered back to you.</li>
       </ol>
       <div style="margin-top:12px;font-size:12px;color:#6b7280">Order ref: <strong>${esc(orderRef)}</strong> — check your seller dashboard or contact support if you need updates.</div>
     </div>` : '';
@@ -939,11 +950,11 @@ async function createServiceOrderRecords(supabase, order) {
             // Handoff/return choices, already clamped+priced server-side by
             // validate-cart.js (order.items is the checked-out snapshot) —
             // this stays a dumb copy, no re-validation logic added here.
-            collection_method: (item.service_options && item.service_options.collection_method) || 'dropoff',
+            collection_method: (item.service_options && item.service_options.collection_method) || 'rep_collect',
             collection_address: (item.service_options && item.service_options.collection_address) || null,
             collection_slot_start: (item.service_options && item.service_options.collection_slot_start) || null,
             collection_slot_end: (item.service_options && item.service_options.collection_slot_end) || null,
-            return_method: item.item_returned === false ? 'pickup_point' : ((item.service_options && item.service_options.return_method) || 'pickup_point'),
+            return_method: item.item_returned === false ? 'none' : ((item.service_options && item.service_options.return_method) || 'deliver'),
             return_address: item.item_returned === false ? null : ((item.service_options && item.service_options.return_address) || null),
             return_slot_start: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_start) || null),
             return_slot_end: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_end) || null)
@@ -976,10 +987,7 @@ async function createServiceOrderRecords(supabase, order) {
         // Rep-pool broadcast for item_dropoff services only — nothing physical
         // to collect for in_person/digital, so no rep task is created for those.
         if (item.fulfillment_type === 'item_dropoff') {
-            const collectionMethod = (item.service_options && item.service_options.collection_method) || 'dropoff';
-            const dropoffBody = collectionMethod === 'rep_collect'
-                ? `"${item.name || item.title || 'service'}" — rep collection from buyer's address. Available once the seller accepts.`
-                : `"${item.name || item.title || 'service'}" — available once the seller accepts.`;
+            const dropoffBody = `"${item.name || item.title || 'service'}" — rep collection from buyer's address. Available once the seller accepts.`;
             await supabase.from('seller_notifications').insert([{
                 seller_id: null,
                 recipient_role: 'rep',

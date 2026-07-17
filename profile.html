@@ -618,6 +618,12 @@
             <input class="p-input" id="addrPostal" placeholder="0000">
           </div>
         </div>
+        <div class="p-field">
+          <label class="p-label">Delivery Zone</label>
+          <select class="p-input" id="addrZone">
+            <option value="">Select your delivery area…</option>
+          </select>
+        </div>
         <button id="addAddressBtn" class="p-btn">Save Address</button>
       </div>
     </div>
@@ -868,6 +874,7 @@
       document.getElementById('addrCity').value         = prof.city        || '';
       document.getElementById('addrProvince').value     = prof.province    || '';
       document.getElementById('addrPostal').value       = prof.postal_code || '';
+      document.getElementById('addrZone').value         = prof.delivery_zone || '';
       renderAddrPreview(prof);
     } else {
       await sb.from('profiles').insert([{ user_id: user.id, email: user.email, first_name: '', last_name: '', phone: '' }]).catch(() => {});
@@ -878,8 +885,34 @@
     const el = document.getElementById('addressPreview');
     if (!el) return;
     if (!row?.address) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="addr-preview"><strong>${esc(row.label || 'Saved Address')}</strong>${esc(row.address)}${row.city?', '+esc(row.city):''}${row.province?', '+esc(row.province):''}${row.postal_code?' '+esc(row.postal_code):''}</div>`;
+    const zoneName = row.delivery_zone ? (DELIVERY_ZONES.find(z => z.code === row.delivery_zone)?.name || row.delivery_zone) : '';
+    el.innerHTML = `<div class="addr-preview"><strong>${esc(row.label || 'Saved Address')}</strong>${esc(row.address)}${row.city?', '+esc(row.city):''}${row.province?', '+esc(row.province):''}${row.postal_code?' '+esc(row.postal_code):''}${zoneName?' · '+esc(zoneName):''}</div>`;
   }
+
+  // Delivery zones — must match checkout.html's DELIVERY_ZONES exactly; no
+  // shared JS module in this codebase, so this list is copied identically
+  // (same convention as the SAST time helpers duplicated across files).
+  const DELIVERY_ZONES = [
+    { name: 'Varsity Drive',          code: 'varsity_drive'    },
+    { name: 'Umgudulu Road',          code: 'umgudulu_rd'      },
+    { name: 'Pitlochry Road',         code: 'pitlochry_rd'     },
+    { name: 'Around Checkers',        code: 'around_checkers'  },
+    { name: 'Near Westwood Mall',     code: 'westwood_mall'    },
+    { name: 'On Westville Campus',    code: 'westville_campus' },
+    { name: 'On/Around Santa Cruz',   code: 'santa_cruz'       },
+    { name: 'On/Around Crystal Valley', code: 'crystal_valley' },
+    { name: 'On/Around Westview',     code: 'westview'         }
+  ];
+  (function populateZoneSelect() {
+    const sel = document.getElementById('addrZone');
+    if (!sel) return;
+    DELIVERY_ZONES.forEach(z => {
+      const opt = document.createElement('option');
+      opt.value = z.code;
+      opt.textContent = z.name;
+      sel.appendChild(opt);
+    });
+  })();
 
   document.getElementById('saveProfileBtn')?.addEventListener('click', async () => {
     const user = await requireUser(); if (!user) return;
@@ -895,6 +928,7 @@
       city:       document.getElementById('addrCity').value.trim(),
       province:   document.getElementById('addrProvince').value.trim(),
       postal_code: document.getElementById('addrPostal').value.trim(),
+      delivery_zone: document.getElementById('addrZone').value || null,
       updated_at: new Date().toISOString()
     };
     const { error } = await sb.from('profiles').upsert([payload], { onConflict: ['user_id'] });
@@ -1542,6 +1576,41 @@
   })();
 
 })();
+</script>
+
+<!-- Mobile app-style bottom navigation (Home / Search / Cart / Profile) —
+     kept in sync with index.html's markup/CSS so it persists across pages. -->
+<nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary">
+  <button class="mbn-item" id="mbnHome" data-mbn="home" aria-label="Home">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    <span>Home</span>
+  </button>
+  <button class="mbn-item" id="mbnSearch" data-mbn="search" aria-label="Search">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <span>Search</span>
+  </button>
+  <button class="mbn-item" id="mbnCart" data-mbn="cart" aria-label="Cart">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+    <span class="mbn-badge cart-count" id="mbnCartBadge" style="display:none">0</span>
+    <span>Cart</span>
+  </button>
+  <button class="mbn-item active" id="mbnProfile" data-mbn="profile" aria-label="Profile">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>Profile</span>
+  </button>
+</nav>
+<script>
+  document.getElementById('mbnHome')?.addEventListener('click', function() { window.location.href = 'index.html'; });
+  document.getElementById('mbnSearch')?.addEventListener('click', function() { window.location.href = 'shop.html'; });
+  document.getElementById('mbnCart')?.addEventListener('click', function() { window.location.href = 'cart.html'; });
+  (function updateMbnCartBadge() {
+    try {
+      var cart = JSON.parse(localStorage.getItem('ss_cart') || '[]');
+      var count = cart.length;
+      var el = document.getElementById('mbnCartBadge');
+      if (el) { el.textContent = count; el.style.display = count > 0 ? 'flex' : 'none'; }
+    } catch(_) {}
+  })();
 </script>
 </body>
 </html>

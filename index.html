@@ -814,19 +814,17 @@
         <button class="btn" id="myBtnErrorContinue" style="width:100%;padding:14px">Continue</button>
       </div>
 
-      <!-- S7: pickup explainer — shown after every successful/terminal branch -->
+      <!-- S7: delivery explainer — shown after every successful/terminal branch -->
       <div class="mystery-pane" id="myP7">
-        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px;text-align:center">How pickup works</h2>
+        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px;text-align:center">How delivery works</h2>
         <div style="display:flex;gap:10px;margin-bottom:16px">
           <!-- OWNER: swap this placeholder for a real photo -->
-          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Collection point">
+          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Bike delivery">
             <rect width="160" height="100" rx="10" fill="#f0f4ff"/>
-            <rect x="34" y="46" width="54" height="34" rx="2" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
-            <rect x="44" y="56" width="10" height="12" fill="none" stroke="#0a2f66" stroke-width="2"/>
-            <rect x="66" y="56" width="10" height="12" fill="none" stroke="#0a2f66" stroke-width="2"/>
-            <path d="M34 46l27-16 27 16" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linejoin="round"/>
-            <path d="M112 30c0-9.4 7.6-17 17-17s17 7.6 17 17c0 12.7-17 30-17 30s-17-17.3-17-30z" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
-            <circle cx="129" cy="30" r="6" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
+            <circle cx="50" cy="70" r="16" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
+            <circle cx="106" cy="70" r="16" fill="none" stroke="#0a2f66" stroke-width="2.5"/>
+            <path d="M50 70l20-34h20M70 36h14l16 34M50 70h56" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="94" y="46" width="16" height="14" rx="2" fill="#fff" stroke="#0a2f66" stroke-width="2"/>
           </svg>
           <!-- OWNER: swap this placeholder for a real photo -->
           <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Receiving your order">
@@ -838,9 +836,9 @@
           </svg>
         </div>
         <ol style="color:var(--muted);font-size:14px;line-height:1.7;margin:0 0 18px;padding-left:20px">
-          <li><strong style="color:var(--color-accent)">Choose pickup at checkout</strong> — it's free.</li>
-          <li>Come to the <strong style="color:var(--color-accent)">Umzila collection point, UKZN Westville</strong>, at the time you picked.</li>
-          <li>Show your order number, grab your stuff, go.</li>
+          <li><strong style="color:var(--color-accent)">Enter your delivery address at checkout</strong>.</li>
+          <li>An <strong style="color:var(--color-accent)">Umzila rep delivers by bike</strong> to your address at the time you picked.</li>
+          <li>Show your order number, grab your stuff, done.</li>
         </ol>
         <a href="cart.html" id="myCartLink" style="display:none;text-align:center;font-size:13px;color:var(--accent-2);margin-bottom:10px">View my cart &rarr;</a>
         <button class="btn" id="myBtnGotIt" style="width:100%;padding:14px">Got it</button>

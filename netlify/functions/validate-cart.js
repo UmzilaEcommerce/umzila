@@ -3,8 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 // Must match checkout.html's client-side copies — this server copy is authoritative.
 const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
 const PER_SELLER_FEE          = 3;
-const FREE_DELIVERY_THRESHOLD = 250;
-const PICKUP_FEE              = 0;
+const FREE_DELIVERY_THRESHOLD = 600;
 const SERVICE_COLLECT_FEE     = 15; // rep collects buyer's item from their address
 const SERVICE_RETURN_FEE      = 15; // finished item delivered to an address
 // Quantity-aware fee stepping — must match checkout.html exactly.
@@ -25,8 +24,7 @@ function validSlotIso(val) {
 // Server mirror of checkout.html's calculateDeliveryFee() + calculateServiceFees().
 // validatedCart items already carry seller_id/delivery_class/free_delivery/service_fees
 // as clamped/priced by this file, so this just sums them up authoritatively.
-function computeFees(validatedCart, deliveryMethod) {
-    const isPickup = deliveryMethod === 'pickup';
+function computeFees(validatedCart) {
     const productItems = validatedCart.filter(i => (i.listing_type || 'product') !== 'service');
     const subtotal = productItems.reduce((s, i) => s + i.price * i.quantity, 0);
     const feeItems = productItems.filter(i => !i.free_delivery);
@@ -36,9 +34,7 @@ function computeFees(validatedCart, deliveryMethod) {
     let sellerCount = 0;
     let allFreeDelivery = false;
 
-    if (isPickup) {
-        productDelivery = productItems.length ? PICKUP_FEE : 0;
-    } else if (!productItems.length) {
+    if (!productItems.length) {
         // service-only cart — no product delivery fee
     } else if (!feeItems.length) {
         allFreeDelivery = true;
@@ -66,7 +62,7 @@ function computeFees(validatedCart, deliveryMethod) {
     }
 
     // Service collection/return fees are flat, per line, and never waived by
-    // pickup mode or the R250 threshold — those are product-delivery concepts.
+    // the R600 threshold — that's a product-delivery concept.
     let serviceCollection = 0;
     let serviceReturn = 0;
     validatedCart.forEach(item => {
@@ -96,8 +92,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, userId, deliveryMethod } = JSON.parse(event.body);
-        const method = deliveryMethod === 'pickup' ? 'pickup' : 'deliver';
+        const { cartItems, userId } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -278,43 +273,45 @@ variants.forEach(v => {
 
   if (isItemDropoff) {
     // Never trust client-chosen methods/fees — clamp to known values and
-    // price server-side. A paid method with no address is downgraded to the
-    // free default rather than rejecting the whole cart.
+    // price server-side. Collection/return is always rep-collect/deliver
+    // now (no free campus drop-off/pickup-point option left) — a missing
+    // address or slot is rejected rather than silently downgraded, since
+    // there's no free fallback state to downgrade to anymore.
     const intakeKind = product.intake_kind || 'item';
     const rawOpts = (rawItem.service_options && typeof rawItem.service_options === 'object') ? rawItem.service_options : {};
     // Nothing physical to collect when the buyer sends a file or nothing —
     // that leg simply doesn't exist for this archetype.
-    let collectionMethod = (intakeKind === 'item' && rawOpts.collection_method === 'rep_collect') ? 'rep_collect' : (intakeKind === 'item' ? 'dropoff' : 'none');
-    let collectionAddress = (rawOpts.collection_address || '').toString().trim().slice(0, 300) || null;
-    let collectionSlotStart = validSlotIso(rawOpts.collection_slot_start);
-    let collectionSlotEnd = validSlotIso(rawOpts.collection_slot_end);
-    // A paid leg with no address, or no valid future slot, downgrades to the
-    // free default rather than rejecting the whole cart.
+    const collectionMethod = intakeKind === 'item' ? 'rep_collect' : 'none';
+    const collectionAddress = (rawOpts.collection_address || '').toString().trim().slice(0, 300) || null;
+    const collectionSlotStart = validSlotIso(rawOpts.collection_slot_start);
+    const collectionSlotEnd = validSlotIso(rawOpts.collection_slot_end);
     if (collectionMethod === 'rep_collect' && (!collectionAddress || !collectionSlotStart)) {
-      collectionMethod = 'dropoff';
-      hasChanges = true;
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: `Missing collection address/time for "${item.name || product.name}".` })
+      };
     }
-    if (collectionMethod !== 'rep_collect') { collectionAddress = null; collectionSlotStart = null; collectionSlotEnd = null; }
 
-    let returnMethod = (itemReturned && rawOpts.return_method === 'deliver') ? 'deliver' : 'pickup_point';
-    let returnAddress = (rawOpts.return_address || '').toString().trim().slice(0, 300) || null;
-    let returnSlotStart = validSlotIso(rawOpts.return_slot_start);
-    let returnSlotEnd = validSlotIso(rawOpts.return_slot_end);
+    const returnMethod = itemReturned ? 'deliver' : 'none';
+    const returnAddress = (rawOpts.return_address || '').toString().trim().slice(0, 300) || null;
+    const returnSlotStart = validSlotIso(rawOpts.return_slot_start);
+    const returnSlotEnd = validSlotIso(rawOpts.return_slot_end);
     if (returnMethod === 'deliver' && (!returnAddress || !returnSlotStart)) {
-      returnMethod = 'pickup_point';
-      hasChanges = true;
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: `Missing return address/time for "${item.name || product.name}".` })
+      };
     }
-    if (returnMethod !== 'deliver') { returnAddress = null; returnSlotStart = null; returnSlotEnd = null; }
 
     validated.service_options = {
       collection_method: collectionMethod,
-      collection_address: collectionAddress,
-      collection_slot_start: collectionSlotStart,
-      collection_slot_end: collectionSlotEnd,
+      collection_address: collectionMethod === 'rep_collect' ? collectionAddress : null,
+      collection_slot_start: collectionMethod === 'rep_collect' ? collectionSlotStart : null,
+      collection_slot_end: collectionMethod === 'rep_collect' ? collectionSlotEnd : null,
       return_method: returnMethod,
-      return_address: returnAddress,
-      return_slot_start: returnSlotStart,
-      return_slot_end: returnSlotEnd
+      return_address: returnMethod === 'deliver' ? returnAddress : null,
+      return_slot_start: returnMethod === 'deliver' ? returnSlotStart : null,
+      return_slot_end: returnMethod === 'deliver' ? returnSlotEnd : null
     };
     validated.service_fees = {
       collection: collectionMethod === 'rep_collect' ? SERVICE_COLLECT_FEE : 0,
@@ -363,7 +360,7 @@ variants.forEach(v => {
                 validatedCart,
                 total,
                 hasChanges,
-                fees: computeFees(validatedCart, method),
+                fees: computeFees(validatedCart),
                 message: hasChanges ? 'Cart has been updated with current prices and stock' : 'Cart is valid'
             })
         };

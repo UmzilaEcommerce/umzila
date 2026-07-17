@@ -3287,7 +3287,7 @@ async function openProductModal(id) {
             service: '<path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3 3-2-2 3-3z"/>'
           };
           let ftIconPath = '', ftLabel = '';
-          if (ft === 'item_dropoff') { ftIconPath = ICONS.item_dropoff; ftLabel = 'Drop off your item at the <strong>Umzila collection point, UKZN Westville campus</strong>'; }
+          if (ft === 'item_dropoff') { ftIconPath = ICONS.item_dropoff; ftLabel = 'A rep collects your item from your address'; }
           else if (ft === 'in_person') { ftIconPath = ICONS.in_person; ftLabel = 'Meet in-person on campus'; }
           else if (ft === 'digital') { ftIconPath = ICONS.digital; ftLabel = 'Digital delivery'; }
           else { ftIconPath = ICONS.service; ftLabel = 'Service'; }
@@ -3328,7 +3328,6 @@ async function openProductModal(id) {
           <h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>
           <select id="modal-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">
             <option value="">No preference</option>
-            <option value="Pickup from campus">Pickup from campus</option>
             <option value="Delivery to my address">Delivery to my address / location</option>
           </select>
         </div>` : ''}
@@ -3418,15 +3417,8 @@ function renderServicePurchaseInputs(p) {
     const showReturn = p.item_returned !== false;
     return `${intakeHtml}<div class="product-modal-handoff" style="margin:12px 0">
       ${showCollection ? `<h3 style="font-size:14px;font-weight:700;margin-bottom:8px">Getting your item to us</h3>
-      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
-        <input type="radio" name="modal-collection-method" value="dropoff" checked style="margin-top:3px">
-        <span><strong>I'll drop it off — Free</strong><br><span style="font-size:12px;color:#6b7280">Umzila collection point, UKZN Westville campus</span></span>
-      </label>
-      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-        <input type="radio" name="modal-collection-method" value="rep_collect" style="margin-top:3px">
-        <span><strong>Collect it from me — R15</strong><br><span style="font-size:12px;color:#6b7280">A rep fetches it from your res or nearby address</span></span>
-      </label>
-      <div id="modal-collection-address-wrap" style="display:none;margin:8px 0 0 26px">
+      <div style="font-size:13px;color:#374151;margin-bottom:8px">A rep collects it from your address — <strong>R15</strong></div>
+      <div id="modal-collection-address-wrap" style="margin:8px 0 0">
         <label style="display:block;font-size:12px;color:#374151;margin-bottom:4px">Where should the rep collect?</label>
         <input type="text" id="modal-collection-address" placeholder="e.g. Santa Cruz Res, Block B, Room 214" style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px">
         <label style="display:block;font-size:12px;color:#374151;margin:8px 0 4px">When should they come?</label>
@@ -3434,15 +3426,8 @@ function renderServicePurchaseInputs(p) {
       </div>` : ''}
       ${showReturn ? `
       <h3 style="font-size:14px;font-weight:700;margin:${showCollection ? '16px' : '0'} 0 8px">${showCollection ? 'Getting it back to you' : 'Getting your order to you'}</h3>
-      <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;cursor:pointer">
-        <input type="radio" name="modal-return-method" value="pickup_point" checked style="margin-top:3px">
-        <span><strong>I'll pick it up — Free</strong><br><span style="font-size:12px;color:#6b7280">Umzila collection point, UKZN Westville campus</span></span>
-      </label>
-      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-        <input type="radio" name="modal-return-method" value="deliver" style="margin-top:3px">
-        <span><strong>Deliver it to me — R15</strong><br><span style="font-size:12px;color:#6b7280">We bring it to any nearby address</span></span>
-      </label>
-      <div id="modal-return-address-wrap" style="display:none;margin:8px 0 0 26px">
+      <div style="font-size:13px;color:#374151;margin-bottom:8px">Delivered back to you — <strong>R15</strong></div>
+      <div id="modal-return-address-wrap" style="margin:8px 0 0">
         ${showCollection ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;margin-bottom:6px;cursor:pointer">
           <input type="checkbox" id="modal-return-same-address"> Same as collection address
         </label>` : ''}
@@ -3470,37 +3455,19 @@ function renderServicePurchaseInputs(p) {
 let selectedCollectionSlot = null;
 let selectedReturnSlot = null;
 
-// Wires the radio/checkbox interactions for the item_dropoff handoff block
-// above — reveal/hide address fields, load the rep slot picker once a paid
-// leg is chosen, and the "same as collection" copy.
+// Wires the handoff block above — collection/return is always rep-collect/
+// deliver now (no free campus choice left), so both slot pickers just load
+// unconditionally, plus the "same as collection" address copy.
 function wireServiceHandoffInputs() {
   selectedCollectionSlot = null;
   selectedReturnSlot = null;
-  const collectRadios = document.querySelectorAll('input[name="modal-collection-method"]');
   const collectWrap = document.getElementById('modal-collection-address-wrap');
-  let collectSlotLoaded = false;
-  if (collectRadios.length && collectWrap) {
-    collectRadios.forEach(r => r.addEventListener('change', () => {
-      const isRepCollect = document.querySelector('input[name="modal-collection-method"]:checked')?.value === 'rep_collect';
-      collectWrap.style.display = isRepCollect ? 'block' : 'none';
-      if (isRepCollect && !collectSlotLoaded) {
-        collectSlotLoaded = true;
-        loadRepSlotPicker(document.getElementById('modal-collection-slot-picker'), slot => { selectedCollectionSlot = slot; });
-      }
-    }));
+  if (collectWrap) {
+    loadRepSlotPicker(document.getElementById('modal-collection-slot-picker'), slot => { selectedCollectionSlot = slot; });
   }
-  const returnRadios = document.querySelectorAll('input[name="modal-return-method"]');
   const returnWrap = document.getElementById('modal-return-address-wrap');
-  let returnSlotLoaded = false;
-  if (returnRadios.length && returnWrap) {
-    returnRadios.forEach(r => r.addEventListener('change', () => {
-      const isDeliver = document.querySelector('input[name="modal-return-method"]:checked')?.value === 'deliver';
-      returnWrap.style.display = isDeliver ? 'block' : 'none';
-      if (isDeliver && !returnSlotLoaded) {
-        returnSlotLoaded = true;
-        loadRepSlotPicker(document.getElementById('modal-return-slot-picker'), slot => { selectedReturnSlot = slot; });
-      }
-    }));
+  if (returnWrap) {
+    loadRepSlotPicker(document.getElementById('modal-return-slot-picker'), slot => { selectedReturnSlot = slot; });
   }
   const sameAddr = document.getElementById('modal-return-same-address');
   const collectAddr = document.getElementById('modal-collection-address');
@@ -3888,15 +3855,13 @@ function setupProductModalEvents(bundleProduct) {
         serviceExtra = Object.assign({}, serviceExtra, { intake });
       }
 
-      // Item drop-off handoff/return choices — optional, skippable (defaults
-      // to free collection-point both ways). A paid choice needs an address.
-      // No collection leg at all when the buyer sends a file/nothing — the
-      // radios don't exist in the DOM in that case, so this just no-ops.
+      // Item drop-off handoff/return — always rep-collect/deliver now (no
+      // free campus collection-point choice left), both mandatory. No
+      // collection leg at all when the buyer sends a file/nothing — the
+      // address-wrap element doesn't exist in the DOM in that case.
       if (currentModalProduct.fulfillment_type === 'item_dropoff') {
-        const hasCollectionUI = !!document.querySelector('input[name="modal-collection-method"]');
-        const collectionMethod = hasCollectionUI
-          ? (document.querySelector('input[name="modal-collection-method"]:checked')?.value || 'dropoff')
-          : 'none';
+        const hasCollectionUI = !!document.getElementById('modal-collection-address-wrap');
+        const collectionMethod = hasCollectionUI ? 'rep_collect' : 'none';
         const collectionAddressInput = document.getElementById('modal-collection-address');
         const collectionAddress = collectionAddressInput ? collectionAddressInput.value.trim() : '';
         if (collectionMethod === 'rep_collect' && !collectionAddress) {
@@ -3911,7 +3876,8 @@ function setupProductModalEvents(bundleProduct) {
           return;
         }
 
-        const returnMethod = document.querySelector('input[name="modal-return-method"]:checked')?.value || 'pickup_point';
+        const hasReturnUI = !!document.getElementById('modal-return-address-wrap');
+        const returnMethod = hasReturnUI ? 'deliver' : 'none';
         const returnAddressInput = document.getElementById('modal-return-address');
         const returnAddress = returnAddressInput ? returnAddressInput.value.trim() : '';
         if (returnMethod === 'deliver' && !returnAddress) {

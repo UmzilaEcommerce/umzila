@@ -148,59 +148,28 @@
         grid-template-columns: 1fr;
         gap: 30px;
       }
-    }
-    
-    /* ---------- CHECKOUT STEPS ---------- */
-    .checkout-steps {
-      display: flex;
-      gap: 30px;
-      margin-bottom: 40px;
-      padding: 0 20px;
-      max-width: 1200px;
-      margin: 40px auto 30px;
-    }
-    
-    .step {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 600;
-      color: var(--muted);
-      flex: 1;
-    }
-    
-    .step-number {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background: var(--muted);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-    }
-    
-    .step.active .step-number {
-      background: var(--accent);
-    }
-    
-    .step.completed .step-number {
-      background: var(--success);
-    }
-    
-    .step-line {
-      flex: 1;
-      height: 2px;
-      background: var(--muted);
-      margin-left: 10px;
-    }
-    
-    .step:last-child .step-line {
-      display: none;
+      /* Order summary first on mobile — see the total before filling in
+         details, closer to how a delivery-app checkout reads. */
+      .checkout-forms { order: 2; }
+      .order-summary { order: 1; }
     }
     
     /* ---------- CHECKOUT SECTIONS ---------- */
+    /* Field groups within the unified checkout section — a small uppercase
+       eyebrow + divider between contact/delivery/payment, so one long form
+       still reads as three distinct, scannable moments. */
+    .field-group-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 28px 0 12px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    .field-group-label:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+
     .checkout-section {
       background: white;
       border-radius: 12px;
@@ -638,15 +607,6 @@
         padding: 20px;
       }
       
-      .checkout-steps {
-        padding: 0 15px;
-        gap: 15px;
-      }
-      
-      .step-line {
-        display: none;
-      }
-      
       .order-summary {
         position: static;
         margin-top: 30px;
@@ -670,6 +630,43 @@
     .hidden {
       display: none !important;
     }
+
+    /* Quick sign-in shortcut fades out of the way once the buyer starts
+       typing the main form instead — never removed, just de-emphasized. */
+    #quickSigninCard.demoted {
+      opacity: 0.45;
+      transition: opacity 0.2s ease-out;
+    }
+    #quickSigninCard { transition: opacity 0.2s ease-out; }
+
+    /* Adaptive bottom password card — accent border once it recognizes a
+       returning buyer's email, so the state change is visually obvious. */
+    #accountPasswordCard.returning {
+      background: #eef2ff !important;
+      border: 1.5px solid var(--accent);
+    }
+
+    /* Address autocomplete suggestions */
+    .address-suggestions {
+      position: absolute;
+      left: 0; right: 0; top: 100%;
+      z-index: 40;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(16,24,40,0.12);
+      margin-top: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .address-suggestion {
+      padding: 10px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .address-suggestion:last-child { border-bottom: none; }
+    .address-suggestion:hover { background: #f8f9fa; }
     
     .text-center {
       text-align: center;
@@ -699,19 +696,6 @@
       .header-actions { gap: 8px; }
       .header-actions .btn { padding: 7px 10px; font-size: 12px; }
 
-      .checkout-steps {
-        gap: 6px;
-        padding: 0 12px;
-        margin: 20px auto 16px;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        scrollbar-width: none;
-      }
-      .checkout-steps::-webkit-scrollbar { display: none; }
-      .step { flex: 0 0 auto; flex-direction: column; align-items: center; gap: 4px; }
-      .step span { font-size: 11px; }
-      .step-number { width: 26px; height: 26px; font-size: 12px; }
-
       .checkout-layout { margin: 16px auto; gap: 16px; }
       .checkout-section { padding: 16px; margin-bottom: 16px; border-radius: 10px; }
       .section-header h2 { font-size: 16px; }
@@ -721,7 +705,7 @@
       .form-label { font-size: 13px; }
       .btn { font-size: 15px; }
 
-      #continueToPayment, #payNowBtn {
+      #payNowBtn {
         width: 100%;
         padding: 14px 20px;
         font-size: 16px;
@@ -767,24 +751,6 @@
     </div>
   </header>
 
-  <!-- Checkout Steps -->
-  <div class="checkout-steps">
-    <div class="step active" data-step="details">
-      <div class="step-number">1</div>
-      <span>Details</span>
-      <div class="step-line"></div>
-    </div>
-    <div class="step" data-step="shipping">
-      <div class="step-number">2</div>
-      <span>Delivery</span>
-      <div class="step-line"></div>
-    </div>
-    <div class="step" data-step="payment">
-      <div class="step-number">3</div>
-      <span>Pay</span>
-    </div>
-  </div>
-
   <!-- Main Checkout Content -->
   <div class="container">
     <div class="checkout-layout">
@@ -796,18 +762,25 @@
           <p>Loading checkout...</p>
         </div>
 
-        <!-- Details Section — contact info + embedded sign-in. No popup: a
-             guest just fills this in and moves on; signing in is one inline
-             expandable link, never a blocking modal. -->
-        <section id="detailsSection" class="checkout-section hidden">
+        <!-- Unified checkout — contact + delivery + payment, all one view.
+             No popup, no multi-step wizard: a guest fills this in once and
+             hits Pay Now; a returning buyer sees everything pre-filled and
+             collapsed. Signing in is a self-contained inline option, never
+             a blocking modal. -->
+        <section id="checkoutSection" class="checkout-section hidden">
           <div class="section-header">
-            <h2>Your Details</h2>
+            <h2>Checkout</h2>
           </div>
 
-          <div id="inlineSigninBox" style="margin-bottom:14px">
-            <button type="button" id="inlineSigninToggle" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:0">Have an account? Sign in</button>
+          <!-- Path A: explicit "I already have an account" shortcut — fully
+               self-contained (its own email field), works even if nothing
+               else on the page has been touched yet. De-emphasizes itself
+               once the buyer starts typing into the form below instead. -->
+          <div id="quickSigninCard" style="margin-bottom:14px">
+            <button type="button" id="inlineSigninToggle" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:0">Have an account? Sign in for faster checkout</button>
             <div id="inlineSigninForm" class="hidden" style="margin-top:10px;padding:14px;background:#f8f9fa;border-radius:10px">
               <div class="form-group" style="margin-bottom:8px">
+                <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
                 <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
               </div>
               <div id="inlineSigninError" class="error-message hidden"></div>
@@ -818,6 +791,8 @@
           <div id="signedInBox" class="hidden" style="margin-bottom:14px;padding:12px 14px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#166534">
             Signed in as <span id="signedInEmail" style="font-weight:600"></span> · <button type="button" id="signOutInline" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:13px;padding:0">Not you?</button>
           </div>
+
+          <div class="field-group-label">Contact</div>
 
           <div class="form-group">
             <label class="form-label">Email Address <span class="required">*</span></label>
@@ -840,34 +815,9 @@
             <input type="tel" id="phoneNumber" class="form-control" required placeholder="+27 12 345 6789">
           </div>
 
-          <!-- Account-first: the default, prominent path — an account fixes
-               order tracking, service status, and slot changes permanently.
-               Never a hard requirement though — "Skip" always works, so a
-               Supabase Auth hiccup can never cost a sale. Hidden once signed
-               in (via inline sign-in above, or an existing session). -->
-          <div class="form-group" id="detailsAccountCard" style="background:#f0f4ff;border-radius:10px;padding:14px 16px">
-            <div style="font-weight:700;font-size:14px;color:var(--accent);margin-bottom:2px">Create your Umzila account <span style="font-weight:600;color:#16a34a;font-size:12px">Recommended</span></div>
-            <div style="font-size:13px;color:#6b7280;margin-bottom:10px">Track this order, change delivery times, and check out in seconds next time.</div>
-            <input type="password" id="detailsAccountPassword" class="form-control" placeholder="Choose a password (8+ characters)" style="margin-bottom:8px">
-            <div id="detailsAccountError" class="error-message hidden"></div>
-            <div id="detailsAccountMsg" style="font-size:12px;margin-bottom:8px"></div>
-            <div style="font-size:11px;color:#9ca3af">Or just continue below — your order works either way.</div>
-          </div>
-
           <div id="detailsFormError" class="error-message hidden"></div>
-          <div class="text-center mt-4">
-            <button id="continueToDelivery" class="btn" style="padding: 15px 40px; font-size: 16px;">
-              Continue to Delivery
-            </button>
-          </div>
-        </section>
 
-        <!-- Delivery Section -->
-        <section id="shippingSection" class="checkout-section hidden">
-          <div class="section-header">
-            <h2>Delivery</h2>
-            <button class="edit-btn" id="editShipping">Edit</button>
-          </div>
+          <div class="field-group-label">Delivery</div>
 
           <!-- Per-service-item summary, shown when cart has one or more services.
                Content built dynamically by updateServiceBanner() per archetype
@@ -877,30 +827,23 @@
                made in the product modal at add-to-cart time. -->
           <div id="serviceDropoffBanner" style="display:none;margin-bottom:16px"></div>
 
+          <!-- Compact "Deliver to" card — shown only when a returning buyer
+               has BOTH a saved address AND a saved delivery zone on file, so
+               there's genuinely nothing left to (re)confirm. Anything less
+               complete just falls through to the full form below. -->
+          <div id="addressCompactCard" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div style="font-size:14px;color:#1a1a2e"><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
+            <button type="button" id="changeAddressBtn" style="background:none;border:none;color:var(--accent);font-weight:600;font-size:13px;cursor:pointer;padding:0;white-space:nowrap">Change</button>
+          </div>
+
+          <div id="addressFormFull">
           <div id="shippingForm">
-            <!-- Delivery method choice -->
+            <!-- Delivery method — delivery-only, no pickup option -->
             <div class="form-group" id="deliveryMethodGroup">
-              <label class="form-label">How would you like to receive your order? <span class="required">*</span></label>
-              <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
-                <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:12px 14px;border:2px solid #e5e7eb;border-radius:10px;transition:border-color .15s" id="radioLabelPickup">
-                  <input type="radio" name="deliveryMethod" value="pickup" id="methodPickup" style="margin-top:3px;accent-color:var(--accent)">
-                  <div>
-                    <div style="font-weight:600;font-size:14px">Collect at UKZN Westville campus</div>
-                    <div style="font-size:12px;color:#6b7280;margin-top:2px">Pick up your order at the Umzila collection point on campus</div>
-                  </div>
-                </label>
-                <label style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;padding:12px 14px;border:2px solid var(--accent);border-radius:10px;transition:border-color .15s" id="radioLabelDeliver">
-                  <input type="radio" name="deliveryMethod" value="deliver" id="methodDeliver" checked style="margin-top:3px;accent-color:var(--accent)">
-                  <div>
-                    <div style="font-weight:600;font-size:14px">Deliver to my address</div>
-                    <div style="font-size:12px;color:#6b7280;margin-top:2px">Delivered to a nearby area (fee based on parcel size)</div>
-                  </div>
-                </label>
-              </div>
               <div id="estimatedDeliveryTime" style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border-radius:8px;font-size:13px;color:#166534;display:none"></div>
             </div>
 
-            <!-- Address-only fields (hidden for pickup) -->
+            <!-- Address-only fields -->
             <div id="zoneSection">
               <!-- Delivery area restriction banner -->
               <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#856404;line-height:1.5">
@@ -920,7 +863,7 @@
               </div>
             </div>
 
-            <!-- Address fields — hidden when pickup is selected -->
+            <!-- Address fields -->
             <div id="addressSection">
               <div class="form-group">
                 <label class="form-label">Shipping Address <span class="required">*</span></label>
@@ -961,29 +904,7 @@
               </div>
             </div>
           </div>
-
-          <div id="shippingReview" class="hidden">
-            <div class="shipping-review-content">
-              <!-- Shipping details will be shown here when in review mode -->
-            </div>
-          </div>
-
           <div id="shippingFormError" class="error-message hidden"></div>
-          <div class="text-center mt-4">
-            <button id="continueToPayment" class="btn" style="padding: 15px 40px; font-size: 16px;">
-              Continue to Payment
-            </button>
-          </div>
-        </section>
-
-        <!-- Payment Section -->
-        <section id="paymentSection" class="checkout-section hidden">
-          <div class="section-header">
-            <h2>Payment Method</h2>
-            <div>
-              <button class="edit-btn" id="editDetails">Edit Details</button>
-              <button class="edit-btn" id="editDeliveryFromPay">Edit Delivery</button>
-            </div>
           </div>
 
           <!-- Completeness gate — a service left unfinished (e.g. a required
@@ -996,21 +917,7 @@
             <div id="checkoutBlockersList"></div>
           </div>
 
-          <!-- Optional, non-blocking — only shown when checking out as a guest.
-               Never gates Pay Now; skipping this produces a normal guest order. -->
-          <div id="accountCreateCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#f8f9fa;border-radius:10px">
-            <div style="font-weight:600;font-size:14px;margin-bottom:2px">Save your details for next time <span style="font-weight:400;color:#6b7280">(optional)</span></div>
-            <div style="font-size:13px;color:#6b7280;margin-bottom:10px">Create a password to track this order and check out faster later.</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <input type="password" id="accountCreatePassword" class="form-control" placeholder="At least 8 characters" style="max-width:220px">
-              <button type="button" id="accountCreateBtn" class="btn" style="padding:10px 18px;font-size:14px">Create account</button>
-            </div>
-            <div id="accountCreateMsg" style="font-size:12px;margin-top:8px"></div>
-            <div style="font-size:11px;color:#9ca3af;margin-top:6px">Or skip this — your order works either way.</div>
-          </div>
-          <div id="accountReadyMsg" class="hidden" style="margin-bottom:16px;padding:12px 14px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#166534">
-            ✓ Account ready — this order will be saved to it.
-          </div>
+          <div class="field-group-label">Payment</div>
 
           <div class="payment-methods">
             <div class="payment-method selected" data-method="payfast">
@@ -1029,12 +936,42 @@
 
           <div class="form-group">
             <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+              <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
+              <span>Save my card for faster checkout next time</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
               <input type="checkbox" id="termsAgreement" required style="width: auto;">
               <span>I agree to the <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a></span>
             </label>
           </div>
 
+          <!-- Path B: adaptive password field bound to the customerEmail
+               field above, for anyone who didn't use the quick sign-in
+               shortcut. Flips between "create a password" (new email) and
+               "welcome back, sign in" (email matches an existing account)
+               via setAccountCardState(). Hidden entirely once signed in. -->
+          <div id="accountPasswordCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#f8f9fa;border-radius:10px">
+            <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
+            <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
+              <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
+              <button type="button" id="accountPasswordForgot" class="hidden" style="background:none;border:none;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px;padding:0">Forgot password?</button>
+            </div>
+            <div id="accountPasswordError" class="error-message hidden" style="margin-top:8px"></div>
+          </div>
+
           <div id="paymentError" class="error-message hidden"></div>
+
+          <div class="form-group" id="savedCardGroup" style="display:none">
+            <button type="button" id="payWithSavedCardBtn" class="btn" style="width:100%;padding:14px;background:var(--color-ink-navy,#0a2f66)">
+              Pay with saved card
+            </button>
+            <div class="text-muted mt-2" style="font-size:12px;text-align:center">or pay another way below</div>
+          </div>
 
           <div class="text-center mt-4">
             <button id="payNowBtn" class="btn" style="padding: 15px 50px; font-size: 18px; background: var(--cta);">
@@ -1135,8 +1072,7 @@
     // ── Delivery pricing constants (edit here to update rates) ──────────────
     const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
     const PER_SELLER_FEE          = 3;
-    const FREE_DELIVERY_THRESHOLD = 250; // subtotal >= this → delivery free
-    const PICKUP_FEE              = 0;   // fixed fee for campus collection
+    const FREE_DELIVERY_THRESHOLD = 600; // subtotal >= this → delivery free
     // Quantity-aware fee stepping — must match validate-cart.js exactly.
     // "How many fit in one delivery trip before it needs a bigger bag" —
     // most sellers never override units_per_trip, these are the platform
@@ -1284,28 +1220,22 @@
 
     /**
      * calculateDeliveryFee — cart-aware delivery fee
-     * Returns { fee, maxClass, uniqueSellers, isFree, isPickup }
+     * Returns { fee, maxClass, uniqueSellers, isFree }
      */
-    function calculateDeliveryFee(cartItems, subtotal, deliveryMethodType) {
-      const isPickup = deliveryMethodType === 'pickup';
+    function calculateDeliveryFee(cartItems, subtotal) {
       // Services never drive delivery fee — only physical products do
       const productItems = (cartItems || []).filter(i => (i.listing_type || 'product') !== 'service');
       // Admin-flagged free-delivery items (in-house/residence resellers) never
       // contribute a parcel class or a seller to the surcharge — see admin.html.
       const feeItems = productItems.filter(i => !i.free_delivery);
-      if (isPickup) {
-        // Pickup is free for service-only carts (no product to pick up)
-        if (!productItems.length) return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: true, serviceOnly: true };
-        return { fee: PICKUP_FEE, maxClass: 'small', uniqueSellers: 0, isFree: false, isPickup: true };
-      }
       if (!productItems.length)
-        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false, serviceOnly: true };
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, serviceOnly: true };
       if (productItems.length && !feeItems.length)
-        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false, allFreeDelivery: true };
-      // Free-delivery items still count toward the R250 threshold — the
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, allFreeDelivery: true };
+      // Free-delivery items still count toward the R600 threshold — the
       // threshold is a subtotal-size signal, unrelated to who ships what.
       if (subtotal >= FREE_DELIVERY_THRESHOLD)
-        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, isPickup: false };
+        return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true };
 
       const classOrder = { small: 0, medium: 1, large: 2 };
       const classNames = ['small', 'medium', 'large'];
@@ -1330,13 +1260,13 @@
       const maxClass = classNames[maxClassIdx];
       const uniqueSellers = Math.max(sellerIds.size, 1);
       const fee = Math.min(MAX_DELIVERY_FEE, DELIVERY_CLASS_PRICES[maxClass] + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE);
-      return { fee: Math.max(0, fee), maxClass, uniqueSellers, extraTrips, isFree: false, isPickup: false };
+      return { fee: Math.max(0, fee), maxClass, uniqueSellers, extraTrips, isFree: false };
     }
 
     /**
      * calculateServiceFees — flat per-line collection/return fees for
-     * item_dropoff services. Never affected by pickup mode or the R250
-     * threshold — those are product-delivery concepts, not service ones.
+     * item_dropoff services. Never affected by the R600
+     * threshold — that's a product-delivery concept, not a service one.
      * This is the live/optimistic preview; validate-cart.js prices the
      * authoritative amount actually charged (see handlePayment).
      */
@@ -1387,7 +1317,7 @@
       deliveryClass: 'small',
       uniqueSellerCount: 0,
       selectedZone: null,        // delivery zone code
-      deliveryMethodType: 'deliver', // 'pickup' or 'deliver'
+      deliveryMethodType: 'deliver', // delivery-only, no pickup option
       sellerTurnarounds: []      // [{ id, turnaround_time }] for estimated delivery display
     };
     
@@ -1399,31 +1329,27 @@
       loadingState: document.getElementById('loadingState'),
       
       // Sections
-      detailsSection: document.getElementById('detailsSection'),
-      shippingSection: document.getElementById('shippingSection'),
-      paymentSection: document.getElementById('paymentSection'),
+      checkoutSection: document.getElementById('checkoutSection'),
       confirmationSection: document.getElementById('confirmationSection'),
 
-      // Details Form
+      // Contact fields
       customerEmail: document.getElementById('customerEmail'),
       firstName: document.getElementById('firstName'),
       lastName: document.getElementById('lastName'),
       phoneNumber: document.getElementById('phoneNumber'),
-      continueToDelivery: document.getElementById('continueToDelivery'),
       detailsFormError: document.getElementById('detailsFormError'),
-      detailsAccountCard: document.getElementById('detailsAccountCard'),
-      detailsAccountPassword: document.getElementById('detailsAccountPassword'),
-      detailsAccountError: document.getElementById('detailsAccountError'),
-      detailsAccountMsg: document.getElementById('detailsAccountMsg'),
 
-      // Shipping/Delivery Form
+      // Delivery — compact card vs full form
+      addressCompactCard: document.getElementById('addressCompactCard'),
+      compactAddressText: document.getElementById('compactAddressText'),
+      changeAddressBtn: document.getElementById('changeAddressBtn'),
+      addressFormFull: document.getElementById('addressFormFull'),
       shippingAddress: document.getElementById('shippingAddress'),
       city: document.getElementById('city'),
       postalCode: document.getElementById('postalCode'),
       provinceSelect: document.getElementById('provinceSelect'),
       shippingCost: document.getElementById('shippingCost'),
       deliveryInstructions: document.getElementById('deliveryInstructions'),
-      continueToPayment: document.getElementById('continueToPayment'),
       shippingFormError: document.getElementById('shippingFormError'),
 
       // Payment Form
@@ -1431,6 +1357,15 @@
       termsAgreement: document.getElementById('termsAgreement'),
       payNowBtn: document.getElementById('payNowBtn'),
       paymentError: document.getElementById('paymentError'),
+
+      // Adaptive account/password card (Path B)
+      accountPasswordCard: document.getElementById('accountPasswordCard'),
+      accountPasswordTitle: document.getElementById('accountPasswordTitle'),
+      accountPasswordHint: document.getElementById('accountPasswordHint'),
+      accountPasswordInput: document.getElementById('accountPasswordInput'),
+      accountPasswordSigninBtn: document.getElementById('accountPasswordSigninBtn'),
+      accountPasswordForgot: document.getElementById('accountPasswordForgot'),
+      accountPasswordError: document.getElementById('accountPasswordError'),
 
       // Order Summary
       orderItems: document.getElementById('orderItems'),
@@ -1448,10 +1383,12 @@
       confirmationEmail: document.getElementById('confirmationEmail'),
       viewOrderBtn: document.getElementById('viewOrderBtn'),
 
-      // Authentication — embedded inline, no modal
+      // Authentication — Path A (quick shortcut, self-contained) + session UI
       authBtn: document.getElementById('authBtn'),
+      quickSigninCard: document.getElementById('quickSigninCard'),
       inlineSigninToggle: document.getElementById('inlineSigninToggle'),
       inlineSigninForm: document.getElementById('inlineSigninForm'),
+      inlineSigninEmail: document.getElementById('inlineSigninEmail'),
       inlineSigninPassword: document.getElementById('inlineSigninPassword'),
       inlineSigninSubmit: document.getElementById('inlineSigninSubmit'),
       inlineSigninError: document.getElementById('inlineSigninError'),
@@ -1459,15 +1396,7 @@
       signedInBox: document.getElementById('signedInBox'),
       signedInEmail: document.getElementById('signedInEmail'),
       signOutInline: document.getElementById('signOutInline'),
-      accountCreateCard: document.getElementById('accountCreateCard'),
-      accountCreatePassword: document.getElementById('accountCreatePassword'),
-      accountCreateBtn: document.getElementById('accountCreateBtn'),
-      accountCreateMsg: document.getElementById('accountCreateMsg'),
-      accountReadyMsg: document.getElementById('accountReadyMsg'),
 
-      // Steps
-      steps: document.querySelectorAll('.step'),
-      
       // PayFast Form
       payfastForm: document.getElementById('payfastForm')
     };
@@ -1661,24 +1590,50 @@
     // Load profile data into form
     function loadProfileData() {
       if (!state.profile) return;
-      
-      elements.firstName.value = state.profile.first_name || '';
-      elements.lastName.value = state.profile.last_name || '';
-      elements.customerEmail.value = state.user?.email || state.profile.email || '';
-      elements.phoneNumber.value = state.profile.phone || '';
-      
-      if (state.profile.address) {
-        elements.shippingAddress.value = state.profile.address;
-      }
-      if (state.profile.city) {
-        elements.city.value = state.profile.city;
-      }
-      if (state.profile.postal_code) {
-        elements.postalCode.value = state.profile.postal_code;
-      }
+
+      // Merge-fill: only fill fields the buyer hasn't already typed into
+      // themselves (e.g. they started typing before a Path B sign-in
+      // resolved) — never clobber something they wrote.
+      const fill = (el, value) => { if (el && !el.value && value) el.value = value; };
+      fill(elements.firstName, state.profile.first_name);
+      fill(elements.lastName, state.profile.last_name);
+      if (!elements.customerEmail.value) elements.customerEmail.value = state.user?.email || state.profile.email || '';
+      fill(elements.phoneNumber, state.profile.phone);
+      fill(elements.shippingAddress, state.profile.address);
+      fill(elements.city, state.profile.city);
+      fill(elements.postalCode, state.profile.postal_code);
       if (state.profile.province) {
         elements.provinceSelect.value = state.profile.province;
         selectProvince(state.profile.province);
+      }
+      if (state.profile.delivery_zone) {
+        const zoneSelect = document.getElementById('deliveryZoneSelect');
+        if (zoneSelect) zoneSelect.value = state.profile.delivery_zone;
+        state.selectedZone = state.profile.delivery_zone;
+      }
+
+      renderAddressCard();
+
+      // Offer the one-click "pay with saved card" fast-path when this buyer
+      // already has a PayFast token on file from a prior tokenized checkout.
+      const savedCardGroup = document.getElementById('savedCardGroup');
+      if (savedCardGroup) savedCardGroup.style.display = state.profile.payfast_token ? '' : 'none';
+    }
+
+    // Compact "Deliver to" card — only when address AND zone are BOTH on
+    // file (a legacy profile missing just the zone still needs one field
+    // confirmed, so it falls through to the full form instead of a lie).
+    function renderAddressCard() {
+      const p = state.profile;
+      const hasFullAddress = p && p.address && p.city && p.province && p.postal_code && p.delivery_zone;
+      if (!elements.addressCompactCard || !elements.addressFormFull) return;
+      if (hasFullAddress) {
+        elements.compactAddressText.textContent = `${p.address}, ${p.city} · ${p.delivery_zone}`;
+        elements.addressCompactCard.classList.remove('hidden');
+        elements.addressFormFull.classList.add('hidden');
+      } else {
+        elements.addressCompactCard.classList.add('hidden');
+        elements.addressFormFull.classList.remove('hidden');
       }
     }
     
@@ -1699,21 +1654,23 @@
           elements.signedInBox.classList.remove('hidden');
           if (elements.signedInEmail) elements.signedInEmail.textContent = user.email;
         }
-        if (elements.inlineSigninBox) document.getElementById('inlineSigninBox').classList.add('hidden');
-        if (elements.accountCreateCard) elements.accountCreateCard.classList.add('hidden');
-        if (elements.accountReadyMsg) elements.accountReadyMsg.classList.add('hidden');
-        if (elements.detailsAccountCard) elements.detailsAccountCard.classList.add('hidden');
+        // Both auth entry points are moot once actually signed in.
+        elements.quickSigninCard?.classList.add('hidden');
+        elements.accountPasswordCard?.classList.add('hidden');
 
         // Sync cart on login
         syncCartOnLogin(user);
     } else {
         elements.authBtn.textContent = 'Sign In';
-        elements.authBtn.onclick = () => { goToStep('details'); expandInlineSignin(); };
+        elements.authBtn.onclick = () => { goToStep('checkout'); expandInlineSignin(); };
         elements.customerEmail.readOnly = false;
         if (elements.signedInBox) elements.signedInBox.classList.add('hidden');
-        const inlineBox = document.getElementById('inlineSigninBox');
-        if (inlineBox) inlineBox.classList.remove('hidden');
-        if (elements.detailsAccountCard) elements.detailsAccountCard.classList.remove('hidden');
+        elements.quickSigninCard?.classList.remove('hidden');
+        elements.quickSigninCard?.classList.remove('demoted');
+        elements.quickSigninCard?.removeAttribute('data-expanded');
+        elements.inlineSigninForm?.classList.add('hidden');
+        state.emailExists = false;
+        setAccountCardState('hidden');
     }
 }
 	
@@ -1821,15 +1778,237 @@ async function saveCartToServer() {
 }
 
 
-    // Expand the inline "Have an account? Sign in" box on the Details step —
-    // replaces the old auto-popping auth modal. Never blocks the page.
+    // Expand the inline "Have an account? Sign in" box — replaces the old
+    // auto-popping auth modal. Never blocks the page. Marked "expanded" so
+    // demoteQuickSigninCard() knows not to fade it while the buyer is using it.
     function expandInlineSignin() {
       const form = elements.inlineSigninForm;
       if (!form) return;
       form.classList.remove('hidden');
-      if (elements.inlineSigninPassword) elements.inlineSigninPassword.focus();
+      elements.quickSigninCard?.classList.remove('demoted');
+      elements.quickSigninCard?.setAttribute('data-expanded', 'true');
+      if (elements.inlineSigninEmail && !elements.inlineSigninEmail.value) {
+        elements.inlineSigninEmail.focus();
+      } else if (elements.inlineSigninPassword) {
+        elements.inlineSigninPassword.focus();
+      }
     }
-    
+
+    // Anti-clutter: once the buyer starts typing the main form themselves,
+    // a collapsed quick-signin shortcut fades out of the way (it's not what
+    // they're doing right now) — but leave an *expanded* one alone since
+    // they deliberately opened it.
+    function demoteQuickSigninCard() {
+      const card = elements.quickSigninCard;
+      if (!card || card.getAttribute('data-expanded') === 'true') return;
+      card.classList.add('demoted');
+    }
+
+    // ── Path B: adaptive bottom password card ──────────────────────────
+    // Debounced live check of the main email field against
+    // check-email-exists.js. Never blocks checkout — any failure just
+    // falls back to the "new" state.
+    let emailCheckTimer = null;
+    let emailCheckAbort = null;
+    let emailCheckedValue = '';
+    state.emailExists = false;
+
+    function checkEmailDebounced() {
+      clearTimeout(emailCheckTimer);
+      const email = elements.customerEmail.value.trim();
+      if (!isValidEmail(email)) { setAccountCardState('hidden'); return; }
+      emailCheckTimer = setTimeout(async () => {
+        if (email === emailCheckedValue) return;
+        emailCheckAbort?.abort();
+        emailCheckAbort = new AbortController();
+        try {
+          const res = await fetch('/.netlify/functions/check-email-exists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+            signal: emailCheckAbort.signal
+          });
+          const json = await res.json().catch(() => ({ exists: false }));
+          emailCheckedValue = email;
+          state.emailExists = !!json.exists;
+          setAccountCardState(state.emailExists ? 'returning' : 'new');
+        } catch (e) {
+          if (e.name !== 'AbortError') setAccountCardState('new');
+        }
+      }, 500);
+    }
+
+    // Renders the adaptive card and applies the anti-clutter rule: once the
+    // bottom card is confidently "returning", the top quick-signin shortcut
+    // hides — two sign-in prompts on screen at once is confusing when one
+    // is already exactly where the buyer's attention is.
+    function setAccountCardState(mode) {
+      if (state.user) { elements.accountPasswordCard?.classList.add('hidden'); return; }
+      const card = elements.accountPasswordCard;
+      if (!card) return;
+      if (mode === 'hidden') {
+        card.classList.add('hidden');
+        return;
+      }
+      card.classList.remove('hidden');
+      card.classList.toggle('returning', mode === 'returning');
+      elements.accountPasswordInput.value = '';
+      elements.accountPasswordError.classList.add('hidden');
+      if (mode === 'returning') {
+        elements.accountPasswordTitle.textContent = 'Welcome back — enter your password to sign in';
+        elements.accountPasswordHint.textContent = 'This email already has an Umzila account.';
+        elements.accountPasswordInput.required = true;
+        elements.accountPasswordSigninBtn.classList.remove('hidden');
+        elements.accountPasswordForgot.classList.remove('hidden');
+        elements.quickSigninCard?.classList.add('hidden');
+      } else {
+        elements.accountPasswordTitle.textContent = 'Create a password to track your order';
+        elements.accountPasswordHint.textContent = 'Optional — leave blank to check out as a guest.';
+        elements.accountPasswordInput.required = false;
+        elements.accountPasswordSigninBtn.classList.add('hidden');
+        elements.accountPasswordForgot.classList.add('hidden');
+        elements.quickSigninCard?.classList.remove('hidden');
+      }
+    }
+
+    // Called right before order preparation (both the redirect flow and the
+    // saved-card one-click flow) — the single branch point for
+    // sign-in / create-account / continue-as-guest. Returns true if it's OK
+    // to proceed, false if it already showed a blocking inline error.
+    async function handleAccountPasswordSubmit() {
+      if (state.user) return true;
+      const email = elements.customerEmail.value.trim();
+      const password = elements.accountPasswordInput?.value || '';
+
+      if (state.emailExists) {
+        if (!password) {
+          showError(elements.accountPasswordError, 'This email has an account — sign in above, or use a different email.');
+          return false;
+        }
+        try {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          state.user = data.user;
+          await verifyUserProfile(data.user.id);
+          updateAuthUI(data.user);
+          return true;
+        } catch (error) {
+          showError(elements.accountPasswordError, error.message || 'Wrong email or password.');
+          return false;
+        }
+      }
+
+      // New email — account creation is optional and never blocks the order.
+      if (password && supabaseClient) {
+        const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
+        try {
+          const { data, error } = await supabaseClient.auth.signUp({
+            email, password, options: { data: { full_name: fullName } }
+          });
+          if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
+            // Race: became registered between the live check and submit.
+            state.emailExists = true;
+            setAccountCardState('returning');
+            showError(elements.accountPasswordError, 'This email already has an account — enter your password to sign in.');
+            return false;
+          } else if (!error && data.user && data.session) {
+            state.user = data.user;
+            await verifyUserProfile(data.user.id);
+            updateAuthUI(data.user);
+          } else if (!error) {
+            showNotification('Account created — check your email to verify it. Your order will still go through as normal.', 'success');
+          }
+          // Any other signup error fails open — continue as guest.
+        } catch (e) {
+          console.warn('Account creation error, continuing as guest', e);
+        }
+      }
+      return true;
+    }
+
+    /********************
+     * ADDRESS AUTOCOMPLETE (OpenStreetMap Photon — free, no key)
+     ********************/
+    // Biased near UKZN Westville campus so results are relevant to who's
+    // actually shopping here, without needing any signup/API key anywhere.
+    const CAMPUS_LAT = -29.8175;
+    const CAMPUS_LON = 30.9436;
+
+    function wireAddressAutocomplete(inputEl, onSelect) {
+      if (!inputEl) return;
+      let debounceTimer = null;
+      let abortCtrl = null;
+
+      const dropdown = document.createElement('div');
+      dropdown.className = 'address-suggestions hidden';
+      inputEl.parentNode.style.position = inputEl.parentNode.style.position || 'relative';
+      inputEl.parentNode.appendChild(dropdown);
+
+      function closeDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+      }
+
+      inputEl.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = inputEl.value.trim();
+        if (query.length < 3) { closeDropdown(); return; }
+        debounceTimer = setTimeout(async () => {
+          abortCtrl?.abort();
+          abortCtrl = new AbortController();
+          try {
+            const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}`;
+            const res = await fetch(url, { signal: abortCtrl.signal });
+            const data = await res.json();
+            const features = (data && data.features) || [];
+            if (!features.length) { closeDropdown(); return; }
+            dropdown.innerHTML = features.map((f, i) => {
+              const p = f.properties || {};
+              const label = [p.housenumber, p.street || p.name, p.city].filter(Boolean).join(' ');
+              return `<div class="address-suggestion" data-idx="${i}">${escapeHtmlLite(label || 'Unknown address')}</div>`;
+            }).join('');
+            dropdown.classList.remove('hidden');
+            dropdown.querySelectorAll('.address-suggestion').forEach(el => {
+              el.addEventListener('click', () => {
+                const feature = features[Number(el.dataset.idx)];
+                if (feature) onSelect(feature.properties || {});
+                closeDropdown();
+              });
+            });
+          } catch (e) {
+            if (e.name !== 'AbortError') closeDropdown();
+          }
+        }, 400);
+      });
+
+      document.addEventListener('click', (e) => {
+        if (e.target !== inputEl && !dropdown.contains(e.target)) closeDropdown();
+      });
+    }
+
+    // Maps a picked Photon feature onto the address form fields. Zone is
+    // never auto-picked (Photon has no concept of DELIVERY_ZONES) — at most
+    // a loose keyword pre-highlight, always left for the buyer to confirm
+    // since it gates the existing hard deliveryZoneError validation.
+    function applyAddressSuggestion(props) {
+      const streetLine = [props.housenumber, props.street || props.name].filter(Boolean).join(' ');
+      if (streetLine) elements.shippingAddress.value = streetLine;
+      if (props.city) elements.city.value = props.city;
+      if (props.postcode) elements.postalCode.value = props.postcode;
+      if (props.state) {
+        const match = Array.from(elements.provinceSelect.options).find(o =>
+          o.value && (props.state.includes(o.value) || o.value.includes(props.state))
+        );
+        if (match) { elements.provinceSelect.value = match.value; selectProvince(match.value); }
+      }
+      if (props.city || props.street) {
+        const zoneSelect = document.getElementById('deliveryZoneSelect');
+        const haystack = `${props.street || ''} ${props.name || ''}`.toLowerCase();
+        const zoneMatch = DELIVERY_ZONES.find(z => haystack.includes(z.name.toLowerCase().split(' ')[0]));
+        if (zoneSelect && zoneMatch && !zoneSelect.value) zoneSelect.value = zoneMatch.code;
+      }
+    }
+
     /********************
      * CART MANAGEMENT WITH PRODUCT IMAGES
      ********************/
@@ -2233,7 +2412,6 @@ async function validateCheckout() {
         }
         
         // Send cart to server for validation
-        const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
         const response = await fetch('/.netlify/functions/validate-cart', {
             method: 'POST',
             headers: {
@@ -2241,8 +2419,7 @@ async function validateCheckout() {
             },
             body: JSON.stringify({
                 cartItems: state.cart,
-                userId: state.user?.id,
-                deliveryMethod: deliveryMethodType
+                userId: state.user?.id
             })
         });
 
@@ -2353,9 +2530,7 @@ async function validateCheckout() {
 
       // Use enriched validated cart when available; fall back to raw cart
       const cartForFee = (state.validatedCart && state.validatedCart.length) ? state.validatedCart : state.cart;
-      const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
-      state.deliveryMethodType = deliveryMethodType;
-      const { fee, maxClass, uniqueSellers, isFree, isPickup, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal, deliveryMethodType);
+      const { fee, maxClass, uniqueSellers, isFree, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal);
       const svcFees = calculateServiceFees(cartForFee);
       state.deliveryFee       = fee + svcFees.total;
       state.deliveryClass     = maxClass;
@@ -2384,9 +2559,6 @@ async function validateCheckout() {
       if (cartForFee.length === 0) {
         shippingEl.textContent = '—';
         if (breakdownEl) breakdownEl.style.display = 'none';
-      } else if (isPickup) {
-        shippingEl.textContent = formatCurrency(PICKUP_FEE);
-        if (breakdownEl) { breakdownEl.textContent = 'Campus collection · UKZN Westville'; breakdownEl.style.display = 'block'; }
       } else if (isFree) {
         const cartNow = state.validatedCart || state.cart;
         const svcOnly = cartHasServices(cartNow) && !cartHasProducts(cartNow);
@@ -2404,7 +2576,7 @@ async function validateCheckout() {
           breakdownEl.style.display = 'block';
         }
       }
-      if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1 && !isPickup) ? 'inline' : 'none';
+      if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1) ? 'inline' : 'none';
       refreshEstimatedTime();
 
       // Discount display
@@ -2458,15 +2630,14 @@ async function validateCheckout() {
       };
 
       const maxMins = Math.max(...state.sellerTurnarounds.map(s => toMins(s.turnaround_time)));
-      const isPickup = (state.deliveryMethodType || 'deliver') === 'pickup';
 
       let label;
-      if (maxMins <= 60)        label = isPickup ? 'Ready for pickup in ~1–3 hours'          : 'Estimated delivery in ~2–4 hours';
-      else if (maxMins <= 120)  label = isPickup ? 'Ready for pickup in ~2–4 hours'          : 'Estimated delivery in ~3–5 hours';
-      else if (maxMins <= 240)  label = isPickup ? 'Ready for pickup in ~4–6 hours'          : 'Estimated delivery today';
-      else if (maxMins <= 480)  label = isPickup ? 'Ready for pickup same day'                : 'Estimated delivery today';
-      else if (maxMins <= 1440) label = isPickup ? 'Ready for pickup next business day'       : 'Estimated delivery next business day';
-      else                      label = isPickup ? 'Ready for pickup in 2–3 days'             : 'Estimated delivery in 2–3 days';
+      if (maxMins <= 60)        label = 'Estimated delivery in ~2–4 hours';
+      else if (maxMins <= 120)  label = 'Estimated delivery in ~3–5 hours';
+      else if (maxMins <= 240)  label = 'Estimated delivery today';
+      else if (maxMins <= 480)  label = 'Estimated delivery today';
+      else if (maxMins <= 1440) label = 'Estimated delivery next business day';
+      else                      label = 'Estimated delivery in 2–3 days';
 
       el.textContent = `🕒 ${label}`;
       el.style.display = 'block';
@@ -2524,13 +2695,13 @@ async function validateCheckout() {
           var opts = item.service_options || {};
           var intakeKind = item.intake_kind || 'item';
           var showCollection = intakeKind === 'item';
-          var collectLabel = opts.collection_method === 'rep_collect'
-            ? 'Rep collects from ' + escapeHtmlLite(opts.collection_address || '') + (opts.collection_slot_start ? ' · ' + formatSAST(opts.collection_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
-            : 'Drop off at campus collection point — Free';
+          var collectLabel = opts.collection_address
+            ? 'Rep collects from ' + escapeHtmlLite(opts.collection_address) + (opts.collection_slot_start ? ' · ' + formatSAST(opts.collection_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
+            : 'Rep collects from your address — R15';
           var showReturn = item.item_returned !== false;
-          var returnLabel = opts.return_method === 'deliver'
-            ? 'Deliver to ' + escapeHtmlLite(opts.return_address || '') + (opts.return_slot_start ? ' · ' + formatSAST(opts.return_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
-            : 'Pick up at campus collection point — Free';
+          var returnLabel = opts.return_address
+            ? 'Delivered to ' + escapeHtmlLite(opts.return_address) + (opts.return_slot_start ? ' · ' + formatSAST(opts.return_slot_start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '') + ' — R15'
+            : 'Delivered to your address — R15';
           body = (showCollection
               ? '<div style="margin-top:6px">Handoff: <strong>' + collectLabel + '</strong> <button type="button" class="svc-change-btn" data-svc-id="' + item.id + '" data-svc-field="collection" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:12px;padding:0">Change</button></div>'
               : '<div style="margin-top:6px">' + (intakeKind === 'file' ? '📄 No collection — buyer sent a file' : '🙌 Nothing to collect — seller makes it') + '</div>')
@@ -2654,68 +2825,44 @@ async function validateCheckout() {
             ? (opts.collection_slot_start ? { start: opts.collection_slot_start, end: opts.collection_slot_end } : null)
             : (opts.return_slot_start ? { start: opts.return_slot_start, end: opts.return_slot_end } : null);
 
+          // Collection/return is always rep/bike-handled now — no free
+          // campus drop-off/pickup-point choice left, just the address+slot.
           if (field === 'collection') {
-            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Getting your item to us</div>'
-              + '<label style="display:block;margin-bottom:4px;cursor:pointer"><input type="radio" name="svc-collect-' + svcId + '" value="dropoff"' + (opts.collection_method !== 'rep_collect' ? ' checked' : '') + '> I\'ll drop it off — Free</label>'
-              + '<label style="display:block;cursor:pointer"><input type="radio" name="svc-collect-' + svcId + '" value="rep_collect"' + (opts.collection_method === 'rep_collect' ? ' checked' : '') + '> Collect it from me — R15</label>'
-              + '<div class="svc-slot-fields" style="display:' + (opts.collection_method === 'rep_collect' ? 'block' : 'none') + '">'
+            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">A rep will collect this item from your address — R15</div>'
               + '<input type="text" class="svc-collect-addr" placeholder="e.g. Santa Cruz Res, Block B, Room 214" value="' + escapeHtmlLite(opts.collection_address || '') + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:8px 10px;border:1px solid #d9d9df;border-radius:6px;font-size:13px">'
               + '<label style="display:block;font-size:12px;color:#374151;margin:8px 0 4px">When should they come?</label>'
               + '<div class="svc-slot-picker" style="font-size:13px;color:#6b7280">Loading available times…</div>'
-              + '</div>'
               + '<button type="button" class="svc-save-btn" style="margin-top:8px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Save</button>';
           } else {
-            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Getting it back to you</div>'
-              + '<label style="display:block;margin-bottom:4px;cursor:pointer"><input type="radio" name="svc-return-' + svcId + '" value="pickup_point"' + (opts.return_method !== 'deliver' ? ' checked' : '') + '> I\'ll pick it up — Free</label>'
-              + '<label style="display:block;cursor:pointer"><input type="radio" name="svc-return-' + svcId + '" value="deliver"' + (opts.return_method === 'deliver' ? ' checked' : '') + '> Deliver it to me — R15</label>'
-              + '<div class="svc-slot-fields" style="display:' + (opts.return_method === 'deliver' ? 'block' : 'none') + '">'
+            panel.innerHTML = '<div style="font-weight:600;margin-bottom:6px;font-size:12px">Delivered back to you — R15</div>'
               + '<input type="text" class="svc-return-addr" placeholder="e.g. Santa Cruz Res, Block B, Room 214" value="' + escapeHtmlLite(opts.return_address || '') + '" style="width:100%;box-sizing:border-box;margin-top:6px;padding:8px 10px;border:1px solid #d9d9df;border-radius:6px;font-size:13px">'
               + '<label style="display:block;font-size:12px;color:#374151;margin:8px 0 4px">When should we deliver?</label>'
               + '<div class="svc-slot-picker" style="font-size:13px;color:#6b7280">Loading available times…</div>'
-              + '</div>'
               + '<button type="button" class="svc-save-btn" style="margin-top:8px;padding:6px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">Save</button>';
           }
           panel.classList.remove('hidden');
-
-          let slotPickerLoaded = false;
-          const maybeLoadSlotPicker = () => {
-            if (slotPickerLoaded) return;
-            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
-            if (checked !== 'rep_collect' && checked !== 'deliver') return;
-            slotPickerLoaded = true;
-            loadRepSlotPickerCheckout(panel.querySelector('.svc-slot-picker'), slot => { pickedSlot = slot; }, pickedSlot);
-          };
-          maybeLoadSlotPicker();
-
-          panel.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => {
-            const slotFields = panel.querySelector('.svc-slot-fields');
-            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
-            if (slotFields) slotFields.style.display = (checked === 'rep_collect' || checked === 'deliver') ? 'block' : 'none';
-            maybeLoadSlotPicker();
-          }));
+          loadRepSlotPickerCheckout(panel.querySelector('.svc-slot-picker'), slot => { pickedSlot = slot; }, pickedSlot);
 
           panel.querySelector('.svc-save-btn').addEventListener('click', () => {
-            const checked = panel.querySelector('input[type="radio"]:checked')?.value;
             const addrInput = panel.querySelector('.svc-collect-addr, .svc-return-addr');
             const addr = addrInput ? addrInput.value.trim() : '';
-            const isPaid = checked === 'rep_collect' || checked === 'deliver';
-            if (isPaid && !addr) { addrInput.style.borderColor = '#dc2626'; addrInput.focus(); return; }
-            if (isPaid && !pickedSlot) {
+            if (!addr) { addrInput.style.borderColor = '#dc2626'; addrInput.focus(); return; }
+            if (!pickedSlot) {
               panel.querySelector('.svc-slot-picker')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               showNotification('Please pick a time first.');
               return;
             }
             const newOpts = Object.assign({}, cartItem.service_options || {});
             if (field === 'collection') {
-              newOpts.collection_method = checked === 'rep_collect' ? 'rep_collect' : 'dropoff';
-              newOpts.collection_address = checked === 'rep_collect' ? addr : null;
-              newOpts.collection_slot_start = checked === 'rep_collect' ? pickedSlot?.start : null;
-              newOpts.collection_slot_end = checked === 'rep_collect' ? pickedSlot?.end : null;
+              newOpts.collection_method = 'rep_collect';
+              newOpts.collection_address = addr;
+              newOpts.collection_slot_start = pickedSlot?.start;
+              newOpts.collection_slot_end = pickedSlot?.end;
             } else {
-              newOpts.return_method = checked === 'deliver' ? 'deliver' : 'pickup_point';
-              newOpts.return_address = checked === 'deliver' ? addr : null;
-              newOpts.return_slot_start = checked === 'deliver' ? pickedSlot?.start : null;
-              newOpts.return_slot_end = checked === 'deliver' ? pickedSlot?.end : null;
+              newOpts.return_method = 'deliver';
+              newOpts.return_address = addr;
+              newOpts.return_slot_start = pickedSlot?.start;
+              newOpts.return_slot_end = pickedSlot?.end;
             }
             cartItem.service_options = newOpts;
             localStorage.setItem('ss_cart', JSON.stringify(state.cart));
@@ -2767,9 +2914,8 @@ function validateShippingForm() {
 
     const cart = state.validatedCart || state.cart;
     const serviceOnly = cartHasServices(cart) && !cartHasProducts(cart);
-    const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
 
-    if (!isPickup && !serviceOnly) {
+    if (!serviceOnly) {
         const addressFields = [
             { element: elements.shippingAddress, name: 'Shipping Address' },
             { element: elements.city, name: 'City' },
@@ -2804,16 +2950,17 @@ function validateShippingForm() {
         }
     }
 
-    // Item_dropoff service handoff/return — a paid method left with a blank
-    // address blocks this step (mirrors the same check in the product modal).
+    // Item_dropoff service handoff/return — always rep-collected and
+    // delivered back now, so the address is always required (mirrors the
+    // same check in the product modal).
     for (const item of cart) {
         if (item.fulfillment_type !== 'item_dropoff') continue;
         const opts = item.service_options || {};
-        if (opts.collection_method === 'rep_collect' && !opts.collection_address) {
+        if (!opts.collection_address) {
             showError(elements.shippingFormError, 'Add the collection address for your service item before continuing.');
             return false;
         }
-        if (opts.return_method === 'deliver' && !opts.return_address) {
+        if (item.item_returned !== false && !opts.return_address) {
             showError(elements.shippingFormError, 'Add the return address for your service item before continuing.');
             return false;
         }
@@ -2823,11 +2970,10 @@ function validateShippingForm() {
 }
 
 // Completeness gate — the actual fix for "I'll finish setting up my service
-// at checkout, then just pays without finishing it." Handoff/collection
-// choices are NOT checked here — they already default to a valid free state
-// even if untouched, so there's nothing incomplete about leaving them alone.
-// Only genuinely missing required data (an answer, an uploaded file, a
-// booked slot) blocks payment. Returns [] when nothing is missing.
+// at checkout, then just pays without finishing it." Collection/return is
+// always rep-collect/deliver now (no free campus option left), so a missing
+// slot always blocks payment — not just when a paid method was chosen.
+// Returns [] when nothing is missing.
 function getCheckoutBlockers() {
     const cart = state.validatedCart || state.cart;
     const blockers = [];
@@ -2845,14 +2991,14 @@ function getCheckoutBlockers() {
         if (item.fulfillment_type === 'in_person' && item.booking_mode === 'scheduled' && !item.booking_id) {
             blockers.push({ itemId: item.id, title, message: 'Pick an appointment time' });
         }
-        // A paid collection/return leg needs a committed time, not just an
+        // Collection/return always needs a committed time, not just an
         // address — the "Change" panel already requires one when set, but a
         // buyer could still arrive here with a stale/cleared slot.
         const opts = item.service_options || {};
-        if (opts.collection_method === 'rep_collect' && !opts.collection_slot_start) {
+        if (item.fulfillment_type === 'item_dropoff' && !opts.collection_slot_start) {
             blockers.push({ itemId: item.id, title, message: 'Choose a collection time', svcField: 'collection' });
         }
-        if (opts.return_method === 'deliver' && !opts.return_slot_start) {
+        if (item.fulfillment_type === 'item_dropoff' && item.item_returned !== false && !opts.return_slot_start) {
             blockers.push({ itemId: item.id, title, message: 'Choose a return delivery time', svcField: 'return' });
         }
     }
@@ -2873,7 +3019,7 @@ function renderCheckoutBlockers() {
     card.classList.remove('hidden');
     list.querySelectorAll('.checkout-blocker-fix').forEach(btn => {
       btn.addEventListener('click', () => {
-        goToStep('shipping');
+        goToStep('checkout');
         const panel = document.querySelector('.svc-edit-panel[data-svc-panel="' + btn.dataset.itemId + '"]');
         const target = panel || document.getElementById('serviceDropoffBanner');
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2893,44 +3039,49 @@ function renderCheckoutBlockers() {
  // Save shipping information - ADD THIS FUNCTION
 async function saveShippingInfo() {
     try {
-        const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
         state.shippingInfo = {
             firstName: elements.firstName.value.trim(),
             lastName: elements.lastName.value.trim(),
             email: elements.customerEmail.value.trim(),
             phone: elements.phoneNumber.value.trim(),
-            address: isPickup ? 'UKZN Westville Campus Collection Point' : elements.shippingAddress.value.trim(),
-            city: isPickup ? 'Westville' : elements.city.value.trim(),
-            postalCode: isPickup ? '3629' : elements.postalCode.value.trim(),
-            province: isPickup ? 'KwaZulu-Natal' : elements.provinceSelect.value,
+            address: elements.shippingAddress.value.trim(),
+            city: elements.city.value.trim(),
+            postalCode: elements.postalCode.value.trim(),
+            province: elements.provinceSelect.value,
             shippingCost: state.deliveryFee,
-            instructions: isPickup ? '' : (elements.deliveryInstructions?.value.trim() || ''),
+            instructions: elements.deliveryInstructions?.value.trim() || '',
             label: (() => {
               const cart = state.validatedCart || state.cart;
               const hasProducts = cart.some(i => (i.listing_type || 'product') !== 'service');
               const hasServices = cart.some(i => i.listing_type === 'service');
-              if (isPickup) return 'Pickup — UKZN Westville';
               if (hasProducts && hasServices) return 'Mixed: Products + Services';
               if (hasServices && !hasProducts) return 'Service Order';
               return 'Standard Delivery';
             })()
         };
         
-        // Update user profile in Supabase if logged in
+        // Update user profile in Supabase if logged in. Address fields are
+        // only included when actually filled — a service-only cart never
+        // shows the address form, and blank inputs must never overwrite an
+        // address the buyer already had saved from a previous order.
         if (supabaseClient && state.user && state.profile) {
+            const profileUpdate = {
+                first_name: state.shippingInfo.firstName,
+                last_name: state.shippingInfo.lastName,
+                phone: state.shippingInfo.phone
+            };
+            if (state.shippingInfo.address) {
+                profileUpdate.address = state.shippingInfo.address;
+                profileUpdate.city = state.shippingInfo.city;
+                profileUpdate.postal_code = state.shippingInfo.postalCode;
+                profileUpdate.province = state.shippingInfo.province;
+                if (state.selectedZone) profileUpdate.delivery_zone = state.selectedZone;
+            }
             const { error } = await supabaseClient
                 .from('profiles')
-                .update({
-                    first_name: state.shippingInfo.firstName,
-                    last_name: state.shippingInfo.lastName,
-                    phone: state.shippingInfo.phone,
-                    address: state.shippingInfo.address,
-                    city: state.shippingInfo.city,
-                    postal_code: state.shippingInfo.postalCode,
-                    province: state.shippingInfo.province
-                })
+                .update(profileUpdate)
                 .eq('id', state.profile.id);
-            
+
             if (error) {
                 console.error('Error updating profile:', error);
             }
@@ -2980,36 +3131,17 @@ function showNotification(message, type = 'info') {
 }  
 
    
-    // Go to step
-    // Step order: details -> shipping (Delivery) -> payment (Pay). Confirmation
-    // isn't a fourth dot (real confirmation happens on checkout-success.html) —
-    // reaching it just marks all three dots completed.
-    const STEP_ORDER = ['details', 'shipping', 'payment'];
+    // Go to step — collapsed to just two real states now that Details/
+    // Delivery/Payment are one unified view: 'checkout' (the whole form) and
+    // 'confirmation' (shown right after a successful payment redirect back).
     function goToStep(step) {
-      elements.steps.forEach(s => {
-        s.classList.remove('active', 'completed');
-      });
-
-      const targetIdx = step === 'confirmation' ? STEP_ORDER.length : STEP_ORDER.indexOf(step);
-      elements.steps.forEach(s => {
-        const idx = STEP_ORDER.indexOf(s.dataset.step);
-        if (s.dataset.step === step) s.classList.add('active');
-        else if (idx > -1 && idx < targetIdx) s.classList.add('completed');
-      });
-
-      elements.detailsSection.classList.add('hidden');
-      elements.shippingSection.classList.add('hidden');
-      elements.paymentSection.classList.add('hidden');
+      elements.checkoutSection.classList.add('hidden');
       elements.confirmationSection.classList.add('hidden');
 
-      if (step === 'details') {
-        elements.detailsSection.classList.remove('hidden');
-      } else if (step === 'shipping') {
-        elements.shippingSection.classList.remove('hidden');
-      } else if (step === 'payment') {
-        elements.paymentSection.classList.remove('hidden');
-      } else if (step === 'confirmation') {
+      if (step === 'confirmation') {
         elements.confirmationSection.classList.remove('hidden');
+      } else {
+        elements.checkoutSection.classList.remove('hidden');
       }
 
       state.currentStep = step;
@@ -3044,6 +3176,14 @@ async function submitToPayFast(cartItems, orderId, total) {
     cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100)
     // add custom_strX / custom_intX here if you want the server to sign them
   };
+
+  // Buyer opted in to "save my card" — tag this payment as ad-hoc/tokenized
+  // so PayFast stores a reusable token (captured by payfast-itn.js) without
+  // creating a fixed recurring charge. Left unset for every ordinary
+  // checkout, matching generate-payfast-signature.js's additive fields.
+  if (document.getElementById('saveCardCheckbox')?.checked) {
+    payload.subscription_type = 2;
+  }
 
   // Call your Netlify function to generate signature + final params
   const { data: { session: pfSession } } = await supabaseClient.auth.getSession().catch(() => ({ data: {} }));
@@ -3090,38 +3230,36 @@ async function submitToPayFast(cartItems, orderId, total) {
 }
 
     
-    async function processPayment() {
-    try {
-        // Validate form
-        if (!elements.termsAgreement.checked) {
-            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
-            return;
-        }
-        
+    // Shared by the normal PayFast-redirect flow and the "pay with saved
+    // card" one-click flow — validates, re-prices server-side, and writes
+    // the pending_payment order row before any payment is attempted (same
+    // "write to orders before payment" rule either way). Returns
+    // { orderId, total, validatedCart } or null (having already shown the
+    // error and reset the given button).
+    async function preparePendingOrder(triggerBtn, triggerLabel) {
         // Validate shipping form
         if (!validateShippingForm()) {
-            return;
+            return null;
         }
-        
+
         // Save shipping info
         if (!state.shippingInfo) {
             await saveShippingInfo();
         }
-        
-        // Disable button during processing
-        elements.payNowBtn.disabled = true;
-        elements.payNowBtn.textContent = 'Processing...';
-        
+
+        triggerBtn.disabled = true;
+        triggerBtn.textContent = 'Processing...';
+
         // Server-side cart validation
         const validatedCart = await validateCheckout();
-        
+
         if (validatedCart.length === 0) {
             showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
-            elements.payNowBtn.disabled = false;
-            elements.payNowBtn.textContent = 'Pay Now';
-            return;
+            triggerBtn.disabled = false;
+            triggerBtn.textContent = triggerLabel;
+            return null;
         }
-        
+
         // Store enriched validated cart. The delivery/service fee actually
         // charged comes from validate-cart.js's computeFees() (state.serverFees,
         // set inside validateCheckout() above) — never recomputed client-side
@@ -3135,14 +3273,12 @@ async function submitToPayFast(cartItems, orderId, total) {
         if (blockers.length) {
             document.getElementById('checkoutBlockersCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             showError(elements.paymentError, 'Please finish setting up your service before paying.');
-            elements.payNowBtn.disabled = false;
-            elements.payNowBtn.textContent = 'Pay Now';
-            return;
+            triggerBtn.disabled = false;
+            triggerBtn.textContent = triggerLabel;
+            return null;
         }
 
         const subtotal = validatedCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const deliveryMethodType = document.querySelector('input[name="deliveryMethod"]:checked')?.value || 'deliver';
-        state.deliveryMethodType = deliveryMethodType;
         const fees = state.serverFees || { productDelivery: 0, serviceCollection: 0, serviceReturn: 0, total: 0, deliveryClass: 'small', sellerCount: 0 };
         const computedFee = fees.total;
         state.deliveryFee       = computedFee;
@@ -3158,7 +3294,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         const shipping = computedFee;
         const discount = state.discount || 0;
         const total = Math.max(0, subtotal - discount + shipping);
-        
+
         // Save order to Supabase before payment.
         // Coupon is NOT marked used here — that happens in payfast-itn.js after confirmed payment.
         // Cart is NOT cleared here — cleared in payfast-itn.js (Supabase) and checkout-success.html (localStorage).
@@ -3180,7 +3316,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
-                label: state.shippingInfo.label || (deliveryMethodType === 'pickup' ? 'Pickup — UKZN Westville' : 'Standard Delivery'),
+                label: state.shippingInfo.label || 'Standard Delivery',
                 notes: elements.orderNotes.value.trim() || '',
                 // Store applied coupon code so payfast-itn.js can mark it used after confirmed payment
                 coupon_code: state.appliedPromoCode?.code || null,
@@ -3202,15 +3338,69 @@ async function submitToPayFast(cartItems, orderId, total) {
 
             state.orderId = order.id;
         }
-        
+
+        return { orderId, total, validatedCart };
+    }
+
+    async function processPayment() {
+    try {
+        // Validate form
+        if (!elements.termsAgreement.checked) {
+            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            return;
+        }
+
+        // Sign in / create account / continue as guest — the one branch
+        // point for both auth paths, before any order is written.
+        if (!(await handleAccountPasswordSubmit())) return;
+
+        const prepared = await preparePendingOrder(elements.payNowBtn, 'Pay Now');
+        if (!prepared) return;
+
         // Generate PayFast parameters
-        await submitToPayFast(validatedCart, orderId, total);
-        
+        await submitToPayFast(prepared.validatedCart, prepared.orderId, prepared.total);
+
     } catch (error) {
         console.error('Payment processing error:', error);
         showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
         elements.payNowBtn.disabled = false;
         elements.payNowBtn.textContent = 'Pay Now';
+    }
+}
+
+    // One-click "pay with saved card" — reuses the exact same order
+    // preparation as the normal redirect flow, then charges the buyer's
+    // stored PayFast token server-side instead of redirecting.
+    async function payWithSavedCard() {
+    const btn = document.getElementById('payWithSavedCardBtn');
+    try {
+        if (!elements.termsAgreement.checked) {
+            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            return;
+        }
+
+        const prepared = await preparePendingOrder(btn, 'Pay with saved card');
+        if (!prepared) return;
+
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        const res = await fetch('/.netlify/functions/charge-payfast-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+            body: JSON.stringify({ m_payment_id: prepared.orderId, amount: prepared.total })
+        });
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok || !json.success) {
+            throw new Error(json.error || 'Could not charge your saved card. Please pay another way below.');
+        }
+
+        window.location.href = `checkout-success.html?m_payment_id=${prepared.orderId}&order_id=${state.orderId || ''}`;
+
+    } catch (error) {
+        console.error('Saved-card payment error:', error);
+        showError(elements.paymentError, error.message || 'Payment failed. Please try again or pay another way below.');
+        btn.disabled = false;
+        btn.textContent = 'Pay with saved card';
     }
 }
     
@@ -3228,19 +3418,21 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         // Mystery-popup free-gift follow-through (see applyStoredFreeGiftCode)
         // — for a signed-in buyer we already know their email now, so this
-        // can succeed immediately; guests retry once they enter theirs
-        // (Continue-to-Delivery handler).
+        // can succeed immediately; guests retry on the email field's blur
+        // handler once they've typed theirs.
         await applyStoredFreeGiftCode();
 
         // Hide loading state
         elements.loadingState.classList.add('hidden');
-        goToStep('details');
+        goToStep('checkout');
 
-        // Now that the cart is loaded, set the Delivery step's initial
-        // visibility (service-only carts skip the method/address fields
-        // entirely) — previously this only ran on a radio's change event,
-        // so a service-only cart briefly showed irrelevant delivery UI.
+        // Now that the cart is loaded, set the delivery block's initial
+        // visibility (service-only carts skip address/zone entirely) and
+        // show any service-completeness blockers immediately — everything
+        // is one page now, so there's no later "reached payment step" to
+        // defer this to.
         applyDeliveryMethodUI();
+        renderCheckoutBlockers();
 
         // Check for successful payment return
         checkPaymentStatus();
@@ -3248,7 +3440,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       } catch (error) {
         console.error('Initialization error:', error);
         elements.loadingState.classList.add('hidden');
-        goToStep('details');
+        goToStep('checkout');
       }
     }
 
@@ -3256,27 +3448,18 @@ async function submitToPayFast(cartItems, orderId, total) {
     // Top-level (not nested in setupEventListeners) so continueInitialization
     // can call it once the cart is actually loaded, not just on radio change.
     function applyDeliveryMethodUI() {
-      const isPickup = document.querySelector('input[name="deliveryMethod"]:checked')?.value === 'pickup';
       const cart = state.validatedCart || state.cart;
       const serviceOnly = cartHasServices(cart) && !cartHasProducts(cart);
-      const zoneSection = document.getElementById('zoneSection');
-      const addressSection = document.getElementById('addressSection');
-      const deliveryMethodGroup = document.getElementById('deliveryMethodGroup');
-      const radioLabelPickup = document.getElementById('radioLabelPickup');
-      const radioLabelDeliver = document.getElementById('radioLabelDeliver');
-      // Service-only: hide delivery method choice and address sections entirely
+      // Service-only: hide the entire delivery block (compact card + full
+      // form) — nothing physical to deliver, so nothing to confirm.
       if (serviceOnly) {
-        if (deliveryMethodGroup) deliveryMethodGroup.style.display = 'none';
-        if (zoneSection) zoneSection.style.display = 'none';
-        if (addressSection) addressSection.style.display = 'none';
+        elements.addressCompactCard?.classList.add('hidden');
+        elements.addressFormFull?.classList.add('hidden');
       } else {
-        if (deliveryMethodGroup) deliveryMethodGroup.style.display = '';
-        if (zoneSection) zoneSection.style.display = isPickup ? 'none' : '';
-        if (addressSection) addressSection.style.display = isPickup ? 'none' : '';
-        if (radioLabelPickup) radioLabelPickup.style.borderColor = isPickup ? 'var(--accent)' : '#e5e7eb';
-        if (radioLabelDeliver) radioLabelDeliver.style.borderColor = isPickup ? '#e5e7eb' : 'var(--accent)';
+        elements.addressFormFull?.classList.remove('hidden');
+        renderAddressCard();
       }
-      state.deliveryMethodType = serviceOnly ? 'deliver' : (isPickup ? 'pickup' : 'deliver');
+      state.deliveryMethodType = 'deliver';
       updateServiceBanner();
       updateShippingAndTotal();
       refreshEstimatedTime();
@@ -3300,6 +3483,9 @@ async function submitToPayFast(cartItems, orderId, total) {
      ********************/
     
     function setupEventListeners() {
+      // Live address autocomplete (free, no key — OpenStreetMap Photon)
+      wireAddressAutocomplete(elements.shippingAddress, applyAddressSuggestion);
+
       // Populate delivery zone dropdown from DELIVERY_ZONES config
       const zoneSelect = document.getElementById('deliveryZoneSelect');
       if (zoneSelect) {
@@ -3316,78 +3502,15 @@ async function submitToPayFast(cartItems, orderId, total) {
         });
       }
 
-      document.querySelectorAll('input[name="deliveryMethod"]').forEach(radio => {
-        radio.addEventListener('change', applyDeliveryMethodUI);
-      });
-
       // Province select change
       elements.provinceSelect.addEventListener('change', (e) => {
         selectProvince(e.target.value);
       });
       
-      // Continue to delivery button (Details step)
-      elements.continueToDelivery.addEventListener('click', async (e) => {
-        e.preventDefault();
-        if (!validateDetailsForm()) return;
-
-        // Account-first, but never a gate: attempt signup only if a password
-        // was actually entered, and fail open on any error so a guest can
-        // never be blocked from continuing by an auth hiccup.
-        const acctPassword = elements.detailsAccountPassword?.value || '';
-        if (acctPassword && !state.user) {
-          elements.detailsAccountError.classList.add('hidden');
-          elements.detailsAccountMsg.textContent = '';
-          const email = elements.customerEmail.value.trim();
-          const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
-          try {
-            if (supabaseClient) {
-              const { data, error } = await supabaseClient.auth.signUp({
-                email, password: acctPassword, options: { data: { full_name: fullName } }
-              });
-              if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
-                // They already have an account — hand off to the inline
-                // sign-in instead of failing; never a dead end.
-                expandInlineSignin();
-                showError(elements.inlineSigninError, 'Looks like you already have an account — sign in above to continue.');
-                return;
-              } else if (error) {
-                console.warn('Account creation failed, continuing as guest', error);
-                elements.detailsAccountMsg.style.color = '#6b7280';
-                elements.detailsAccountMsg.textContent = "Couldn't create your account right now — continuing as guest, your order is unaffected.";
-              } else if (data.user && data.session) {
-                state.user = data.user;
-                await verifyUserProfile(data.user.id);
-                updateAuthUI(data.user);
-              } else {
-                elements.detailsAccountMsg.style.color = '#166534';
-                elements.detailsAccountMsg.textContent = '✓ Account created — check your email to verify it. Your order will still go through as normal.';
-              }
-            }
-          } catch (err) {
-            console.warn('Account creation error, continuing as guest', err);
-          }
-        }
-
-        // Now that we know the buyer's email (guest or signed-in), retry the
-        // free-gift auto-apply — at page load a guest's email field is still
-        // empty, so the first attempt in continueInitialization can't match it.
-        await applyStoredFreeGiftCode();
-        goToStep('shipping');
-      });
-
-      // Continue to payment button
-      elements.continueToPayment.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        if (!validateShippingForm()) return;
-
-        saveShippingInfo();
-        // Only guests get the optional "create a password" card — a signed-in
-        // buyer already has an account, nothing to offer them here.
-        if (elements.accountCreateCard) elements.accountCreateCard.classList.toggle('hidden', !!state.user);
-        goToStep('payment');
-        renderCheckoutBlockers();
-      });
+      // Retry the free-gift auto-apply once the buyer's typed an email —
+      // at page load a guest's email field is empty, so the very first
+      // attempt in continueInitialization can't match it yet.
+      elements.customerEmail.addEventListener('blur', () => { applyStoredFreeGiftCode(); });
 
       // Pay now button
       elements.payNowBtn.addEventListener('click', (e) => {
@@ -3395,14 +3518,15 @@ async function submitToPayFast(cartItems, orderId, total) {
         processPayment();
       });
 
+      // Pay with saved card button (one-click, shown only when a token is on file)
+      document.getElementById('payWithSavedCardBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        payWithSavedCard();
+      });
+
       // Apply promo code button
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
 
-      // Edit buttons
-      document.getElementById('editShipping')?.addEventListener('click', () => goToStep('shipping'));
-      document.getElementById('editDetails')?.addEventListener('click', () => goToStep('details'));
-      document.getElementById('editDeliveryFromPay')?.addEventListener('click', () => goToStep('shipping'));
-      
       // View order button
       elements.viewOrderBtn.addEventListener('click', () => {
         const lastOrder = localStorage.getItem('last_order');
@@ -3412,17 +3536,18 @@ async function submitToPayFast(cartItems, orderId, total) {
         }
       });
       
-      // Authentication — embedded inline on the Details step, no modal.
-      elements.authBtn.addEventListener('click', () => { goToStep('details'); expandInlineSignin(); });
-
+      // ── Path A: quick sign-in shortcut — fully self-contained (own email
+      // field), so it works the moment it's opened regardless of anything
+      // else on the page.
+      elements.authBtn.addEventListener('click', () => { goToStep('checkout'); expandInlineSignin(); });
       elements.inlineSigninToggle.addEventListener('click', expandInlineSignin);
 
       elements.inlineSigninSubmit.addEventListener('click', async () => {
-        const email = elements.customerEmail.value.trim();
+        const email = elements.inlineSigninEmail.value.trim();
         const password = elements.inlineSigninPassword.value;
 
         if (!email || !isValidEmail(email)) {
-          showError(elements.inlineSigninError, 'Enter your email above first, then your password here.');
+          showError(elements.inlineSigninError, 'Enter your email address.');
           return;
         }
         if (!password) {
@@ -3445,7 +3570,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       });
 
       elements.inlineForgotPassword.addEventListener('click', () => {
-        const email = elements.customerEmail.value.trim();
+        const email = elements.inlineSigninEmail.value.trim();
         if (email && isValidEmail(email) && supabaseClient) {
           supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: `${CONFIG.siteUrl}/reset-password.html`
@@ -3453,7 +3578,7 @@ async function submitToPayFast(cartItems, orderId, total) {
             showError(elements.inlineSigninError, 'Password reset email sent — check your inbox.');
           });
         } else {
-          showError(elements.inlineSigninError, 'Enter your email above first.');
+          showError(elements.inlineSigninError, 'Enter your email address first.');
         }
       });
 
@@ -3465,66 +3590,52 @@ async function submitToPayFast(cartItems, orderId, total) {
         updateAuthUI(null);
       });
 
-      // Embedded, optional account creation — Pay step, explicit button only
-      // (never implicit on Pay Now, so Pay itself stays fast and predictable).
-      // Guest checkout is entirely unaffected by anything in this handler.
-      elements.accountCreateBtn.addEventListener('click', async () => {
-        const email = elements.customerEmail.value.trim();
-        const password = elements.accountCreatePassword.value;
-        const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
+      // ── Path B: adaptive bottom card, driven by the main email field.
+      elements.customerEmail.addEventListener('input', () => {
+        demoteQuickSigninCard();
+        checkEmailDebounced();
+      });
+      elements.firstName.addEventListener('input', demoteQuickSigninCard);
+      elements.phoneNumber.addEventListener('input', demoteQuickSigninCard);
 
-        if (!password || password.length < 8) {
-          elements.accountCreateMsg.style.color = '#dc3545';
-          elements.accountCreateMsg.textContent = 'Use at least 8 characters.';
+      elements.accountPasswordSigninBtn.addEventListener('click', async () => {
+        const email = elements.customerEmail.value.trim();
+        const password = elements.accountPasswordInput.value;
+        if (!password) {
+          showError(elements.accountPasswordError, 'Enter your password.');
           return;
         }
-        if (!supabaseClient) return;
-
-        elements.accountCreateBtn.disabled = true;
+        elements.accountPasswordSigninBtn.disabled = true;
         try {
-          const { data, error } = await supabaseClient.auth.signUp({
-            email, password, options: { data: { full_name: fullName } }
-          });
-
-          // Supabase's wording for "this email already has an account" varies
-          // by version — match loosely and fall back to signing in instead
-          // of surfacing a dead-end error.
-          if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
-            const signInRes = await supabaseClient.auth.signInWithPassword({ email, password });
-            if (signInRes.error) {
-              elements.accountCreateMsg.style.color = '#dc3545';
-              elements.accountCreateMsg.textContent = 'This email already has an account, but that password didn\'t match. Try "Sign in" at the top, or just continue as a guest.';
-              elements.accountCreateBtn.disabled = false;
-              return;
-            }
-            state.user = signInRes.data.user;
-            await verifyUserProfile(state.user.id);
-            updateAuthUI(state.user);
-            return;
-          }
-
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
           if (error) throw error;
-
-          // Only a real session counts — an unconfirmed signup with no
-          // session must not get attached to the order (same class of bug
-          // already fixed once this session for a different flow).
-          if (data.user && data.session) {
-            state.user = data.user;
-            await verifyUserProfile(data.user.id);
-            updateAuthUI(data.user);
-          } else {
-            elements.accountCreateCard.classList.add('hidden');
-            elements.accountReadyMsg.classList.remove('hidden');
-            elements.accountReadyMsg.textContent = '✓ Account created — check your email to verify it. Your order will still go through as normal.';
-          }
+          state.user = data.user;
+          await verifyUserProfile(data.user.id);
+          updateAuthUI(data.user);
+          showNotification('Details filled from your account', 'success');
         } catch (error) {
-          elements.accountCreateMsg.style.color = '#dc3545';
-          elements.accountCreateMsg.textContent = error.message || 'Could not create account — you can still pay as a guest.';
+          showError(elements.accountPasswordError, error.message || 'Wrong email or password.');
         } finally {
-          elements.accountCreateBtn.disabled = false;
+          elements.accountPasswordSigninBtn.disabled = false;
         }
       });
-      
+
+      elements.accountPasswordForgot.addEventListener('click', () => {
+        const email = elements.customerEmail.value.trim();
+        if (email && isValidEmail(email) && supabaseClient) {
+          supabaseClient.auth.resetPasswordForEmail(email, {
+            redirectTo: `${CONFIG.siteUrl}/reset-password.html`
+          }).then(() => {
+            showError(elements.accountPasswordError, 'Password reset email sent — check your inbox.');
+          });
+        }
+      });
+
+      elements.changeAddressBtn?.addEventListener('click', () => {
+        elements.addressCompactCard.classList.add('hidden');
+        elements.addressFormFull.classList.remove('hidden');
+      });
+
       // Enter key for promo code
       elements.promoCodeInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -3542,6 +3653,42 @@ async function submitToPayFast(cartItems, orderId, total) {
       setupEventListeners();
       fetchConfiguration();
     });
+  </script>
+
+  <!-- Mobile app-style bottom navigation (Home / Search / Cart / Profile) —
+       kept in sync with index.html's markup/CSS so it persists across pages. -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary">
+    <button class="mbn-item" id="mbnHome" data-mbn="home" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="mbn-item" id="mbnSearch" data-mbn="search" aria-label="Search">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+    </button>
+    <button class="mbn-item" id="mbnCart" data-mbn="cart" aria-label="Cart">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      <span class="mbn-badge cart-count" id="mbnCartBadge" style="display:none">0</span>
+      <span>Cart</span>
+    </button>
+    <button class="mbn-item" id="mbnProfile" data-mbn="profile" aria-label="Profile">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </button>
+  </nav>
+  <script>
+    document.getElementById('mbnHome')?.addEventListener('click', function() { window.location.href = 'index.html'; });
+    document.getElementById('mbnSearch')?.addEventListener('click', function() { window.location.href = 'shop.html'; });
+    document.getElementById('mbnCart')?.addEventListener('click', function() { window.location.href = 'cart.html'; });
+    document.getElementById('mbnProfile')?.addEventListener('click', function() { window.location.href = 'profile.html'; });
+    (function updateMbnCartBadge() {
+      try {
+        var cart = JSON.parse(localStorage.getItem('ss_cart') || '[]');
+        var count = cart.length;
+        var el = document.getElementById('mbnCartBadge');
+        if (el) { el.textContent = count; el.style.display = count > 0 ? 'flex' : 'none'; }
+      } catch(_) {}
+    })();
   </script>
 </body>
 </html>

@@ -122,7 +122,19 @@ if (event.httpMethod !== 'POST') {
 
       // Transaction options
       email_confirmation: (payload.email_confirmation === undefined ? (payload.emailConfirmation || '1') : payload.email_confirmation),
-      confirmation_address: payload.confirmation_address || payload.confirmationAddress || ''
+      confirmation_address: payload.confirmation_address || payload.confirmationAddress || '',
+
+      // Recurring/tokenization (optional) — only present when the buyer opts
+      // in to "save my card". subscription_type=2 is PayFast's ad-hoc/token
+      // billing mode (stores a reusable token, no fixed recurring charge),
+      // as opposed to =1 (a real fixed-amount subscription). Left empty for
+      // every ordinary checkout call, so those signatures are byte-identical
+      // to before this field existed.
+      subscription_type: payload.subscription_type || '',
+      billing_date: payload.billing_date || '',
+      recurring_amount: payload.recurring_amount || '',
+      frequency: payload.frequency || '',
+      cycles: payload.cycles || ''
       // add any other fields you require here (payment_method, etc.)
     };
 
@@ -134,8 +146,11 @@ if (event.httpMethod !== 'POST') {
       'm_payment_id','amount','item_name','item_description',
       'custom_int1','custom_int2','custom_int3','custom_int4','custom_int5',
       'custom_str1','custom_str2','custom_str3','custom_str4','custom_str5',
-      'email_confirmation','confirmation_address'
-      // add additional keys here in the exact order you will submit them
+      'email_confirmation','confirmation_address',
+      // Recurring/tokenization fields — appended at the end, empty/omitted
+      // for every non-tokenized call (see comment above), verify this
+      // position against PAYFAST_SANDBOX before relying on it for real cards.
+      'subscription_type','billing_date','recurring_amount','frequency','cycles'
     ];
 
     // Helper for encoding: matches PHP urlencode() which PayFast uses server-side to verify.
