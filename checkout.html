@@ -2174,9 +2174,14 @@ async function loadFromLocalStorage() {
         }
         
         if (savedCoupon) {
-            const couponData = JSON.parse(savedCoupon);
-            state.couponCode = couponData.code;
-            state.discount = couponData.discount || 0;
+            // Re-validate server-side rather than trusting the cached amount —
+            // a code applied on cart.html could have expired, hit its limit,
+            // or (for a multi-use code) now need a sign-in check, by the time
+            // the buyer reaches checkout.html.
+            try {
+                const couponData = JSON.parse(savedCoupon);
+                if (couponData?.code) await applyCoupon(couponData.code);
+            } catch (e) { console.warn('Stored coupon re-validation failed', e); }
         }
     } else {
         state.cart = [];
@@ -2303,90 +2308,55 @@ async function loadFromLocalStorage() {
       }
     }
 
+    // Server-validated — never reads discount_codes directly with the anon
+    // key (that would expose seller-created codes' terms/limits to anyone,
+    // and let a tampered client trust its own discount math). Every check
+    // (expiry, email lock, first-order-only, scope, redemption limits,
+    // sign-in requirement for multi-use codes) happens in
+    // netlify/functions/validate-cart.js via the shared discount engine.
     async function applyCoupon(code) {
       try {
-        if (!supabaseClient) return false;
-        
-        const { data: coupon, error } = await supabaseClient
-          .from('discount_codes')
-          .select('*')
-          .eq('code', code.toUpperCase())
-          .eq('used', false)
-          .single();
-        
-        if (error) {
-          console.log('Invalid coupon:', error);
+        const res = await fetch('/.netlify/functions/validate-cart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cartItems: state.cart,
+            userId: state.user?.id,
+            couponCode: code,
+            customerEmail: state.user?.email || elements.customerEmail?.value || ''
+          })
+        });
+        if (!res.ok) return false;
+        const result = await res.json();
+        const discount = result.discount;
+
+        if (!discount || !discount.valid) {
+          const reason = discount?.reason;
+          if (reason === 'expired') showPromoMessage('This code has expired.', 'error');
+          else if (reason === 'email_required') showPromoMessage('Enter your email above to use this code.', 'error');
+          else if (reason === 'email_mismatch') showPromoMessage('This code is not valid for your account.', 'error');
+          else if (reason === 'not_first_order') showPromoMessage('This code is valid for first-time orders only.', 'error');
+          else if (reason === 'already_used' || reason === 'already_redeemed_by_you') showPromoMessage('You’ve already used this code.', 'error');
+          else if (reason === 'fully_redeemed') showPromoMessage('This code has reached its usage limit.', 'error');
+          else showPromoMessage('Invalid or expired promo code', 'error');
           return false;
         }
-        
-        // Check if coupon is expired
-        const now = new Date();
-        const expiresAt = new Date(coupon.expires_at);
 
-        if (now > expiresAt) {
-          showPromoMessage('This code has expired.', 'error');
-          return false;
-        }
+        state.couponCode = discount.code;
+        state.discount = discount.amount;
+        state.appliedPromoCode = discount;
 
-        // Check email ownership — if the code was issued to a specific email,
-        // it's usable either by that logged-in account, or by a guest actively
-        // checking out with the exact matching email (same trust level as
-        // being logged in with it — this is what lets a mystery/free-gift
-        // code auto-apply for guests instead of forcing a login).
-        if (coupon.email) {
-          const userEmail = state.user?.email || elements.customerEmail?.value || '';
-          if (!userEmail) {
-            showPromoMessage('Enter your email above to use this code.', 'error');
-            return false;
-          }
-          if (coupon.email.trim().toLowerCase() !== userEmail.trim().toLowerCase()) {
-            showPromoMessage('This code is not valid for your account.', 'error');
-            return false;
-          }
-        }
+        localStorage.setItem('ss_coupon', JSON.stringify({ code: discount.code }));
 
-        // Check first-order-only restriction
-        if (coupon.first_order_only && state.user) {
-          const { count, error: ordErr } = await supabaseClient
-            .from('orders')
-            .select('id', { count: 'exact', head: true })
-            .eq('user_id', state.user.id)
-            .eq('order_status', 'paid');
-          if (!ordErr && count > 0) {
-            showPromoMessage('This code is valid for first-time orders only.', 'error');
-            return false;
-          }
-        }
-
-        // Calculate discount based on coupon type
-        let discount = 0;
-        if (coupon.type === 'percentage' || coupon.type === 'mystery_gift') {
-          const subtotal = state.cart.reduce((sum, item) => sum + (item.price * (item.quantity || item.qty || 1)), 0);
-          discount = (subtotal * coupon.amount) / 100;
-        } else {
-          discount = coupon.amount;
-        }
-        
-        state.couponCode = coupon.code;
-        state.discount = discount;
-        state.appliedPromoCode = coupon;
-        
-        // Save coupon to localStorage
-        localStorage.setItem('ss_coupon', JSON.stringify({
-          code: coupon.code,
-          discount: discount,
-          coupon_data: coupon
-        }));
-        
         updateOrderSummary();
         return true;
-        
+
       } catch (error) {
         console.error('Error applying coupon:', error);
         return false;
       }
     }
-    
+
     // Apply promo code from input
     async function applyPromoCode() {
       const code = elements.promoCodeInput.value.trim();
@@ -2394,10 +2364,14 @@ async function loadFromLocalStorage() {
         showPromoMessage('Please enter a promo code', 'error');
         return;
       }
-      
+
       const success = await applyCoupon(code);
       if (success) {
-        showPromoMessage(`Promo code applied! Discount: ${formatCurrency(state.discount)}`, 'success');
+        if (state.appliedPromoCode?.requiresSignIn) {
+          showPromoMessage(`Sign in to use this code — ${formatCurrency(state.appliedPromoCode.previewAmount)} off waiting for you`, 'info');
+        } else {
+          showPromoMessage(`Promo code applied! Discount: ${formatCurrency(state.discount)}`, 'success');
+        }
         elements.promoCodeInput.value = '';
       } else {
         showPromoMessage('Invalid or expired promo code', 'error');
@@ -2411,7 +2385,9 @@ async function validateCheckout() {
             throw new Error('Your cart is empty');
         }
         
-        // Send cart to server for validation
+        // Send cart to server for validation. Re-sends the applied coupon
+        // (if any) so its final validity/amount reflects the buyer's actual
+        // current sign-in state — not whatever was true when they typed it.
         const response = await fetch('/.netlify/functions/validate-cart', {
             method: 'POST',
             headers: {
@@ -2419,7 +2395,9 @@ async function validateCheckout() {
             },
             body: JSON.stringify({
                 cartItems: state.cart,
-                userId: state.user?.id
+                userId: state.user?.id,
+                couponCode: state.couponCode || undefined,
+                customerEmail: state.user?.email || elements.customerEmail?.value || ''
             })
         });
 
@@ -2441,6 +2419,16 @@ async function validateCheckout() {
         // Server-authoritative fees (see validate-cart.js computeFees) — used
         // by handlePayment instead of recomputing client-side at pay time.
         state.serverFees = result.fees || null;
+
+        // Server-authoritative discount — this, not state.discount, is what
+        // actually gets written to the order. Keep state.discount/couponCode/
+        // appliedPromoCode in sync too so the on-screen summary reflects the
+        // same re-check (e.g. a multi-use code that now requires sign-in).
+        state.serverDiscount = result.discount || null;
+        if (state.serverDiscount) {
+            state.discount = state.serverDiscount.valid ? state.serverDiscount.amount : 0;
+            state.appliedPromoCode = state.serverDiscount;
+        }
 
         return result.validatedCart;
         
@@ -2579,12 +2567,31 @@ async function validateCheckout() {
       if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1) ? 'inline' : 'none';
       refreshEstimatedTime();
 
-      // Discount display
-      if (discount > 0 && state.couponCode) {
+      // Discount display — scope-aware label, plus a distinct "sign in to
+      // use this" state for a previewed-but-not-yet-redeemable multi-use code.
+      const promo = state.appliedPromoCode;
+      if (promo?.requiresSignIn) {
         elements.discountRow.classList.remove('hidden');
-        elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})</span> <span>-${formatCurrency(discount)}</span>`;
+        elements.discountRow.innerHTML = `<span>Discount (${promo.code})</span> <span>-${formatCurrency(promo.previewAmount || 0)}</span>`;
+        let note = document.getElementById('discountSignInNote');
+        if (!note) {
+          note = document.createElement('div');
+          note.id = 'discountSignInNote';
+          note.style.cssText = 'font-size:11px;color:#e0284f;text-align:right;margin-top:-8px;margin-bottom:4px';
+          elements.discountRow.insertAdjacentElement('afterend', note);
+        }
+        note.textContent = `Sign in or create an account to use this code — ${formatCurrency(promo.previewAmount || 0)} off waiting for you`;
+        note.style.display = 'block';
       } else {
-        elements.discountRow.classList.add('hidden');
+        const existingNote = document.getElementById('discountSignInNote');
+        if (existingNote) existingNote.style.display = 'none';
+        if (discount > 0 && state.couponCode) {
+          elements.discountRow.classList.remove('hidden');
+          const scopeNote = (promo?.scopeLabel && promo.scopeLabel !== 'your whole order') ? ` <span style="color:#6b7280;font-weight:400">(${escapeHtmlLite(promo.scopeLabel)})</span>` : '';
+          elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})${scopeNote}</span> <span>-${formatCurrency(discount)}</span>`;
+        } else {
+          elements.discountRow.classList.add('hidden');
+        }
       }
 
       elements.totalAmount.textContent = formatCurrency(total);
@@ -3290,9 +3297,13 @@ async function submitToPayFast(cartItems, orderId, total) {
         // Generate order ID
         const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-        // Calculate totals based on validated cart
+        // Calculate totals based on validated cart. Discount comes from
+        // state.serverDiscount — validateCheckout() just re-validated it
+        // above with the buyer's actual current sign-in state, so a
+        // multi-use code applied while guest correctly resolves to 0 here
+        // if they never signed in (silently — no block, per design).
         const shipping = computedFee;
-        const discount = state.discount || 0;
+        const discount = (state.serverDiscount && state.serverDiscount.valid) ? state.serverDiscount.amount : 0;
         const total = Math.max(0, subtotal - discount + shipping);
 
         // Save order to Supabase before payment.
@@ -3318,8 +3329,10 @@ async function submitToPayFast(cartItems, orderId, total) {
                 m_payment_id: orderId,
                 label: state.shippingInfo.label || 'Standard Delivery',
                 notes: elements.orderNotes.value.trim() || '',
-                // Store applied coupon code so payfast-itn.js can mark it used after confirmed payment
-                coupon_code: state.appliedPromoCode?.code || null,
+                // Store applied coupon code so payfast-itn.js can consume it after confirmed
+                // payment — only when a real discount was actually applied (never a code that
+                // resolved to 0, e.g. a multi-use code a guest never signed in to use).
+                coupon_code: (discount > 0 && state.serverDiscount?.valid) ? state.serverDiscount.code : null,
                 delivery_class: fees.deliveryClass || null,
                 seller_count:   fees.sellerCount || null,
                 delivery_zone:  state.selectedZone || null

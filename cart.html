@@ -208,52 +208,89 @@
     return cart.reduce((s,item)=> s + (Number(item.price||0) * Number(item.quantity||item.qty||1)), 0);
   }
 
-  // Discount code — same discount_codes table + localStorage['ss_coupon']
-  // shape checkout.html reads on load, so a code applied here carries
-  // straight through. Recomputed fresh against the current cart total each
-  // time (not the stored flat value) so qty changes after applying stay
-  // accurate for percentage-type codes.
-  let appliedCoupon = null;
+  // Discount code — server-validated via validate-cart.js's shared discount
+  // engine (netlify/functions/lib/discounts.js), never computed client-side
+  // or read directly from discount_codes (that'd expose seller-created
+  // codes' terms to anyone with the anon key, and let a tampered client
+  // trust its own math). Same localStorage['ss_coupon'] shape checkout.html
+  // reads on load, so a code applied here carries straight through — but
+  // checkout.html re-validates it again itself, never trusts this cache.
+  let appliedCoupon = null;      // { code }
+  let currentDiscountInfo = null; // last server response's `discount` object
   (function loadStoredCoupon(){
     try {
       const saved = JSON.parse(localStorage.getItem('ss_coupon') || 'null');
-      if (saved && saved.code) appliedCoupon = saved;
+      if (saved && saved.code) appliedCoupon = { code: saved.code };
     } catch(_) {}
   })();
 
   function currentDiscount(){
-    if (!appliedCoupon?.coupon_data) return 0;
-    const c = appliedCoupon.coupon_data;
-    const subtotal = calcTotal();
-    return c.type === 'percentage' || c.type === 'mystery_gift' ? (subtotal * c.amount) / 100 : c.amount;
+    return (currentDiscountInfo && currentDiscountInfo.valid) ? (currentDiscountInfo.amount || 0) : 0;
+  }
+
+  // Re-validates the currently-applied code against the live cart —
+  // called after applying, and after any qty/remove change (a scoped code's
+  // amount depends on which eligible items are actually still in the cart).
+  async function refreshAppliedCoupon(){
+    if (!appliedCoupon?.code) { currentDiscountInfo = null; return; }
+    try {
+      const res = await fetch('/.netlify/functions/validate-cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cartItems: cart,
+          userId: currentUser?.id,
+          couponCode: appliedCoupon.code,
+          customerEmail: currentUser?.email || ''
+        })
+      });
+      const result = res.ok ? await res.json() : null;
+      currentDiscountInfo = result?.discount || null;
+      if (!currentDiscountInfo || (!currentDiscountInfo.valid && !currentDiscountInfo.requiresSignIn)) {
+        // Code is no longer valid at all (expired, fully redeemed, etc.) —
+        // drop it rather than keep showing a dead code.
+        appliedCoupon = null;
+        localStorage.removeItem('ss_coupon');
+      }
+    } catch (e) {
+      console.warn('Coupon re-validation failed', e);
+    }
   }
 
   async function applyCoupon(code){
     const msgEl = document.getElementById('promoMsg');
     msgEl.className = 'promo-msg';
     if (!code) { msgEl.classList.add('error'); msgEl.textContent = 'Enter a code first.'; return; }
-    if (!sb) { msgEl.classList.add('error'); msgEl.textContent = 'Could not apply code right now.'; return; }
-    try {
-      const { data: coupon, error } = await sb.from('discount_codes')
-        .select('*').eq('code', code.toUpperCase()).eq('used', false).single();
-      if (error || !coupon) { msgEl.classList.add('error'); msgEl.textContent = 'Invalid or expired promo code'; return; }
-      if (coupon.expires_at && new Date() > new Date(coupon.expires_at)) {
-        msgEl.classList.add('error'); msgEl.textContent = 'This code has expired.'; return;
-      }
-      // Email-restricted codes aren't verifiable yet — guest email isn't
-      // known at the cart stage. Let checkout apply it once they're there.
-      if (coupon.email) {
-        msgEl.classList.add('error'); msgEl.textContent = 'Enter your email at checkout to apply this code.'; return;
-      }
-      appliedCoupon = { code: coupon.code, coupon_data: coupon };
-      localStorage.setItem('ss_coupon', JSON.stringify(appliedCoupon));
+    appliedCoupon = { code: code.trim().toUpperCase() };
+    await refreshAppliedCoupon();
+    if (!currentDiscountInfo || !currentDiscountInfo.valid) {
+      const reasons = {
+        expired: 'This code has expired.',
+        email_required: 'Enter your email at checkout to apply this code.',
+        email_mismatch: 'This code is not valid for your account.',
+        not_first_order: 'This code is valid for first-time orders only.',
+        already_used: 'This code has already been used.',
+        already_redeemed_by_you: 'You’ve already used this code.',
+        fully_redeemed: 'This code has reached its usage limit.'
+      };
+      msgEl.classList.add('error');
+      msgEl.textContent = reasons[currentDiscountInfo?.reason] || 'Invalid or expired promo code';
+      appliedCoupon = null;
+      currentDiscountInfo = null;
+      localStorage.removeItem('ss_coupon');
+      updateSummary();
+      return;
+    }
+    localStorage.setItem('ss_coupon', JSON.stringify({ code: appliedCoupon.code }));
+    if (currentDiscountInfo.requiresSignIn) {
+      msgEl.classList.add('success');
+      msgEl.textContent = `Sign in at checkout to use this code — ${fmt(currentDiscountInfo.previewAmount || 0)} off waiting for you`;
+    } else {
       msgEl.classList.add('success');
       msgEl.textContent = `Promo code applied! Discount: ${fmt(currentDiscount())}`;
-      document.getElementById('promoInput').value = '';
-      updateSummary();
-    } catch (e) {
-      msgEl.classList.add('error'); msgEl.textContent = 'Could not apply code right now.';
     }
+    document.getElementById('promoInput').value = '';
+    updateSummary();
   }
 
   function updateSummary(){
@@ -275,8 +312,22 @@
         return `<div class="summary-row"><div>${esc(item.name||item.title||'Item')} ${item.size?'× '+esc(item.size):''} ×${qty}</div><div>${fmt(Number(item.price||0)*qty)}</div></div>`;
       }).join('');
     }
-    if(discountRow) discountRow.classList.toggle('hidden', discount <= 0);
-    if(discountAmount) discountAmount.textContent = '-' + fmt(discount);
+    const requiresSignIn = currentDiscountInfo?.requiresSignIn;
+    if(discountRow) discountRow.classList.toggle('hidden', discount <= 0 && !requiresSignIn);
+    if(discountAmount) discountAmount.textContent = '-' + fmt(requiresSignIn ? (currentDiscountInfo.previewAmount || 0) : discount);
+    let signInNote = document.getElementById('discountSignInNote');
+    if (requiresSignIn) {
+      if (!signInNote) {
+        signInNote = document.createElement('div');
+        signInNote.id = 'discountSignInNote';
+        signInNote.style.cssText = 'font-size:11px;color:#e0284f;margin-top:-2px;margin-bottom:6px';
+        discountRow?.insertAdjacentElement('afterend', signInNote);
+      }
+      signInNote.textContent = 'Sign in at checkout to use this code';
+      signInNote.style.display = 'block';
+    } else if (signInNote) {
+      signInNote.style.display = 'none';
+    }
     if(sumTotal) sumTotal.textContent = fmt(total);
     if(checkBtn) checkBtn.disabled = cart.length === 0;
   }
@@ -382,6 +433,9 @@
   async function syncAndRender(){
     writeLocalCart(cart);
     if(sb && currentUser) await writeSupabaseCart(cart);
+    // Re-check the applied code — a scoped code's amount depends on which
+    // eligible items are still in the cart after a qty change/removal.
+    await refreshAppliedCoupon();
     await renderCart();
   }
 
@@ -401,6 +455,7 @@
   // Init
   setLoading(true);
   await loadCart();
+  await refreshAppliedCoupon();
   await renderCart();
   setLoading(false);
 })();

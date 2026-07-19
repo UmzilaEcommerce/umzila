@@ -363,6 +363,7 @@
       <button class="tab-btn"         data-tab="notifications" role="tab">🔔 Alerts<div class="tab-notif-dot" id="tabNotifDot"></div></button>
       <button class="tab-btn"         data-tab="analytics"     role="tab">📊 Analytics</button>
       <button class="tab-btn"         data-tab="advertise"     role="tab">📢 Advertise</button>
+      <button class="tab-btn"         data-tab="marketing"     role="tab">🎟️ Marketing</button>
     </nav>
 
     <!-- ── TAB: My Shop ── -->
@@ -1124,6 +1125,123 @@
       </div>
     </div>
 
+    <!-- ── TAB: Marketing ── -->
+    <div id="tabMarketing" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div class="panel-title">Discount Codes</div>
+        <p style="color:var(--muted);margin:0 0 20px;font-size:14px">
+          Create a code buyers can enter at checkout. It only ever discounts
+          <strong>your own products</strong> — never another seller's items in
+          the same cart, even if you choose "my whole shop".
+        </p>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#fff;margin-bottom:24px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Code</label>
+              <input type="text" id="mktCodeInput" class="form-control" style="font-size:13px;text-transform:uppercase" placeholder="e.g. BONGI15" maxlength="20">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Discount</label>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="mktAmountInput" class="form-control" style="font-size:13px" placeholder="15" min="1" step="1">
+                <select id="mktTypeInput" class="form-control" style="font-size:13px;max-width:90px">
+                  <option value="percentage">%</option>
+                  <option value="fixed">R</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Expires</label>
+              <input type="date" id="mktExpiresInput" class="form-control" style="font-size:13px">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Use limit (optional)</label>
+              <input type="number" id="mktMaxRedemptionsInput" class="form-control" style="font-size:13px" placeholder="Unlimited" min="1" step="1">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:12px">
+            <label class="form-label" style="font-size:12px">Applies to</label>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="mktScope" value="order" checked> My whole shop — any of my products in the buyer's cart
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+                <input type="radio" name="mktScope" value="products"> Specific products only
+              </label>
+            </div>
+            <select id="mktProductsSelect" multiple class="form-control" style="font-size:13px;margin-top:8px;display:none;height:120px"></select>
+          </div>
+
+          <div id="mktCreateError" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
+          <div id="mktCreateSuccess" style="display:none;color:#059669;font-size:13px;margin-bottom:10px"></div>
+          <button class="btn" id="mktCreateBtn" style="background:#0a2f66;color:#fff;border:none">Create code</button>
+        </div>
+
+        <div style="font-weight:700;font-size:15px;margin-bottom:10px">Your Codes</div>
+        <div id="mktCodesList" style="color:var(--muted);font-size:14px">Loading…</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Promote by Email</div>
+        <p style="color:var(--muted);margin:0 0 20px;font-size:14px">
+          Write the wording — layout and design are fixed and premium. Every
+          email needs Umzila's approval before it sends.
+        </p>
+
+        <div style="border:1px solid #e5e7eb;border-radius:14px;padding:20px;background:#fff;margin-bottom:24px">
+          <div class="form-group">
+            <label class="form-label" style="font-size:12px">Attach a code (optional)</label>
+            <select id="promoCodeSelect" class="form-control" style="font-size:13px">
+              <option value="">No code — just an announcement</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:12px">Subject line</label>
+            <input type="text" id="promoSubjectInput" class="form-control" style="font-size:13px" maxlength="80" placeholder="e.g. 15% off everything this weekend">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:12px">Headline</label>
+            <input type="text" id="promoHeadlineInput" class="form-control" style="font-size:13px" maxlength="60" placeholder="e.g. Our biggest sale yet">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:12px">Message</label>
+            <textarea id="promoMessageInput" class="form-control" style="font-size:13px;min-height:90px" maxlength="500" placeholder="Tell buyers what's on offer and why they'll love it."></textarea>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Button text</label>
+              <input type="text" id="promoCtaTextInput" class="form-control" style="font-size:13px" maxlength="30" value="Shop now">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label" style="font-size:12px">Button destination</label>
+              <select id="promoCtaDestSelect" class="form-control" style="font-size:13px">
+                <option value="my_shop">My shop page</option>
+                <option value="product">A specific product</option>
+              </select>
+            </div>
+          </div>
+          <select id="promoProductSelect" class="form-control" style="font-size:13px;margin-top:8px;display:none"></select>
+
+          <div id="promoError" style="display:none;color:#dc2626;font-size:13px;margin:12px 0 0"></div>
+          <div id="promoSuccess" style="display:none;color:#059669;font-size:13px;margin:12px 0 0"></div>
+          <div style="display:flex;gap:10px;margin-top:16px">
+            <button class="btn ghost" id="promoPreviewBtn">Preview</button>
+            <button class="btn" id="promoSubmitBtn" style="background:#0a2f66;color:#fff;border:none">Submit for approval</button>
+          </div>
+        </div>
+
+        <div id="promoPreviewWrap" style="display:none;margin-bottom:24px">
+          <div style="font-weight:700;font-size:15px;margin-bottom:10px">Preview</div>
+          <iframe id="promoPreviewFrame" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:10px;background:#fff"></iframe>
+        </div>
+
+        <div style="font-weight:700;font-size:15px;margin-bottom:10px">My Campaigns</div>
+        <div id="promoCampaignsList" style="color:var(--muted);font-size:14px">Loading…</div>
+      </div>
+    </div>
+
   </div><!-- /stateDashboard -->
 
   <!-- Shop picker modal -->
@@ -1314,6 +1432,7 @@
       if (name === 'analytics')     loadAnalytics();
       if (name === 'notifications') loadNotifications();
       if (name === 'advertise')     loadAdvertiseTab();
+      if (name === 'marketing')    loadMarketingTab();
     }
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
@@ -1413,6 +1532,260 @@
         var form = div.querySelector('form');
         if (form) form.submit(); else showAdError('Could not redirect to PayFast.');
       } catch(e) { showAdError('Network error: ' + e.message); }
+    }
+
+    /* ── MARKETING TAB — Discount Codes ──────────────────────────────────── */
+    var mktTabInitialised = false;
+    function mktEsc(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, function(c) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+    async function loadMarketingTab() {
+      if (!SD.seller) return;
+      await renderMktCodesList();
+      await loadPromoteTab();
+      if (mktTabInitialised) return;
+      mktTabInitialised = true;
+
+      // Populate the product multi-select for scope=products
+      var prodSel = document.getElementById('mktProductsSelect');
+      if (prodSel) {
+        try {
+          var { data: prods } = await SD.sb.from('products')
+            .select('id, name').eq('seller_id', SD.seller.id).eq('visible', true).order('name');
+          prodSel.innerHTML = (prods || []).map(p => `<option value="${p.id}">${mktEsc(p.name || p.id)}</option>`).join('');
+        } catch (e) { /* left empty — create will just reject with no products selected */ }
+      }
+
+      document.querySelectorAll('input[name="mktScope"]').forEach(function(r) {
+        r.addEventListener('change', function() {
+          prodSel.style.display = document.querySelector('input[name="mktScope"]:checked').value === 'products' ? '' : 'none';
+        });
+      });
+
+      document.getElementById('mktCreateBtn').addEventListener('click', createDiscountCode);
+    }
+
+    async function renderMktCodesList() {
+      var el = document.getElementById('mktCodesList');
+      if (!el || !SD.seller) return;
+      try {
+        var session = (await SD.sb.auth.getSession()).data.session;
+        if (!session) { el.textContent = 'Please log in again.'; return; }
+        var res = await fetch('/.netlify/functions/manage-discount-codes', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        var data = await res.json();
+        var codes = (data.codes || []).filter(c => c.seller_id === SD.seller.id);
+        if (!codes.length) { el.innerHTML = '<div style="color:var(--muted)">No codes yet — create one above.</div>'; return; }
+
+        el.innerHTML = codes.map(function(c) {
+          var amountLabel = c.type === 'percentage' ? (c.amount + '% off') : ('R' + c.amount + ' off');
+          var scopeLabel = c.scope === 'products' ? 'Selected products' : 'My whole shop';
+          var statusColor = c.status === 'active' ? '#059669' : '#9ca3af';
+          var expiresLabel = c.expires_at ? new Date(c.expires_at).toLocaleDateString('en-ZA') : '—';
+          var limitLabel = c.max_redemptions ? (c.redemptions + ' / ' + c.max_redemptions + ' used') : (c.redemptions + ' used');
+          return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fff">
+            <div>
+              <div style="font-weight:700;font-size:14px;font-family:ui-monospace,monospace">${mktEsc(c.code)}</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:2px">${amountLabel} · ${scopeLabel} · Expires ${expiresLabel} · ${limitLabel}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:11px;font-weight:700;color:${statusColor};text-transform:uppercase">${c.status}</span>
+              ${c.status === 'active' ? `<button class="btn ghost" data-disable-code="${c.id}" style="font-size:12px;padding:6px 12px">Disable</button>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+
+        el.querySelectorAll('[data-disable-code]').forEach(function(btn) {
+          btn.addEventListener('click', async function() {
+            if (!confirm('Disable this code? It will stop working immediately.')) return;
+            btn.disabled = true;
+            try {
+              var session = (await SD.sb.auth.getSession()).data.session;
+              await fetch('/.netlify/functions/manage-discount-codes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+                body: JSON.stringify({ action: 'disable', code_id: btn.dataset.disableCode })
+              });
+              await renderMktCodesList();
+            } catch (e) { btn.disabled = false; }
+          });
+        });
+      } catch (e) {
+        el.textContent = 'Could not load your codes right now.';
+      }
+    }
+
+    async function createDiscountCode() {
+      var errEl = document.getElementById('mktCreateError');
+      var okEl  = document.getElementById('mktCreateSuccess');
+      errEl.style.display = 'none'; okEl.style.display = 'none';
+
+      var code = document.getElementById('mktCodeInput').value.trim().toUpperCase();
+      var amount = document.getElementById('mktAmountInput').value;
+      var type = document.getElementById('mktTypeInput').value;
+      var expires_at = document.getElementById('mktExpiresInput').value;
+      var max_redemptions = document.getElementById('mktMaxRedemptionsInput').value || null;
+      var scope = document.querySelector('input[name="mktScope"]:checked').value;
+      var product_ids = scope === 'products'
+        ? Array.from(document.getElementById('mktProductsSelect').selectedOptions).map(o => o.value)
+        : undefined;
+
+      var btn = document.getElementById('mktCreateBtn');
+      btn.disabled = true; btn.textContent = 'Creating…';
+      try {
+        var session = (await SD.sb.auth.getSession()).data.session;
+        if (!session) { errEl.style.display = 'block'; errEl.textContent = 'Please log in again.'; return; }
+        var res = await fetch('/.netlify/functions/manage-discount-codes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            action: 'create', code, amount, type, expires_at, max_redemptions, scope, product_ids,
+            seller_id: SD.seller.id
+          })
+        });
+        var data = await res.json();
+        if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Could not create code.'; return; }
+        okEl.style.display = 'block'; okEl.textContent = `✓ ${data.code.code} created.`;
+        document.getElementById('mktCodeInput').value = '';
+        document.getElementById('mktAmountInput').value = '';
+        document.getElementById('mktMaxRedemptionsInput').value = '';
+        await renderMktCodesList();
+      } catch (e) {
+        errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Create code';
+      }
+    }
+
+    /* ── MARKETING TAB — Promote by Email ────────────────────────────────── */
+    var promoTabInitialised = false;
+
+    async function loadPromoteTab() {
+      if (!SD.seller) return;
+
+      var codeSel = document.getElementById('promoCodeSelect');
+      if (codeSel) {
+        try {
+          var session0 = (await SD.sb.auth.getSession()).data.session;
+          var res0 = await fetch('/.netlify/functions/manage-discount-codes', {
+            headers: { Authorization: `Bearer ${session0.access_token}` }
+          });
+          var data0 = await res0.json();
+          var activeCodes = (data0.codes || []).filter(c => c.seller_id === SD.seller.id && c.status === 'active');
+          codeSel.innerHTML = '<option value="">No code — just an announcement</option>' +
+            activeCodes.map(c => `<option value="${c.id}">${mktEsc(c.code)} (${c.type === 'percentage' ? c.amount + '%' : 'R' + c.amount} off)</option>`).join('');
+        } catch (e) { /* left with just the default option */ }
+      }
+
+      var prodSel = document.getElementById('promoProductSelect');
+      if (prodSel && !prodSel.options.length) {
+        try {
+          var { data: prods } = await SD.sb.from('products')
+            .select('id, name').eq('seller_id', SD.seller.id).eq('visible', true).order('name');
+          prodSel.innerHTML = (prods || []).map(p => `<option value="${p.id}">${mktEsc(p.name || p.id)}</option>`).join('');
+        } catch (e) { /* left empty */ }
+      }
+
+      await renderPromoCampaignsList();
+
+      if (promoTabInitialised) return;
+      promoTabInitialised = true;
+
+      document.getElementById('promoCtaDestSelect').addEventListener('change', function() {
+        prodSel.style.display = this.value === 'product' ? '' : 'none';
+      });
+      document.getElementById('promoPreviewBtn').addEventListener('click', function() { runPromoAction('preview'); });
+      document.getElementById('promoSubmitBtn').addEventListener('click', function() { runPromoAction('submit'); });
+    }
+
+    function promoBuildPayload(action) {
+      return {
+        action: action,
+        seller_id: SD.seller.id,
+        discount_code_id: document.getElementById('promoCodeSelect').value || null,
+        subject: document.getElementById('promoSubjectInput').value,
+        headline: document.getElementById('promoHeadlineInput').value,
+        body_message: document.getElementById('promoMessageInput').value,
+        cta_text: document.getElementById('promoCtaTextInput').value || 'Shop now',
+        cta_destination: document.getElementById('promoCtaDestSelect').value,
+        cta_product_id: document.getElementById('promoProductSelect').value || null
+      };
+    }
+
+    async function runPromoAction(action) {
+      var errEl = document.getElementById('promoError');
+      var okEl  = document.getElementById('promoSuccess');
+      errEl.style.display = 'none'; okEl.style.display = 'none';
+
+      var subject = document.getElementById('promoSubjectInput').value.trim();
+      var headline = document.getElementById('promoHeadlineInput').value.trim();
+      var message = document.getElementById('promoMessageInput').value.trim();
+      if (!subject || !headline || !message) {
+        errEl.style.display = 'block'; errEl.textContent = 'Subject, headline, and message are required.';
+        return;
+      }
+
+      var btn = document.getElementById(action === 'preview' ? 'promoPreviewBtn' : 'promoSubmitBtn');
+      var originalLabel = btn.textContent;
+      btn.disabled = true; btn.textContent = action === 'preview' ? 'Loading…' : 'Submitting…';
+      try {
+        var session = (await SD.sb.auth.getSession()).data.session;
+        if (!session) { errEl.style.display = 'block'; errEl.textContent = 'Please log in again.'; return; }
+        var res = await fetch('/.netlify/functions/submit-marketing-campaign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify(promoBuildPayload(action))
+        });
+        var data = await res.json();
+        if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Something went wrong.'; return; }
+
+        if (action === 'preview') {
+          var wrap = document.getElementById('promoPreviewWrap');
+          var frame = document.getElementById('promoPreviewFrame');
+          wrap.style.display = 'block';
+          frame.srcdoc = data.html;
+          wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          okEl.style.display = 'block'; okEl.textContent = 'Submitted for approval — it will send once Umzila reviews it.';
+          await renderPromoCampaignsList();
+        }
+      } catch (e) {
+        errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+      } finally {
+        btn.disabled = false; btn.textContent = originalLabel;
+      }
+    }
+
+    async function renderPromoCampaignsList() {
+      var el = document.getElementById('promoCampaignsList');
+      if (!el || !SD.seller) return;
+      try {
+        var session = (await SD.sb.auth.getSession()).data.session;
+        if (!session) { el.textContent = 'Please log in again.'; return; }
+        var res = await fetch('/.netlify/functions/submit-marketing-campaign', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        var data = await res.json();
+        var campaigns = data.campaigns || [];
+        if (!campaigns.length) { el.innerHTML = '<div style="color:var(--muted)">No campaigns yet.</div>'; return; }
+
+        var statusColors = { pending: '#d97706', approved: '#2563eb', sent: '#059669', rejected: '#dc2626' };
+        el.innerHTML = campaigns.map(function(c) {
+          var color = statusColors[c.status] || '#6b7280';
+          var meta = c.status === 'sent' && c.recipient_count != null
+            ? `Sent to ${c.recipient_count} subscriber(s)`
+            : (c.status === 'rejected' && c.rejection_reason ? mktEsc(c.rejection_reason) : formatDate(c.created_at));
+          return `<div style="padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;background:#fff">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <div style="font-weight:700;font-size:14px">${mktEsc(c.subject)}</div>
+              <span style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase">${c.status}</span>
+            </div>
+            <div style="font-size:12px;color:#6b7280;margin-top:4px">${meta}</div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        el.textContent = 'Could not load your campaigns right now.';
+      }
     }
 
     async function loadMyCampaigns() {

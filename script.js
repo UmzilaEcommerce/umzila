@@ -4137,14 +4137,17 @@ document.getElementById('backToHomeBtn')?.addEventListener('click', function(){
 async function handleSubscribe(email){
   if(!email) return { success:false, error: 'no email' };
   if(!supabaseClient) {
-    try{ localStorage.setItem('demo_subscribe_'+email, Date.now()); }catch(e){} 
+    try{ localStorage.setItem('demo_subscribe_'+email, Date.now()); }catch(e){}
     return { success: true, demo:true };
   }
   try {
-    const { data, error } = await supabaseClient
-      .from('subscribers')
-      .insert([{ email, referral_code: null, referred_by: null }]);
-    if(error) return { success:false, error };
+    const res = await fetch('/.netlify/functions/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) return { success:false, error: data.error || 'Could not subscribe' };
     return { success:true, data };
   } catch(e){
     return { success:false, error:e };

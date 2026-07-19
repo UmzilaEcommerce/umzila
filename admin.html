@@ -404,6 +404,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="disputes"><span class="menu-icon">⚠️</span><span class="menu-label">Disputes</span></li>
           <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
+          <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
@@ -785,6 +786,113 @@ const supabaseClient = supabase.createClient(
           </div>
           <div id="adCampaignsTable" style="overflow-x:auto">
             <p style="color:#6b7280">Loading campaigns…</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Marketing -->
+      <section id="section-marketing" style="display:none">
+        <div class="card">
+          <div class="section-top"><h2>🎟️ Platform Discount Codes</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Codes here can discount across the whole site (any/all sellers), unlike seller-created codes which only ever discount that seller's own products.</p>
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fafafa;margin-bottom:20px">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px">
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Code</label>
+                <input type="text" id="pcCodeInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;text-transform:uppercase" placeholder="SUMMER20" maxlength="20"></div>
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Discount</label>
+                <div style="display:flex;gap:6px">
+                  <input type="number" id="pcAmountInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="20" min="1">
+                  <select id="pcTypeInput" style="padding:8px 6px;border:1px solid #d1d5db;border-radius:6px"><option value="percentage">%</option><option value="fixed">R</option></select>
+                </div></div>
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Expires</label>
+                <input type="date" id="pcExpiresInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px"></div>
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Use limit (optional)</label>
+                <input type="number" id="pcMaxRedemptionsInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="Unlimited" min="1"></div>
+            </div>
+            <div style="margin-bottom:12px">
+              <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Applies to</label>
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;margin-right:16px;cursor:pointer"><input type="radio" name="pcScope" value="order" checked> Whole site / whole order</label>
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="pcScope" value="products"> Specific products</label>
+              <select id="pcProductsSelect" multiple style="width:100%;height:110px;margin-top:8px;display:none;padding:6px;border:1px solid #d1d5db;border-radius:6px"></select>
+            </div>
+            <div id="pcCreateError" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
+            <div id="pcCreateSuccess" style="display:none;color:#059669;font-size:13px;margin-bottom:10px"></div>
+            <button class="btn" id="pcCreateBtn" style="background:#0a2f66;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer">Create platform code</button>
+          </div>
+
+          <div id="pcCodesTable" style="overflow-x:auto">
+            <p style="color:#6b7280">Loading codes…</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-top"><h2>📬 Campaign Approval Queue</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Every seller-submitted promotional email needs approval here before it sends. Approving sends it immediately.</p>
+          <div id="mcQueue"><p style="color:#6b7280">Loading campaigns…</p></div>
+        </div>
+
+        <div class="card">
+          <div class="section-top"><h2>✍️ Platform Campaign</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Compose a promotional email from Umzila itself. Submitting sends it immediately — there's no queue for your own campaigns.</p>
+
+          <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fafafa;margin-bottom:20px">
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Attach a platform code (optional)</label>
+              <select id="mcCodeSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px"><option value="">No code — just an announcement</option></select></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Subject line</label>
+              <input type="text" id="mcSubjectInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="80" placeholder="e.g. This weekend only: 20% off site-wide"></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Headline</label>
+              <input type="text" id="mcHeadlineInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="60" placeholder="e.g. Our biggest campus sale yet"></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Message</label>
+              <textarea id="mcMessageInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px;min-height:80px" maxlength="500" placeholder="Tell subscribers what's on offer."></textarea></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:12px">
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Button text</label>
+                <input type="text" id="mcCtaTextInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" maxlength="30" value="Shop now"></div>
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Button destination</label>
+                <select id="mcCtaDestSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px">
+                  <option value="home">Umzila homepage</option>
+                  <option value="checkout_with_code">Checkout with code applied</option>
+                </select></div>
+            </div>
+            <div id="mcError" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
+            <div id="mcSuccess" style="display:none;color:#059669;font-size:13px;margin-bottom:10px"></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn" id="mcPreviewBtn" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:8px 20px;border-radius:8px;cursor:pointer">Preview</button>
+              <button class="btn" id="mcSendBtn" style="background:#0a2f66;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer">Send now</button>
+            </div>
+          </div>
+
+          <div id="mcPreviewWrap" style="display:none;margin-bottom:8px">
+            <iframe id="mcPreviewFrame" style="width:100%;height:520px;border:1px solid #e5e7eb;border-radius:10px;background:#fff"></iframe>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-top"><h2>📧 Direct Email</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Search the marketable-contacts table and send one email to a single known person. Every result shows where the email came from and their marketing status, so you don't message the wrong person.</p>
+
+          <input type="text" id="deSearchInput" placeholder="Search by email or name…" style="width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;margin-bottom:12px">
+          <div id="deResults" style="margin-bottom:20px"></div>
+
+          <div id="deComposeWrap" style="display:none;border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fafafa">
+            <div style="font-size:13px;color:#6b7280;margin-bottom:12px">Sending to <strong id="deSelectedEmail"></strong></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Subject line</label>
+              <input type="text" id="deSubjectInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="80"></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Headline</label>
+              <input type="text" id="deHeadlineInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="60"></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Message</label>
+              <textarea id="deMessageInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px;min-height:80px" maxlength="500"></textarea></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Button text</label>
+              <input type="text" id="deCtaTextInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="30" value="Visit Umzila"></div>
+            <div id="deError" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
+            <div id="deSuccess" style="display:none;color:#059669;font-size:13px;margin-bottom:10px"></div>
+            <div style="display:flex;gap:10px">
+              <button class="btn" id="dePreviewBtn" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:8px 20px;border-radius:8px;cursor:pointer">Preview</button>
+              <button class="btn" id="deSendBtn" style="background:#0a2f66;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer">Send</button>
+            </div>
+            <div id="dePreviewWrap" style="display:none;margin-top:14px">
+              <iframe id="dePreviewFrame" style="width:100%;height:480px;border:1px solid #e5e7eb;border-radius:10px;background:#fff"></iframe>
+            </div>
           </div>
         </div>
       </section>
@@ -1884,7 +1992,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'service-orders': document.getElementById('section-service-orders'),
     'disputes': document.getElementById('section-disputes'),
     'product-reviews': document.getElementById('section-product-reviews'),
-    'ad-campaigns': document.getElementById('section-ad-campaigns')
+    'ad-campaigns': document.getElementById('section-ad-campaigns'),
+    'marketing': document.getElementById('section-marketing')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -1978,6 +2087,430 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       this.style.fontWeight = '700';
       loadAdCampaigns(this.dataset.status);
     });
+  });
+
+  // ── Marketing: Platform Discount Codes ──────────────────────────────────────
+  function pcEsc(s) { return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  let platformCodesLoaded = false;
+  let pcProductsLoaded = false;
+
+  async function pcGetToken() {
+    const session = supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
+    return session && session.access_token;
+  }
+
+  async function loadPlatformCodes() {
+    const tableEl = document.getElementById('pcCodesTable');
+    if (!tableEl) return;
+    tableEl.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/manage-discount-codes', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const codes = data.codes || [];
+      if (!codes.length) { tableEl.innerHTML = '<p style="color:#6b7280">No codes yet.</p>'; return; }
+
+      tableEl.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb">
+          <th style="padding:8px 12px">Code</th><th style="padding:8px 12px">Discount</th>
+          <th style="padding:8px 12px">Scope</th><th style="padding:8px 12px">Owner</th>
+          <th style="padding:8px 12px">Uses</th><th style="padding:8px 12px">Expires</th>
+          <th style="padding:8px 12px">Status</th><th style="padding:8px 12px">Actions</th>
+        </tr></thead>
+        <tbody>${codes.map(c => {
+          const amountLabel = c.type === 'percentage' ? `${c.amount}%` : `R${c.amount}`;
+          const scopeLabel = c.scope === 'products' ? 'Products' : 'Whole order';
+          const owner = c.seller_id ? 'Seller' : 'Platform';
+          const usesLabel = c.max_redemptions ? `${c.redemptions} / ${c.max_redemptions}` : `${c.redemptions}`;
+          const fmtDate = d => d ? new Date(d).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—';
+          const statusColor = c.status === 'active' ? '#059669' : '#9ca3af';
+          const action = c.status === 'active'
+            ? `<button class="pc-disable-btn" data-id="${c.id}" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px">Disable</button>`
+            : '—';
+          return `<tr style="border-bottom:1px solid #f0f0f5">
+            <td style="padding:10px 12px;font-family:ui-monospace,monospace;font-weight:700">${pcEsc(c.code)}</td>
+            <td style="padding:10px 12px">${amountLabel}</td>
+            <td style="padding:10px 12px">${scopeLabel}</td>
+            <td style="padding:10px 12px">${owner}</td>
+            <td style="padding:10px 12px">${usesLabel}</td>
+            <td style="padding:10px 12px">${fmtDate(c.expires_at)}</td>
+            <td style="padding:10px 12px"><span style="color:${statusColor};font-weight:700;text-transform:uppercase;font-size:12px">${c.status}</span></td>
+            <td style="padding:10px 12px">${action}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+
+      tableEl.querySelectorAll('.pc-disable-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          if (!confirm('Disable this code?')) return;
+          this.disabled = true;
+          const token = await pcGetToken();
+          await fetch('/.netlify/functions/manage-discount-codes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ action: 'disable', code_id: this.dataset.id })
+          });
+          loadPlatformCodes();
+        });
+      });
+    } catch (e) {
+      console.error('loadPlatformCodes error', e);
+      tableEl.innerHTML = '<p style="color:#dc2626">Failed to load codes.</p>';
+    }
+  }
+
+  async function loadPcProducts() {
+    if (pcProductsLoaded || !supabaseClient) return;
+    pcProductsLoaded = true;
+    const sel = document.getElementById('pcProductsSelect');
+    if (!sel) return;
+    try {
+      const { data: prods } = await supabaseClient.from('products').select('id, name').eq('visible', true).order('name').limit(500);
+      sel.innerHTML = (prods || []).map(p => `<option value="${p.id}">${pcEsc(p.name || p.id)}</option>`).join('');
+    } catch (e) { /* left empty */ }
+  }
+
+  document.querySelectorAll('input[name="pcScope"]').forEach(r => {
+    r.addEventListener('change', () => {
+      const sel = document.getElementById('pcProductsSelect');
+      const isProducts = document.querySelector('input[name="pcScope"]:checked').value === 'products';
+      sel.style.display = isProducts ? '' : 'none';
+      if (isProducts) loadPcProducts();
+    });
+  });
+
+  document.getElementById('pcCreateBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('pcCreateError');
+    const okEl = document.getElementById('pcCreateSuccess');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+
+    const code = document.getElementById('pcCodeInput').value.trim().toUpperCase();
+    const amount = document.getElementById('pcAmountInput').value;
+    const type = document.getElementById('pcTypeInput').value;
+    const expires_at = document.getElementById('pcExpiresInput').value;
+    const max_redemptions = document.getElementById('pcMaxRedemptionsInput').value || null;
+    const scope = document.querySelector('input[name="pcScope"]:checked').value;
+    const product_ids = scope === 'products'
+      ? Array.from(document.getElementById('pcProductsSelect').selectedOptions).map(o => o.value)
+      : undefined;
+
+    const btn = document.getElementById('pcCreateBtn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/manage-discount-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'create', code, amount, type, expires_at, max_redemptions, scope, product_ids })
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Could not create code.'; return; }
+      okEl.style.display = 'block'; okEl.textContent = `✓ ${data.code.code} created.`;
+      document.getElementById('pcCodeInput').value = '';
+      document.getElementById('pcAmountInput').value = '';
+      document.getElementById('pcMaxRedemptionsInput').value = '';
+      loadPlatformCodes();
+    } catch (e) {
+      errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create platform code';
+    }
+  });
+
+  // ── Marketing: Campaign Approval Queue ──────────────────────────────────────
+  let mcQueueLoaded = false;
+  let mcCodeSelectLoaded = false;
+
+  async function loadMcQueue() {
+    const el = document.getElementById('mcQueue');
+    if (!el) return;
+    el.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/admin-manage-marketing?status=pending', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const camps = data.campaigns || [];
+      if (!camps.length) { el.innerHTML = '<p style="color:#6b7280">No campaigns waiting for review.</p>'; return; }
+
+      el.innerHTML = camps.map(c => {
+        const shop = c.sellers && c.sellers.shop_name ? c.sellers.shop_name : '—';
+        const code = c.discount_codes;
+        const codeLabel = code ? `${pcEsc(code.code)} — ${code.type === 'percentage' ? code.amount + '%' : 'R' + code.amount} off (${code.scope === 'products' ? 'selected products' : 'whole shop'})` : 'No code attached';
+        const submitted = new Date(c.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+        return `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:16px 18px;margin-bottom:12px;background:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:15px">${pcEsc(c.subject)}</div>
+              <div style="font-size:13px;color:#6b7280;margin-top:2px">From <strong>${pcEsc(shop)}</strong> · Submitted ${submitted}</div>
+              <div style="font-size:13px;color:#374151;margin-top:6px">${codeLabel}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="mc-preview-btn" data-id="${c.id}" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px">Preview</button>
+              <button class="mc-approve-btn" data-id="${c.id}" style="background:#059669;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px">Approve &amp; Send</button>
+              <button class="mc-reject-btn" data-id="${c.id}" style="background:#dc2626;color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px">Reject</button>
+            </div>
+          </div>
+          <iframe id="mc-frame-${c.id}" style="display:none;width:100%;height:480px;border:1px solid #e5e7eb;border-radius:10px;margin-top:14px;background:#fff"></iframe>
+        </div>`;
+      }).join('');
+
+      el.querySelectorAll('.mc-preview-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const frame = document.getElementById('mc-frame-' + this.dataset.id);
+          if (frame.style.display === 'block') { frame.style.display = 'none'; return; }
+          const token = await pcGetToken();
+          const res = await fetch('/.netlify/functions/admin-manage-marketing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ campaign_id: this.dataset.id, action: 'preview' })
+          });
+          const data = await res.json();
+          if (res.ok) { frame.srcdoc = data.html; frame.style.display = 'block'; }
+        });
+      });
+
+      el.querySelectorAll('.mc-approve-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          if (!confirm('Approve and send this campaign to all subscribers now? This cannot be undone.')) return;
+          this.disabled = true; this.textContent = 'Sending…';
+          const token = await pcGetToken();
+          const res = await fetch('/.netlify/functions/admin-manage-marketing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ campaign_id: this.dataset.id, action: 'approve' })
+          });
+          const data = await res.json();
+          if (!res.ok) { alert(data.error || 'Send failed.'); this.disabled = false; this.textContent = 'Approve & Send'; return; }
+          alert(`Sent to ${data.recipient_count} subscriber(s).`);
+          loadMcQueue();
+        });
+      });
+
+      el.querySelectorAll('.mc-reject-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const reason = prompt('Reason for rejecting this campaign (shown to the seller):');
+          if (reason === null) return;
+          this.disabled = true;
+          const token = await pcGetToken();
+          await fetch('/.netlify/functions/admin-manage-marketing', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ campaign_id: this.dataset.id, action: 'reject', rejection_reason: reason })
+          });
+          loadMcQueue();
+        });
+      });
+    } catch (e) {
+      console.error('loadMcQueue error', e);
+      el.innerHTML = '<p style="color:#dc2626">Failed to load the approval queue.</p>';
+    }
+  }
+
+  async function loadMcCodeSelect() {
+    if (mcCodeSelectLoaded) return;
+    mcCodeSelectLoaded = true;
+    const sel = document.getElementById('mcCodeSelect');
+    if (!sel) return;
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/manage-discount-codes', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const platformCodes = (data.codes || []).filter(c => !c.seller_id && c.status === 'active');
+      sel.innerHTML = '<option value="">No code — just an announcement</option>' +
+        platformCodes.map(c => `<option value="${c.id}">${pcEsc(c.code)} (${c.type === 'percentage' ? c.amount + '%' : 'R' + c.amount} off)</option>`).join('');
+    } catch (e) { /* left with just the default option */ }
+  }
+
+  function mcBuildPayload(action) {
+    return {
+      action,
+      discount_code_id: document.getElementById('mcCodeSelect').value || null,
+      subject: document.getElementById('mcSubjectInput').value,
+      headline: document.getElementById('mcHeadlineInput').value,
+      body_message: document.getElementById('mcMessageInput').value,
+      cta_text: document.getElementById('mcCtaTextInput').value || 'Shop now',
+      cta_destination: document.getElementById('mcCtaDestSelect').value
+    };
+  }
+
+  document.getElementById('mcPreviewBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('mcError'); const okEl = document.getElementById('mcSuccess');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    const btn = document.getElementById('mcPreviewBtn');
+    btn.disabled = true; btn.textContent = 'Loading…';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/submit-marketing-campaign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(mcBuildPayload('preview'))
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Could not preview.'; return; }
+      const wrap = document.getElementById('mcPreviewWrap'); const frame = document.getElementById('mcPreviewFrame');
+      wrap.style.display = 'block'; frame.srcdoc = data.html;
+    } catch (e) {
+      errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Preview';
+    }
+  });
+
+  document.getElementById('mcSendBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('mcError'); const okEl = document.getElementById('mcSuccess');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    const subject = document.getElementById('mcSubjectInput').value.trim();
+    const headline = document.getElementById('mcHeadlineInput').value.trim();
+    const message = document.getElementById('mcMessageInput').value.trim();
+    if (!subject || !headline || !message) {
+      errEl.style.display = 'block'; errEl.textContent = 'Subject, headline, and message are required.'; return;
+    }
+    if (!confirm('Send this campaign to all subscribers now? This cannot be undone.')) return;
+
+    const btn = document.getElementById('mcSendBtn');
+    btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const token = await pcGetToken();
+      const createRes = await fetch('/.netlify/functions/submit-marketing-campaign', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(mcBuildPayload('submit'))
+      });
+      const created = await createRes.json();
+      if (!createRes.ok) { errEl.style.display = 'block'; errEl.textContent = created.error || 'Could not create campaign.'; return; }
+
+      const sendRes = await fetch('/.netlify/functions/admin-manage-marketing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ campaign_id: created.campaign.id, action: 'approve' })
+      });
+      const sent = await sendRes.json();
+      if (!sendRes.ok) { errEl.style.display = 'block'; errEl.textContent = sent.error || 'Campaign created but send failed.'; return; }
+
+      okEl.style.display = 'block'; okEl.textContent = `✓ Sent to ${sent.recipient_count} subscriber(s).`;
+      document.getElementById('mcSubjectInput').value = '';
+      document.getElementById('mcHeadlineInput').value = '';
+      document.getElementById('mcMessageInput').value = '';
+      document.getElementById('mcPreviewWrap').style.display = 'none';
+    } catch (e) {
+      errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Send now';
+    }
+  });
+
+  // ── Marketing: Direct Email ──────────────────────────────────────────────
+  let deSelectedEmail = null;
+  let deSearchTimer = null;
+
+  function deSourceBadges(sources) {
+    const labels = { newsletter:'Newsletter', mystery_gift:'Mystery gift', referral:'Referral',
+      checkout:'Checkout', seller_application:'Seller application', stock_alert:'Stock alert', account_signup:'Account' };
+    return (sources || []).map(s => `<span style="background:#eef2ff;color:#3730a3;padding:1px 8px;border-radius:999px;font-size:11px;margin-right:4px">${pcEsc(labels[s] || s)}</span>`).join('');
+  }
+
+  function deConsentBadge(consent, unsubscribed) {
+    if (unsubscribed) return `<span style="color:#dc2626;font-weight:700;font-size:11px;text-transform:uppercase">Unsubscribed</span>`;
+    const map = { opted_in: ['#059669','Opted in'], soft_opt_in: ['#2563eb','Soft opt-in'], transactional: ['#9ca3af','Transactional only'] };
+    const [color, label] = map[consent] || ['#6b7280', consent];
+    return `<span style="color:${color};font-weight:700;font-size:11px;text-transform:uppercase">${label}</span>`;
+  }
+
+  async function loadDeResults(q) {
+    const el = document.getElementById('deResults');
+    el.innerHTML = '<p style="color:#6b7280;font-size:13px">Searching…</p>';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch(`/.netlify/functions/admin-direct-email?q=${encodeURIComponent(q || '')}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const contacts = data.contacts || [];
+      if (!contacts.length) { el.innerHTML = '<p style="color:#6b7280;font-size:13px">No matching contacts.</p>'; return; }
+
+      el.innerHTML = contacts.map(c => {
+        const lastOrder = c.last_order_at ? new Date(c.last_order_at).toLocaleDateString('en-ZA', { day:'numeric', month:'short', year:'numeric' }) : null;
+        return `<div class="de-contact-row" data-email="${pcEsc(c.email)}" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin-bottom:6px;cursor:pointer;background:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700;font-size:13px">${pcEsc(c.email)}${c.name ? ' · ' + pcEsc(c.name) : ''}</div>
+              <div style="margin-top:4px">${deSourceBadges(c.sources)}</div>
+            </div>
+            <div style="text-align:right">
+              ${deConsentBadge(c.consent, c.unsubscribed)}
+              ${lastOrder ? `<div style="font-size:11px;color:#9ca3af;margin-top:2px">Last order ${lastOrder}</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      el.querySelectorAll('.de-contact-row').forEach(row => {
+        row.addEventListener('click', () => {
+          deSelectedEmail = row.dataset.email;
+          document.getElementById('deSelectedEmail').textContent = deSelectedEmail;
+          document.getElementById('deComposeWrap').style.display = 'block';
+          document.getElementById('deError').style.display = 'none';
+          document.getElementById('deSuccess').style.display = 'none';
+          document.getElementById('dePreviewWrap').style.display = 'none';
+        });
+      });
+    } catch (e) {
+      console.error('loadDeResults error', e);
+      el.innerHTML = '<p style="color:#dc2626;font-size:13px">Search failed.</p>';
+    }
+  }
+
+  document.getElementById('deSearchInput')?.addEventListener('input', function() {
+    clearTimeout(deSearchTimer);
+    const val = this.value;
+    deSearchTimer = setTimeout(() => loadDeResults(val), 300);
+  });
+
+  async function runDeAction(action) {
+    const errEl = document.getElementById('deError'); const okEl = document.getElementById('deSuccess');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    if (!deSelectedEmail) { errEl.style.display = 'block'; errEl.textContent = 'Select a contact first.'; return; }
+
+    const subject = document.getElementById('deSubjectInput').value.trim();
+    const headline = document.getElementById('deHeadlineInput').value.trim();
+    const message = document.getElementById('deMessageInput').value.trim();
+    if (!subject || !headline || !message) {
+      errEl.style.display = 'block'; errEl.textContent = 'Subject, headline, and message are required.'; return;
+    }
+    if (action === 'send' && !confirm(`Send this email to ${deSelectedEmail}?`)) return;
+
+    const btn = document.getElementById(action === 'preview' ? 'dePreviewBtn' : 'deSendBtn');
+    const originalLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = action === 'preview' ? 'Loading…' : 'Sending…';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/admin-direct-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: action === 'preview' ? 'preview' : undefined,
+          email: deSelectedEmail, subject, headline, body_message: message,
+          cta_text: document.getElementById('deCtaTextInput').value || 'Visit Umzila'
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Something went wrong.'; return; }
+
+      if (action === 'preview') {
+        const wrap = document.getElementById('dePreviewWrap'); const frame = document.getElementById('dePreviewFrame');
+        wrap.style.display = 'block'; frame.srcdoc = data.html;
+      } else {
+        okEl.style.display = 'block'; okEl.textContent = `✓ Sent to ${deSelectedEmail}.`;
+      }
+    } catch (e) {
+      errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.';
+    } finally {
+      btn.disabled = false; btn.textContent = originalLabel;
+    }
+  }
+
+  document.getElementById('dePreviewBtn')?.addEventListener('click', () => runDeAction('preview'));
+  document.getElementById('deSendBtn')?.addEventListener('click', () => runDeAction('send'));
+
+  document.querySelector('[data-section="marketing"]')?.addEventListener('click', () => {
+    if (!platformCodesLoaded) { platformCodesLoaded = true; loadPlatformCodes(); }
+    if (!mcQueueLoaded) { mcQueueLoaded = true; loadMcQueue(); }
+    loadMcCodeSelect();
+    if (document.getElementById('deResults') && !document.getElementById('deResults').dataset.loaded) {
+      document.getElementById('deResults').dataset.loaded = '1';
+      loadDeResults('');
+    }
   });
 
   // Load intelligence dashboard when tab is clicked

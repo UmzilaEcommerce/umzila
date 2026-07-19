@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { validateCode, computeDiscount } = require('./lib/discounts');
 
 // Must match checkout.html's client-side copies — this server copy is authoritative.
 const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
@@ -92,7 +93,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, userId } = JSON.parse(event.body);
+        const { cartItems, userId, couponCode, customerEmail } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -351,6 +352,40 @@ variants.forEach(v => {
                 });
         }
         
+        // Server-authoritative discount — mirrors how `fees` already works.
+        // Never trust a client-computed discount amount once real seller
+        // money is involved.
+        let discount = null;
+        if (couponCode) {
+            const v = await validateCode(supabase, { code: couponCode, email: customerEmail, userId });
+            if (!v.ok) {
+                discount = { valid: false, reason: v.reason };
+            } else {
+                let sellerShopName = null;
+                if (v.codeRow.seller_id) {
+                    const { data: sellerRow } = await supabase
+                        .from('sellers')
+                        .select('shop_name')
+                        .eq('id', v.codeRow.seller_id)
+                        .maybeSingle();
+                    sellerShopName = sellerRow?.shop_name || null;
+                }
+                const computed = computeDiscount(v.codeRow, validatedCart, sellerShopName);
+                discount = {
+                    valid: true,
+                    code: v.codeRow.code,
+                    type: v.codeRow.type,
+                    requiresSignIn: !!v.requiresSignIn,
+                    amount: v.requiresSignIn ? 0 : computed.amount,
+                    previewAmount: computed.amount,
+                    eligibleSubtotal: computed.eligibleSubtotal,
+                    matchedItems: computed.matchedItems,
+                    scopeLabel: computed.scopeLabel,
+                    reason: computed.reason || null
+                };
+            }
+        }
+
         return {
             statusCode: 200,
             headers: {
@@ -361,6 +396,7 @@ variants.forEach(v => {
                 total,
                 hasChanges,
                 fees: computeFees(validatedCart),
+                discount,
                 message: hasChanges ? 'Cart has been updated with current prices and stock' : 'Cart is valid'
             })
         };

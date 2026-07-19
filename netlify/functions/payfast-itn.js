@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const { computeDiscount } = require('./lib/discounts');
 
 exports.handler = async function(event, context) {
     const headers = { 'Content-Type': 'text/plain' };
@@ -102,15 +103,58 @@ exports.handler = async function(event, context) {
                         }
                     }
 
-                    // ── Mark coupon as used ────────────────────────────────
+                    // ── Consume the coupon ──────────────────────────────────
+                    // Two code generations: legacy single-global-use codes
+                    // (referral/mystery-gift/gift) still just flip `used`,
+                    // exactly as before. New multi-use admin/seller codes
+                    // instead record a per-buyer redemption row — that's
+                    // what makes "one code, many buyers, once each" real.
                     if (existingOrder.coupon_code) {
-                        const { error: dcErr } = await supabase
+                        const { data: codeRow } = await supabase
                             .from('discount_codes')
-                            .update({ used: true, used_at: new Date().toISOString() })
+                            .select('*')
                             .eq('code', existingOrder.coupon_code)
-                            .eq('used', false); // idempotent — only updates if not already consumed
-                        if (dcErr) console.error('ITN: error marking coupon used:', dcErr);
-                        else console.log('ITN: coupon marked used:', existingOrder.coupon_code);
+                            .maybeSingle();
+
+                        if (codeRow?.multi_use) {
+                            if (!resolvedUserId) {
+                                console.warn('ITN: multi-use coupon on a guest order — skipping redemption record (should not happen, discount should have been 0)', existingOrder.coupon_code);
+                            } else {
+                                try {
+                                    const orderItems = Array.isArray(existingOrder.items)
+                                        ? existingOrder.items
+                                        : (typeof existingOrder.items === 'string' ? JSON.parse(existingOrder.items) : []);
+                                    const { matchedItems } = computeDiscount(codeRow, orderItems);
+                                    const { error: redErr } = await supabase.from('discount_redemptions').insert([{
+                                        discount_code_id: codeRow.id,
+                                        code: codeRow.code,
+                                        order_id: existingOrder.id,
+                                        order_number: existingOrder.order_number,
+                                        user_id: resolvedUserId,
+                                        email: buyerEmailForLookup || null,
+                                        discount_amount: existingOrder.discount || 0,
+                                        matched_items: matchedItems
+                                    }]);
+                                    // 23505 = unique violation on (discount_code_id, user_id) —
+                                    // an ITN retry hitting the same redemption again; expected, not an error.
+                                    if (redErr && redErr.code !== '23505') {
+                                        console.error('ITN: error recording redemption:', redErr);
+                                    } else if (!redErr) {
+                                        console.log('ITN: redemption recorded for coupon', codeRow.code, 'user', resolvedUserId);
+                                    }
+                                } catch (redemptionErr) {
+                                    console.error('ITN: redemption recording error:', redemptionErr.message);
+                                }
+                            }
+                        } else {
+                            const { error: dcErr } = await supabase
+                                .from('discount_codes')
+                                .update({ used: true, used_at: new Date().toISOString() })
+                                .eq('code', existingOrder.coupon_code)
+                                .eq('used', false); // idempotent — only updates if not already consumed
+                            if (dcErr) console.error('ITN: error marking coupon used:', dcErr);
+                            else console.log('ITN: coupon marked used:', existingOrder.coupon_code);
+                        }
                     }
 
                     // ── Clear buyer's Supabase cart ────────────────────────
