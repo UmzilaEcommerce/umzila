@@ -180,6 +180,21 @@
                 localStorage.removeItem('ss_cart');
                 localStorage.removeItem('ss_coupon');
                 console.log('checkout-success: payment confirmed, cart cleared');
+
+                // Marketing opt-in — only sent once payment is actually
+                // confirmed paid (never before, never blocking). Fire-and-
+                // forget through subscribe.js; the subscribers table itself
+                // has no anon/authenticated access, so this must go through
+                // the function, never a direct table write.
+                var marketingEmail = localStorage.getItem('ss_marketing_optin');
+                if (marketingEmail) {
+                  fetch('/.netlify/functions/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: marketingEmail })
+                  }).catch(function() {});
+                  localStorage.removeItem('ss_marketing_optin');
+                }
                 // Check for service items and show next steps panel
                 try {
                   const { data: fullOrder } = await sb.from('orders').select('items').eq('m_payment_id', mPaymentId).maybeSingle();

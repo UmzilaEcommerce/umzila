@@ -296,12 +296,26 @@
     }
     
     .summary-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
       font-size: 20px;
+      font-family: inherit;
+      font-weight: 700;
       color: var(--accent);
       margin-bottom: 25px;
       padding-bottom: 15px;
       border-bottom: 2px solid #f8f9fa;
+      background: none;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      cursor: default;
+      text-align: left;
     }
+    .summary-header-meta { display: none; }
+    .summary-chevron { display: none; margin-left: auto; }
     
     .order-items {
       max-height: 300px;
@@ -624,11 +638,108 @@
       .promo-code-input {
         flex-direction: column;
       }
+
+      /* Order summary collapses to an accordion — tap the header to see
+         the full item list. Totals/checkout stay above it in the normal
+         page flow either way (this is the right column reflowed below the
+         form on mobile), so nothing important is ever hidden by this. */
+      .summary-header { cursor: pointer; margin-bottom: 12px; padding-bottom: 12px; }
+      .summary-header-meta { display: block; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
+      .summary-chevron { display: block; transition: transform 0.15s ease; }
+      .order-summary.expanded .summary-chevron { transform: rotate(180deg); }
+      .order-summary:not(.expanded) #orderItems { display: none; }
+
+      /* Sticky bottom Pay bar — replaces the deleted bottom nav's screen
+         real estate with something that actually serves checkout: the
+         live total and the pay action, always in view while scrolling
+         through delivery/payment fields. Relocates the *existing*
+         #totalAmount/#payNowBtn (or the saved-card button) via flex order,
+         not a duplicate element, so totals can never drift out of sync. */
+      body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+      .mobile-pay-bar {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 1000;
+        background: #fff;
+        box-shadow: 0 -4px 12px rgba(16,24,40,0.08);
+        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+      .mobile-pay-bar-total {
+        font-family: 'Playfair Display', serif;
+        font-weight: 700;
+        font-size: 18px;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+      }
+      .mobile-pay-bar #payNowBtnMobile,
+      .mobile-pay-bar #payWithSavedCardBtnMobile {
+        flex: 1;
+        padding: 13px 16px;
+        font-size: 15px;
+        min-height: 44px;
+      }
+    }
+    @media (min-width: 769px) {
+      .mobile-pay-bar { display: none; }
     }
     
     /* ---------- UTILITY CLASSES ---------- */
     .hidden {
       display: none !important;
+    }
+
+    /* ---------- UNIFIED AUTH PANEL ---------- */
+    #authCardWrap { margin-bottom: 16px; }
+    .auth-card {
+      background: #f8f9fa;
+      border-radius: var(--radius-md);
+      padding: 13px 14px;
+      margin-bottom: 8px;
+    }
+    #authCardWrap > .auth-card:last-child,
+    #authCardWrap > .hidden + .auth-card:last-child { margin-bottom: 0; }
+    .auth-row-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 44px;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      text-align: left;
+    }
+    .auth-row-btn .auth-row-chevron { margin-left: auto; opacity: 0.5; }
+    .auth-inline-form { margin-top: 10px; }
+    .auth-text-link {
+      background: none;
+      border: none;
+      color: #6b7280;
+      text-decoration: underline;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 10px 0;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+    }
+    /* Signed-in strip — a thin confirmation, not a card, so a fully
+       set-up returning buyer's whole auth footprint is ~36px tall. */
+    .auth-signed-in {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #f0fdf4;
+      color: #166534;
+      font-size: 13px;
+      padding: 10px 14px;
     }
 
     /* Quick sign-in shortcut fades out of the way once the buyer starts
@@ -640,10 +751,114 @@
     #quickSigninCard { transition: opacity 0.2s ease-out; }
 
     /* Adaptive bottom password card — accent border once it recognizes a
-       returning buyer's email, so the state change is visually obvious. */
+       returning buyer's email, so the state change is visually obvious;
+       muted/optional treatment for a brand-new email (never a gate). */
     #accountPasswordCard.returning {
       background: #eef2ff !important;
       border: 1.5px solid var(--accent);
+    }
+    #accountPasswordCard:not(.returning) {
+      background: #fbfbfc;
+      border: 1px dashed #e5e7eb;
+    }
+    #accountPasswordCard:not(.returning) #accountPasswordTitle { font-size: 13px; color: #4b5563; }
+
+    /* ---------- CAMPUS ETA STRIP (signature element) ---------- */
+    .eta-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius-pill);
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+    .eta-strip-empty {
+      background: #f4f6fb;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .eta-strip-active {
+      background: #eef2f8;
+      color: var(--accent);
+    }
+    .eta-dot {
+      flex: 0 0 auto;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      animation: eta-pulse 2s ease-in-out infinite;
+    }
+    @keyframes eta-pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.35; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .eta-dot { animation: none; }
+    }
+
+    /* ---------- CONSENT CHECKBOXES / MORE OPTIONS ---------- */
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      min-height: 44px;
+    }
+    .checkbox-row input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+    }
+    .consent-divider {
+      height: 1px;
+      background: #eee;
+      margin: 4px 0 8px;
+    }
+    .more-options-disclosure {
+      margin-bottom: 4px;
+    }
+    .more-options-disclosure > summary {
+      list-style: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      padding: 10px 0;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+    }
+    .more-options-disclosure > summary::-webkit-details-marker { display: none; }
+    .more-options-disclosure > summary::before {
+      content: '▸';
+      display: inline-block;
+      margin-right: 6px;
+      transition: transform 0.15s ease;
+    }
+    .more-options-disclosure[open] > summary::before { transform: rotate(90deg); }
+
+    /* Saved-card fast path is the dominant CTA when available — regular
+       Pay Now demotes to a plain link underneath instead of two
+       equal-weight buttons. */
+    .has-saved-card #payNowBtn {
+      background: none !important;
+      color: var(--muted) !important;
+      box-shadow: none !important;
+      padding: 10px !important;
+      font-size: 14px !important;
+      text-decoration: underline;
+    }
+
+    /* Desktop: no space pressure, so "More options" is always expanded and
+       the toggle affordance is hidden — native <details> collapse-by-
+       default behavior only actually applies on mobile widths. */
+    @media (min-width: 769px) {
+      .more-options-disclosure > summary { display: none; }
+      .more-options-disclosure > *:not(summary) { display: block !important; }
     }
 
     /* Address autocomplete suggestions */
@@ -772,26 +987,81 @@
             <h2>Checkout</h2>
           </div>
 
-          <!-- Path A: explicit "I already have an account" shortcut — fully
-               self-contained (its own email field), works even if nothing
-               else on the page has been touched yet. De-emphasizes itself
-               once the buyer starts typing into the form below instead. -->
-          <div id="quickSigninCard" style="margin-bottom:14px">
-            <button type="button" id="inlineSigninToggle" style="background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:0">Have an account? Sign in for faster checkout</button>
-            <div id="inlineSigninForm" class="hidden" style="margin-top:10px;padding:14px;background:#f8f9fa;border-radius:10px">
-              <div class="form-group" style="margin-bottom:8px">
-                <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
-                <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
-              </div>
-              <div id="inlineSigninError" class="error-message hidden"></div>
-              <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
-              <button type="button" id="inlineForgotPassword" style="background:none;border:none;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px;padding:0;margin-left:10px">Forgot password?</button>
+          <!-- Shop-branding banner — only for a single-seller cart (e.g.
+               reached via a shop's "Buy Now"), so a purchase from one
+               shop doesn't feel like a generic detour through "the main
+               site's checkout." Never shown for a mixed-seller cart.
+               Populated by renderShopBrandingBanner(). -->
+          <div id="shopBrandingBanner" class="hidden" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:16px;background:#fff;border:1px solid var(--color-border,#e5e7eb);border-radius:var(--radius-md)">
+            <div id="shopBrandingLogo" style="flex:0 0 auto;width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Ordering from</div>
+              <div id="shopBrandingName" style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
             </div>
-          </div>
-          <div id="signedInBox" class="hidden" style="margin-bottom:14px;padding:12px 14px;background:#f0fdf4;border-radius:10px;font-size:13px;color:#166534">
-            Signed in as <span id="signedInEmail" style="font-weight:600"></span> · <button type="button" id="signOutInline" style="background:none;border:none;color:#166534;text-decoration:underline;cursor:pointer;font-size:13px;padding:0">Not you?</button>
+            <div id="shopBrandingAmount" style="flex:0 0 auto;font-size:13px;color:var(--muted)"></div>
           </div>
 
+          <!-- Unified auth panel — one visual component, five JS-driven
+               states (guest/untyped, guest/known-email, guest/new-email,
+               signed-in/complete, signed-in/partial). The state machine
+               below (checkEmailDebounced/setAccountCardState/updateAuthUI)
+               is unchanged — only markup grouping + styling changed here. -->
+          <div id="authCardWrap">
+            <!-- Path A: explicit "I already have an account" shortcut — fully
+                 self-contained (its own email field), works even if nothing
+                 else on the page has been touched yet. De-emphasizes itself
+                 once the buyer starts typing into the form below instead. -->
+            <div id="quickSigninCard" class="auth-card">
+              <button type="button" id="inlineSigninToggle" class="auth-row-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                <span>Already have an account? <strong>Sign in</strong></span>
+                <svg class="auth-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+              <div id="inlineSigninForm" class="hidden auth-inline-form">
+                <div class="form-group" style="margin-bottom:8px">
+                  <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
+                  <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
+                </div>
+                <div id="inlineSigninError" class="error-message hidden"></div>
+                <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
+                <button type="button" id="inlineForgotPassword" class="auth-text-link" style="margin-left:10px">Forgot password?</button>
+              </div>
+            </div>
+
+            <div id="signedInBox" class="hidden auth-card auth-signed-in">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Signed in as <strong id="signedInEmail"></strong></span>
+              <button type="button" id="signOutInline" class="auth-text-link" style="margin-left:auto;color:#166534">Not you?</button>
+            </div>
+
+            <!-- Path B: adaptive password field bound to the customerEmail
+                 field below, for anyone who didn't use the quick sign-in
+                 shortcut above. Flips between "create a password" (new
+                 email) and "welcome back, sign in" (email matches an
+                 existing account) via setAccountCardState(). Hidden
+                 entirely once signed in. -->
+            <div id="accountPasswordCard" class="hidden auth-card">
+              <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
+              <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
+                <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
+                <button type="button" id="accountPasswordForgot" class="hidden auth-text-link">Forgot password?</button>
+              </div>
+              <div id="accountPasswordError" class="error-message hidden" style="margin-top:8px"></div>
+            </div>
+          </div>
+
+          <!-- Contact — collapses to one editable summary line for a
+               signed-in buyer with a name/phone already on file; full and
+               open for guests (unchanged for them). Mirrors the compact/
+               full pattern already proven for the address section below. -->
+          <div id="contactSummary" class="hidden auth-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
+            <div style="font-size:14px;color:#1a1a2e" id="contactSummaryText"></div>
+            <button type="button" id="editContactBtn" class="auth-text-link" style="white-space:nowrap">Edit</button>
+          </div>
+
+          <div id="contactFormFull">
           <div class="field-group-label">Contact</div>
 
           <div class="form-group">
@@ -816,6 +1086,7 @@
           </div>
 
           <div id="detailsFormError" class="error-message hidden"></div>
+          </div>
 
           <div class="field-group-label">Delivery</div>
 
@@ -833,24 +1104,26 @@
                complete just falls through to the full form below. -->
           <div id="addressCompactCard" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
             <div style="font-size:14px;color:#1a1a2e"><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
-            <button type="button" id="changeAddressBtn" style="background:none;border:none;color:var(--accent);font-weight:600;font-size:13px;cursor:pointer;padding:0;white-space:nowrap">Change</button>
+            <button type="button" id="changeAddressBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Change</button>
           </div>
+
+          <!-- Campus ETA strip — the one signature element of this page.
+               Replaces both the old zone-restriction banner and a buried
+               green delivery-time box with one persistent, honest line:
+               a live-styled pill that shows "choose an area" before a
+               zone is picked, then the zone name + the real
+               seller-turnaround estimate once known (refreshEstimatedTime()
+               below — unchanged data, just one place to look). -->
+          <div id="estimatedDeliveryTime" class="eta-strip eta-strip-empty">
+            📍 Choose your delivery area to see your ETA — deliveries are currently only available near UKZN Westville
+          </div>
+
+          <div id="addressNudgeText" class="hidden" style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">One more thing — add your delivery address to finish</div>
 
           <div id="addressFormFull">
           <div id="shippingForm">
-            <!-- Delivery method — delivery-only, no pickup option -->
-            <div class="form-group" id="deliveryMethodGroup">
-              <div id="estimatedDeliveryTime" style="margin-top:10px;padding:10px 14px;background:#f0fdf4;border-radius:8px;font-size:13px;color:#166534;display:none"></div>
-            </div>
-
             <!-- Address-only fields -->
             <div id="zoneSection">
-              <!-- Delivery area restriction banner -->
-              <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#856404;line-height:1.5">
-                📍 <strong>Deliveries are currently only available to areas near UKZN Westville.</strong>
-                Select your delivery area below before continuing.
-              </div>
-
               <!-- Delivery zone dropdown (required) -->
               <div class="form-group">
                 <label class="form-label">Delivery Area <span class="required">*</span></label>
@@ -919,58 +1192,57 @@
 
           <div class="field-group-label">Payment</div>
 
-          <div class="payment-methods">
-            <div class="payment-method selected" data-method="payfast">
-              <div class="payment-icon">💳</div>
-              <div class="payment-details">
-                <h4>PayFast</h4>
-                <p>Secure payment via PayFast (Credit Card, EFT, SnapScan)</p>
-              </div>
+          <!-- Order notes + "save my card" are real but non-essential to a
+               fast checkout — grouped under a disclosure. Native <details>
+               so no JS is needed; CSS forces it open on desktop where
+               there's no space pressure, native collapse-by-default on
+               mobile (see MORE-OPTIONS rules). -->
+          <details id="moreOptionsDisclosure" class="more-options-disclosure">
+            <summary>More options</summary>
+            <div class="form-group">
+              <label class="form-label">Order Notes (Optional)</label>
+              <textarea id="orderNotes" class="form-control" rows="3" placeholder="Any special notes for your order"></textarea>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label class="form-label">Order Notes (Optional)</label>
-            <textarea id="orderNotes" class="form-control" rows="3" placeholder="Any special notes for your order"></textarea>
-          </div>
+            <div class="form-group">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
+                <span>Save my card for faster checkout next time</span>
+              </label>
+            </div>
+          </details>
 
+          <!-- Terms + marketing opt-in always visible on every breakpoint —
+               never hide a consent checkbox behind a disclosure. Kept
+               visually distinct from each other (divider) so opting into
+               marketing never reads as bundled into agreeing to the order. -->
           <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-              <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
-              <span>Save my card for faster checkout next time</span>
-            </label>
-          </div>
-
-          <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <label class="checkbox-row">
               <input type="checkbox" id="termsAgreement" required style="width: auto;">
               <span>I agree to the <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a></span>
             </label>
           </div>
 
-          <!-- Path B: adaptive password field bound to the customerEmail
-               field above, for anyone who didn't use the quick sign-in
-               shortcut. Flips between "create a password" (new email) and
-               "welcome back, sign in" (email matches an existing account)
-               via setAccountCardState(). Hidden entirely once signed in. -->
-          <div id="accountPasswordCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#f8f9fa;border-radius:10px">
-            <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
-            <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
-              <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
-              <button type="button" id="accountPasswordForgot" class="hidden" style="background:none;border:none;color:#6b7280;text-decoration:underline;cursor:pointer;font-size:13px;padding:0">Forgot password?</button>
-            </div>
-            <div id="accountPasswordError" class="error-message hidden" style="margin-top:8px"></div>
+          <div class="consent-divider"></div>
+
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" id="marketingOptIn" style="width: auto;">
+              <span>Send me deals from campus shops (unsubscribe anytime)</span>
+            </label>
           </div>
 
           <div id="paymentError" class="error-message hidden"></div>
 
+          <!-- Saved-card fast path becomes the dominant CTA once it's
+               available (checkoutSection.has-saved-card, toggled in JS
+               alongside savedCardGroup's own visibility) — the regular Pay
+               Now demotes to a plain "pay another way" link underneath it
+               instead of two equally-weighted buttons competing. -->
           <div class="form-group" id="savedCardGroup" style="display:none">
             <button type="button" id="payWithSavedCardBtn" class="btn" style="width:100%;padding:14px;background:var(--color-ink-navy,#0a2f66)">
               Pay with saved card
             </button>
-            <div class="text-muted mt-2" style="font-size:12px;text-align:center">or pay another way below</div>
           </div>
 
           <div class="text-center mt-4">
@@ -978,7 +1250,7 @@
               Pay Now
             </button>
             <div class="text-muted mt-3" style="font-size: 12px;">
-              You will be redirected to PayFast's secure payment page
+              🔒 Secured by PayFast
             </div>
           </div>
         </section>
@@ -1005,9 +1277,13 @@
       </div>
 
       <!-- Right Column - Order Summary -->
-      <div class="order-summary">
-        <h2 class="summary-header">Order Summary</h2>
-        
+      <div class="order-summary" id="orderSummaryCard">
+        <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false">
+          <span>Order Summary</span>
+          <span class="summary-header-meta" id="summaryHeaderMeta"></span>
+          <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+
         <div id="orderItems" class="order-items">
           <!-- Order items will be populated here -->
         </div>
@@ -1058,6 +1334,17 @@
     </div>
   </div>
 
+
+  <!-- Sticky mobile Pay bar — replaces the deleted bottom nav's space with
+       something checkout actually benefits from. Not a duplicate payment
+       path: both buttons call the exact same handler functions as their
+       full-size counterparts above, and the total is kept in sync from
+       the same updateShippingAndTotal() write (see updateSummaryHeaderMeta). -->
+  <div class="mobile-pay-bar" id="mobilePayBar">
+    <span class="mobile-pay-bar-total" id="mobilePayBarTotal">R0.00</span>
+    <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--color-ink-navy,#0a2f66)">Pay with saved card</button>
+    <button type="button" id="payNowBtnMobile" class="btn" style="background:var(--cta)">Pay Now</button>
+  </div>
 
   <!-- PayFast Form (Hidden) -->
   <form id="payfastForm" method="post">
@@ -1332,7 +1619,11 @@
       checkoutSection: document.getElementById('checkoutSection'),
       confirmationSection: document.getElementById('confirmationSection'),
 
-      // Contact fields
+      // Contact fields — compact summary vs full form (signed-in vs guest)
+      contactSummary: document.getElementById('contactSummary'),
+      contactSummaryText: document.getElementById('contactSummaryText'),
+      editContactBtn: document.getElementById('editContactBtn'),
+      contactFormFull: document.getElementById('contactFormFull'),
       customerEmail: document.getElementById('customerEmail'),
       firstName: document.getElementById('firstName'),
       lastName: document.getElementById('lastName'),
@@ -1613,11 +1904,21 @@
       }
 
       renderAddressCard();
+      renderContactCard();
+      refreshEstimatedTime();
 
       // Offer the one-click "pay with saved card" fast-path when this buyer
       // already has a PayFast token on file from a prior tokenized checkout.
+      // has-saved-card also demotes the regular Pay Now button visually
+      // (see .has-saved-card #payNowBtn) so the two CTAs aren't competing.
       const savedCardGroup = document.getElementById('savedCardGroup');
-      if (savedCardGroup) savedCardGroup.style.display = state.profile.payfast_token ? '' : 'none';
+      const hasSavedCard = !!state.profile.payfast_token;
+      if (savedCardGroup) savedCardGroup.style.display = hasSavedCard ? '' : 'none';
+      elements.checkoutSection?.classList.toggle('has-saved-card', hasSavedCard);
+      // Mobile bar shows exactly one CTA — the saved-card path when
+      // available, otherwise the regular Pay Now — never both at once.
+      document.getElementById('payWithSavedCardBtnMobile')?.classList.toggle('hidden', !hasSavedCard);
+      document.getElementById('payNowBtnMobile')?.classList.toggle('hidden', hasSavedCard);
     }
 
     // Compact "Deliver to" card — only when address AND zone are BOTH on
@@ -1634,9 +1935,33 @@
       } else {
         elements.addressCompactCard.classList.add('hidden');
         elements.addressFormFull.classList.remove('hidden');
+        // A signed-in buyer with an incomplete address gets a small nudge
+        // instead of the full form silently reappearing with no
+        // acknowledgment of who they are — a guest sees the plain form,
+        // no nudge needed since there's nothing "missing" for them yet.
+        const nudge = document.getElementById('addressNudgeText');
+        if (nudge) nudge.classList.toggle('hidden', !state.user);
       }
     }
-    
+
+    // Compact contact summary vs full form — same pattern as the address
+    // card above. Only collapses for a signed-in buyer with a name+phone
+    // already on file; guests always see the full open fields (unchanged).
+    function renderContactCard() {
+      if (!elements.contactSummary || !elements.contactFormFull) return;
+      const p = state.profile;
+      const hasContact = state.user && p && p.first_name && p.last_name && p.phone;
+      if (hasContact) {
+        elements.contactSummaryText.textContent =
+          `${p.first_name} ${p.last_name} · ${p.phone}`;
+        elements.contactSummary.classList.remove('hidden');
+        elements.contactFormFull.classList.add('hidden');
+      } else {
+        elements.contactSummary.classList.add('hidden');
+        elements.contactFormFull.classList.remove('hidden');
+      }
+    }
+
   function updateAuthUI(user) {
     if (user) {
         elements.authBtn.textContent = 'Profile';
@@ -1671,6 +1996,9 @@
         elements.inlineSigninForm?.classList.add('hidden');
         state.emailExists = false;
         setAccountCardState('hidden');
+        elements.contactSummary?.classList.add('hidden');
+        elements.contactFormFull?.classList.remove('hidden');
+        document.getElementById('addressNudgeText')?.classList.add('hidden');
     }
 }
 	
@@ -2017,11 +2345,20 @@ async function saveCartToServer() {
     // Load cart with server validation
 async function loadCart() {
     try {
-        // Check URL parameters (from index.html "Buy Now" button)
         const urlParams = new URLSearchParams(window.location.search);
-        const productId = urlParams.get('product');
         const couponCode = urlParams.get('coupon');
-        
+
+        // "Buy Now" from a shop page — a single item, entirely independent
+        // of whatever's in the buyer's real cart (never merged, never
+        // clobbers ss_cart). Takes priority over both the server cart and
+        // localStorage for this page load only.
+        if (urlParams.get('buynow') === '1' && localStorage.getItem('ss_buynow')) {
+            await loadBuyNowItem();
+            if (couponCode) await applyCoupon(couponCode);
+            updateOrderSummary();
+            return;
+        }
+
         if (state.user && supabaseClient) {
             // Load from Supabase server cart
             const { data, error } = await supabaseClient
@@ -2133,46 +2470,46 @@ async function loadAndValidateCartItems(serverItems) {
     }
 }
 
+// Re-fetches current price/stock/seller_id/delivery_class for a set of
+// localStorage-shaped cart items (id/qty-or-quantity/etc — see addToCart()
+// in script.js) and drops any that no longer exist. Shared by the normal
+// cart path and the buy-now path below so there's one place this logic
+// lives, not two copies that could drift.
+async function refreshCartItemsFromProducts(items) {
+    if (!supabaseClient || !items.length) return items;
+    const productIds = items.map(item => item.id);
+    const { data: products, error } = await supabaseClient
+        .from('products')
+        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
+        .in('id', productIds);
+    if (error || !products) return items;
+
+    const productMap = {};
+    products.forEach(p => productMap[p.id] = p);
+
+    return items.map(item => {
+        const product = productMap[item.id];
+        if (!product) return item;
+        const currentPrice = product.sale && product.sale_price ? product.sale_price : product.price;
+        return {
+            ...item,
+            price: currentPrice,
+            name: product.name || item.name,
+            image: product.image || item.image,
+            seller_id: product.seller_id || item.seller_id || null,
+            delivery_class: product.delivery_class || item.delivery_class || null
+        };
+    }).filter(item => productMap[item.id]); // Remove items that no longer exist
+}
+
 // Load from localStorage (fallback)
 async function loadFromLocalStorage() {
     const savedCart = localStorage.getItem('ss_cart');
     const savedCoupon = localStorage.getItem('ss_coupon');
-    
+
     if (savedCart) {
-        state.cart = JSON.parse(savedCart);
-        
-        // Validate prices by fetching current product data
-        if (supabaseClient && state.cart.length > 0) {
-            const productIds = state.cart.map(item => item.id);
-            
-            const { data: products, error } = await supabaseClient
-                .from('products')
-                .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
-                .in('id', productIds);
-                
-            if (!error && products) {
-                const productMap = {};
-                products.forEach(p => productMap[p.id] = p);
-                
-                // Update cart with current prices
-                state.cart = state.cart.map(item => {
-                    const product = productMap[item.id];
-                    if (product) {
-                        const currentPrice = product.sale && product.sale_price ? product.sale_price : product.price;
-                        return {
-                            ...item,
-                            price: currentPrice,
-                            name: product.name || item.name,
-                            image: product.image || item.image,
-                            seller_id: product.seller_id || item.seller_id || null,
-                            delivery_class: product.delivery_class || item.delivery_class || null
-                        };
-                    }
-                    return item;
-                }).filter(item => productMap[item.id]); // Remove items that no longer exist
-            }
-        }
-        
+        state.cart = await refreshCartItemsFromProducts(JSON.parse(savedCart));
+
         if (savedCoupon) {
             // Re-validate server-side rather than trusting the cached amount —
             // a code applied on cart.html could have expired, hit its limit,
@@ -2187,62 +2524,22 @@ async function loadFromLocalStorage() {
         state.cart = [];
     }
 }
-    
-    // Load product from Supabase using product ID with images
-    async function loadProductFromId(productId, couponCode = null) {
-      try {
-        if (!supabaseClient) {
-          console.error('Supabase not initialized');
-          return;
-        }
-        
-        // Fetch product details with images
-        const { data: product, error } = await supabaseClient
-          .from('products')
-          .select(`
-            *,
-            product_images!fk_product_images_product(*)
-          `)
-          .eq('id', productId)
-          .single();
-        
-        if (error) throw error;
-        
-        // Get first product image
-        let imageUrl = 'https://via.placeholder.com/400x400?text=Product+Image';
-        if (product.product_images && product.product_images.length > 0) {
-          // Sort by image_order if available
-          const sortedImages = product.product_images.sort((a, b) => (a.image_order || 0) - (b.image_order || 0));
-          imageUrl = sortedImages[0].url;
-        }
-        
-        // Add product to cart
-        state.cart = [{
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          quantity: 1,
-          size: product.size || 'One Size',
-          image: imageUrl,
-          product_data: product // Store full product data for later use
-        }];
-        
-        // Apply coupon if provided
-        if (couponCode) {
-          await applyCoupon(couponCode);
-        }
-        
-        // Save to localStorage
-        localStorage.setItem('ss_cart', JSON.stringify(state.cart));
-        
-        updateOrderSummary();
-        
-      } catch (error) {
-        console.error('Error loading product:', error);
-        showEmptyCart();
-      }
+
+// "Buy Now" from a shop page (see shop.html's buyNow()) — a single item
+// stashed under its own key, intentionally independent of ss_cart. Cleared
+// immediately after loading so a refresh/back-navigation never replays it.
+async function loadBuyNowItem() {
+    const saved = localStorage.getItem('ss_buynow');
+    localStorage.removeItem('ss_buynow');
+    if (!saved) { state.cart = []; return; }
+    try {
+        state.cart = await refreshCartItemsFromProducts(JSON.parse(saved));
+    } catch (e) {
+        console.error('Error loading buy-now item:', e);
+        state.cart = [];
     }
-    
+}
+
     // Load product images for all cart items
     async function loadProductImagesForCart() {
       if (!supabaseClient || state.cart.length === 0) return;
@@ -2507,6 +2804,22 @@ async function validateCheckout() {
       updateShippingAndTotal(subtotal);
     }
 
+    // Mobile-only collapsed summary header — "Order (3 items) · R247.00 ▾".
+    // Desktop ignores this (order summary is always expanded there). Called
+    // from updateShippingAndTotal() — the single place totalAmount is
+    // actually finalized, regardless of which caller triggered the update.
+    function updateSummaryHeaderMeta() {
+      const meta = document.getElementById('summaryHeaderMeta');
+      const count = state.cart.length;
+      if (meta) {
+        meta.textContent = count
+          ? `${count} item${count === 1 ? '' : 's'} · ${elements.totalAmount.textContent}`
+          : '';
+      }
+      const mobileTotal = document.getElementById('mobilePayBarTotal');
+      if (mobileTotal) mobileTotal.textContent = elements.totalAmount.textContent;
+    }
+
     // Update delivery fee and total
     function updateShippingAndTotal(subtotal) {
       if (typeof subtotal !== 'number') {
@@ -2595,8 +2908,9 @@ async function validateCheckout() {
       }
 
       elements.totalAmount.textContent = formatCurrency(total);
+      updateSummaryHeaderMeta();
     }
-    
+
     /********************
      * ESTIMATED DELIVERY TIME
      ********************/
@@ -2609,45 +2923,90 @@ async function validateCheckout() {
       try {
         const { data: sellers } = await supabaseClient
           .from('sellers')
-          .select('id, turnaround_time')
+          .select('id, shop_name, logo_url, turnaround_time')
           .in('id', sellerIds);
         if (sellers?.length) {
           state.sellerTurnarounds = sellers;
           refreshEstimatedTime();
+          // Single-seller cart — light branding touch, never shown for a
+          // mixed multi-seller cart so it can never misattribute an order.
+          if (sellerIds.length === 1) renderShopBrandingBanner(sellers[0], cart);
         }
       } catch (e) {
         console.warn('Could not fetch seller turnaround times:', e);
       }
     }
 
+    // Drives the Campus ETA strip's content/state. Called whenever the
+    // delivery zone changes (zone known, turnaround maybe not yet) and
+    // whenever seller turnaround data arrives (zone maybe not yet known) —
+    // the strip always reflects whatever is currently known, never both-or-
+    // nothing.
     function refreshEstimatedTime() {
       const el = document.getElementById('estimatedDeliveryTime');
       if (!el) return;
-      if (!state.sellerTurnarounds?.length) { el.style.display = 'none'; return; }
 
-      const toMins = t => {
-        if (!t) return 0;
-        if (t.includes('1 hour'))        return 60;
-        if (t.includes('2 hour'))        return 120;
-        if (t.includes('4 hour'))        return 240;
-        if (t.includes('Same day'))      return 480;
-        if (t.includes('Next business')) return 1440;
-        if (t.includes('2'))             return 4320; // "2–3 days"
-        return 0;
-      };
+      const zoneObj = DELIVERY_ZONES.find(z => z.code === state.selectedZone);
+      if (!zoneObj) {
+        el.className = 'eta-strip eta-strip-empty';
+        el.innerHTML = '📍 Choose your delivery area to see your ETA — deliveries are currently only available near UKZN Westville';
+        return;
+      }
 
-      const maxMins = Math.max(...state.sellerTurnarounds.map(s => toMins(s.turnaround_time)));
+      let label = null;
+      if (state.sellerTurnarounds?.length) {
+        const toMins = t => {
+          if (!t) return 0;
+          if (t.includes('1 hour'))        return 60;
+          if (t.includes('2 hour'))        return 120;
+          if (t.includes('4 hour'))        return 240;
+          if (t.includes('Same day'))      return 480;
+          if (t.includes('Next business')) return 1440;
+          if (t.includes('2'))             return 4320; // "2–3 days"
+          return 0;
+        };
+        const maxMins = Math.max(...state.sellerTurnarounds.map(s => toMins(s.turnaround_time)));
+        if (maxMins <= 60)        label = '~2–4 hours';
+        else if (maxMins <= 120)  label = '~3–5 hours';
+        else if (maxMins <= 240)  label = 'today';
+        else if (maxMins <= 480)  label = 'today';
+        else if (maxMins <= 1440) label = 'next business day';
+        else                      label = '2–3 days';
+      }
 
-      let label;
-      if (maxMins <= 60)        label = 'Estimated delivery in ~2–4 hours';
-      else if (maxMins <= 120)  label = 'Estimated delivery in ~3–5 hours';
-      else if (maxMins <= 240)  label = 'Estimated delivery today';
-      else if (maxMins <= 480)  label = 'Estimated delivery today';
-      else if (maxMins <= 1440) label = 'Estimated delivery next business day';
-      else                      label = 'Estimated delivery in 2–3 days';
+      el.className = 'eta-strip eta-strip-active';
+      el.innerHTML = `<span class="eta-dot" aria-hidden="true"></span>` +
+        `Delivering to ${zoneObj.name}` + (label ? ` · Est. ${label}` : '');
+    }
 
-      el.textContent = `🕒 ${label}`;
-      el.style.display = 'block';
+    // Lightweight single-seller branding touch — only ever called (from
+    // updateEstimatedDelivery()) when the whole cart belongs to exactly
+    // one seller, so it can never misattribute a mixed-seller order.
+    // Reuses shop.html's own logo/initials-fallback pattern for consistency.
+    function renderShopBrandingBanner(seller, cart) {
+      const banner = document.getElementById('shopBrandingBanner');
+      if (!banner || !seller?.shop_name) return;
+      const logoEl = document.getElementById('shopBrandingLogo');
+      const nameEl = document.getElementById('shopBrandingName');
+      const amountEl = document.getElementById('shopBrandingAmount');
+
+      nameEl.textContent = seller.shop_name;
+      if (seller.logo_url) {
+        logoEl.innerHTML = `<img src="${escapeHtmlLite(seller.logo_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+      } else {
+        const initials = seller.shop_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+        logoEl.textContent = initials;
+      }
+
+      // Single line item — show its subtotal; multiple items from the same
+      // seller — keep the banner to just the shop identity, no recompute.
+      if (cart.length === 1) {
+        amountEl.textContent = formatCurrency((cart[0].price || 0) * (cart[0].quantity || cart[0].qty || 1));
+      } else {
+        amountEl.textContent = '';
+      }
+
+      banner.classList.remove('hidden');
     }
 
     /********************
@@ -3352,6 +3711,14 @@ async function submitToPayFast(cartItems, orderId, total) {
             state.orderId = order.id;
         }
 
+        // Marketing opt-in survives the redirect to PayFast and back via
+        // localStorage (the page fully navigates away) — actually sent from
+        // checkout-success.html once payment is confirmed paid, never here
+        // (an order can still fail/be abandoned after this point).
+        if (document.getElementById('marketingOptIn')?.checked) {
+            try { localStorage.setItem('ss_marketing_optin', state.shippingInfo.email || ''); } catch (_) {}
+        }
+
         return { orderId, total, validatedCart };
     }
 
@@ -3476,6 +3843,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       updateServiceBanner();
       updateShippingAndTotal();
       refreshEstimatedTime();
+      updateEstimatedDelivery(); // early fetch so the ETA strip + shop banner show right away, not just at final Pay Now validation
     }
 
     // Check payment status from URL
@@ -3512,6 +3880,7 @@ async function submitToPayFast(cartItems, orderId, total) {
           state.selectedZone = zoneSelect.value || null;
           const errEl = document.getElementById('deliveryZoneError');
           if (errEl) errEl.style.display = state.selectedZone ? 'none' : 'block';
+          refreshEstimatedTime();
         });
       }
 
@@ -3533,6 +3902,23 @@ async function submitToPayFast(cartItems, orderId, total) {
 
       // Pay with saved card button (one-click, shown only when a token is on file)
       document.getElementById('payWithSavedCardBtn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        payWithSavedCard();
+      });
+
+      // Mobile-only order summary accordion (desktop CSS ignores .expanded).
+      document.getElementById('summaryToggle')?.addEventListener('click', () => {
+        const card = document.getElementById('orderSummaryCard');
+        const expanded = card.classList.toggle('expanded');
+        document.getElementById('summaryToggle').setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      });
+
+      // Sticky mobile Pay bar — same handlers as the full-size buttons above.
+      document.getElementById('payNowBtnMobile')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        processPayment();
+      });
+      document.getElementById('payWithSavedCardBtnMobile')?.addEventListener('click', (e) => {
         e.preventDefault();
         payWithSavedCard();
       });
@@ -3649,6 +4035,11 @@ async function submitToPayFast(cartItems, orderId, total) {
         elements.addressFormFull.classList.remove('hidden');
       });
 
+      elements.editContactBtn?.addEventListener('click', () => {
+        elements.contactSummary.classList.add('hidden');
+        elements.contactFormFull.classList.remove('hidden');
+      });
+
       // Enter key for promo code
       elements.promoCodeInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -3666,42 +4057,6 @@ async function submitToPayFast(cartItems, orderId, total) {
       setupEventListeners();
       fetchConfiguration();
     });
-  </script>
-
-  <!-- Mobile app-style bottom navigation (Home / Search / Cart / Profile) —
-       kept in sync with index.html's markup/CSS so it persists across pages. -->
-  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary">
-    <button class="mbn-item" id="mbnHome" data-mbn="home" aria-label="Home">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="mbn-item" id="mbnSearch" data-mbn="search" aria-label="Search">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <span>Search</span>
-    </button>
-    <button class="mbn-item" id="mbnCart" data-mbn="cart" aria-label="Cart">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-      <span class="mbn-badge cart-count" id="mbnCartBadge" style="display:none">0</span>
-      <span>Cart</span>
-    </button>
-    <button class="mbn-item" id="mbnProfile" data-mbn="profile" aria-label="Profile">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span>Profile</span>
-    </button>
-  </nav>
-  <script>
-    document.getElementById('mbnHome')?.addEventListener('click', function() { window.location.href = 'index.html'; });
-    document.getElementById('mbnSearch')?.addEventListener('click', function() { window.location.href = 'shop.html'; });
-    document.getElementById('mbnCart')?.addEventListener('click', function() { window.location.href = 'cart.html'; });
-    document.getElementById('mbnProfile')?.addEventListener('click', function() { window.location.href = 'profile.html'; });
-    (function updateMbnCartBadge() {
-      try {
-        var cart = JSON.parse(localStorage.getItem('ss_cart') || '[]');
-        var count = cart.length;
-        var el = document.getElementById('mbnCartBadge');
-        if (el) { el.textContent = count; el.style.display = count > 0 ? 'flex' : 'none'; }
-      } catch(_) {}
-    })();
   </script>
 </body>
 </html>

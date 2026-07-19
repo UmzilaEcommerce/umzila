@@ -525,6 +525,27 @@
       showCartToast();
     }
 
+    // "Buy Now" — jumps straight into checkout.html with just this one
+    // item, entirely independent of whatever's already in ss_cart (never
+    // merged into it, so a buyer's real cart is untouched either way).
+    // Same item shape as addToCart() above so checkout.html's existing
+    // cart-loading logic needs no new format to understand.
+    function buyNow(product, size, qty, preferred_delivery) {
+      var item = {
+        id:                product.id,
+        title:             product.title,
+        price:             product.displayPrice || (product.sale && product.salePrice ? product.salePrice : product.price),
+        qty:               qty,
+        size:              size,
+        img:               product.primary_image || '',
+        stock:             product.stock || 0,
+        maxQuantity:       product.stock || 0,
+        preferred_delivery: preferred_delivery || ''
+      };
+      localStorage.setItem('ss_buynow', JSON.stringify([item]));
+      window.location.href = 'checkout.html?buynow=1';
+    }
+
     function showCartToast() {
       var t = document.getElementById('cartToast');
       t.classList.add('show');
@@ -699,7 +720,8 @@
             (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
           (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="margin-bottom:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notify Me</button>' : '') +
           '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>' +
-          '<button class="product-modal-add-to-cart" id="sh-modal-add-btn"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
+          '<button id="sh-modal-buynow-btn" style="width:100%;padding:13px;border:none;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Buy Now</button>' +
+          '<button class="product-modal-add-to-cart" id="sh-modal-add-btn" style="width:100%;padding:12px;border:1px solid var(--accent,#0a2f66);border-radius:999px;background:#fff;color:var(--accent,#0a2f66);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
           (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
             '<div class="description-text' + (hasLongDesc ? ' collapsed' : '') + '" id="sh-desc-text">' + escHtml(hasLongDesc ? shortDesc : full.desc) + '</div>' +
             (hasLongDesc ? '<button class="see-more-btn" id="sh-see-more">See More</button>' : '') +
@@ -771,6 +793,16 @@
         if (prefDelivery) localStorage.setItem('ss_preferred_delivery', prefDelivery);
         addToCart(_modalProduct, size, qty, prefDelivery);
         closeProductModal();
+      });
+
+      document.getElementById('sh-modal-buynow-btn').addEventListener('click', function() {
+        if (!_modalProduct) return;
+        var selectedSize = (content.querySelector('.size-option.selected') || {}).dataset || {};
+        var size = selectedSize.size || sizes[0] || 'M';
+        var qty  = parseInt(document.getElementById('sh-qty-val').textContent) || 1;
+        var prefDelivery = (document.getElementById('sh-delivery-pref') || {}).value || '';
+        if (prefDelivery) localStorage.setItem('ss_preferred_delivery', prefDelivery);
+        buyNow(_modalProduct, size, qty, prefDelivery);
       });
 
       // Share / Copy Link
