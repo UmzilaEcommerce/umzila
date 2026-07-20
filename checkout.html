@@ -647,7 +647,7 @@
       .summary-header-meta { display: block; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
       .summary-chevron { display: block; transition: transform 0.15s ease; }
       .order-summary.expanded .summary-chevron { transform: rotate(180deg); }
-      .order-summary:not(.expanded) #orderItems { display: none; }
+      .order-summary:not(.expanded) #orderSummaryBody { display: none; }
 
       /* Sticky bottom Pay bar — replaces the deleted bottom nav's screen
          real estate with something that actually serves checkout: the
@@ -854,11 +854,15 @@
     }
 
     /* Desktop: no space pressure, so "More options" is always expanded and
-       the toggle affordance is hidden — native <details> collapse-by-
-       default behavior only actually applies on mobile widths. */
+       the toggle affordance is hidden. The <details> element ships `open`
+       by default (see markup) — Chromium hides collapsed-details content
+       via an internal content-visibility mechanism that a plain
+       `display:block !important` override cannot undo, so staying open by
+       default and only *closing* it on mobile via one line of JS (see
+       setupEventListeners) is the reliable approach, not fighting it with
+       CSS the other way. */
     @media (min-width: 769px) {
       .more-options-disclosure > summary { display: none; }
-      .more-options-disclosure > *:not(summary) { display: block !important; }
     }
 
     /* Address autocomplete suggestions */
@@ -1197,7 +1201,7 @@
                so no JS is needed; CSS forces it open on desktop where
                there's no space pressure, native collapse-by-default on
                mobile (see MORE-OPTIONS rules). -->
-          <details id="moreOptionsDisclosure" class="more-options-disclosure">
+          <details id="moreOptionsDisclosure" class="more-options-disclosure" open>
             <summary>More options</summary>
             <div class="form-group">
               <label class="form-label">Order Notes (Optional)</label>
@@ -1284,6 +1288,11 @@
           <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
+        <!-- Everything below the header collapses together on mobile — a
+             collapsed header showing just "N items · Rxxx" would be
+             pointless if the totals stayed visible right underneath it
+             anyway. Desktop ignores this (always expanded). -->
+        <div id="orderSummaryBody">
         <div id="orderItems" class="order-items">
           <!-- Order items will be populated here -->
         </div>
@@ -1329,6 +1338,7 @@
 
         <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
           All prices include VAT where applicable
+        </div>
         </div>
       </div>
     </div>
@@ -3796,6 +3806,14 @@ async function submitToPayFast(cartItems, orderId, total) {
         // see their details prefilled; guests just start filling the form.
         await checkAuth();
 
+        // The saved-coupon re-check inside loadCart() (above) ran before
+        // state.user was known — checkAuth() hasn't resolved at that point
+        // — so a multi-use code can come back stale-flagged "sign in to use
+        // this" even for someone who actually is signed in. Re-validate now
+        // that the real auth state is known, so the discount/label reflects
+        // it correctly.
+        if (state.couponCode) await applyCoupon(state.couponCode);
+
         // Mystery-popup free-gift follow-through (see applyStoredFreeGiftCode)
         // — for a signed-in buyer we already know their email now, so this
         // can succeed immediately; guests retry on the email field's blur
@@ -3912,6 +3930,13 @@ async function submitToPayFast(cartItems, orderId, total) {
         const expanded = card.classList.toggle('expanded');
         document.getElementById('summaryToggle').setAttribute('aria-expanded', expanded ? 'true' : 'false');
       });
+
+      // "More options" ships open (so desktop needs no JS at all) — close it
+      // by default only on mobile, where it should start collapsed. The
+      // native <summary> click still opens/closes it from there either way.
+      if (window.innerWidth < 769) {
+        document.getElementById('moreOptionsDisclosure')?.removeAttribute('open');
+      }
 
       // Sticky mobile Pay bar — same handlers as the full-size buttons above.
       document.getElementById('payNowBtnMobile')?.addEventListener('click', (e) => {
