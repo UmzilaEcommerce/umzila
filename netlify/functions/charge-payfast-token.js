@@ -6,11 +6,17 @@
 // code path — it does not touch generate-payfast-signature.js or the
 // existing form-based checkout flow, which remain byte-for-byte unchanged.
 //
-// IMPORTANT — verify before going live: the exact header/signature scheme
-// PayFast's adhoc-charge API expects, and the response shape, could not be
-// confirmed against PayFast's live docs in the environment this was written
-// in. Test this end-to-end against PAYFAST_SANDBOX=true with a real
-// tokenized order before ever calling it with PAYFAST_SANDBOX=false.
+// Header/signature scheme verified 2026-07-24 against PayFast's official PHP SDK source
+// (github.com/PayFast/payfast-php-sdk: PayFastApi.php, Request.php, Auth.php,
+// Services/Subscriptions.php) after a production 502 revealed two bugs: the sandbox
+// path pointed at "api.sandbox.payfast.co.za", which does not resolve as a real host
+// (PayFast has exactly one API host — sandbox mode is a `?testing=true` query param on
+// the same host); and the timestamp used milliseconds + a "Z" suffix instead of
+// PayFast's exact signed format (PHP's date("Y-m-d\TH:i:sO")). Both are fixed below.
+// The exact JSON response shape on success/failure still isn't confirmed against live
+// docs — `pfJson.status` is checked defensively (only fails the request if PayFast
+// explicitly returns a non-"success" status; a response with no `status` field at all
+// won't be treated as a failure) precisely because that field's presence is unconfirmed.
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
@@ -85,13 +91,25 @@ exports.handler = async function (event, context) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'PayFast merchant configuration missing on server.' }) };
     }
 
-    const apiHost = SANDBOX ? 'api.sandbox.payfast.co.za' : 'api.payfast.co.za';
+    // PayFast's official SDK (github.com/PayFast/payfast-php-sdk) exposes a single API
+    // host — there is no "api.sandbox.payfast.co.za" (verified: that hostname does not
+    // resolve). Sandbox/test mode is switched via a `testing=true` query param instead.
+    const apiHost = 'api.payfast.co.za';
     const amountCents = Math.round(Number(order.total) * 100);
-    const timestamp = new Date().toISOString();
+    // PayFast's SDK builds this as PHP's date("Y-m-d\TH:i:sO") — no milliseconds, and a
+    // numeric UTC offset rather than "Z". This exact string is signed and re-verified by
+    // PayFast server-side, so it must match their format, not just be valid ISO-8601.
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const offsetMin = -now.getTimezoneOffset();
+    const offsetSign = offsetMin >= 0 ? '+' : '-';
+    const offsetH = pad(Math.floor(Math.abs(offsetMin) / 60));
+    const offsetM = pad(Math.abs(offsetMin) % 60);
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${offsetSign}${offsetH}${offsetM}`;
 
-    // PayFast API v1 header-based signing — merchant-id/version/timestamp
-    // are signed together with the body params, MD5, same passphrase used
-    // for the form flow. Confirm this against PayFast's API docs/sandbox.
+    // PayFast API v1 header-based signing, matching PayFast/payfast-php-sdk's
+    // Auth::generateApiSignature: merchant-id/version/timestamp headers merged with
+    // the body params, keys sorted alphabetically, MD5, passphrase appended last.
     const signaturePayload = {
       'merchant-id': MERCHANT_ID,
       version: 'v1',
@@ -105,7 +123,8 @@ exports.handler = async function (event, context) {
       .join('&') + (PASSPHRASE ? `&passphrase=${encodeURIComponent(PASSPHRASE).replace(/%20/g, '+')}` : '');
     const signature = crypto.createHash('md5').update(sigString).digest('hex');
 
-    const pfRes = await fetch(`https://${apiHost}/subscriptions/${encodeURIComponent(profile.payfast_token)}/adhoc`, {
+    const pfUrl = `https://${apiHost}/subscriptions/${encodeURIComponent(profile.payfast_token)}/adhoc${SANDBOX ? '?testing=true' : ''}`;
+    const pfRes = await fetch(pfUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

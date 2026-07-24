@@ -4699,11 +4699,21 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch (e) {}
 });
 
-function runReveal(){ 
-  document.querySelectorAll('.fade-up').forEach(el=>{ 
-    const rect = el.getBoundingClientRect(); 
-    if(rect.top < window.innerHeight - 60) el.classList.add('show'); 
-  }); 
+let revealObserver = null;
+function runReveal(){
+  if(!revealObserver){
+    revealObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        if(entry.isIntersecting){
+          entry.target.classList.add('show');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, {
+      rootMargin: '0px 0px -60px 0px'
+    });
+  }
+  document.querySelectorAll('.fade-up:not(.show)').forEach(el => revealObserver.observe(el));
 }
 
 window.addEventListener('scroll', runReveal); 

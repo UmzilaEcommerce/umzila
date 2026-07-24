@@ -396,7 +396,7 @@
       const variants = variantsCache[pid] || [];
       const uniqueSizes = [...new Set(variants.filter(v=>v.stock>0).map(v=>v.size).filter(Boolean))];
       const qty = item.quantity || item.qty || 1;
-      const imgSrc = item.image || item.thumbnail || 'https://placehold.co/80x80?text=Item';
+      const imgSrc = item.image || item.img || item.thumbnail || 'https://placehold.co/80x80?text=Item';
 
       const sizeOptions = uniqueSizes.length
         ? `<select class="size-select" data-idx="${idx}">
