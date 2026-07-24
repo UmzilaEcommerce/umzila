@@ -136,11 +136,29 @@ exports.handler = async function (event, context) {
       body: JSON.stringify({ amount: amountCents, item_name: signaturePayload.item_name })
     });
 
-    const pfJson = await pfRes.json().catch(() => ({}));
+    // Read as text first — if PayFast's response isn't valid JSON (a plain-text
+    // or HTML error from an edge/gateway layer, say), `.json()` would throw and
+    // get swallowed, losing the one clue we have to what actually went wrong.
+    const pfRawText = await pfRes.text();
+    let pfJson = {};
+    try { pfJson = JSON.parse(pfRawText); } catch (_) { /* not JSON — pfRawText still has it */ }
 
     if (!pfRes.ok || (pfJson.status && pfJson.status !== 'success')) {
-      console.error('charge-payfast-token: PayFast API error', pfRes.status, pfJson);
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'PayFast declined the charge. Please pay another way.' }) };
+      console.error('charge-payfast-token: PayFast API error', pfRes.status, pfRawText);
+      // `detail`/`pfStatus` are for the browser console only (checkout.html logs
+      // them, never shows them in the user-facing banner) — this is PayFast's
+      // own response, not a secret, and it's the fastest way to diagnose a
+      // rejection without server-log access.
+      const detail = pfJson?.message || pfJson?.error || (pfRawText ? pfRawText.slice(0, 300) : null);
+      return {
+        statusCode: 502,
+        headers,
+        body: JSON.stringify({
+          error: 'PayFast declined the charge. Please pay another way.',
+          detail,
+          pfStatus: pfRes.status
+        })
+      };
     }
 
     // Order is marked paid asynchronously by payfast-itn.js when PayFast's

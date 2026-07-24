@@ -2533,7 +2533,7 @@ async function loadAndValidateCartItems(serverItems) {
             .from('products')
             .select(`
                 *,
-                product_variants!fk_product_variants_product(*)
+                product_variants!product_variants_product_id_fkey(*)
             `)
             .in('id', productIds);
             
@@ -3922,6 +3922,12 @@ async function submitToPayFast(cartItems, orderId, total) {
         const json = await res.json().catch(() => ({}));
 
         if (!res.ok || !json.success) {
+            // json.detail/pfStatus (PayFast's own rejection reason, when the server
+            // could get one) are diagnostic-only -- logged here, never shown in the
+            // user-facing banner below.
+            if (json.detail || json.pfStatus) {
+                console.error('Saved-card charge rejected by PayFast:', { pfStatus: json.pfStatus, detail: json.detail });
+            }
             throw new Error(json.error || 'Could not charge your saved card. Please pay another way below.');
         }
 

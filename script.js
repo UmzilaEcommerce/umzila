@@ -289,7 +289,7 @@ async function validateCartPrices() {
         price,
         sale,
         sale_price,
-        product_variants!fk_product_variants_product(*)
+        product_variants!product_variants_product_id_fkey(*)
       `)
       .in('id', productIds);
       
