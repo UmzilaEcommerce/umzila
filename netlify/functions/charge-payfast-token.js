@@ -25,6 +25,7 @@
 // won't be treated as a failure) precisely because that field's presence is unconfirmed.
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const { completeOrderPayment } = require('./lib/complete-order-payment');
 
 exports.handler = async function (event, context) {
   const headers = { 'Content-Type': 'application/json' };
@@ -182,9 +183,25 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Order is marked paid asynchronously by payfast-itn.js when PayFast's
-    // ITN for this charge arrives (same notify_url as every other payment,
-    // matched by m_payment_id) — no order-status write happens here.
+    // Unlike the redirect flow, this request already IS the authoritative
+    // confirmation that payment succeeded — there's no ITN to wait on (the
+    // ad-hoc/subscriptions API call above never told PayFast our m_payment_id
+    // in the first place, so its ITN for this charge type can't correlate
+    // back to this order the way the redirect flow's form-submitted
+    // m_payment_id lets payfast-itn.js do it). So mark it paid and run the
+    // same post-payment tasks right here, via the function shared with
+    // payfast-itn.js. A failure in any of that (an email, a stock update)
+    // must never turn a successful charge into a client-facing failure —
+    // the card was already charged; only genuine PayFast rejection above
+    // should ever produce a 502.
+    const siteUrl = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
+    await completeOrderPayment(supabase, {
+      mPaymentId: m_payment_id,
+      pfPaymentId: pfJson?.data?.pf_payment_id || pfJson?.pf_payment_id || null,
+      pfResponse: pfJson,
+      siteUrl
+    }).catch(err => console.error('charge-payfast-token: order completion error (charge already succeeded)', err));
+
     return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
 
   } catch (err) {
