@@ -8,11 +8,17 @@
 //
 // Header/signature scheme verified 2026-07-24 against PayFast's official PHP SDK source
 // (github.com/PayFast/payfast-php-sdk: PayFastApi.php, Request.php, Auth.php,
-// Services/Subscriptions.php) after a production 502 revealed two bugs: the sandbox
-// path pointed at "api.sandbox.payfast.co.za", which does not resolve as a real host
-// (PayFast has exactly one API host — sandbox mode is a `?testing=true` query param on
-// the same host); and the timestamp used milliseconds + a "Z" suffix instead of
-// PayFast's exact signed format (PHP's date("Y-m-d\TH:i:sO")). Both are fixed below.
+// Services/Subscriptions.php) across two rounds of production 502s:
+//   Round 1 — the sandbox path pointed at "api.sandbox.payfast.co.za", which does not
+//   resolve as a real host (PayFast has exactly one API host; sandbox mode is a
+//   `?testing=true` query param on the same host); timestamp used milliseconds + "Z"
+//   instead of PayFast's exact signed format (PHP's date("Y-m-d\TH:i:sO")).
+//   Round 2 — PayFast returned 401 "Merchant authorization failed" (per PayFast's own
+//   support KB, this specifically means a bad signature, not a credentials/account
+//   problem), which was the passphrase being appended to the signature string AFTER
+//   sorting instead of being merged in BEFORE sorting (it belongs alphabetically
+//   between "merchant-id" and "timestamp"), plus PHP's urlencode() escaping !*'()~
+//   that JS's encodeURIComponent leaves untouched. Both fixed below.
 // The exact JSON response shape on success/failure still isn't confirmed against live
 // docs — `pfJson.status` is checked defensively (only fails the request if PayFast
 // explicitly returns a non-"success" status; a response with no `status` field at all
@@ -107,9 +113,23 @@ exports.handler = async function (event, context) {
     const offsetM = pad(Math.abs(offsetMin) % 60);
     const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}${offsetSign}${offsetH}${offsetM}`;
 
+    // PHP's urlencode() (used by PayFast's SDK) escapes !*'()~ in addition to
+    // everything encodeURIComponent already escapes, and turns spaces into
+    // "+" rather than "%20" -- match it exactly, since the signature is a
+    // byte-for-byte MD5 of this encoded string.
+    function phpUrlEncode(value) {
+      return encodeURIComponent(String(value))
+        .replace(/%20/g, '+')
+        .replace(/[!*'()~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+    }
+
     // PayFast API v1 header-based signing, matching PayFast/payfast-php-sdk's
-    // Auth::generateApiSignature: merchant-id/version/timestamp headers merged with
-    // the body params, keys sorted alphabetically, MD5, passphrase appended last.
+    // Auth::generateApiSignature exactly: passphrase is merged into the SAME
+    // object before sorting -- it lands alphabetically between "merchant-id"
+    // and "timestamp", not appended at the end. Getting this ordering wrong
+    // silently produces a completely different (wrong) MD5, which is exactly
+    // what PayFast's "Merchant authorization failed" (401) means: a bad
+    // signature, not a credentials problem.
     const signaturePayload = {
       'merchant-id': MERCHANT_ID,
       version: 'v1',
@@ -117,10 +137,11 @@ exports.handler = async function (event, context) {
       amount: amountCents,
       item_name: `Umzila order ${order.order_number || m_payment_id}`
     };
+    if (PASSPHRASE) signaturePayload.passphrase = PASSPHRASE;
     const sigString = Object.keys(signaturePayload)
       .sort()
-      .map(k => `${k}=${encodeURIComponent(signaturePayload[k]).replace(/%20/g, '+')}`)
-      .join('&') + (PASSPHRASE ? `&passphrase=${encodeURIComponent(PASSPHRASE).replace(/%20/g, '+')}` : '');
+      .map(k => `${k}=${phpUrlEncode(signaturePayload[k])}`)
+      .join('&');
     const signature = crypto.createHash('md5').update(sigString).digest('hex');
 
     const pfUrl = `https://${apiHost}/subscriptions/${encodeURIComponent(profile.payfast_token)}/adhoc${SANDBOX ? '?testing=true' : ''}`;
