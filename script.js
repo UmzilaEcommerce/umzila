@@ -4699,7 +4699,7 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch (e) {}
 });
 
-let revealObserver = null;
+var revealObserver = null;
 function runReveal(){
   if(!revealObserver){
     revealObserver = new IntersectionObserver((entries, observer) => {
