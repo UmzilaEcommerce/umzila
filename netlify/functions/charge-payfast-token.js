@@ -56,21 +56,27 @@ exports.handler = async function (event, context) {
       return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid or expired session' }) };
     }
 
-    const { m_payment_id } = JSON.parse(event.body || '{}');
+    const { m_payment_id, payment_method_id } = JSON.parse(event.body || '{}');
     if (!m_payment_id) {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing m_payment_id' }) };
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 
-    // ── Look up the stored token for THIS user only.
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('payfast_token')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // ── Look up the card to charge — scoped to THIS user only, never trust a
+    // client-supplied owner. If the client didn't specify which saved card
+    // (payment_method_id), fall back to the most-recently-used one, matching
+    // the "most recent = default" rule the switcher UI is built around.
+    let cardQuery = supabase
+      .from('payment_methods')
+      .select('id, payfast_token')
+      .eq('user_id', user.id);
+    cardQuery = payment_method_id
+      ? cardQuery.eq('id', payment_method_id)
+      : cardQuery.order('last_used_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false }).limit(1);
+    const { data: card } = await cardQuery.maybeSingle();
 
-    if (!profile?.payfast_token) {
+    if (!card?.payfast_token) {
       return { statusCode: 403, headers, body: JSON.stringify({ error: 'No saved card on file' }) };
     }
 
@@ -145,7 +151,7 @@ exports.handler = async function (event, context) {
       .join('&');
     const signature = crypto.createHash('md5').update(sigString).digest('hex');
 
-    const pfUrl = `https://${apiHost}/subscriptions/${encodeURIComponent(profile.payfast_token)}/adhoc${SANDBOX ? '?testing=true' : ''}`;
+    const pfUrl = `https://${apiHost}/subscriptions/${encodeURIComponent(card.payfast_token)}/adhoc${SANDBOX ? '?testing=true' : ''}`;
     const pfRes = await fetch(pfUrl, {
       method: 'POST',
       headers: {
@@ -194,6 +200,17 @@ exports.handler = async function (event, context) {
     // must never turn a successful charge into a client-facing failure —
     // the card was already charged; only genuine PayFast rejection above
     // should ever produce a 502.
+    // Charge succeeded — this card is now the most-recently-used one, which
+    // is exactly what makes it the switcher's default next time. Best-effort:
+    // a failure here never downgrades an already-successful charge.
+    try {
+      await supabase.from('payment_methods')
+        .update({ last_used_at: new Date().toISOString() })
+        .eq('id', card.id);
+    } catch (luErr) {
+      console.error('charge-payfast-token: last_used_at update error', luErr);
+    }
+
     const siteUrl = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
     await completeOrderPayment(supabase, {
       mPaymentId: m_payment_id,

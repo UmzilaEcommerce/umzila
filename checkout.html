@@ -134,24 +134,14 @@
     }
     
     /* ---------- CHECKOUT LAYOUT ---------- */
+    /* Single stacked column on every breakpoint — the order summary now
+       lives inside the form flow itself (moved to sit near the bottom,
+       directly above tip/pay) rather than as a persistent side rail, so
+       there's no second column left to lay out here. */
     .checkout-layout {
-      display: grid;
-      grid-template-columns: 1fr 400px;
-      gap: 40px;
       margin: 40px auto;
       max-width: 1200px;
       padding: 0 20px;
-    }
-    
-    @media (max-width: 768px) {
-      .checkout-layout {
-        grid-template-columns: 1fr;
-        gap: 30px;
-      }
-      /* Order summary first on mobile — see the total before filling in
-         details, closer to how a delivery-app checkout reads. */
-      .checkout-forms { order: 2; }
-      .order-summary { order: 1; }
     }
     
     /* ---------- CHECKOUT SECTIONS ---------- */
@@ -286,13 +276,14 @@
     }
     
     /* ---------- ORDER SUMMARY ---------- */
+    /* Now sits inline near the bottom of the single-column form (not a
+       sticky side rail), so no sticky positioning is needed. */
     .order-summary {
       background: white;
       border-radius: 12px;
       padding: 30px;
       box-shadow: var(--shadow);
-      position: sticky;
-      top: 100px;
+      margin: 30px 0;
     }
     
     .summary-header {
@@ -311,11 +302,15 @@
       border-left: none;
       border-right: none;
       border-top: none;
-      cursor: default;
+      cursor: pointer;
       text-align: left;
     }
-    .summary-header-meta { display: none; }
-    .summary-chevron { display: none; margin-left: auto; }
+    /* Fold trigger meta/chevron are visible on every breakpoint now — the
+       item-list fold is no longer mobile-only (see .order-summary:not(.expanded)
+       #orderSummaryBody below, in the RESPONSIVE section). */
+    .summary-header-meta { display: block; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
+    .summary-chevron { display: block; margin-left: auto; transition: transform 0.15s ease; }
+    .order-summary.expanded .summary-chevron { transform: rotate(180deg); }
     
     .order-items {
       max-height: 300px;
@@ -611,51 +606,62 @@
       display: none;
     }
     
+    /* Order summary item-list fold — collapsed by default on EVERY
+       breakpoint now (previously mobile-only). #orderSummaryBody wraps only
+       the foldable item list + promo code panel; .summary-totals lives
+       outside it as a sibling so the amount due is never hidden by this. */
+    .order-summary:not(.expanded) #orderSummaryBody { display: none; }
+
     /* ---------- RESPONSIVE ---------- */
     @media (max-width: 768px) {
       .container {
         padding: 0 15px;
       }
-      
+
       .checkout-section {
         padding: 20px;
       }
-      
-      .order-summary {
-        position: static;
-        margin-top: 30px;
-      }
-      
+
       .item-image {
         width: 60px;
         height: 60px;
       }
-      
+
       .item-title {
         font-size: 14px;
       }
-      
+
       .promo-code-input {
         flex-direction: column;
       }
 
-      /* Order summary collapses to an accordion — tap the header to see
-         the full item list. Totals/checkout stay above it in the normal
-         page flow either way (this is the right column reflowed below the
-         form on mobile), so nothing important is ever hidden by this. */
-      .summary-header { cursor: pointer; margin-bottom: 12px; padding-bottom: 12px; }
-      .summary-header-meta { display: block; margin-left: auto; font-size: 13px; font-weight: 500; color: var(--muted); }
-      .summary-chevron { display: block; transition: transform 0.15s ease; }
-      .order-summary.expanded .summary-chevron { transform: rotate(180deg); }
-      .order-summary:not(.expanded) #orderSummaryBody { display: none; }
+      /* Order summary header accordion — cursor/meta/chevron are already
+         set globally (see ORDER SUMMARY rules above); this just tightens
+         header spacing for the smaller viewport. */
+      .summary-header { margin-bottom: 12px; padding-bottom: 12px; }
 
       /* Sticky bottom Pay bar — replaces the deleted bottom nav's screen
          real estate with something that actually serves checkout: the
          live total and the pay action, always in view while scrolling
-         through delivery/payment fields. Relocates the *existing*
-         #totalAmount/#payNowBtn (or the saved-card button) via flex order,
-         not a duplicate element, so totals can never drift out of sync. */
+         through delivery/payment fields. Both buttons call the exact same
+         handlers as their full-size counterparts, so this is a second pair
+         of buttons, not a second payment path — which is why the ORIGINAL
+         inline Pay Now wrapper and saved-card button group must be hidden
+         below: otherwise both sets render at once on mobile. */
       body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+      .text-center.mt-4,
+      #savedCardGroup {
+        display: none !important;
+      }
+      /* Equivalent of the "Secured by PayFast" trust line that lived inside
+         the now-hidden .text-center.mt-4, re-shown next to the sticky bar. */
+      .mobile-pay-trust {
+        display: block;
+        text-align: center;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 6px 16px 2px;
+      }
       .mobile-pay-bar {
         position: fixed;
         left: 0; right: 0; bottom: 0;
@@ -681,9 +687,29 @@
         font-size: 15px;
         min-height: 44px;
       }
+      /* Once a saved card exists, payNowBtnMobile is no longer hidden — it's
+         the mobile equivalent of the demoted desktop "different card" link.
+         Wraps onto its own row underneath the total + primary button so it
+         never competes for width. Confirmed real gap: before this rule,
+         mobile buyers had zero path to pay with a new card once one was
+         already saved. */
+      .mobile-pay-bar.has-saved-card {
+        flex-wrap: wrap;
+      }
+      .mobile-pay-bar.has-saved-card #payNowBtnMobile {
+        flex: 1 1 100%;
+        order: 3;
+        background: none !important;
+        color: var(--muted) !important;
+        box-shadow: none !important;
+        padding: 4px !important;
+        font-size: 13px !important;
+        min-height: auto;
+        text-decoration: underline;
+      }
     }
     @media (min-width: 769px) {
-      .mobile-pay-bar { display: none; }
+      .mobile-pay-bar, .mobile-pay-trust { display: none; }
     }
     
     /* ---------- UTILITY CLASSES ---------- */
@@ -853,6 +879,44 @@
       text-decoration: underline;
     }
 
+    /* Foldable card switcher — folded row is just this button; the list
+       underneath only unhides when #cardSwitcherToggle is expanded. */
+    .card-switcher-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .card-switcher-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      background: #fff;
+      border: 1px solid #dde6f5;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-top: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      color: #1a1a2e;
+      text-align: left;
+    }
+    .card-switcher-item:first-child { margin-top: 0; }
+    .card-switcher-item.selected {
+      border-color: var(--accent);
+      background: #fff;
+      font-weight: 600;
+    }
+
     /* Desktop: no space pressure, so "More options" is always expanded and
        the toggle affordance is hidden. The <details> element ships `open`
        by default (see markup) — Chromium hides collapsed-details content
@@ -960,6 +1024,50 @@
     #addressCompactCard{animation:cardCollapseIn .24s ease-out both}
     @keyframes cardCollapseIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 
+    /* One-time "is this the correct address?" nudge (session-scoped, see
+       showAddressConfirmOverlay() in the script below). The scrim dims the
+       page — it's deliberately translucent, not an opaque takeover — while
+       the address card and its small callout sit above it via z-index so
+       they read at full brightness. .mobile-pay-bar uses z-index:1000, so
+       everything here starts above that. */
+    .addr-confirm-scrim{
+      position:fixed;inset:0;
+      background:rgba(10,12,20,.45);
+      z-index:1200;
+      transition:opacity .18s ease-out;
+    }
+    #addressCompactCard.addr-confirm-highlight{
+      position:relative;
+      z-index:1300;
+      font-weight:700;
+      box-shadow:0 0 0 3px rgba(79,70,229,.25),0 10px 28px rgba(16,24,40,.22);
+    }
+    .addr-confirm-callout{
+      position:relative;
+      z-index:1300;
+      display:flex;align-items:center;flex-wrap:wrap;gap:10px;
+      background:#fff;
+      border:1px solid var(--color-border,#e5e7eb);
+      border-radius:8px;
+      padding:8px 12px;
+      margin:-6px 0 14px;
+      font-size:13px;
+      font-weight:600;
+      color:#1a1a2e;
+      box-shadow:0 2px 10px rgba(16,24,40,.12);
+    }
+    .addr-confirm-yes-btn{
+      background:var(--accent);
+      color:#fff;
+      border:none;
+      border-radius:6px;
+      padding:6px 12px;
+      font-size:12px;
+      font-weight:700;
+      cursor:pointer;
+      min-height:32px;
+    }
+
     /* Promo success checkmark (order-summary discount code) */
     .promo-check-inline{display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:-2px}
     .promo-check-inline path{stroke-dasharray:20;stroke-dashoffset:20;animation:confirmCheckDraw .3s ease-out .05s forwards}
@@ -1004,6 +1112,7 @@
       .btn.is-processing::after{animation:none;border-top-color:rgba(255,255,255,.4)}
       .promo-code-input-panel{transition:none}
       .tip-pill{transition:none}
+      .addr-confirm-scrim{transition:none}
     }
   </style>
   <!-- Include Supabase client -->
@@ -1061,64 +1170,70 @@
             <div id="shopBrandingAmount" style="flex:0 0 auto;font-size:13px;color:var(--muted)"></div>
           </div>
 
-          <!-- Unified auth panel — one visual component, five JS-driven
-               states (guest/untyped, guest/known-email, guest/new-email,
-               signed-in/complete, signed-in/partial). The state machine
-               below (checkEmailDebounced/setAccountCardState/updateAuthUI)
-               is unchanged — only markup grouping + styling changed here. -->
-          <div id="authCardWrap">
-            <!-- Path A: explicit "I already have an account" shortcut — fully
-                 self-contained (its own email field), works even if nothing
-                 else on the page has been touched yet. De-emphasizes itself
-                 once the buyer starts typing into the form below instead. -->
-            <div id="quickSigninCard" class="auth-card">
-              <button type="button" id="inlineSigninToggle" class="auth-row-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                <span>Already have an account? <strong>Sign in</strong></span>
-                <svg class="auth-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-              <div id="inlineSigninForm" class="hidden auth-inline-form">
-                <div class="form-group" style="margin-bottom:8px">
-                  <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
-                  <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
+          <!-- ============ PAGE 1 — Your details ============
+               #step1Page wraps the heading, the auth/sign-in cards
+               (#authCardWrap, inside #step1ContactAccount), AND the full
+               contact fields (#contactFormFull) as ONE single-page-app-style
+               "page" — only ever one of #step1Page / #step2DeliveryPayment
+               is visible at a time (see showCheckoutPage(), updateAuthUI(),
+               advanceToStep2(), goBackToStep1()). A signed-in buyer with a
+               complete contact on file (see hasCompleteContact()) skips this
+               entire page — not even collapsed — since there's nothing left
+               for them to do here; their contact info instead shows via the
+               #contactSummary chip at the top of #step2DeliveryPayment. -->
+          <div id="step1Page">
+          <div id="step1Heading" class="field-group-label">Step 1 of 2 — Your details</div>
+          <div id="step1ContactAccount">
+            <!-- Unified auth panel — one visual component, five JS-driven
+                 states (guest/untyped, guest/known-email, guest/new-email,
+                 signed-in/complete, signed-in/partial). The state machine
+                 below (checkEmailDebounced/setAccountCardState/updateAuthUI)
+                 is unchanged — only markup grouping + styling changed here. -->
+            <div id="authCardWrap">
+              <!-- Path A: explicit "I already have an account" shortcut — fully
+                   self-contained (its own email field), works even if nothing
+                   else on the page has been touched yet. De-emphasizes itself
+                   once the buyer starts typing into the form below instead. -->
+              <div id="quickSigninCard" class="auth-card">
+                <button type="button" id="inlineSigninToggle" class="auth-row-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <span>Already have an account? <strong>Sign in</strong></span>
+                  <svg class="auth-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div id="inlineSigninForm" class="hidden auth-inline-form">
+                  <div class="form-group" style="margin-bottom:8px">
+                    <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
+                    <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
+                  </div>
+                  <div id="inlineSigninError" class="error-message hidden"></div>
+                  <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
+                  <button type="button" id="inlineForgotPassword" class="auth-text-link" style="margin-left:10px">Forgot password?</button>
                 </div>
-                <div id="inlineSigninError" class="error-message hidden"></div>
-                <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
-                <button type="button" id="inlineForgotPassword" class="auth-text-link" style="margin-left:10px">Forgot password?</button>
+              </div>
+
+              <div id="signedInBox" class="hidden auth-card auth-signed-in">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Signed in as <strong id="signedInEmail"></strong></span>
+                <button type="button" id="signOutInline" class="auth-text-link" style="margin-left:auto;color:#166534">Not you?</button>
+              </div>
+
+              <!-- Path B: adaptive password field bound to the customerEmail
+                   field below, for anyone who didn't use the quick sign-in
+                   shortcut above. Flips between "create a password" (new
+                   email) and "welcome back, sign in" (email matches an
+                   existing account) via setAccountCardState(). Hidden
+                   entirely once signed in. -->
+              <div id="accountPasswordCard" class="hidden auth-card">
+                <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
+                <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
+                  <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
+                  <button type="button" id="accountPasswordForgot" class="hidden auth-text-link">Forgot password?</button>
+                </div>
+                <div id="accountPasswordError" class="error-message hidden" style="margin-top:8px"></div>
               </div>
             </div>
-
-            <div id="signedInBox" class="hidden auth-card auth-signed-in">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Signed in as <strong id="signedInEmail"></strong></span>
-              <button type="button" id="signOutInline" class="auth-text-link" style="margin-left:auto;color:#166534">Not you?</button>
-            </div>
-
-            <!-- Path B: adaptive password field bound to the customerEmail
-                 field below, for anyone who didn't use the quick sign-in
-                 shortcut above. Flips between "create a password" (new
-                 email) and "welcome back, sign in" (email matches an
-                 existing account) via setAccountCardState(). Hidden
-                 entirely once signed in. -->
-            <div id="accountPasswordCard" class="hidden auth-card">
-              <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
-              <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
-                <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
-                <button type="button" id="accountPasswordForgot" class="hidden auth-text-link">Forgot password?</button>
-              </div>
-              <div id="accountPasswordError" class="error-message hidden" style="margin-top:8px"></div>
-            </div>
-          </div>
-
-          <!-- Contact — collapses to one editable summary line for a
-               signed-in buyer with a name/phone already on file; full and
-               open for guests (unchanged for them). Mirrors the compact/
-               full pattern already proven for the address section below. -->
-          <div id="contactSummary" class="hidden auth-card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px">
-            <div style="font-size:14px;color:#1a1a2e" id="contactSummaryText"></div>
-            <button type="button" id="editContactBtn" class="auth-text-link" style="white-space:nowrap">Edit</button>
           </div>
 
           <div id="contactFormFull">
@@ -1146,9 +1261,60 @@
           </div>
 
           <div id="detailsFormError" class="error-message hidden"></div>
+
+          <!-- Page 1's only exit — validates via validateDetailsForm() (the
+               same function validateShippingForm() already calls first as
+               defense-in-depth) then switches to page 2 (advanceToStep2()).
+               Does NOT sign in / create an account — that logic stays
+               exactly where it already lives, inside
+               handleAccountPasswordSubmit(), called later at actual payment
+               time by processPayment()/payWithSavedCard(). -->
+          <div class="text-center mt-4">
+            <button type="button" id="continueToStep2Btn" class="btn" style="padding: 14px 40px; font-size: 16px;">Continue to delivery details</button>
+          </div>
+          </div>
           </div>
 
-          <div class="field-group-label">Delivery</div>
+          <!-- ============ PAGE 2 — Delivery + Payment ============
+               Hidden by default in markup. Becomes visible either
+               immediately — for a signed-in buyer whose contact is already
+               complete, see updateAuthUI() — or after page 1's Continue
+               button validates (advanceToStep2()). -->
+          <div id="step2DeliveryPayment" class="hidden">
+
+          <!-- Contact — compact summary chip for a signed-in buyer with a
+               name/phone already on file (this is effectively the top of
+               "page 2" for them); guests and signed-in-but-incomplete
+               buyers never see page 2 until Continue, and by then their
+               #contactFormFull (up in page 1) already has what's needed, so
+               this chip is what shows here from that point on too. Mirrors
+               the compact/full pattern already proven for the address
+               section below. -->
+          <div id="contactSummary" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+            <div style="font-size:14px;color:#1a1a2e"><svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Contact:</strong> <span id="contactSummaryText"></span></div>
+            <button type="button" id="editContactBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Edit</button>
+          </div>
+
+          <!-- Back to page 1 — shown only when the buyer actually navigated
+               here via Continue (guest, or signed-in-but-incomplete-contact,
+               which follows the same guest-like flow) — see
+               advanceToStep2(). A signed-in buyer with a complete contact
+               who skips straight to page 2 never sees this; nothing behind
+               it for them. -->
+          <div id="step2BackLink" class="hidden" style="margin-bottom:14px">
+            <button type="button" id="backToStep1Btn" class="auth-text-link">&larr; Back to your details</button>
+          </div>
+
+          <!-- .field-group-label:first-of-type strips the top divider —
+               correct when this was the first such label under the shared
+               form parent (a signed-in buyer with #step1Heading hidden but
+               still structurally present/first). Now that "Delivery" is the
+               first .field-group-label inside its own new parent
+               (#step2DeliveryPayment), that CSS rule would otherwise apply
+               here too and silently drop the divider for everyone — restore
+               it explicitly so the visual separation from #contactSummary/
+               #step2BackLink above is unchanged. -->
+          <div class="field-group-label" style="margin-top:28px;padding-top:20px;border-top:1px solid #eee">Delivery</div>
 
           <!-- Per-service-item summary, shown when cart has one or more services.
                Content built dynamically by updateServiceBanner() per archetype
@@ -1159,43 +1325,47 @@
           <div id="serviceDropoffBanner" style="display:none;margin-bottom:16px"></div>
 
           <!-- Compact "Deliver to" card — shown only when a returning buyer
-               has BOTH a saved address AND a saved delivery zone on file, so
-               there's genuinely nothing left to (re)confirm. Anything less
-               complete just falls through to the full form below. -->
+               has a complete saved address on file, so there's genuinely
+               nothing left to (re)confirm. Anything less complete just
+               falls through to the full form below. -->
           <div id="addressCompactCard" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
             <div style="font-size:14px;color:#1a1a2e"><svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
             <button type="button" id="changeAddressBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Change</button>
           </div>
 
+          <!-- One-time "is this the correct address?" nudge — session-scoped
+               only (sessionStorage 'ss_addr_confirmed'), no DB write, shown
+               at most once per tab for a returning signed-in buyer with a
+               complete saved address. Small inline callout, NOT a modal —
+               see showAddressConfirmOverlay()/dismissAddressConfirmOverlay()
+               below. Sits above #addrConfirmScrim via z-index (CSS). -->
+          <div id="addrConfirmCallout" class="hidden addr-confirm-callout">
+            <span>Is this the correct address?</span>
+            <button type="button" id="addrConfirmYesBtn" class="addr-confirm-yes-btn">Yes, that's right</button>
+          </div>
+
+          <!-- Full-viewport dim scrim for the address-confirm nudge above.
+               Any click on it dismisses the nudge (identical to clicking
+               Yes) — see setupEventListeners(). Kept out of the flow
+               (position:fixed) so its DOM position doesn't matter. -->
+          <div id="addrConfirmScrim" class="hidden addr-confirm-scrim"></div>
+
           <!-- Campus ETA strip — the one signature element of this page.
                Replaces both the old zone-restriction banner and a buried
                green delivery-time box with one persistent, honest line:
-               a live-styled pill that shows "choose an area" before a
-               zone is picked, then the zone name + the real
-               seller-turnaround estimate once known (refreshEstimatedTime()
-               below — unchanged data, just one place to look). -->
+               a live-styled pill that shows a generic estimate before any
+               seller-turnaround data is known, then the real seller-
+               turnaround estimate once it arrives (refreshEstimatedTime()
+               below — unchanged data, just one place to look). No delivery
+               zone is involved — deliveries aren't restricted by area. -->
           <div id="estimatedDeliveryTime" class="eta-strip eta-strip-empty">
-            📍 Choose your delivery area to see your ETA — deliveries are currently only available near UKZN Westville
+            📍 Delivery: usually within 1–3 days
           </div>
 
           <div id="addressNudgeText" class="hidden" style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">One more thing — add your delivery address to finish</div>
 
           <div id="addressFormFull">
           <div id="shippingForm">
-            <!-- Address-only fields -->
-            <div id="zoneSection">
-              <!-- Delivery zone dropdown (required) -->
-              <div class="form-group">
-                <label class="form-label">Delivery Area <span class="required">*</span></label>
-                <select id="deliveryZoneSelect" class="form-control" required>
-                  <option value="">Select your delivery area…</option>
-                </select>
-                <div id="deliveryZoneError" style="display:none;color:#dc3545;font-size:12px;margin-top:4px">
-                  Delivery is only available in selected areas near UKZN Westville.
-                </div>
-              </div>
-            </div>
-
             <!-- Address fields -->
             <div id="addressSection">
               <div class="form-group">
@@ -1252,44 +1422,77 @@
 
           <div class="field-group-label">Payment</div>
 
-          <!-- Order notes + "save my card" are real but non-essential to a
-               fast checkout — grouped under a disclosure. Native <details>
-               so no JS is needed; CSS forces it open on desktop where
-               there's no space pressure, native collapse-by-default on
-               mobile (see MORE-OPTIONS rules). -->
-          <details id="moreOptionsDisclosure" class="more-options-disclosure" open>
-            <summary>More options</summary>
-            <div class="form-group">
-              <label class="form-label">Order Notes (Optional)</label>
-              <textarea id="orderNotes" class="form-control" rows="3" placeholder="Any special notes for your order"></textarea>
+          <!-- Order summary — moved here (bottom of the form, single
+               stacked column) so it reads as the last thing a buyer checks
+               before paying, rather than a persistent side rail. The item
+               list + promo panel fold shut by default on every breakpoint;
+               .summary-totals is a sibling OUTSIDE that fold, so the total
+               due is always visible regardless of expand/collapse state. -->
+          <div class="order-summary" id="orderSummaryCard">
+            <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false">
+              <span>Order Summary</span>
+              <span class="summary-header-meta" id="summaryHeaderMeta"></span>
+              <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+
+            <div id="orderSummaryBody">
+              <div id="orderItems" class="order-items">
+                <!-- Order items will be populated here -->
+              </div>
+
+              <div class="promo-code-section">
+                <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="false">
+                  <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
+                  Have a code?
+                </button>
+                <div class="promo-code-input-panel" id="promoCodePanel">
+                  <div class="promo-code-input">
+                    <input type="text" id="promoCodeInput" placeholder="Enter promo code">
+                    <button id="applyPromoCode" class="btn">Apply</button>
+                  </div>
+                  <div id="promoMessage" class="promo-message"></div>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
-                <span>Save my card for faster checkout next time</span>
-              </label>
+            <div class="summary-totals">
+              <div class="summary-row">
+                <span>Subtotal</span>
+                <span id="subtotalAmount">R0.00</span>
+              </div>
+              <div class="summary-row discount hidden" id="discountRow">
+                <span>Discount</span>
+                <span id="discountAmount">-R0.00</span>
+              </div>
+              <div class="summary-row shipping">
+                <span>Delivery</span>
+                <span id="shippingAmount">—</span>
+              </div>
+              <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
+              <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
+                No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
+              </div>
+              <div class="summary-row shipping hidden" id="serviceCollectionRow">
+                <span>Item collection</span>
+                <span id="serviceCollectionAmount">R0.00</span>
+              </div>
+              <div class="summary-row shipping hidden" id="serviceReturnRow">
+                <span>Return delivery</span>
+                <span id="serviceReturnAmount">R0.00</span>
+              </div>
+              <div class="summary-row tip hidden" id="tipRow">
+                <span>Tip</span>
+                <span id="tipAmount">R0.00</span>
+              </div>
+              <div class="summary-row total">
+                <span>Total</span>
+                <span id="totalAmount" class="amount-roll">R0.00</span>
+              </div>
             </div>
-          </details>
 
-          <!-- Terms + marketing opt-in always visible on every breakpoint —
-               never hide a consent checkbox behind a disclosure. Kept
-               visually distinct from each other (divider) so opting into
-               marketing never reads as bundled into agreeing to the order. -->
-          <div class="form-group">
-            <label class="checkbox-row">
-              <input type="checkbox" id="termsAgreement" required style="width: auto;">
-              <span>I agree to the <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a></span>
-            </label>
-          </div>
-
-          <div class="consent-divider"></div>
-
-          <div class="form-group">
-            <label class="checkbox-row">
-              <input type="checkbox" id="marketingOptIn" style="width: auto;">
-              <span>Send me deals from campus shops (unsubscribe anytime)</span>
-            </label>
+            <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
+              All prices include VAT where applicable
+            </div>
           </div>
 
           <!-- Driver tip — optional, never pre-selected, set before the
@@ -1305,7 +1508,80 @@
             </div>
           </div>
 
+          <!-- Order notes + "save my card" are real but non-essential to a
+               fast checkout — grouped under a disclosure. Native <details>
+               so no JS is needed; CSS forces it open on desktop where
+               there's no space pressure, native collapse-by-default on
+               mobile (see MORE-OPTIONS rules). -->
+          <details id="moreOptionsDisclosure" class="more-options-disclosure" open>
+            <summary>More options</summary>
+            <div class="form-group">
+              <label class="form-label">Order Notes (Optional)</label>
+              <textarea id="orderNotes" class="form-control" rows="3" placeholder="Any special notes for your order"></textarea>
+            </div>
+
+            <div class="form-group" id="saveCardCheckboxGroup">
+              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
+                <span>Save my card for faster checkout next time</span>
+              </label>
+            </div>
+          </details>
+
+          <!-- PayFast never returns a masked card number, so a buyer-chosen
+               name is the only way to tell saved cards apart in the switcher.
+               Shown once "save my card" is ticked (first-timer) or, once at
+               least one card is already saved, unconditionally every time
+               this "different card" redirect path is used — see
+               loadProfileData()/the saveCardCheckbox change listener. -->
+          <div class="form-group hidden" id="cardNameGroup">
+            <label class="form-label" for="cardNameInput">Name this card (optional)</label>
+            <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. My Debit Card" maxlength="40">
+          </div>
+
+          <!-- Terms + marketing opt-in always visible on every breakpoint —
+               never hide a consent checkbox behind a disclosure. Kept
+               visually distinct from each other (divider) so opting into
+               marketing never reads as bundled into agreeing to the order.
+               A signed-in buyer who already accepted terms on a prior order
+               (profiles.terms_accepted_at set) sees this pre-checked and
+               locked instead of re-asked — see applyTermsConsentUI(). -->
+          <div class="form-group" id="termsAgreementGroup">
+            <label class="checkbox-row">
+              <input type="checkbox" id="termsAgreement" required style="width: auto;">
+              <span id="termsAgreementText">I agree to the <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a></span>
+            </label>
+            <div id="termsAcceptedNote" class="hidden" style="font-size:12px;color:var(--text-muted,#888);margin-top:4px;margin-left:26px;"></div>
+          </div>
+
+          <div class="consent-divider"></div>
+
+          <div class="form-group" id="marketingOptInGroup">
+            <label class="checkbox-row">
+              <input type="checkbox" id="marketingOptIn" style="width: auto;">
+              <span>Send me deals from shops (unsubscribe anytime)</span>
+            </label>
+          </div>
+
           <div id="paymentError" class="error-message hidden"></div>
+
+          <!-- Foldable card switcher — only rendered (see renderCardSwitcher())
+               once 2+ cards are saved; with exactly one, there's nothing to
+               switch between so this stays hidden and "Pay with saved card"
+               below just charges that one card. Deliberately a sibling of
+               #savedCardGroup / .text-center.mt-4, NOT nested inside either —
+               both of those are force-hidden on mobile (see the .text-center.
+               mt-4, #savedCardGroup rule), and the switcher must stay visible
+               there too. -->
+          <div class="form-group hidden" id="cardSwitcherGroup" style="margin-bottom:12px;padding:12px 16px;background:#f0f4ff;border-radius:10px">
+            <button type="button" id="cardSwitcherToggle" class="card-switcher-toggle">
+              <span style="font-size:14px;color:#1a1a2e;text-align:left">
+                <svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Paying with:</strong> <span id="cardSwitcherSelectedText"></span>
+              </span>
+              <span class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Switch</span>
+            </button>
+            <div id="cardSwitcherList" class="hidden" style="margin-top:10px"></div>
+          </div>
 
           <!-- Saved-card fast path becomes the dominant CTA once it's
                available (checkoutSection.has-saved-card, toggled in JS
@@ -1325,6 +1601,7 @@
             <div class="text-muted mt-3" style="font-size: 12px;">
               <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
             </div>
+          </div>
           </div>
         </section>
 
@@ -1348,78 +1625,6 @@
           </div>
         </section>
       </div>
-
-      <!-- Right Column - Order Summary -->
-      <div class="order-summary" id="orderSummaryCard">
-        <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false">
-          <span>Order Summary</span>
-          <span class="summary-header-meta" id="summaryHeaderMeta"></span>
-          <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-
-        <!-- Everything below the header collapses together on mobile — a
-             collapsed header showing just "N items · Rxxx" would be
-             pointless if the totals stayed visible right underneath it
-             anyway. Desktop ignores this (always expanded). -->
-        <div id="orderSummaryBody">
-        <div id="orderItems" class="order-items">
-          <!-- Order items will be populated here -->
-        </div>
-
-        <div class="promo-code-section">
-          <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="false">
-            <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
-            Have a code?
-          </button>
-          <div class="promo-code-input-panel" id="promoCodePanel">
-            <div class="promo-code-input">
-              <input type="text" id="promoCodeInput" placeholder="Enter promo code">
-              <button id="applyPromoCode" class="btn">Apply</button>
-            </div>
-            <div id="promoMessage" class="promo-message"></div>
-          </div>
-        </div>
-
-        <div class="summary-totals">
-          <div class="summary-row">
-            <span>Subtotal</span>
-            <span id="subtotalAmount">R0.00</span>
-          </div>
-          <div class="summary-row discount hidden" id="discountRow">
-            <span>Discount</span>
-            <span id="discountAmount">-R0.00</span>
-          </div>
-          <div class="summary-row shipping">
-            <span>Delivery</span>
-            <span id="shippingAmount">—</span>
-          </div>
-          <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
-          <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
-            No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
-          </div>
-          <div class="summary-row shipping hidden" id="serviceCollectionRow">
-            <span>Item collection</span>
-            <span id="serviceCollectionAmount">R0.00</span>
-          </div>
-          <div class="summary-row shipping hidden" id="serviceReturnRow">
-            <span>Return delivery</span>
-            <span id="serviceReturnAmount">R0.00</span>
-          </div>
-          <div class="summary-row tip hidden" id="tipRow">
-            <span>Tip</span>
-            <span id="tipAmount">R0.00</span>
-          </div>
-          <div class="summary-row total">
-            <span>Total</span>
-            <span id="totalAmount" class="amount-roll">R0.00</span>
-          </div>
-        </div>
-
-        <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
-          All prices include VAT where applicable
-        </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -1428,7 +1633,12 @@
        something checkout actually benefits from. Not a duplicate payment
        path: both buttons call the exact same handler functions as their
        full-size counterparts above, and the total is kept in sync from
-       the same updateShippingAndTotal() write (see updateSummaryHeaderMeta). -->
+       the same updateShippingAndTotal() write (see updateSummaryHeaderMeta).
+       The equivalent "Secured by PayFast" trust line (normally part of the
+       inline Pay Now wrapper, which is hidden on mobile) is re-shown here. -->
+  <div class="mobile-pay-trust">
+    <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
+  </div>
   <div class="mobile-pay-bar" id="mobilePayBar">
     <span class="mobile-pay-bar-total amount-roll" id="mobilePayBarTotal">R0.00</span>
     <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--color-ink-navy,#0a2f66)">Pay with saved card</button>
@@ -1692,10 +1902,11 @@
       deliveryFee: 0,
       deliveryClass: 'small',
       uniqueSellerCount: 0,
-      selectedZone: null,        // delivery zone code
       deliveryMethodType: 'deliver', // delivery-only, no pickup option
       sellerTurnarounds: [],     // [{ id, turnaround_time }] for estimated delivery display
-      tip: 0                    // optional driver tip, buyer-elected, added straight into the total
+      tip: 0,                    // optional driver tip, buyer-elected, added straight into the total
+      paymentMethods: [],        // this buyer's saved cards, most-recently-used first
+      selectedPaymentMethodId: null // which one "Pay with saved card" will charge
     };
 
     // Tip is buyer-favorable money on top of the order — no fraud surface,
@@ -1746,6 +1957,18 @@
       checkoutSection: document.getElementById('checkoutSection'),
       confirmationSection: document.getElementById('confirmationSection'),
 
+      // Step 1 — contact/account, skipped entirely for a signed-in buyer
+      step1Heading: document.getElementById('step1Heading'),
+      step1ContactAccount: document.getElementById('step1ContactAccount'),
+
+      // Page 1 vs page 2 — single-page-app-style view switch, only one of
+      // these two is ever visible at a time. See showCheckoutPage().
+      step1Page: document.getElementById('step1Page'),
+      step2DeliveryPayment: document.getElementById('step2DeliveryPayment'),
+      continueToStep2Btn: document.getElementById('continueToStep2Btn'),
+      step2BackLink: document.getElementById('step2BackLink'),
+      backToStep1Btn: document.getElementById('backToStep1Btn'),
+
       // Contact fields — compact summary vs full form (signed-in vs guest)
       contactSummary: document.getElementById('contactSummary'),
       contactSummaryText: document.getElementById('contactSummaryText'),
@@ -1773,6 +1996,17 @@
       // Payment Form
       orderNotes: document.getElementById('orderNotes'),
       termsAgreement: document.getElementById('termsAgreement'),
+      termsAgreementText: document.getElementById('termsAgreementText'),
+      termsAcceptedNote: document.getElementById('termsAcceptedNote'),
+      marketingOptInGroup: document.getElementById('marketingOptInGroup'),
+      saveCardCheckboxGroup: document.getElementById('saveCardCheckboxGroup'),
+      saveCardCheckbox: document.getElementById('saveCardCheckbox'),
+      cardNameGroup: document.getElementById('cardNameGroup'),
+      cardNameInput: document.getElementById('cardNameInput'),
+      cardSwitcherGroup: document.getElementById('cardSwitcherGroup'),
+      cardSwitcherToggle: document.getElementById('cardSwitcherToggle'),
+      cardSwitcherSelectedText: document.getElementById('cardSwitcherSelectedText'),
+      cardSwitcherList: document.getElementById('cardSwitcherList'),
       payNowBtn: document.getElementById('payNowBtn'),
       paymentError: document.getElementById('paymentError'),
 
@@ -1960,17 +2194,44 @@
       }
     }
     
+    // This buyer's saved cards, most-recently-used first (nulls last, i.e.
+    // never-yet-charged cards sort by when they were added) — exactly the
+    // ordering the "most recent = default" rule and the switcher list need.
+    // RLS (authenticated_select_own_payment_methods) already scopes this to
+    // state.user's own rows; no extra .eq('user_id', ...) needed, but it's
+    // included anyway as defense in depth against a future RLS regression.
+    async function loadPaymentMethods() {
+      state.paymentMethods = [];
+      state.selectedPaymentMethodId = null;
+      if (!supabaseClient || !state.user) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('payment_methods')
+          .select('id, display_name, created_at, last_used_at')
+          .eq('user_id', state.user.id)
+          .order('last_used_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false });
+        if (error) { console.error('loadPaymentMethods error:', error); return; }
+        state.paymentMethods = data || [];
+        if (state.paymentMethods.length) state.selectedPaymentMethodId = state.paymentMethods[0].id;
+      } catch (e) {
+        console.error('loadPaymentMethods error:', e);
+      }
+    }
+
     // Verify user profile exists (like in index.html)
     async function verifyUserProfile(userId) {
       try {
         if (!supabaseClient || !userId) return;
-        
-        const { data: profile, error } = await supabaseClient
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .single();
-        
+
+        // Run alongside the profile fetch — loadProfileData() (called below)
+        // needs state.paymentMethods already populated to decide the
+        // saved-card UI, so both must finish before it runs.
+        const [{ data: profile, error }] = await Promise.all([
+          supabaseClient.from('profiles').select('*').eq('user_id', userId).single(),
+          loadPaymentMethods()
+        ]);
+
         if (error) {
           // Profile doesn't exist, create one
           const { data: userData } = await supabaseClient.auth.getUser();
@@ -2024,41 +2285,155 @@
         elements.provinceSelect.value = state.profile.province;
         selectProvince(state.profile.province);
       }
-      if (state.profile.delivery_zone) {
-        const zoneSelect = document.getElementById('deliveryZoneSelect');
-        if (zoneSelect) zoneSelect.value = state.profile.delivery_zone;
-        state.selectedZone = state.profile.delivery_zone;
-      }
 
       renderAddressCard();
       renderContactCard();
       refreshEstimatedTime();
 
-      // Offer the one-click "pay with saved card" fast-path when this buyer
-      // already has a PayFast token on file from a prior tokenized checkout.
-      // has-saved-card also demotes the regular Pay Now button visually
-      // (see .has-saved-card #payNowBtn) so the two CTAs aren't competing.
+      // Offer the one-click "pay with saved card" fast-path once this buyer
+      // has at least one saved payment_methods row. has-saved-card also
+      // demotes the regular Pay Now button visually (see .has-saved-card
+      // #payNowBtn) so the two CTAs aren't competing.
       const savedCardGroup = document.getElementById('savedCardGroup');
-      const hasSavedCard = !!state.profile.payfast_token;
-      if (savedCardGroup) savedCardGroup.style.display = hasSavedCard ? '' : 'none';
-      elements.checkoutSection?.classList.toggle('has-saved-card', hasSavedCard);
-      // Mobile bar shows exactly one CTA — the saved-card path when
-      // available, otherwise the regular Pay Now — never both at once.
-      document.getElementById('payWithSavedCardBtnMobile')?.classList.toggle('hidden', !hasSavedCard);
-      document.getElementById('payNowBtnMobile')?.classList.toggle('hidden', hasSavedCard);
+      const hasEverSavedCard = state.paymentMethods.length > 0;
+      if (savedCardGroup) savedCardGroup.style.display = hasEverSavedCard ? '' : 'none';
+      elements.checkoutSection?.classList.toggle('has-saved-card', hasEverSavedCard);
+      document.getElementById('payWithSavedCardBtnMobile')?.classList.toggle('hidden', !hasEverSavedCard);
+      // No longer force-hidden on mobile once a card exists — relabeled and
+      // demoted instead (see .mobile-pay-bar.has-saved-card #payNowBtnMobile)
+      // so mobile buyers keep a real path to pay with a different card.
+      document.getElementById('mobilePayBar')?.classList.toggle('has-saved-card', hasEverSavedCard);
+
+      // Once a card is already saved, "save my card for next time" has
+      // nothing left to offer — hide it entirely instead of re-asking, and
+      // every future checkout auto-saves silently (see the subscription_type
+      // assignment in submitToPayFast()). Guests never reach here
+      // (loadProfileData only runs after a profile loads), so this never
+      // affects the guest checkout.
+      elements.saveCardCheckboxGroup?.classList.toggle('hidden', hasEverSavedCard);
+
+      // The regular Pay button becomes the "pay another way" fallback once a
+      // saved card exists — relabel both the desktop and mobile copies of it
+      // (CSS alone can only restyle, not change the text).
+      const payNowLabel = hasEverSavedCard ? 'Want to use a different card?' : 'Pay Now';
+      if (elements.payNowBtn) elements.payNowBtn.textContent = payNowLabel;
+      const payNowBtnMobileEl = document.getElementById('payNowBtnMobile');
+      if (payNowBtnMobileEl) payNowBtnMobileEl.textContent = payNowLabel;
+
+      // Card-naming input: unconditional once a card already exists (nothing
+      // left to opt into, tokenization is now automatic); for a first-timer
+      // it only appears once "save my card" is ticked — see the
+      // saveCardCheckbox change listener.
+      elements.cardNameGroup?.classList.toggle('hidden', !hasEverSavedCard && !elements.saveCardCheckbox?.checked);
+
+      renderCardSwitcher();
+
+      // Signed-in buyer: don't re-ask for consent already on file.
+      // Terms/privacy acceptance is remembered via profiles.terms_accepted_at;
+      // marketing opt-in is looked up from the subscribers table. Both are
+      // strictly gated on state.user — a guest checkout never runs either.
+      if (state.user) {
+        applyTermsConsentUI();
+        checkMarketingOptInVisibility();
+      }
     }
 
-    // Compact "Deliver to" card — only when address AND zone are BOTH on
-    // file (a legacy profile missing just the zone still needs one field
-    // confirmed, so it falls through to the full form instead of a lie).
+    // A buyer-chosen name, falling back to "Card added {date}" at render
+    // time only — never baked into storage, so a later rename (not built in
+    // this pass) would apply retroactively to any pre-existing "Card added"
+    // fallback text.
+    function paymentMethodLabel(card) {
+      if (card.display_name) return card.display_name;
+      return `Card added ${formatSAST(card.created_at, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+    }
+
+    // Foldable card switcher — only meaningful with 2+ saved cards (with
+    // exactly one, there's nothing to switch between, so it stays hidden and
+    // "Pay with saved card" just charges that one card via the same
+    // most-recent-first fallback charge-payfast-token.js already applies).
+    function renderCardSwitcher() {
+      if (!elements.cardSwitcherGroup) return;
+      const cards = state.paymentMethods;
+      if (cards.length < 2) {
+        elements.cardSwitcherGroup.classList.add('hidden');
+        return;
+      }
+      elements.cardSwitcherGroup.classList.remove('hidden');
+
+      if (!cards.some(c => c.id === state.selectedPaymentMethodId)) {
+        state.selectedPaymentMethodId = cards[0].id;
+      }
+      const selected = cards.find(c => c.id === state.selectedPaymentMethodId);
+      if (elements.cardSwitcherSelectedText) {
+        elements.cardSwitcherSelectedText.textContent = selected ? paymentMethodLabel(selected) : '';
+      }
+
+      if (elements.cardSwitcherList) {
+        elements.cardSwitcherList.innerHTML = cards.map(c => `
+          <button type="button" class="card-switcher-item${c.id === state.selectedPaymentMethodId ? ' selected' : ''}" data-card-id="${c.id}">
+            ${paymentMethodLabel(c)}
+          </button>
+        `).join('');
+      }
+    }
+
+    // Reflect a signed-in buyer's prior Terms & Conditions / Privacy Policy
+    // acceptance (profiles.terms_accepted_at) so it's never re-asked. If
+    // already accepted, the checkbox is shown pre-checked and disabled
+    // (still reports .checked === true for existing validation) with a
+    // small "Accepted on {date}" note; otherwise it's left exactly as
+    // today — unticked, interactive, required.
+    function applyTermsConsentUI() {
+      if (!elements.termsAgreement) return;
+      const acceptedAt = state.profile?.terms_accepted_at;
+      if (!acceptedAt) return; // not yet accepted — default markup already correct
+      elements.termsAgreement.checked = true;
+      elements.termsAgreement.disabled = true;
+      if (elements.termsAcceptedNote) {
+        elements.termsAcceptedNote.textContent = `Accepted on ${formatSAST(acceptedAt, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+        elements.termsAcceptedNote.classList.remove('hidden');
+      }
+    }
+
+    // Signed-in buyer only: look up whether this email is already opted into
+    // marketing (subscribers table — reused, no new table/column) and hide
+    // the "Send me deals" checkbox entirely when there's nothing left to
+    // opt into. Read-only; the existing ss_marketing_optin → checkout-success
+    // → subscribe.js write path is unchanged.
+    async function checkMarketingOptInVisibility() {
+      if (!supabaseClient || !elements.marketingOptInGroup) return;
+      const email = state.user?.email || state.profile?.email;
+      if (!email) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from('subscribers')
+          .select('consent, unsubscribed')
+          .ilike('email', email)
+          .maybeSingle();
+        if (error) { console.error('Marketing opt-in lookup error:', error); return; }
+        const alreadyOptedIn = !!data && data.consent === 'opted_in' && !data.unsubscribed;
+        elements.marketingOptInGroup.classList.toggle('hidden', alreadyOptedIn);
+      } catch (e) {
+        console.error('Marketing opt-in lookup error:', e);
+      }
+    }
+
+    // Compact "Deliver to" card — shown once address is fully on file
+    // (delivery zone is no longer part of the profile's address completeness
+    // check — deliveries aren't restricted by area).
     function renderAddressCard() {
       const p = state.profile;
-      const hasFullAddress = p && p.address && p.city && p.province && p.postal_code && p.delivery_zone;
+      const hasFullAddress = p && p.address && p.city && p.province && p.postal_code;
       if (!elements.addressCompactCard || !elements.addressFormFull) return;
       if (hasFullAddress) {
-        elements.compactAddressText.textContent = `${p.address}, ${p.city} · ${p.delivery_zone}`;
+        elements.compactAddressText.textContent = `${p.address}, ${p.city}`;
         elements.addressCompactCard.classList.remove('hidden');
         elements.addressFormFull.classList.add('hidden');
+        // One-time "is this the correct address?" nudge for a returning
+        // signed-in buyer — only ever relevant here, since this is exactly
+        // the branch where hasFullAddress is known true. No-ops for guests
+        // or once already dismissed this tab session (see function below).
+        maybeShowAddressConfirmNudge();
       } else {
         elements.addressCompactCard.classList.add('hidden');
         elements.addressFormFull.classList.remove('hidden');
@@ -2071,13 +2446,108 @@
       }
     }
 
+    // Fires at most once per tab (sessionStorage 'ss_addr_confirmed') for a
+    // returning signed-in buyer whose profile already has a complete saved
+    // address — purely a session-scoped UI affordance, nothing persisted to
+    // the database and no effect on order submission either way.
+    //
+    // Called synchronously from renderAddressCard(), itself called from
+    // loadProfileData() inside verifyUserProfile() — which every caller
+    // always awaits BEFORE calling updateAuthUI() to decide page 1 vs page 2
+    // visibility (see showCheckoutPage()). That means at this exact point
+    // #step2DeliveryPayment (which contains #addressCompactCard) may still
+    // be hidden, so calling showAddressConfirmOverlay() immediately would
+    // scrollIntoView an element with no layout box — a no-op. Deferring one
+    // tick (setTimeout 0, a macrotask) guarantees it runs AFTER the pending
+    // `await verifyUserProfile(...)` continuation (a microtask, always
+    // scheduled first) has called updateAuthUI() and settled page
+    // visibility, so the scroll/highlight target the actually-visible card.
+    function maybeShowAddressConfirmNudge() {
+      if (!state.user) return;
+      let alreadyDismissed = false;
+      try {
+        alreadyDismissed = !!sessionStorage.getItem('ss_addr_confirmed');
+      } catch (e) {
+        // Storage unavailable (private mode, etc.) — fail safe by not
+        // nagging the buyer every render; just skip the nudge entirely.
+        return;
+      }
+      if (alreadyDismissed) return;
+      setTimeout(function () {
+        // Only meaningful once page 2 is actually the visible page. If
+        // contact info is still incomplete, page 1 stays shown until
+        // Continue is clicked, and the address card underneath has no
+        // visible ancestor to scroll to / highlight yet — skip silently
+        // rather than dim the page over a hidden card. Not a correctness
+        // issue: this is a one-time nicety, and the compact card still
+        // renders normally (sans nudge) once page 2 is reached.
+        if (elements.step2DeliveryPayment && elements.step2DeliveryPayment.classList.contains('hidden')) return;
+        showAddressConfirmOverlay();
+      }, 0);
+    }
+
+    // Scrolls the compact address card into view, then dims the rest of the
+    // page behind it with a translucent scrim + small inline "Is this the
+    // correct address?" callout. Deliberately not a modal: no backdrop
+    // blur/close-X of its own, and any click outside the (higher z-index)
+    // card/callout dismisses it exactly like clicking "Yes".
+    function showAddressConfirmOverlay() {
+      const card = elements.addressCompactCard;
+      const scrim = document.getElementById('addrConfirmScrim');
+      const callout = document.getElementById('addrConfirmCallout');
+      if (!card || !scrim || !callout) return;
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+
+      const reveal = function () {
+        scrim.classList.remove('hidden');
+        callout.classList.remove('hidden');
+        card.classList.add('addr-confirm-highlight');
+      };
+      // Let the smooth scroll settle before dimming the page; reduced-motion
+      // visitors get an instant jump + instant scrim, no timeout needed.
+      if (reduceMotion) reveal();
+      else setTimeout(reveal, 350);
+    }
+
+    // Single dismissal path for the address-confirm nudge — used by both
+    // the "Yes, that's right" button and any click on the full-viewport
+    // scrim (i.e. anywhere else on the page). Behaviorally identical either
+    // way: hide the overlay, restore normal interaction, remember for the
+    // rest of this tab session only (never localStorage, never the DB).
+    function dismissAddressConfirmOverlay() {
+      const card = elements.addressCompactCard;
+      const scrim = document.getElementById('addrConfirmScrim');
+      const callout = document.getElementById('addrConfirmCallout');
+      if (scrim) scrim.classList.add('hidden');
+      if (callout) callout.classList.add('hidden');
+      if (card) card.classList.remove('addr-confirm-highlight');
+      try {
+        sessionStorage.setItem('ss_addr_confirmed', '1');
+      } catch (e) {
+        // Storage unavailable — nothing to persist, overlay still closes.
+      }
+    }
+
+    // Single source of truth for "does this buyer have nothing left to
+    // supply in Contact" — reused by renderContactCard() (compact chip vs
+    // full form) AND by updateAuthUI()/showCheckoutPage() decisions (page 1
+    // vs page 2), so the two never disagree. A signed-in buyer with an
+    // incomplete profile (e.g. missing phone) is NOT considered "complete"
+    // here — same as today — so they still see the full contact fields.
+    function hasCompleteContact() {
+      const p = state.profile;
+      return !!(state.user && p && p.first_name && p.last_name && p.phone);
+    }
+
     // Compact contact summary vs full form — same pattern as the address
     // card above. Only collapses for a signed-in buyer with a name+phone
     // already on file; guests always see the full open fields (unchanged).
     function renderContactCard() {
       if (!elements.contactSummary || !elements.contactFormFull) return;
       const p = state.profile;
-      const hasContact = state.user && p && p.first_name && p.last_name && p.phone;
+      const hasContact = hasCompleteContact();
       if (hasContact) {
         elements.contactSummaryText.textContent =
           `${p.first_name} ${p.last_name} · ${p.phone}`;
@@ -2087,6 +2557,45 @@
         elements.contactSummary.classList.add('hidden');
         elements.contactFormFull.classList.remove('hidden');
       }
+    }
+
+    // Single-page-app-style view switch between page 1 (#step1Page) and
+    // page 2 (#step2DeliveryPayment) — only one is ever visible at a time.
+    // Unrelated to goToStep() (checkoutSection vs confirmationSection,
+    // pre- vs post-payment) — do not confuse the two. Always scrolls to the
+    // top of whichever page becomes visible, same pattern as goToStep().
+    // (The address-confirm overlay race this could otherwise cause with
+    // maybeShowAddressConfirmNudge()'s own scrollIntoView is handled there
+    // instead, via a one-tick defer — see that function's comment.)
+    function showCheckoutPage(pageNum) {
+      if (!elements.step1Page || !elements.step2DeliveryPayment) return;
+      if (pageNum === 2) {
+        elements.step1Page.classList.add('hidden');
+        elements.step2DeliveryPayment.classList.remove('hidden');
+      } else {
+        elements.step2DeliveryPayment.classList.add('hidden');
+        elements.step1Page.classList.remove('hidden');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Page 1's Continue button — validation + page-switch gate only. Never
+    // signs in / creates an account (that stays inside
+    // handleAccountPasswordSubmit(), called later at actual payment time).
+    function advanceToStep2() {
+      if (!validateDetailsForm()) return;
+      // The buyer is genuinely navigating here via Continue — this is the
+      // one and only place "Back" becomes meaningful, per the brief.
+      elements.step2BackLink?.classList.remove('hidden');
+      showCheckoutPage(2);
+    }
+
+    // Back link at the top of page 2 (guest / incomplete-contact path only)
+    // — also reused by the existing "Edit" action on the signed-in contact
+    // chip, since #contactFormFull now lives on page 1. No data is lost
+    // either way; this only toggles CSS visibility.
+    function goBackToStep1() {
+      showCheckoutPage(1);
     }
 
   function updateAuthUI(user) {
@@ -2110,6 +2619,23 @@
         elements.quickSigninCard?.classList.add('hidden');
         elements.accountPasswordCard?.classList.add('hidden');
 
+        // Step 1 is skipped entirely for a signed-in buyer — not even
+        // collapsed. Their contact chip (#contactSummary, outside this
+        // wrapper) takes over as the effective top of Step 2.
+        elements.step1ContactAccount?.classList.add('hidden');
+        elements.step1Heading?.classList.add('hidden');
+
+        // Page 1 vs page 2 — reuse the exact same completeness check
+        // renderContactCard() just used (it always runs first, via
+        // verifyUserProfile() -> loadProfileData(), before updateAuthUI()
+        // is ever called for a signed-in user). Complete contact -> skip
+        // straight to page 2, no Continue click needed, Back link stays
+        // hidden (nothing behind page 1 for them). Incomplete -> page 1
+        // stays visible exactly like a guest, Back link stays hidden until
+        // Continue is actually clicked.
+        elements.step2BackLink?.classList.add('hidden');
+        showCheckoutPage(hasCompleteContact() ? 2 : 1);
+
         // Sync cart on login
         syncCartOnLogin(user);
     } else {
@@ -2126,6 +2652,15 @@
         elements.contactSummary?.classList.add('hidden');
         elements.contactFormFull?.classList.remove('hidden');
         document.getElementById('addressNudgeText')?.classList.add('hidden');
+
+        // A guest sees Step 1 in full, labeled as such.
+        elements.step1ContactAccount?.classList.remove('hidden');
+        elements.step1Heading?.classList.remove('hidden');
+
+        // Page 1 visible, page 2 hidden, Back link hidden — nothing to go
+        // back to yet (matches today's default).
+        elements.step2BackLink?.classList.add('hidden');
+        showCheckoutPage(1);
     }
 }
 	
@@ -2441,10 +2976,7 @@ async function saveCartToServer() {
       });
     }
 
-    // Maps a picked Photon feature onto the address form fields. Zone is
-    // never auto-picked (Photon has no concept of DELIVERY_ZONES) — at most
-    // a loose keyword pre-highlight, always left for the buyer to confirm
-    // since it gates the existing hard deliveryZoneError validation.
+    // Maps a picked Photon feature onto the address form fields.
     function applyAddressSuggestion(props) {
       const streetLine = [props.housenumber, props.street || props.name].filter(Boolean).join(' ');
       if (streetLine) elements.shippingAddress.value = streetLine;
@@ -2455,12 +2987,6 @@ async function saveCartToServer() {
           o.value && (props.state.includes(o.value) || o.value.includes(props.state))
         );
         if (match) { elements.provinceSelect.value = match.value; selectProvince(match.value); }
-      }
-      if (props.city || props.street) {
-        const zoneSelect = document.getElementById('deliveryZoneSelect');
-        const haystack = `${props.street || ''} ${props.name || ''}`.toLowerCase();
-        const zoneMatch = DELIVERY_ZONES.find(z => haystack.includes(z.name.toLowerCase().split(' ')[0]));
-        if (zoneSelect && zoneMatch && !zoneSelect.value) zoneSelect.value = zoneMatch.code;
       }
     }
 
@@ -2936,10 +3462,11 @@ async function validateCheckout() {
       updateShippingAndTotal(subtotal);
     }
 
-    // Mobile-only collapsed summary header — "Order (3 items) · R247.00 ▾".
-    // Desktop ignores this (order summary is always expanded there). Called
-    // from updateShippingAndTotal() — the single place totalAmount is
-    // actually finalized, regardless of which caller triggered the update.
+    // Collapsed item-list fold header — "3 items ▾". Totals now always
+    // render separately (outside the fold), so this only needs to reflect
+    // item count, not the total anymore. Called from updateShippingAndTotal()
+    // — the single place totalAmount is actually finalized, regardless of
+    // which caller triggered the update.
     function updateSummaryHeaderMeta(totalText) {
       // setAmountText() delays elements.totalAmount's own text update briefly
       // (for the fade-through), so read the just-computed total passed in
@@ -2950,7 +3477,7 @@ async function validateCheckout() {
       const count = state.cart.length;
       if (meta) {
         meta.textContent = count
-          ? `${count} item${count === 1 ? '' : 's'} · ${text}`
+          ? `${count} item${count === 1 ? '' : 's'}`
           : '';
       }
       const mobileTotal = document.getElementById('mobilePayBarTotal');
@@ -3080,21 +3607,14 @@ async function validateCheckout() {
       }
     }
 
-    // Drives the Campus ETA strip's content/state. Called whenever the
-    // delivery zone changes (zone known, turnaround maybe not yet) and
-    // whenever seller turnaround data arrives (zone maybe not yet known) —
-    // the strip always reflects whatever is currently known, never both-or-
-    // nothing.
+    // Drives the Campus ETA strip's content/state. Called whenever seller
+    // turnaround data arrives — the strip shows a generic estimate before
+    // that data is known, then the real seller-turnaround estimate once it
+    // arrives. No delivery zone involved (deliveries aren't restricted by
+    // area), so this is purely a function of state.sellerTurnarounds.
     function refreshEstimatedTime() {
       const el = document.getElementById('estimatedDeliveryTime');
       if (!el) return;
-
-      const zoneObj = DELIVERY_ZONES.find(z => z.code === state.selectedZone);
-      if (!zoneObj) {
-        el.className = 'eta-strip eta-strip-empty';
-        el.innerHTML = '📍 Choose your delivery area to see your ETA — deliveries are currently only available near UKZN Westville';
-        return;
-      }
 
       let label = null;
       if (state.sellerTurnarounds?.length) {
@@ -3117,9 +3637,14 @@ async function validateCheckout() {
         else                      label = '2–3 days';
       }
 
+      if (!label) {
+        el.className = 'eta-strip eta-strip-empty';
+        el.innerHTML = '📍 Delivery: usually within 1–3 days';
+        return;
+      }
+
       el.className = 'eta-strip eta-strip-active';
-      el.innerHTML = `<span class="eta-dot" aria-hidden="true"></span>` +
-        `Delivering to ${zoneObj.name}` + (label ? ` · Est. ${label}` : '');
+      el.innerHTML = `<span class="eta-dot" aria-hidden="true"></span>Estimated delivery: ${label}`;
     }
 
     // Lightweight single-seller branding touch — only ever called (from
@@ -3438,25 +3963,6 @@ function validateShippingForm() {
                 return false;
             }
         }
-
-        // Delivery zone validation
-        const zoneErrorEl = document.getElementById('deliveryZoneError');
-        if (!state.selectedZone) {
-            if (zoneErrorEl) zoneErrorEl.style.display = 'block';
-            document.getElementById('deliveryZoneSelect')?.focus();
-            return false;
-        }
-        if (zoneErrorEl) zoneErrorEl.style.display = 'none';
-
-        // Soft address/zone mismatch warning (non-blocking)
-        const selectedZoneObj = DELIVERY_ZONES.find(z => z.code === state.selectedZone);
-        if (selectedZoneObj) {
-            const addr = ((elements.shippingAddress?.value || '') + ' ' + (elements.city?.value || '')).toLowerCase();
-            const zoneKeyword = selectedZoneObj.name.toLowerCase().split(' ')[0];
-            if (!addr.includes(zoneKeyword)) {
-                console.warn('[Umzila] Address may not match selected delivery zone:', selectedZoneObj.name);
-            }
-        }
     }
 
     // Item_dropoff service handoff/return — always rep-collected and
@@ -3584,7 +4090,19 @@ async function saveShippingInfo() {
                 profileUpdate.city = state.shippingInfo.city;
                 profileUpdate.postal_code = state.shippingInfo.postalCode;
                 profileUpdate.province = state.shippingInfo.province;
-                if (state.selectedZone) profileUpdate.delivery_zone = state.selectedZone;
+            }
+            // First time this signed-in buyer actually agrees to the Terms &
+            // Conditions / Privacy Policy, record it — piggybacked on this
+            // same profile update call (no extra round-trip). By the time
+            // saveShippingInfo() runs, processPayment()/payWithSavedCard()
+            // have already confirmed elements.termsAgreement.checked is true
+            // (or it's pre-checked+disabled from a prior acceptance, in
+            // which case terms_accepted_at is already set and this is
+            // skipped).
+            if (!state.profile.terms_accepted_at && elements.termsAgreement?.checked) {
+                const acceptedAt = new Date().toISOString();
+                profileUpdate.terms_accepted_at = acceptedAt;
+                state.profile.terms_accepted_at = acceptedAt;
             }
             const { error } = await supabaseClient
                 .from('profiles')
@@ -3686,11 +4204,15 @@ async function submitToPayFast(cartItems, orderId, total) {
     // add custom_strX / custom_intX here if you want the server to sign them
   };
 
-  // Buyer opted in to "save my card" — tag this payment as ad-hoc/tokenized
-  // so PayFast stores a reusable token (captured by payfast-itn.js) without
-  // creating a fixed recurring charge. Left unset for every ordinary
-  // checkout, matching generate-payfast-signature.js's additive fields.
-  if (document.getElementById('saveCardCheckbox')?.checked) {
+  // Tag this payment as ad-hoc/tokenized so PayFast stores a reusable token
+  // (captured by payfast-itn.js into payment_methods) without creating a
+  // fixed recurring charge. Once a buyer has saved a card once, every future
+  // "different card" checkout auto-saves too — never asked again — so this
+  // is unconditional from that point on; a first-timer still opts in via
+  // the checkbox. Left unset for every ordinary checkout otherwise, matching
+  // generate-payfast-signature.js's additive fields.
+  const hasEverSavedCard = state.paymentMethods && state.paymentMethods.length > 0;
+  if (hasEverSavedCard || document.getElementById('saveCardCheckbox')?.checked) {
     payload.subscription_type = 2;
   }
 
@@ -3832,6 +4354,11 @@ async function submitToPayFast(cartItems, orderId, total) {
                 discount: discount,
                 shipping_cost: shipping,
                 tip_amount: tip,
+                // Bridges the gap between "buyer names a new card here" and
+                // "the token only arrives later via ITN" — read back by
+                // completeOrderPayment() when it inserts the payment_methods
+                // row. Harmless when no card ends up getting tokenized.
+                pending_card_name: (elements.cardNameInput?.value || '').trim().substring(0, 100) || null,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
@@ -3842,8 +4369,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // resolved to 0, e.g. a multi-use code a guest never signed in to use).
                 coupon_code: (discount > 0 && state.serverDiscount?.valid) ? state.serverDiscount.code : null,
                 delivery_class: fees.deliveryClass || null,
-                seller_count:   fees.sellerCount || null,
-                delivery_zone:  state.selectedZone || null
+                seller_count:   fees.sellerCount || null
             };
 
             const { data: order, error } = await supabaseClient
@@ -3917,7 +4443,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         const res = await fetch('/.netlify/functions/charge-payfast-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
-            body: JSON.stringify({ m_payment_id: prepared.orderId, amount: prepared.total })
+            body: JSON.stringify({ m_payment_id: prepared.orderId, amount: prepared.total, payment_method_id: state.selectedPaymentMethodId || null })
         });
         const json = await res.json().catch(() => ({}));
 
@@ -4042,23 +4568,6 @@ async function submitToPayFast(cartItems, orderId, total) {
       // Live address autocomplete (free, no key — OpenStreetMap Photon)
       wireAddressAutocomplete(elements.shippingAddress, applyAddressSuggestion);
 
-      // Populate delivery zone dropdown from DELIVERY_ZONES config
-      const zoneSelect = document.getElementById('deliveryZoneSelect');
-      if (zoneSelect) {
-        DELIVERY_ZONES.forEach(z => {
-          const opt = document.createElement('option');
-          opt.value = z.code;
-          opt.textContent = z.name;
-          zoneSelect.appendChild(opt);
-        });
-        zoneSelect.addEventListener('change', () => {
-          state.selectedZone = zoneSelect.value || null;
-          const errEl = document.getElementById('deliveryZoneError');
-          if (errEl) errEl.style.display = state.selectedZone ? 'none' : 'block';
-          refreshEstimatedTime();
-        });
-      }
-
       // Province select change
       elements.provinceSelect.addEventListener('change', (e) => {
         selectProvince(e.target.value);
@@ -4081,7 +4590,27 @@ async function submitToPayFast(cartItems, orderId, total) {
         payWithSavedCard();
       });
 
-      // Mobile-only order summary accordion (desktop CSS ignores .expanded).
+      // Foldable card switcher — fold/unfold, and select a card from the list.
+      elements.cardSwitcherToggle?.addEventListener('click', () => {
+        elements.cardSwitcherList?.classList.toggle('hidden');
+      });
+      elements.cardSwitcherList?.addEventListener('click', (e) => {
+        const item = e.target.closest('.card-switcher-item');
+        if (!item) return;
+        state.selectedPaymentMethodId = item.dataset.cardId;
+        renderCardSwitcher();
+        elements.cardSwitcherList.classList.add('hidden');
+      });
+
+      // First-timer only: the name input only makes sense once they've
+      // opted into saving a card at all (once a card already exists, the
+      // input is shown unconditionally by loadProfileData() instead).
+      elements.saveCardCheckbox?.addEventListener('change', () => {
+        elements.cardNameGroup?.classList.toggle('hidden', !elements.saveCardCheckbox.checked);
+      });
+
+      // Order summary item-list accordion — applies on every breakpoint now
+      // (see .order-summary:not(.expanded) #orderSummaryBody in the CSS).
       document.getElementById('summaryToggle')?.addEventListener('click', () => {
         const card = document.getElementById('orderSummaryCard');
         const expanded = card.classList.toggle('expanded');
@@ -4241,14 +4770,39 @@ async function submitToPayFast(cartItems, orderId, total) {
       });
 
       elements.changeAddressBtn?.addEventListener('click', () => {
+        // If the confirm nudge happens to be up when "Change" is clicked,
+        // clear it first — otherwise the scrim would keep dimming the page
+        // over a now-hidden compact card with nothing left to confirm.
+        const addrScrim = document.getElementById('addrConfirmScrim');
+        if (addrScrim && !addrScrim.classList.contains('hidden')) dismissAddressConfirmOverlay();
         elements.addressCompactCard.classList.add('hidden');
         elements.addressFormFull.classList.remove('hidden');
       });
 
+      // Address-confirm nudge dismissal: "Yes, that's right" and a click
+      // anywhere on the scrim are treated identically (see brief — no
+      // separate "this is wrong" path; wrong-address buyers just dismiss
+      // and use the existing "Change" link normally).
+      document.getElementById('addrConfirmYesBtn')?.addEventListener('click', dismissAddressConfirmOverlay);
+      document.getElementById('addrConfirmScrim')?.addEventListener('click', dismissAddressConfirmOverlay);
+
       elements.editContactBtn?.addEventListener('click', () => {
         elements.contactSummary.classList.add('hidden');
         elements.contactFormFull.classList.remove('hidden');
+        // #contactFormFull now lives on page 1 — switch there so it's
+        // actually visible (its parent, page 1, would otherwise still be
+        // hidden for the signed-in-complete buyer this chip is shown to).
+        // Editing then re-clicking "Continue to delivery details" (already
+        // valid, since these fields were pre-filled) brings them straight
+        // back to page 2 — no separate "done editing" control needed.
+        goBackToStep1();
       });
+
+      // Page 1 -> page 2 (guest, or signed-in-but-incomplete-contact).
+      elements.continueToStep2Btn?.addEventListener('click', advanceToStep2);
+      // Page 2 -> page 1 (guest-path only — see showCheckoutPage()/
+      // advanceToStep2() for when this link becomes visible).
+      elements.backToStep1Btn?.addEventListener('click', goBackToStep1);
 
       // Enter key for promo code
       elements.promoCodeInput.addEventListener('keypress', (e) => {

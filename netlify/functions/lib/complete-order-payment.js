@@ -33,7 +33,7 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     // Fetch order before update — needed for idempotency check, coupon/cart data, confirmation + seller emails
     const { data: existingOrder } = await supabase
         .from('orders')
-        .select('id, payment_status, user_id, customer_email, customer_name, coupon_code, items, total, discount, shipping_cost, order_number, label, delivery_address, city, province, postal_code, notes')
+        .select('id, payment_status, user_id, customer_email, customer_name, coupon_code, items, total, discount, shipping_cost, order_number, label, delivery_address, city, province, postal_code, notes, pending_card_name')
         .eq('m_payment_id', mPaymentId)
         .maybeSingle();
 
@@ -79,18 +79,25 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         } catch (e) { console.warn('completeOrderPayment: user_id backfill error:', e.message); }
     }
 
-    // ── Capture PayFast token for one-click future checkouts ──
+    // ── Capture PayFast token as a new saved payment method ───
     // Additive/best-effort only — never blocks order fulfillment. pfData.token
     // is only ever present on the redirect flow's ITN (a "save my card"
     // checkout); the saved-card charge path has no new token to capture here.
+    // `onConflict` + `ignoreDuplicates` makes this INSERT ... ON CONFLICT DO
+    // NOTHING — a defensive guard against ITN retries re-delivering the same
+    // token, not an update path (last_used_at is only ever set by an actual
+    // charge in charge-payfast-token.js, never here).
     if (pfData.token && resolvedUserId) {
         try {
-            await supabase.from('profiles')
-                .update({ payfast_token: pfData.token, payfast_token_added_at: new Date().toISOString() })
-                .eq('user_id', resolvedUserId);
-            console.log('completeOrderPayment: payfast_token saved for user_id', resolvedUserId);
+            const { error: pmErr } = await supabase.from('payment_methods')
+                .upsert(
+                    { user_id: resolvedUserId, payfast_token: pfData.token, display_name: existingOrder.pending_card_name || null },
+                    { onConflict: 'user_id,payfast_token', ignoreDuplicates: true }
+                );
+            if (pmErr) console.warn('completeOrderPayment: payment_methods save error:', pmErr.message);
+            else console.log('completeOrderPayment: payment_methods saved for user_id', resolvedUserId);
         } catch (tokenErr) {
-            console.warn('completeOrderPayment: payfast_token save error:', tokenErr.message);
+            console.warn('completeOrderPayment: payment_methods save error:', tokenErr.message);
         }
     }
 

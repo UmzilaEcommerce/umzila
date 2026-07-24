@@ -32,7 +32,18 @@
       "Bash(sed \"s/.*\\\\.from\\('//\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\ntand\\\\Downloads\\\\umzila-remote\" -Directory)",
       "Bash(Select-Object Name)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git log *)",
+      "mcp__supabase__get_advisors",
+      "Skill(claude-in-chrome)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
