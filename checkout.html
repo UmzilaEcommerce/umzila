@@ -949,6 +949,62 @@
       .payment-details p { font-size: 12px; }
       .payment-icon { font-size: 20px; }
     }
+
+    /* ---------- STREAMLINED REDESIGN: icons, motion, tip, collapsed promo ---------- */
+    .icon-inline{width:16px;height:16px;flex-shrink:0;vertical-align:-3px;margin-right:4px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+    /* Address-confirm checkmark: drawn on collapse into the compact card */
+    .confirm-check{display:inline-flex;width:16px;height:16px;margin-right:6px;vertical-align:-3px;color:var(--success,#28a745)}
+    .confirm-check path{stroke-dasharray:20;stroke-dashoffset:20;animation:confirmCheckDraw .3s ease-out .05s forwards}
+    @keyframes confirmCheckDraw{to{stroke-dashoffset:0}}
+    #addressCompactCard{animation:cardCollapseIn .24s ease-out both}
+    @keyframes cardCollapseIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Promo success checkmark (order-summary discount code) */
+    .promo-check-inline{display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:-2px}
+    .promo-check-inline path{stroke-dasharray:20;stroke-dashoffset:20;animation:confirmCheckDraw .3s ease-out .05s forwards}
+
+    /* Total/amount roll — brief fade-through so a recalculated number reads
+       as "live," not an abrupt jump cut. */
+    .amount-roll{display:inline-block;transition:opacity .15s ease-out}
+    .amount-roll.rolling{opacity:.35}
+
+    /* Pay button processing/success morph — text hidden (not removed, so
+       width never jumps), spinner or checkmark drawn via ::after. */
+    .btn{position:relative}
+    .btn.is-processing,.btn.is-success{color:transparent !important;pointer-events:none}
+    .btn.is-processing::after{content:'';position:absolute;inset:0;margin:auto;width:20px;height:20px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:btnSpin .6s linear infinite}
+    .btn.is-success::after{content:'';position:absolute;inset:0;margin:auto;width:18px;height:11px;border-left:3px solid #fff;border-bottom:3px solid #fff;transform:rotate(-45deg) translateY(-2px)}
+    @keyframes btnSpin{to{transform:rotate(360deg)}}
+
+    /* Discount code: collapsed "Have a code?" toggle instead of an
+       always-visible input box */
+    .promo-toggle{background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0;display:inline-flex;align-items:center;gap:5px;min-height:32px}
+    .promo-toggle:hover{text-decoration:underline}
+    .promo-code-input-panel{overflow:hidden;max-height:0;transition:max-height .28s ease-in-out}
+    .promo-code-input-panel.open{max-height:120px}
+
+    /* Driver tip — optional pill row, shown after payment method, never
+       pre-selected */
+    .tip-section{margin:16px 0}
+    .tip-section-label{font-weight:600;font-size:14px;margin-bottom:8px;color:#1a1a2e}
+    .tip-pills{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .tip-pill{padding:8px 16px;min-height:38px;border:1.5px solid var(--color-border,#e5e7eb);border-radius:999px;background:#fff;font-weight:600;font-size:13px;cursor:pointer;transition:border-color .15s,background .15s,transform .1s}
+    .tip-pill:active{transform:scale(0.95)}
+    .tip-pill.selected{border-color:var(--accent);background:#f0f4ff;color:var(--accent)}
+    .tip-pill-custom{width:80px;min-height:38px;padding:8px 10px;border:1.5px solid var(--color-border,#e5e7eb);border-radius:999px;font-size:13px;text-align:center}
+    .tip-pill-custom:focus{outline:none;border-color:var(--accent)}
+    .summary-row.tip span:last-child{font-weight:600}
+
+    @media(prefers-reduced-motion:reduce){
+      .confirm-check path,.promo-check-inline path{animation:none;stroke-dashoffset:0}
+      #addressCompactCard{animation:none}
+      .amount-roll{transition:none}
+      .amount-roll.rolling{opacity:1}
+      .btn.is-processing::after{animation:none;border-top-color:rgba(255,255,255,.4)}
+      .promo-code-input-panel{transition:none}
+      .tip-pill{transition:none}
+    }
   </style>
   <!-- Include Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1107,7 +1163,7 @@
                there's genuinely nothing left to (re)confirm. Anything less
                complete just falls through to the full form below. -->
           <div id="addressCompactCard" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <div style="font-size:14px;color:#1a1a2e"><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
+            <div style="font-size:14px;color:#1a1a2e"><svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
             <button type="button" id="changeAddressBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Change</button>
           </div>
 
@@ -1236,6 +1292,19 @@
             </label>
           </div>
 
+          <!-- Driver tip — optional, never pre-selected, set before the
+               buyer commits to a payment method so it's already folded into
+               whatever total gets charged either way. -->
+          <div class="tip-section">
+            <div class="tip-section-label">Add a tip for your delivery rep (optional)</div>
+            <div class="tip-pills" id="tipPills">
+              <button type="button" class="tip-pill" data-tip="10">R10</button>
+              <button type="button" class="tip-pill" data-tip="20">R20</button>
+              <button type="button" class="tip-pill" data-tip="30">R30</button>
+              <input type="number" id="tipCustomInput" class="tip-pill-custom" placeholder="Custom" min="0" step="1">
+            </div>
+          </div>
+
           <div id="paymentError" class="error-message hidden"></div>
 
           <!-- Saved-card fast path becomes the dominant CTA once it's
@@ -1254,7 +1323,7 @@
               Pay Now
             </button>
             <div class="text-muted mt-3" style="font-size: 12px;">
-              🔒 Secured by PayFast
+              <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
             </div>
           </div>
         </section>
@@ -1298,11 +1367,17 @@
         </div>
 
         <div class="promo-code-section">
-          <div class="promo-code-input">
-            <input type="text" id="promoCodeInput" placeholder="Enter promo code">
-            <button id="applyPromoCode" class="btn">Apply</button>
+          <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="false">
+            <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
+            Have a code?
+          </button>
+          <div class="promo-code-input-panel" id="promoCodePanel">
+            <div class="promo-code-input">
+              <input type="text" id="promoCodeInput" placeholder="Enter promo code">
+              <button id="applyPromoCode" class="btn">Apply</button>
+            </div>
+            <div id="promoMessage" class="promo-message"></div>
           </div>
-          <div id="promoMessage" class="promo-message"></div>
         </div>
 
         <div class="summary-totals">
@@ -1330,9 +1405,13 @@
             <span>Return delivery</span>
             <span id="serviceReturnAmount">R0.00</span>
           </div>
+          <div class="summary-row tip hidden" id="tipRow">
+            <span>Tip</span>
+            <span id="tipAmount">R0.00</span>
+          </div>
           <div class="summary-row total">
             <span>Total</span>
-            <span id="totalAmount">R0.00</span>
+            <span id="totalAmount" class="amount-roll">R0.00</span>
           </div>
         </div>
 
@@ -1351,7 +1430,7 @@
        full-size counterparts above, and the total is kept in sync from
        the same updateShippingAndTotal() write (see updateSummaryHeaderMeta). -->
   <div class="mobile-pay-bar" id="mobilePayBar">
-    <span class="mobile-pay-bar-total" id="mobilePayBarTotal">R0.00</span>
+    <span class="mobile-pay-bar-total amount-roll" id="mobilePayBarTotal">R0.00</span>
     <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--color-ink-navy,#0a2f66)">Pay with saved card</button>
     <button type="button" id="payNowBtnMobile" class="btn" style="background:var(--cta)">Pay Now</button>
   </div>
@@ -1615,8 +1694,46 @@
       uniqueSellerCount: 0,
       selectedZone: null,        // delivery zone code
       deliveryMethodType: 'deliver', // delivery-only, no pickup option
-      sellerTurnarounds: []      // [{ id, turnaround_time }] for estimated delivery display
+      sellerTurnarounds: [],     // [{ id, turnaround_time }] for estimated delivery display
+      tip: 0                    // optional driver tip, buyer-elected, added straight into the total
     };
+
+    // Tip is buyer-favorable money on top of the order — no fraud surface,
+    // just guard against a fat-finger custom amount derailing the total.
+    function clampTip(v) {
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) return 0;
+      return Math.min(200, n);
+    }
+
+    // Brief fade-through when a displayed amount changes, so the total reads
+    // as "recalculated," not an abrupt jump cut. No-op if text is unchanged.
+    function setAmountText(el, text) {
+      if (!el || el.textContent === text) return;
+      el.classList.add('rolling');
+      setTimeout(() => { el.textContent = text; el.classList.remove('rolling'); }, 120);
+    }
+
+    // The sticky mobile Pay bar has its own button elements (payNowBtnMobile /
+    // payWithSavedCardBtnMobile) — only one of a desktop/mobile pair is ever
+    // visible at once, but preparePendingOrder() only receives whichever one
+    // was actually clicked. Mirror the processing/success class onto its
+    // counterpart too so the visible button always reflects real state,
+    // regardless of which one triggered it.
+    function mobilePairOf(btn) {
+      return btn ? document.getElementById(btn.id + 'Mobile') : null;
+    }
+
+    // Discount code input is collapsed behind a "Have a code?" toggle by
+    // default (order-summary sidebar) — opened explicitly by the buyer, or
+    // automatically once a code is actually applied (see applyCoupon()).
+    function openPromoCodePanel() {
+      const panel = document.getElementById('promoCodePanel');
+      const toggle = document.getElementById('promoCodeToggle');
+      if (!panel || panel.classList.contains('open')) return;
+      panel.classList.add('open');
+      if (toggle) toggle.setAttribute('aria-expanded', 'true');
+    }
     
     /********************
      * DOM ELEMENTS
@@ -2655,6 +2772,11 @@ async function loadBuyNowItem() {
 
         localStorage.setItem('ss_coupon', JSON.stringify({ code: discount.code }));
 
+        // A returning visitor with an already-applied code (or one just
+        // restored from cart.html) should see the panel open, not have to
+        // guess there's a toggle hiding their active discount.
+        openPromoCodePanel();
+
         updateOrderSummary();
         return true;
 
@@ -2818,16 +2940,21 @@ async function validateCheckout() {
     // Desktop ignores this (order summary is always expanded there). Called
     // from updateShippingAndTotal() — the single place totalAmount is
     // actually finalized, regardless of which caller triggered the update.
-    function updateSummaryHeaderMeta() {
+    function updateSummaryHeaderMeta(totalText) {
+      // setAmountText() delays elements.totalAmount's own text update briefly
+      // (for the fade-through), so read the just-computed total passed in
+      // here rather than the DOM node — which would otherwise read one step
+      // stale for the ~120ms window.
+      const text = totalText || elements.totalAmount.textContent;
       const meta = document.getElementById('summaryHeaderMeta');
       const count = state.cart.length;
       if (meta) {
         meta.textContent = count
-          ? `${count} item${count === 1 ? '' : 's'} · ${elements.totalAmount.textContent}`
+          ? `${count} item${count === 1 ? '' : 's'} · ${text}`
           : '';
       }
       const mobileTotal = document.getElementById('mobilePayBarTotal');
-      if (mobileTotal) mobileTotal.textContent = elements.totalAmount.textContent;
+      if (mobileTotal) setAmountText(mobileTotal, text);
     }
 
     // Update delivery fee and total
@@ -2848,8 +2975,14 @@ async function validateCheckout() {
       state.uniqueSellerCount = uniqueSellers;
 
       const discount = state.discount || 0;
-      const total    = Math.max(0, subtotal - discount + fee + svcFees.total);
+      const tip      = clampTip(state.tip);
+      const total    = Math.max(0, subtotal - discount + fee + svcFees.total + tip);
       state.orderTotal = total;
+
+      const tipRow = document.getElementById('tipRow');
+      const tipAmt = document.getElementById('tipAmount');
+      if (tipRow) tipRow.classList.toggle('hidden', tip <= 0);
+      if (tipAmt) tipAmt.textContent = formatCurrency(tip);
 
       const collectionRow = document.getElementById('serviceCollectionRow');
       const collectionAmt = document.getElementById('serviceCollectionAmount');
@@ -2917,8 +3050,8 @@ async function validateCheckout() {
         }
       }
 
-      elements.totalAmount.textContent = formatCurrency(total);
-      updateSummaryHeaderMeta();
+      setAmountText(elements.totalAmount, formatCurrency(total));
+      updateSummaryHeaderMeta(formatCurrency(total));
     }
 
     /********************
@@ -3623,8 +3756,10 @@ async function submitToPayFast(cartItems, orderId, total) {
             await saveShippingInfo();
         }
 
+        const mobileBtn = mobilePairOf(triggerBtn);
         triggerBtn.disabled = true;
-        triggerBtn.textContent = 'Processing...';
+        triggerBtn.classList.add('is-processing');
+        if (mobileBtn) { mobileBtn.disabled = true; mobileBtn.classList.add('is-processing'); }
 
         // Server-side cart validation
         const validatedCart = await validateCheckout();
@@ -3632,7 +3767,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         if (validatedCart.length === 0) {
             showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
             triggerBtn.disabled = false;
-            triggerBtn.textContent = triggerLabel;
+            triggerBtn.classList.remove('is-processing');
+            if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
             return null;
         }
 
@@ -3650,7 +3786,8 @@ async function submitToPayFast(cartItems, orderId, total) {
             document.getElementById('checkoutBlockersCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
             showError(elements.paymentError, 'Please finish setting up your service before paying.');
             triggerBtn.disabled = false;
-            triggerBtn.textContent = triggerLabel;
+            triggerBtn.classList.remove('is-processing');
+            if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
             return null;
         }
 
@@ -3673,7 +3810,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         // if they never signed in (silently — no block, per design).
         const shipping = computedFee;
         const discount = (state.serverDiscount && state.serverDiscount.valid) ? state.serverDiscount.amount : 0;
-        const total = Math.max(0, subtotal - discount + shipping);
+        const tip = clampTip(state.tip);
+        const total = Math.max(0, subtotal - discount + shipping + tip);
 
         // Save order to Supabase before payment.
         // Coupon is NOT marked used here — that happens in payfast-itn.js after confirmed payment.
@@ -3693,6 +3831,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 total: total,
                 discount: discount,
                 shipping_cost: shipping,
+                tip_amount: tip,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
@@ -3754,7 +3893,9 @@ async function submitToPayFast(cartItems, orderId, total) {
         console.error('Payment processing error:', error);
         showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
         elements.payNowBtn.disabled = false;
-        elements.payNowBtn.textContent = 'Pay Now';
+        elements.payNowBtn.classList.remove('is-processing');
+        const payNowMobile = mobilePairOf(elements.payNowBtn);
+        if (payNowMobile) { payNowMobile.disabled = false; payNowMobile.classList.remove('is-processing'); }
     }
 }
 
@@ -3784,13 +3925,23 @@ async function submitToPayFast(cartItems, orderId, total) {
             throw new Error(json.error || 'Could not charge your saved card. Please pay another way below.');
         }
 
+        // A half-second of confirmed closure before leaving the page, rather
+        // than an abrupt redirect straight from "Processing...".
+        const savedCardMobile = mobilePairOf(btn);
+        btn.classList.remove('is-processing');
+        btn.classList.add('is-success');
+        if (savedCardMobile) { savedCardMobile.classList.remove('is-processing'); savedCardMobile.classList.add('is-success'); }
+        await new Promise(resolve => setTimeout(resolve, 450));
+
         window.location.href = `checkout-success.html?m_payment_id=${prepared.orderId}&order_id=${state.orderId || ''}`;
 
     } catch (error) {
         console.error('Saved-card payment error:', error);
         showError(elements.paymentError, error.message || 'Payment failed. Please try again or pay another way below.');
         btn.disabled = false;
-        btn.textContent = 'Pay with saved card';
+        btn.classList.remove('is-processing', 'is-success');
+        const savedCardMobileErr = mobilePairOf(btn);
+        if (savedCardMobileErr) { savedCardMobileErr.disabled = false; savedCardMobileErr.classList.remove('is-processing', 'is-success'); }
     }
 }
     
@@ -3950,6 +4101,34 @@ async function submitToPayFast(cartItems, orderId, total) {
 
       // Apply promo code button
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
+
+      // Collapsed "Have a code?" toggle (order-summary sidebar)
+      document.getElementById('promoCodeToggle')?.addEventListener('click', () => {
+        const panel = document.getElementById('promoCodePanel');
+        const toggle = document.getElementById('promoCodeToggle');
+        const isOpen = panel.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(isOpen));
+        if (isOpen) elements.promoCodeInput?.focus();
+      });
+
+      // Driver tip — optional pill row, tapping the already-selected pill
+      // again clears it back to no tip. Never pre-selected.
+      document.querySelectorAll('.tip-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const wasSelected = btn.classList.contains('selected');
+          document.querySelectorAll('.tip-pill').forEach(b => b.classList.remove('selected'));
+          const customInput = document.getElementById('tipCustomInput');
+          if (customInput) customInput.value = '';
+          state.tip = wasSelected ? 0 : clampTip(btn.dataset.tip);
+          if (!wasSelected) btn.classList.add('selected');
+          updateShippingAndTotal();
+        });
+      });
+      document.getElementById('tipCustomInput')?.addEventListener('input', (e) => {
+        document.querySelectorAll('.tip-pill').forEach(b => b.classList.remove('selected'));
+        state.tip = clampTip(e.target.value);
+        updateShippingAndTotal();
+      });
 
       // View order button
       elements.viewOrderBtn.addEventListener('click', () => {
