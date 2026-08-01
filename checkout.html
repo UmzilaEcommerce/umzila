@@ -2577,6 +2577,23 @@
         elements.step1Page.classList.remove('hidden');
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      refreshMobilePayBarVisibility();
+    }
+
+    // The sticky mobile Pay bar (#mobilePayBar) lives outside #checkoutSection
+    // in the DOM (it's fixed-position, shared across the whole page), so it
+    // never inherited showCheckoutPage()'s page-1-vs-2 hidden toggling or
+    // goToStep()'s checkout-vs-confirmation toggling — it was relying purely
+    // on the max-width:768px media query, which made it visible on mobile
+    // during page 1 too. Its "Pay Now" only makes sense once page 2 (delivery
+    // + payment) is actually the visible page, so gate it on the same two
+    // hidden-class checks used everywhere else in this file.
+    function refreshMobilePayBarVisibility() {
+      const onPage2 = elements.step2DeliveryPayment && !elements.step2DeliveryPayment.classList.contains('hidden');
+      const inCheckout = elements.checkoutSection && !elements.checkoutSection.classList.contains('hidden');
+      const show = !!(onPage2 && inCheckout);
+      document.getElementById('mobilePayBar')?.classList.toggle('hidden', !show);
+      document.querySelector('.mobile-pay-trust')?.classList.toggle('hidden', !show);
     }
 
     // Page 1's Continue button — validation + page-switch gate only. Never
@@ -4173,8 +4190,9 @@ function showNotification(message, type = 'info') {
 
       state.currentStep = step;
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      refreshMobilePayBarVisibility();
     }
-    
+
     /********************
      * PAYFAST INTEGRATION
      ********************/
