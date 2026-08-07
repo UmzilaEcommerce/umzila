@@ -2940,6 +2940,14 @@ async function saveCartToServer() {
     // actually shopping here, without needing any signup/API key anywhere.
     const CAMPUS_LAT = -29.8175;
     const CAMPUS_LON = 30.9436;
+    // Photon's lat/lon params are only a soft ranking bias, not a hard
+    // filter — generic words like "Road"/"Block"/"Campus" in a query pull
+    // in unrelated matches from anywhere on earth (seen in practice:
+    // Karachi/Gurgaon/Dhaka results for a UKZN address). Delivery only
+    // happens within South Africa anyway, so restrict the search to a
+    // South Africa bounding box server-side, then drop anything that still
+    // slips through without a ZA country code as a defensive backstop.
+    const SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // minLon,minLat,maxLon,maxLat
 
     function wireAddressAutocomplete(inputEl, onSelect) {
       if (!inputEl) return;
@@ -2964,10 +2972,11 @@ async function saveCartToServer() {
           abortCtrl?.abort();
           abortCtrl = new AbortController();
           try {
-            const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}`;
+            const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}&bbox=${SOUTH_AFRICA_BBOX}`;
             const res = await fetch(url, { signal: abortCtrl.signal });
             const data = await res.json();
-            const features = (data && data.features) || [];
+            const allFeatures = (data && data.features) || [];
+            const features = allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
             if (!features.length) { closeDropdown(); return; }
             dropdown.innerHTML = features.map((f, i) => {
               const p = f.properties || {};
