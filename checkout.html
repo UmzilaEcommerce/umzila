@@ -649,12 +649,12 @@
          inline Pay Now wrapper and saved-card button group must be hidden
          below: otherwise both sets render at once on mobile. */
       body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-      .text-center.mt-4,
+      .pay-now-inline-wrapper,
       #savedCardGroup {
         display: none !important;
       }
       /* Equivalent of the "Secured by PayFast" trust line that lived inside
-         the now-hidden .text-center.mt-4, re-shown next to the sticky bar. */
+         the now-hidden .pay-now-inline-wrapper, re-shown next to the sticky bar. */
       .mobile-pay-trust {
         display: block;
         text-align: center;
@@ -1569,10 +1569,10 @@
                once 2+ cards are saved; with exactly one, there's nothing to
                switch between so this stays hidden and "Pay with saved card"
                below just charges that one card. Deliberately a sibling of
-               #savedCardGroup / .text-center.mt-4, NOT nested inside either —
-               both of those are force-hidden on mobile (see the .text-center.
-               mt-4, #savedCardGroup rule), and the switcher must stay visible
-               there too. -->
+               #savedCardGroup / .pay-now-inline-wrapper, NOT nested inside
+               either — both of those are force-hidden on mobile (see the
+               .pay-now-inline-wrapper, #savedCardGroup rule), and the
+               switcher must stay visible there too. -->
           <div class="form-group hidden" id="cardSwitcherGroup" style="margin-bottom:12px;padding:12px 16px;background:#f0f4ff;border-radius:10px">
             <button type="button" id="cardSwitcherToggle" class="card-switcher-toggle">
               <span style="font-size:14px;color:#1a1a2e;text-align:left">
@@ -1594,7 +1594,7 @@
             </button>
           </div>
 
-          <div class="text-center mt-4">
+          <div class="text-center mt-4 pay-now-inline-wrapper">
             <button id="payNowBtn" class="btn" style="padding: 15px 50px; font-size: 18px; background: var(--cta);">
               Pay Now
             </button>
