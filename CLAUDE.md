@@ -4,6 +4,14 @@ do not put any supabase keys in the frontend and use existing functions and code
 if there are already duplicate stuff on supabase and files using separate tables for example, but for the same data, and you see flaws, fix all of that, delete tables or columns or anything to make it as minimal and viable and streamlined as possible. do not have files looking at different places for the same info or updating wrong tables unused by other files.
 never write the site in the frontend, always use SITE_BASE_URL variable in netlify.
 
+📚 CHANGE DOCUMENTATION & SYSTEM NOTES — STANDING RULE (applies automatically, every session, no need to be asked)
+Read `docs/CHANGELOG.md` and any relevant `docs/systems/*.md` FIRST when picking up work in an area not already understood this session — that's the fast path to current state instead of re-deriving it from the code every time.
+Whenever a drastic change is made — a significant bug fix touching a core flow (checkout, cart, payments, auth, seller system), a multi-file fix, or a new feature — before considering the task done:
+1. Add a dated entry to `docs/CHANGELOG.md` (create it if missing, newest entry first): what was broken/reported, the actual root cause (not just the symptom), what changed, and which files were touched.
+2. If the change involved building or substantially reworking a whole system (not a one-off bug fix — e.g. a multi-stage feature build, or a tangled area like cart-loading that took real effort to untangle), create or update a dedicated doc at `docs/systems/<system-name>.md`, written in plain prose, not just a diff summary: what the system does end-to-end, the key pieces and how they connect, why non-obvious decisions were made, known limitations/gotchas, and what to check before touching it again. Link it from the CHANGELOG entry.
+3. Update this file (CLAUDE.md) itself if the change affects the constraints/rules below (a new table, a new convention, a corrected assumption) — this file must always reflect current reality, not a snapshot from whenever it was last edited.
+This is a durable, ongoing convention, not a one-time task — keep applying it without being reminded.
+
 🚫 UMZILA SELLER SYSTEM — STRICT “DO NOT” RULES
 🧱 ARCHITECTURE / SYSTEM INTEGRITY
 Do not rewrite or replace existing working systems (checkout, PayFast, seller approval, auth flow)
