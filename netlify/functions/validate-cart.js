@@ -42,12 +42,19 @@ function computeFees(validatedCart) {
     } else if (subtotal >= FREE_DELIVERY_THRESHOLD) {
         // free — still counts free_delivery items toward the threshold
     } else {
+        // A per-product "Custom Delivery Price" (admin.html, stored at
+        // products.metadata.delivery_price) overrides the Small/Medium/Large
+        // class price for that line entirely — must match checkout.html's
+        // calculateDeliveryFee() exactly.
+        const customItems = feeItems.filter(i => Number.isFinite(i.delivery_price));
+        const classItems = feeItems.filter(i => !Number.isFinite(i.delivery_price));
+
         const classOrder = { small: 0, medium: 1, large: 2 };
         const classNames = ['small', 'medium', 'large'];
         const sellerIds = new Set();
         let maxClassIdx = 0;
         let extraTrips = 0;
-        feeItems.forEach(item => {
+        classItems.forEach(item => {
             const dc = (item.delivery_class || 'small').toLowerCase();
             const baseIdx = classOrder[dc] ?? 0;
             const capacity = item.units_per_trip || DEFAULT_UNITS_PER_TRIP[dc] || DEFAULT_UNITS_PER_TRIP.small;
@@ -55,11 +62,14 @@ function computeFees(validatedCart) {
             const rawIdx = baseIdx + (trips - 1);
             if (rawIdx > maxClassIdx) maxClassIdx = Math.min(rawIdx, 2);
             extraTrips += Math.max(0, rawIdx - 2);
-            if (item.seller_id) sellerIds.add(item.seller_id);
         });
+        feeItems.forEach(item => { if (item.seller_id) sellerIds.add(item.seller_id); });
         deliveryClass = classNames[maxClassIdx];
         sellerCount = Math.max(sellerIds.size, 1);
-        productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, DELIVERY_CLASS_PRICES[deliveryClass] + (sellerCount - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
+        const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[deliveryClass] : 0;
+        const customBaseFee = customItems.length ? Math.max(...customItems.map(i => i.delivery_price)) : 0;
+        const baseFee = Math.max(classBaseFee, customBaseFee);
+        productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, baseFee + (sellerCount - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
     }
 
     // Service collection/return fees are flat, per line, and never waived by
@@ -131,7 +141,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, metadata')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -228,6 +238,16 @@ variants.forEach(v => {
     itemPrice = product.sale_price;
   }
 
+  // A physical product must never reach payment with a zero/invalid price —
+  // this is the authoritative check (checkout.html has a matching client-side
+  // check too, but that's only a UX shortcut; this is what actually blocks it).
+  if (!isService && !(Number(itemPrice) > 0)) {
+    return {
+        statusCode: 400,
+        body: JSON.stringify({ error: `"${item.name || product.name}" has no valid price and cannot be purchased. Please contact the seller.` })
+    };
+  }
+
   const qty = Math.min(item.quantity || 1, itemStock || Infinity);
   if (qty <= 0) {
     hasChanges = true;
@@ -240,6 +260,8 @@ variants.forEach(v => {
 
   const isItemDropoff = isService && product.fulfillment_type === 'item_dropoff';
   const itemReturned = rawItem.item_returned !== false;
+  const deliveryPrice = (product.metadata && Number.isFinite(Number(product.metadata.delivery_price)))
+    ? Number(product.metadata.delivery_price) : null;
 
   const validated = {
     id: product.id,
@@ -253,7 +275,8 @@ variants.forEach(v => {
     max_quantity: maxQuantity,
     subtotal: itemPrice * qty,
     seller_id: product.seller_id || null,
-    delivery_class: product.delivery_class || null,
+    delivery_class: product.delivery_class || 'small',
+    delivery_price: deliveryPrice,
     listing_type: product.listing_type || 'product',
     fulfillment_type: product.fulfillment_type || null,
     service_turnaround: product.service_turnaround || null,

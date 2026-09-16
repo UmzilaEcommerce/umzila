@@ -1823,12 +1823,20 @@
       if (subtotal >= FREE_DELIVERY_THRESHOLD)
         return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true };
 
+      // A per-product "Custom Delivery Price" (admin.html, stored at
+      // products.metadata.delivery_price) overrides the Small/Medium/Large
+      // class price for that line entirely — it opts out of the class/trip
+      // stepping model below, but its seller still counts toward the
+      // per-seller surcharge like any other line.
+      const customItems = feeItems.filter(i => Number.isFinite(i.delivery_price));
+      const classItems = feeItems.filter(i => !Number.isFinite(i.delivery_price));
+
       const classOrder = { small: 0, medium: 1, large: 2 };
       const classNames = ['small', 'medium', 'large'];
       let maxClassIdx = 0;
       let extraTrips = 0;
       const sellerIds = new Set();
-      feeItems.forEach(item => {
+      classItems.forEach(item => {
         const dc = (item.delivery_class || 'small').toLowerCase();
         const baseIdx = classOrder[dc] ?? 0;
         const qty = item.quantity || item.qty || 1;
@@ -1841,11 +1849,14 @@
         // these stack across lines rather than taking the max, since one
         // trip can't physically absorb two different bulky products' overflow.
         extraTrips += Math.max(0, rawIdx - 2);
-        if (item.seller_id) sellerIds.add(item.seller_id);
       });
+      feeItems.forEach(item => { if (item.seller_id) sellerIds.add(item.seller_id); });
       const maxClass = classNames[maxClassIdx];
       const uniqueSellers = Math.max(sellerIds.size, 1);
-      const fee = Math.min(MAX_DELIVERY_FEE, DELIVERY_CLASS_PRICES[maxClass] + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE);
+      const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[maxClass] : 0;
+      const customBaseFee = customItems.length ? Math.max(...customItems.map(i => i.delivery_price)) : 0;
+      const baseFee = Math.max(classBaseFee, customBaseFee);
+      const fee = Math.min(MAX_DELIVERY_FEE, baseFee + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE);
       return { fee: Math.max(0, fee), maxClass, uniqueSellers, extraTrips, isFree: false };
     }
 
@@ -3125,6 +3136,8 @@ async function loadAndValidateCartItems(serverItems) {
             const quantity = Math.min(item.quantity, itemStock);
             
             if (quantity > 0) {
+                const deliveryPrice = (product.metadata && Number.isFinite(Number(product.metadata.delivery_price)))
+                    ? Number(product.metadata.delivery_price) : null;
                 state.cart.push({
                     id: item.product_id,
                     name: product.name || item.name,
@@ -3135,7 +3148,11 @@ async function loadAndValidateCartItems(serverItems) {
                     variant_id: item.variant_id,
                     product_data: product,
                     seller_id: product.seller_id || null,
-                    delivery_class: product.delivery_class || null
+                    delivery_class: product.delivery_class || 'small',
+                    listing_type: product.listing_type || 'product',
+                    free_delivery: product.free_delivery === true,
+                    units_per_trip: product.units_per_trip || null,
+                    delivery_price: deliveryPrice
                 });
             }
         });
@@ -3159,9 +3176,14 @@ async function refreshCartItemsFromProducts(items) {
     const productIds = items.map(item => item.id);
     const { data: products, error } = await supabaseClient
         .from('products')
-        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class')
+        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, listing_type, free_delivery, units_per_trip, metadata')
         .in('id', productIds);
-    if (error || !products) return items;
+    // A failed re-fetch must not silently fall back to whatever the client
+    // cart item already had — a shop.html-sourced item may never have
+    // carried delivery_class/listing_type/price in the first place (see
+    // buildCartItem() in shop.html), so trusting it here can under-price
+    // delivery or let a $0 item through. Surface the failure instead.
+    if (error || !products) throw new Error('Could not verify current product prices — please try again.');
 
     const productMap = {};
     products.forEach(p => productMap[p.id] = p);
@@ -3170,13 +3192,19 @@ async function refreshCartItemsFromProducts(items) {
         const product = productMap[item.id];
         if (!product) return item;
         const currentPrice = product.sale && product.sale_price ? product.sale_price : product.price;
+        const deliveryPrice = (product.metadata && Number.isFinite(Number(product.metadata.delivery_price)))
+            ? Number(product.metadata.delivery_price) : null;
         return {
             ...item,
             price: currentPrice,
             name: product.name || item.name,
             image: product.image || item.image,
             seller_id: product.seller_id || item.seller_id || null,
-            delivery_class: product.delivery_class || item.delivery_class || null
+            delivery_class: product.delivery_class || 'small',
+            listing_type: product.listing_type || 'product',
+            free_delivery: product.free_delivery === true,
+            units_per_trip: product.units_per_trip || null,
+            delivery_price: deliveryPrice
         };
     }).filter(item => productMap[item.id]); // Remove items that no longer exist
 }
@@ -4315,6 +4343,18 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         if (validatedCart.length === 0) {
             showError(elements.paymentError, 'Your cart is empty or items are out of stock.');
+            triggerBtn.disabled = false;
+            triggerBtn.classList.remove('is-processing');
+            if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
+            return null;
+        }
+
+        // A physical product must never reach payment with a zero/invalid
+        // price — validate-cart.js already rejects this server-side, but
+        // checking here too avoids a pointless PayFast round-trip.
+        const unpriced = validatedCart.find(i => (i.listing_type || 'product') !== 'service' && !(i.price > 0));
+        if (unpriced) {
+            showError(elements.paymentError, `"${unpriced.name}" has no valid price — please contact the seller.`);
             triggerBtn.disabled = false;
             triggerBtn.classList.remove('is-processing');
             if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }

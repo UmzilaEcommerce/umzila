@@ -502,23 +502,42 @@
       if (mbnBadge) { mbnBadge.textContent = total; mbnBadge.style.display = total > 0 ? 'flex' : 'none'; }
     }
 
+    // Shared by addToCart() and buyNow() so both buttons build the exact
+    // same item shape — a prior version of this file duplicated this object
+    // literal in both functions and let them drift, silently dropping
+    // delivery_class/listing_type/free_delivery/units_per_trip from every
+    // shop-page cart item (checkout.html's own DB re-fetch masked most of
+    // it, but not all — e.g. a sale-priced or custom-delivery-priced item
+    // could still reach payment with a wrong fee or, if price resolved to
+    // 0, an invalid charge).
+    function buildCartItem(product, size, qty, preferred_delivery) {
+      var price = product.displayPrice || (product.sale && product.salePrice ? product.salePrice : product.price);
+      return {
+        id:                product.id,
+        title:             product.title,
+        price:             price,
+        qty:               qty,
+        size:              size,
+        img:               product.primary_image || '',
+        stock:             product.stock || 0,
+        maxQuantity:       product.stock || 0,
+        preferred_delivery: preferred_delivery || '',
+        seller_id:         product.seller_id || (product.seller && product.seller.id) || null,
+        listing_type:      product.listing_type || 'product',
+        delivery_class:    product.delivery_class || 'small',
+        free_delivery:     product.free_delivery === true,
+        units_per_trip:    product.units_per_trip || null,
+        delivery_price:    Number.isFinite(product.delivery_price) ? product.delivery_price : null
+      };
+    }
+
     function addToCart(product, size, qty, preferred_delivery) {
       var cart = getCart();
       var existing = cart.find(function(i) { return i.id === product.id && i.size === size; });
       if (existing) {
         existing.qty = Math.min(existing.qty + qty, existing.stock || 99);
       } else {
-        cart.push({
-          id:                product.id,
-          title:             product.title,
-          price:             product.displayPrice || (product.sale && product.salePrice ? product.salePrice : product.price),
-          qty:               qty,
-          size:              size,
-          img:               product.primary_image || '',
-          stock:             product.stock || 0,
-          maxQuantity:       product.stock || 0,
-          preferred_delivery: preferred_delivery || ''
-        });
+        cart.push(buildCartItem(product, size, qty, preferred_delivery));
       }
       saveCart(cart);
       updateCartCount();
@@ -531,17 +550,7 @@
     // Same item shape as addToCart() above so checkout.html's existing
     // cart-loading logic needs no new format to understand.
     function buyNow(product, size, qty, preferred_delivery) {
-      var item = {
-        id:                product.id,
-        title:             product.title,
-        price:             product.displayPrice || (product.sale && product.salePrice ? product.salePrice : product.price),
-        qty:               qty,
-        size:              size,
-        img:               product.primary_image || '',
-        stock:             product.stock || 0,
-        maxQuantity:       product.stock || 0,
-        preferred_delivery: preferred_delivery || ''
-      };
+      var item = buildCartItem(product, size, qty, preferred_delivery);
       localStorage.setItem('ss_buynow', JSON.stringify([item]));
       window.location.href = 'checkout.html?buynow=1';
     }
@@ -653,6 +662,10 @@
       var isOnSale     = full.sale || false;
       var displayPrice = isOnSale && full.salePrice ? full.salePrice : (full.price || 0);
       var originalPrice = isOnSale && full.price ? full.price : null;
+      full.displayPrice = displayPrice;
+      // A physical product with no resolvable price must never reach
+      // checkout/payment — treat it the same as out-of-stock.
+      var isUnpriced = !(displayPrice > 0);
 
       var sizes = full.size && full.size.length ? full.size : ['One Size'];
       var sizeOptionsHtml = sizes.map(function(s) {
@@ -718,10 +731,11 @@
           '</div></div>' +
           (full.stock < 1 ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Out of stock</div>' :
             (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
+          (isUnpriced ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Price unavailable — contact seller</div>' : '') +
           (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="margin-bottom:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notify Me</button>' : '') +
           '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>' +
-          '<button id="sh-modal-buynow-btn" style="width:100%;padding:13px;border:none;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Buy Now</button>' +
-          '<button class="product-modal-add-to-cart" id="sh-modal-add-btn" style="width:100%;padding:12px;border:1px solid var(--accent,#0a2f66);border-radius:999px;background:#fff;color:var(--accent,#0a2f66);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px"' + (full.stock < 1 ? ' disabled style="opacity:.5;cursor:not-allowed"' : '') + '>Add to Cart</button>' +
+          '<button id="sh-modal-buynow-btn" style="width:100%;padding:13px;border:none;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px' + ((full.stock < 1 || isUnpriced) ? ';opacity:.5;cursor:not-allowed' : '') + '"' + ((full.stock < 1 || isUnpriced) ? ' disabled' : '') + '>Buy Now</button>' +
+          '<button class="product-modal-add-to-cart" id="sh-modal-add-btn" style="width:100%;padding:12px;border:1px solid var(--accent,#0a2f66);border-radius:999px;background:#fff;color:var(--accent,#0a2f66);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px' + ((full.stock < 1 || isUnpriced) ? ';opacity:.5;cursor:not-allowed' : '') + '"' + ((full.stock < 1 || isUnpriced) ? ' disabled' : '') + '>Add to Cart</button>' +
           (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
             '<div class="description-text' + (hasLongDesc ? ' collapsed' : '') + '" id="sh-desc-text">' + escHtml(hasLongDesc ? shortDesc : full.desc) + '</div>' +
             (hasLongDesc ? '<button class="see-more-btn" id="sh-see-more">See More</button>' : '') +
@@ -785,7 +799,7 @@
 
       // Add to cart
       document.getElementById('sh-modal-add-btn').addEventListener('click', function() {
-        if (!_modalProduct) return;
+        if (!_modalProduct || isUnpriced) return;
         var selectedSize = (content.querySelector('.size-option.selected') || {}).dataset || {};
         var size = selectedSize.size || sizes[0] || 'M';
         var qty  = parseInt(document.getElementById('sh-qty-val').textContent) || 1;
@@ -796,7 +810,7 @@
       });
 
       document.getElementById('sh-modal-buynow-btn').addEventListener('click', function() {
-        if (!_modalProduct) return;
+        if (!_modalProduct || isUnpriced) return;
         var selectedSize = (content.querySelector('.size-option.selected') || {}).dataset || {};
         var size = selectedSize.size || sizes[0] || 'M';
         var qty  = parseInt(document.getElementById('sh-qty-val').textContent) || 1;
@@ -931,8 +945,16 @@
         if (addBtn) {
           addBtn.addEventListener('click', function(e) {
             e.stopPropagation();
+            // card.dataset.product is a minimal snapshot (id/price/stock —
+            // see makeShopCard) for cheap rendering of 100+ cards; it never
+            // carried delivery_class/listing_type/seller_id. Resolve the
+            // full record from allProducts, same as openProductModal() does,
+            // so the quick "+ Add" button builds an identical cart item to
+            // the modal's Add to Cart instead of a stripped-down one.
+            var full = allProducts.find(function(fp) { return fp.id === product.id; }) || product;
+            if (!(full.price > 0) && !(full.sale && full.salePrice > 0)) return;
             var size = sizeEl ? sizeEl.value : 'M';
-            addToCart(product, size, 1);
+            addToCart(full, size, 1);
           });
         }
       });
@@ -968,7 +990,13 @@
         desc:            row.description || '',
         color:           (row.metadata && row.metadata.color) || '',
         favourite_count: Number(row.favourite_count || 0),
-        seller:          sellerData || null
+        seller:          sellerData || null,
+        seller_id:       row.seller_id || (sellerData && sellerData.id) || null,
+        listing_type:    row.listing_type || 'product',
+        delivery_class:  row.delivery_class || 'small',
+        free_delivery:   row.free_delivery === true,
+        units_per_trip:  row.units_per_trip || null,
+        delivery_price:  (row.metadata && Number.isFinite(Number(row.metadata.delivery_price))) ? Number(row.metadata.delivery_price) : null
       };
     }
 
@@ -1326,7 +1354,6 @@
       if (profileBtn && profileBtn.style.display !== 'none') profileBtn.click();
       else signBtnEl?.click();
     });
-    updateCartCount();
   </script>
 
 </body>
