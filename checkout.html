@@ -1917,7 +1917,10 @@
       sellerTurnarounds: [],     // [{ id, turnaround_time }] for estimated delivery display
       tip: 0,                    // optional driver tip, buyer-elected, added straight into the total
       paymentMethods: [],        // this buyer's saved cards, most-recently-used first
-      selectedPaymentMethodId: null // which one "Pay with saved card" will charge
+      selectedPaymentMethodId: null, // which one "Pay with saved card" will charge
+      isBuyNow: false             // set by loadCart() — a buy-now cart is a single isolated
+                                   // item, never the buyer's real ss_cart/server cart, so
+                                   // syncCartOnLogin() must leave it alone (see there)
     };
 
     // Tip is buyer-favorable money on top of the order — no fraud surface,
@@ -2664,8 +2667,13 @@
         elements.step2BackLink?.classList.add('hidden');
         showCheckoutPage(hasCompleteContact() ? 2 : 1);
 
-        // Sync cart on login
-        syncCartOnLogin(user);
+        // Sync cart on login — never for a Buy Now checkout: that cart is a
+        // single item deliberately isolated from ss_cart/the server cart
+        // (see loadBuyNowItem()). This runs unawaited in the background,
+        // after loadCart() has already rendered the correct buy-now item —
+        // letting it proceed would silently replace that with the signed-in
+        // buyer's unrelated server cart (or wipe it to empty) moments later.
+        if (!state.isBuyNow) syncCartOnLogin(user);
     } else {
         elements.authBtn.textContent = 'Sign In';
         elements.authBtn.onclick = () => { goToStep('checkout'); expandInlineSignin(); };
@@ -2727,7 +2735,12 @@ async function syncCartOnLogin(user) {
                 }
             });
             
-            state.cart = serverCart.items.map(item => ({
+            // Re-fetch current price/seller_id/delivery_class/listing_type/etc.
+            // from the DB rather than trusting whatever this merge carried
+            // forward — same reasoning as loadFromLocalStorage()/
+            // loadBuyNowItem(), reusing the same helper rather than a fourth
+            // copy of the same allowlist.
+            state.cart = await refreshCartItemsFromProducts(serverCart.items.map(item => ({
                 id: item.product_id,
                 name: item.name,
                 price: item.price,
@@ -2735,8 +2748,8 @@ async function syncCartOnLogin(user) {
                 size: item.size,
                 image: item.image,
                 variant_id: item.variant_id
-            }));
-            
+            })));
+
             // Save merged cart
             localStorage.setItem('ss_cart', JSON.stringify(state.cart));
             await saveCartToServer();
@@ -3043,6 +3056,7 @@ async function loadCart() {
         // clobbers ss_cart). Takes priority over both the server cart and
         // localStorage for this page load only.
         if (urlParams.get('buynow') === '1' && localStorage.getItem('ss_buynow')) {
+            state.isBuyNow = true;
             await loadBuyNowItem();
             if (couponCode) await applyCoupon(couponCode);
             updateOrderSummary();
