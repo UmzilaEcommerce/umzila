@@ -413,6 +413,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="delivery-ops"><span class="menu-icon">🛵</span><span class="menu-label">Delivery Ops</span></li>
           <li data-section="deliveries"><span class="menu-icon">📮</span><span class="menu-label">Deliveries</span></li>
           <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
+          <li data-section="delivery-analytics"><span class="menu-icon">📈</span><span class="menu-label">Delivery Analytics</span></li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
@@ -1008,6 +1009,20 @@ const supabaseClient = supabase.createClient(
           <button id="refreshDeliveryPricingBtn" class="small-btn" onclick="window.loadDeliveryPricing?.()">↻ Refresh</button>
         </div>
         <div id="deliveryPricingMount"></div>
+      </section>
+
+      <!-- Delivery Analytics (Stage 17, plan §99/100). Explicitly lowest
+           priority per the plan itself -- "needs real operational data to
+           be meaningful... post-pilot-validation, not part of the launch
+           checklist." Built structurally correct now; will show near-empty
+           numbers until real delivery volume exists, which is expected. -->
+      <section id="section-delivery-analytics" style="display:none">
+        <div class="section-top">
+          <h2>📈 Delivery Analytics</h2>
+          <button id="refreshDeliveryAnalyticsBtn" class="small-btn" onclick="window.loadDeliveryAnalytics?.()">↻ Refresh</button>
+        </div>
+        <div id="deliveryAnalyticsSummaryMount" style="margin-bottom:18px"></div>
+        <div id="deliveryAnalyticsRoutesMount"></div>
       </section>
 
       <!-- Settings -->
@@ -2128,7 +2143,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'service-areas': document.getElementById('section-service-areas'),
     'delivery-ops': document.getElementById('section-delivery-ops'),
     'deliveries': document.getElementById('section-deliveries'),
-    'delivery-pricing': document.getElementById('section-delivery-pricing')
+    'delivery-pricing': document.getElementById('section-delivery-pricing'),
+    'delivery-analytics': document.getElementById('section-delivery-analytics')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -2693,6 +2709,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="delivery-ops"]')?.addEventListener('click', () => window.loadDeliveryOps?.());
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
   document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
+  document.querySelector('[data-section="delivery-analytics"]')?.addEventListener('click', () => window.loadDeliveryAnalytics?.());
 
   // Manage-shops sub-tabs
   document.querySelectorAll('.sub-tab[data-shtab]').forEach(btn => {
@@ -4798,6 +4815,89 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     });
   }
   /* ============================================================ end Delivery Pricing */
+
+  /* ============================================================ Delivery Analytics
+     Stage 17 (plan §99/100). Two admin-gated RPCs (SECURITY DEFINER, checks
+     admins internally -- these are cross-seller/cross-customer aggregates
+     with no natural per-row RLS scoping) back a summary KPI row and a
+     per-route profitability table. Explicitly lowest priority per the plan
+     itself; will show mostly zeros until real delivery volume exists --
+     that's expected, not a bug, and this admin view exists precisely so the
+     founder can watch it fill in once the pilot goes live. */
+
+  window.loadDeliveryAnalytics = async function(){
+    const summaryMount = document.getElementById('deliveryAnalyticsSummaryMount');
+    const routesMount = document.getElementById('deliveryAnalyticsRoutesMount');
+    if(!summaryMount || !routesMount) return;
+    if(!supabaseClient){ summaryMount.innerHTML = ''; routesMount.innerHTML = '<p style="color:var(--muted)">Supabase not available</p>'; return; }
+    summaryMount.innerHTML = '<p style="color:var(--muted)">Loading summary…</p>';
+    routesMount.innerHTML = '<p style="color:var(--muted)">Loading routes…</p>';
+    await Promise.all([ loadDeliveryAnalyticsSummary(), loadRouteProfitability() ]);
+  };
+
+  function fmtRands(v){ return 'R' + Number(v || 0).toFixed(2); }
+  function fmtNum(v, decimals){ return v === null || v === undefined ? '—' : Number(v).toFixed(decimals === undefined ? 0 : decimals); }
+  function fmtPct(v){ return v === null || v === undefined ? '—' : (Number(v) * 100).toFixed(1) + '%'; }
+
+  async function loadDeliveryAnalyticsSummary(){
+    const mount = document.getElementById('deliveryAnalyticsSummaryMount');
+    if(!mount) return;
+    try {
+      const { data, error } = await supabaseClient.rpc('get_delivery_analytics_summary');
+      if(error){ console.warn('loadDeliveryAnalyticsSummary error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load analytics summary</p>'; return; }
+      const s = Array.isArray(data) ? data[0] : data;
+      if(!s){ mount.innerHTML = '<p style="color:var(--muted)">No data yet.</p>'; return; }
+      const cards = [
+        ['Total deliveries', fmtNum(s.total_deliveries)],
+        ['Delivered', fmtNum(s.delivered_count)],
+        ['Failed', fmtNum(s.failed_count)],
+        ['Cancelled', fmtNum(s.cancelled_count)],
+        ['Avg delivery time', s.avg_delivery_minutes === null ? '—' : fmtNum(s.avg_delivery_minutes, 1) + ' min'],
+        ['PIN completion rate', fmtPct(s.pin_completion_rate)],
+        ['Compliments', fmtNum(s.compliments_count)],
+        ['Complaints', fmtNum(s.complaints_count)],
+        ['Total rider payout', fmtRands(s.total_rider_payout)],
+        ['Total delivery revenue', fmtRands(s.total_delivery_revenue)]
+      ];
+      mount.innerHTML = '<h3 style="margin-bottom:10px">Summary</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">' +
+        cards.map(([label, val]) => `<div style="background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${escapeHtml(label)}</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text)">${escapeHtml(String(val))}</div>
+        </div>`).join('') + '</div>' +
+        '<p style="font-size:11px;color:#9ca3af;margin-top:10px">Average pickup time, rider acceptance time, and customer ETA accuracy are not yet computable from the current schema (they need per-event timestamp diffing) — deferred, not silently dropped; tracked in docs/systems/delivery-network-spec.md §T.</p>';
+    } catch(e){
+      console.warn('loadDeliveryAnalyticsSummary failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load analytics summary</p>';
+    }
+  }
+
+  async function loadRouteProfitability(){
+    const mount = document.getElementById('deliveryAnalyticsRoutesMount');
+    if(!mount) return;
+    try {
+      const { data, error } = await supabaseClient.rpc('get_route_profitability', { p_limit: 50 });
+      if(error){ console.warn('loadRouteProfitability error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load route profitability</p>'; return; }
+      const rows = data || [];
+      if(!rows.length){ mount.innerHTML = '<h3 style="margin-bottom:8px">Route Profitability</h3><p style="color:var(--muted)">No routes yet.</p>'; return; }
+      mount.innerHTML = '<h3 style="margin-bottom:8px">Route Profitability</h3><div style="overflow:auto"><table>' +
+        '<thead><tr><th>Route</th><th>Status</th><th>Deliveries</th><th>Distance</th><th>Duration</th><th>Revenue</th><th>Priority</th><th>Payout</th><th>Remaining</th></tr></thead><tbody>' +
+        rows.map(r => `<tr>
+          <td style="font-size:12px">${escapeHtml(String(r.route_id).slice(0,8))}</td>
+          <td>${escapeHtml(r.status || '')}</td>
+          <td>${fmtNum(r.delivery_count)}</td>
+          <td>${r.total_distance_km === null ? '—' : fmtNum(r.total_distance_km, 1) + 'km'}</td>
+          <td>${r.total_duration_min === null ? '—' : fmtNum(r.total_duration_min, 0) + 'min'}</td>
+          <td>${fmtRands(r.customer_delivery_revenue)}</td>
+          <td>${fmtRands(r.priority_revenue)}</td>
+          <td>${fmtRands(r.driver_payout)}</td>
+          <td>${fmtRands(r.gross_logistics_revenue_remaining)}</td>
+        </tr>`).join('') + '</tbody></table></div>';
+    } catch(e){
+      console.warn('loadRouteProfitability failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load route profitability</p>';
+    }
+  }
+  /* ============================================================ end Delivery Analytics */
 
   // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();
