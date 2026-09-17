@@ -3361,7 +3361,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('sellers')
-        .select('id, shop_name, email, status, created_at, user_id')
+        .select('id, shop_name, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo')
         .order('created_at', { ascending: false });
       if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
       shopsCache = data || [];
@@ -3390,12 +3390,26 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const statusColor = isActive ? '#16a34a' : (s.status === 'disabled' ? '#dc2626' : '#d97706');
       const btnLabel = isActive ? 'Disable Shop' : 'Enable Shop';
       const btnColor = isActive ? '#dc2626' : '#16a34a';
+      const hasPickup = !!s.pickup_geo;
+      // Self-arranged skip (founder ask 2026-09-17): admin-only, not a seller
+      // self-service toggle -- for a hyperlocal seller (e.g. a residence
+      // student selling ice-cream/water), free-delivery items within this
+      // radius of their pickup address never enter the delivery network at
+      // all (see get-delivery-quote.js). Needs pickup_geo as the center point.
+      const radiusRow = hasPickup
+        ? `<div style="display:flex;align-items:center;gap:6px;margin-top:8px">
+            <label style="font-size:12px;color:var(--muted)">Self-arranged radius (km):</label>
+            <input type="number" step="0.1" min="0" id="sar-${escapeHtml(s.id)}" value="${s.self_arranged_radius_km != null ? escapeHtml(String(s.self_arranged_radius_km)) : ''}" style="width:70px;padding:4px 6px;border:1px solid #dde1ea;border-radius:6px;font-size:12px">
+            <button onclick="setSellerSelfArrangedRadius('${escapeHtml(s.id)}')" style="padding:4px 10px;border-radius:6px;border:none;background:#0a2f66;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+          </div>`
+        : `<div style="font-size:12px;color:var(--muted);margin-top:8px">Self-arranged radius: needs a pickup address set first</div>`;
       return `
       <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:10px;box-shadow:0 2px 8px rgba(2,6,23,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
           <div style="font-weight:700;font-size:15px">${escapeHtml(s.shop_name || '—')}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(s.email || '—')}</div>
           <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+          ${radiusRow}
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
           <span style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600">${escapeHtml(s.status || 'unknown')}</span>
@@ -3419,6 +3433,24 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       showToast(newStatus === 'disabled' ? 'Shop disabled — products hidden site-wide' : 'Shop enabled');
       await loadManageShops();
     } catch (e) { showToast('Toggle failed'); }
+  };
+
+  // Direct .update() -- permitted by the sellers_admin_all RLS policy
+  // (2026-09-17), not an RPC, since this is just one of possibly several
+  // admin-only seller fields going forward.
+  window.setSellerSelfArrangedRadius = async function(sellerId) {
+    if (!supabaseClient) return;
+    const input = document.getElementById('sar-' + sellerId);
+    if (!input) return;
+    const raw = input.value.trim();
+    const km = raw === '' ? null : Number(raw);
+    if (raw !== '' && (!Number.isFinite(km) || km < 0)) { showToast('Enter a valid radius in km'); return; }
+    try {
+      const { error } = await supabaseClient.from('sellers').update({ self_arranged_radius_km: km }).eq('id', sellerId);
+      if (error) { showToast('Failed: ' + error.message); return; }
+      showToast(km === null ? 'Self-arranged radius cleared' : `Self-arranged radius set to ${km}km`);
+      await loadManageShops();
+    } catch (e) { showToast('Save failed'); }
   };
   /* ============================================================ end Manage Shops */
 

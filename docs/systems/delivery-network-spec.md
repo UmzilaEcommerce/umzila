@@ -874,6 +874,26 @@ Every stage up to this point had been verified with real transactional SQL again
 
 ---
 
+## X. Admin-set self-arranged radius — skip the delivery network entirely for hyperlocal sellers (2026-09-17)
+
+**The ask:** some sellers are hyperlocal (e.g. a student in a residence selling ice-cream, noodles, or water). For their free-delivery items, if the buyer is close enough, the order should never touch the driver/delivery pipeline at all — seller and buyer sort out the physical handoff directly, exactly like every order did before this build existed. The founder wants the radius set by admins only, never self-service by sellers, and explicitly does not want a low-ticket bundling-minimum rule for now.
+
+**Why this was simple to build:** `create_delivery_on_payment()` (the trigger that creates a `deliveries` row) only fires `if new.delivery_quote_id is not null`, and `checkout.html`'s `fetchDeliveryQuote()` already silently no-ops (`state.deliveryQuoteId` stays `null`) whenever `get-delivery-quote.js` doesn't return a `quoteId` — including its existing `ineligible(reason)` helper (HTTP 200, no `quoteId`). So "skip the delivery system" needed **zero changes to checkout.html or the delivery trigger** — it's entirely a `get-delivery-quote.js` decision.
+
+**What shipped:**
+- New `sellers.self_arranged_radius_km` (nullable numeric).
+- New RLS policy `sellers_admin_all` on `sellers` — there was previously **no admin UPDATE policy on this table at all** (only `sellers_update_own`, self-service by the seller), which is why `admin.html`'s existing shop-status toggle has to go through the `admin_set_seller_status` RPC instead of a plain `.update()`. This is the more reusable fix for any future admin-only seller field, not just this one.
+- `admin.html`'s existing "Manage Shops" section gets a per-shop "Self-arranged radius (km)" input + Save (greyed out with a note if the seller has no `pickup_geo` yet, since the radius needs a center point) — `window.setSellerSelfArrangedRadius()`, a plain `.update()` now permitted by the new policy.
+- `get-delivery-quote.js`: before the paid Google Routes call, a single-seller cart where the seller has `self_arranged_radius_km` set, every item is `free_delivery`, and the destination is within that radius (straight-line haversine, new `haversineKm()` helper — no need to spend a paid Routes call on a simple radius check) returns `ineligible('self_arranged')` instead of proceeding.
+
+**Verified:** real RLS test (two real seller/admin accounts) — the admin account's write to `self_arranged_radius_km` applied, a non-admin account's write was correctly blocked, zero leftover test state (the one real mutation, Lumina Shop's radius, is the actual intended production value, not test residue). Live `netlify dev` HTTP test against the real endpoint with a real Sweet Corner product temporarily flagged `free_delivery`: a destination inside the radius correctly returned `{eligible:false, reason:'self_arranged'}`; a destination outside correctly fell through to the existing zone-eligibility logic untouched. Both test mutations reverted after. Security advisor sweep clean, no new findings.
+
+**Known follow-up:** Lumina Shop's radius (2.5km, the founder's real number) is set but inert until Lumina Shop's `pickup_geo` is set the same way Sweet Corner's just was — needed before this is actually live for them.
+
+**Verified NOT touched:** `checkout.html`, `create_delivery_on_payment()`, PayFast files.
+
+---
+
 ## D. Original plan (verbatim, as pasted by founder 2026-09-17)
 
 > Preserved in full below for reference. Do not edit — record any changes as new entries in §B instead.

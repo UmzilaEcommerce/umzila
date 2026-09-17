@@ -4,6 +4,16 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Admin-set self-arranged radius: skip the delivery network for hyperlocal sellers
+
+**What shipped:** hyperlocal sellers (e.g. a residence student selling ice-cream/water) can now be flagged by an admin, via `admin.html`'s Manage Shops section, with a radius (km) within which their free-delivery orders never enter the driver/delivery pipeline at all — buyer and seller coordinate the handoff directly, same as every order did before this build. Mechanism: `get-delivery-quote.js` now checks this before the paid Google Routes call and returns `ineligible('self_arranged')`, which the existing checkout flow already silently treats as "no delivery quote" — zero changes needed to checkout.html or the delivery-creation trigger. New `sellers.self_arranged_radius_km` column; new admin-only RLS policy `sellers_admin_all` (there was no admin UPDATE policy on `sellers` at all before this).
+
+**Files:** `netlify/functions/get-delivery-quote.js`, `admin.html`, migration `sellers_self_arranged_radius`.
+**Full write-up:** `docs/systems/delivery-network-spec.md` §X.
+**Commit:** *(pending — see this entry's own commit; not pushed yet, per founder instruction)*
+
+---
+
 ## 2026-09-17 — Founder correction: seller "ready" toggle, premature "delivered" popup, tracking-activation gate
 
 **What was broken:** the seller dashboard let sellers pick any of 5 states (`Pending/Packaging/Fulfilled/Delivered/Returned`) for delivery-network orders. Marking `Fulfilled` (packed, not yet shipped) wrote `order_item_statuses.status='fulfilled'`, which `profile.html` reads as "Seller marked this as delivered. Did you receive it?" — so customers were prompted to confirm delivery before the order had even left the store. Root cause: an earlier same-session design correction (§J, Stage 7) reused this existing 5-state dropdown instead of building the plan's own §40 "simple binary ready toggle" — the aggregation logic was reused correctly, but the semantics ("fulfilled" == "delivered" from the customer's POV) weren't.

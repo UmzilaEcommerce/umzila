@@ -75,6 +75,17 @@ function parseGeographyPoint(hex) {
 // every tier, fall back to extended_zone_fee ONLY when the destination is in
 // an 'extended' zone. Any other case here means "priceable is not possible"
 // and the caller must treat it as ineligible rather than guess a fee.
+// Straight-line only -- self-arranged eligibility is a simple "close enough
+// to sort out yourselves" radius check, not a real road-distance quote, so
+// there's no reason to spend a paid Google Routes call on it.
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function resolveDistanceBaseFee(distanceKm, tiers, extendedZoneFee, zoneType) {
   const sorted = Array.isArray(tiers)
     ? [...tiers].filter(t => Number.isFinite(t && t.max_km) && Number.isFinite(t && t.fee)).sort((a, b) => a.max_km - b.max_km)
@@ -211,6 +222,34 @@ exports.handler = async function (event, context) {
       return ineligible(MULTI_SELLER_REASON);
     }
     const sellerId = pickupSellerIds[0];
+
+    // ---- Self-arranged sellers (admin-set, founder ask 2026-09-17): a
+    // hyperlocal seller (e.g. a residence-based student selling ice-cream/
+    // noodles/water) can be marked as not needing the delivery network at
+    // all for free-delivery items within a set radius -- buyer and seller
+    // sort out the handoff directly, exactly like every order did before
+    // this build existed. Checked before the zone check / paid Routes call
+    // since it's a completely separate, cheaper path. Only ever applies to
+    // a single-seller cart -- a self-arranged seller's items never combine
+    // with a real-delivery seller's items in one quote.
+    const { data: selfArrangedSeller, error: selfArrangedSellerError } = await supabase
+      .from('sellers')
+      .select('self_arranged_radius_km, pickup_geo')
+      .eq('id', sellerId)
+      .maybeSingle();
+    if (selfArrangedSellerError) {
+      return serverError('Failed to check self-arranged eligibility', selfArrangedSellerError);
+    }
+    if (selfArrangedSeller && selfArrangedSeller.self_arranged_radius_km && selfArrangedSeller.pickup_geo
+        && productItems.every(i => i.free_delivery)) {
+      const selfArrangedPoint = parseGeographyPoint(selfArrangedSeller.pickup_geo);
+      if (selfArrangedPoint) {
+        const distanceToSellerKm = haversineKm(selfArrangedPoint.lat, selfArrangedPoint.lon, destinationLat, destinationLon);
+        if (distanceToSellerKm <= Number(selfArrangedSeller.self_arranged_radius_km)) {
+          return ineligible('self_arranged');
+        }
+      }
+    }
 
     // ---- Eligibility check BEFORE calling the (paid) Routes API ----
     const { data: zoneData, error: zoneError } = await supabase.rpc('find_service_zone_for_point', {
