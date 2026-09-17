@@ -3376,6 +3376,21 @@
       if (error) { toast('Update failed: ' + error.message); return; }
       toast('Order status updated ✓');
 
+      // Delivery network Stage 7 (docs/systems/delivery-network-spec.md) —
+      // once every seller on this order has confirmed their part is done,
+      // advance the linked delivery (if one exists) from PENDING to
+      // READY_FOR_DISPATCH. Deliberately fire-and-forget: most orders won't
+      // have a deliveries row yet (no Google key means no quote ever
+      // succeeded), and even when they do, this must never block or error
+      // the fulfillment update that already succeeded above.
+      if (derived === 'Fulfilled' || derived === 'Delivered') {
+        fetch('/.netlify/functions/advance-delivery-on-fulfillment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderId })
+        }).catch(function(e) { console.warn('advance-delivery-on-fulfillment failed (non-blocking):', e); });
+      }
+
       // Refetch so this seller's own _mySellerStatus (and any other seller's
       // concurrent progress) is reflected accurately, not assumed locally.
       ordersLoaded = false;

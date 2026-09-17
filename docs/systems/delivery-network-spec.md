@@ -1,6 +1,6 @@
 # Umzila Delivery Network — Master Spec
 
-Status: **STAGES 1-6 COMPLETE, 2026-09-17** (audit §A; address infra §F; quote engine §G; checkout integration/payment trigger §H; state machine §I). Stage 4 (bundle engine) is a confirmed no-op by design (§B item 2). Everything built so far is verified — either with real transactional tests directly in the database, or logic tests of the JS involved — not just code review. **Nothing is visibly live yet on the real site**: the whole pipeline is gated on `GOOGLE_ROUTES_SERVER_KEY` (§C), which hasn't been provided — no quotes can succeed, so `delivery_quote_id` stays null, so the Stage 5 payment trigger correctly never fires on real traffic. That's expected, not a blocker to continuing. Next: Stage 7 (seller "mark ready" — the first thing that actually calls Stage 6's `transitionDelivery()` helper) — first stage since Stage 2 that's genuinely safe to parallelize again.
+Status: **STAGES 1-7 COMPLETE, 2026-09-17** (audit §A; address infra §F; quote engine §G; checkout integration/payment trigger §H; state machine §I; seller fulfillment hook §J). Stage 4 (bundle engine) is a confirmed no-op by design (§B item 2). Everything built so far is verified — either with real transactional tests directly in the database, or logic tests of the JS involved — not just code review. **Nothing is visibly live yet on the real site**: the whole pipeline is gated on `GOOGLE_ROUTES_SERVER_KEY` (§C), which hasn't been provided — no quotes can succeed, so `delivery_quote_id` stays null, so the Stage 5 payment trigger correctly never fires on real traffic. That's expected, not a blocker to continuing. **Stage 7 turned out to need a real design correction** — seller-dashboard.html already had a robust, multi-seller-aware fulfillment mechanism the original plan didn't know about; Stage 7 hooks into it rather than building a duplicate "mark ready" UI. See §J. Next: Stage 8 (rider system — `drivers`/`driver_offers`, online/heartbeat, dispatch) is the next real stage and needs a founder decision first (§C item: are the existing rep accounts the same people to seed as drivers).
 Owner note: this is the living reference document for the delivery network build. Keep coming back to this file across sessions instead of re-explaining the plan. Update it as stages complete (see `docs/CHANGELOG.md` policy in `CLAUDE.md`).
 
 ---
@@ -566,6 +566,26 @@ Built entirely directly, no subagent (small, tightly-coupled: the enum values, t
 **A deliberate design note worth remembering:** a wrong PIN entry (plan §163) must never change delivery status at all — enforced simply by `PIN_REQUIRED` not listing itself as a valid destination in its own transition list. Stage 13's PIN-confirmation function must only call `transitionDelivery()` on an actual match, never on a failed attempt (which should instead just increment a retry counter directly).
 
 **Verified NOT touched:** no PayFast file, `checkout.html`, or `validate-cart.js` were touched this stage.
+
+---
+
+## J. Stage 7 — what actually shipped, and a real design correction (2026-09-17)
+
+Built entirely directly, no subagent — this stage's whole value came from tracing existing, subtle logic correctly, not from writing a lot of new code.
+
+**The correction:** Fable's original Stage 7 plan called for a new "Mark ready" button/UI and a new function checking `order_items.fulfillment_status`. Investigating before building surfaced two things that changed the design:
+1. `order_items.fulfillment_status` is **genuinely dead** — no CHECK constraint exists on it, and all 46 existing rows are still `'pending'`; nothing in the codebase writes anything else to it, ever.
+2. `seller-dashboard.html` already has a real, working, **multi-seller-aware** fulfillment mechanism (`updateOrderFulfillment()`) that derives `orders.order_status` from every seller's own `order_item_statuses` rows on a shared order — specifically built so one seller's update can't clobber another seller's already-recorded progress. This is exactly the "all sellers on this order must be ready" problem Stage 7 needed to solve, already solved.
+
+Building a second, parallel "ready" mechanism next to this would have been precisely the kind of duplication `CLAUDE.md` calls out. Instead, Stage 7 hooks one small server-side call into the *existing* mechanism's already-correct aggregation point.
+
+**Files:**
+- `netlify/functions/advance-delivery-on-fulfillment.js` (new): takes `{orderId}`, looks up whether a `deliveries` row exists for it (most orders won't yet — no Google key means no quote ever succeeded), and if it's still `PENDING`, calls Stage 6's `transitionDelivery()` to move it to `READY_FOR_DISPATCH`. A conflict (another concurrent call already advanced it) or an already-advanced delivery are both treated as a success/no-op, not an error.
+- `seller-dashboard.html`: `updateOrderFulfillment()` now calls this function, fire-and-forget, immediately after it derives `orders.order_status` — only when that derived status is `'Fulfilled'` or `'Delivered'`. Deliberately non-blocking, matching every other opportunistic hook in this build: a failure here can never break the existing "order status updated" flow that already succeeded.
+
+**Verified end-to-end in the database** (order → paid → Stage 5's trigger creates a `PENDING` delivery → the exact transition this function performs → `READY_FOR_DISPATCH`), the first test this build that exercises Stages 5, 6, and 7 together rather than each in isolation. All cleaned up, zero leftover rows.
+
+**Verified NOT touched:** no PayFast file, `checkout.html`, or `validate-cart.js`.
 
 ---
 
