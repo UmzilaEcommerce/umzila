@@ -23,6 +23,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Delivery network Stage 13b (delivery feedback / compliments & complaints) built
+
+**What happened:** Fourteenth implementation stage — the gap found and flagged while closing out Stage 11 (a real stage added during the original plan reconciliation, between Stage 13 and 14, that got missed while working through 12/13/14/15/16 in a different order). Built now, in full, per its original spec. Built entirely by me.
+
+**What shipped:** new `delivery_feedback` table (one submission per delivery, enforced by a unique index) and `netlify/functions/submit-delivery-feedback.js` — the only place a row is created. Resolves `seller_id`/`driver_id` itself from the delivery's actual route rather than trusting the client, a deliberate tightening beyond the plan's literal "customer can insert their own" RLS wording: there is no client-facing INSERT policy at all, closing off a possible complaint-misattribution path before it could be a problem. Three frontend surfaces: `track.html` gets a post-delivery "How was your delivery? ♡ Loved it / Something went wrong" prompt (plan's exact copy) with category buttons for complaints; `seller-dashboard.html` gets a new "Feedback" tab scoped to the seller's own shop; `admin.html` folds a feedback list into the existing Stage 16 Deliveries section (as the plan itself said to do, not a separate admin build), each entry linking into the existing delivery-timeline drill-in.
+
+**A testing mistake caught mid-session, not a product bug:** an RLS negative-test initially tried to reuse a `set_config('role', 'authenticated', ...)` call from a separate, earlier tool call — those settings don't carry across connections, so it silently ran as the bypass-RLS service connection and gave a false pass. Caught by checking the row actually existed afterward, and correctly re-verified within a single transaction (the same pattern already used successfully for every other RLS test this session).
+
+**Verified:** all 4 touched files pass syntax checks; the seller_id/driver_id resolution logic tested against a real route; the one-per-delivery unique index tested for real; RLS re-verified correctly (unrelated user sees nothing, raw client INSERT correctly rejected). Security advisor sweep clean relative to this stage. No PayFast/checkout/logistics file touched, and no changes anywhere outside this stage's own three frontend surfaces plus the one new function.
+
+**Known limitation, tracked not hidden:** no local Netlify dev environment to visually confirm any of the three frontend surfaces render correctly — same class of limitation as every other frontend piece this session.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §S.
+**Commit:** *(pending — see this entry's own commit)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 11 (optional dynamic batch offers) built — and a missed Stage 13b found
 
 **What happened:** Thirteenth implementation stage. Explicitly marked optional by the plan itself, built anyway per the founder's standing "nothing gets left out" instruction. Built entirely by me (touches the shared dispatch/accept code path). While closing this out, found that "Stage 13b — Delivery feedback (compliments/complaints)" — a real stage added during the original plan reconciliation, between Stage 13 and 14 — was never built, having been missed while working through 12/13/14/15/16 in a different order. Tracked explicitly, not silently dropped; it's next.

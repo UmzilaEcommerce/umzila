@@ -992,7 +992,10 @@ const supabaseClient = supabase.createClient(
           <button id="refreshDeliveriesBtn" class="small-btn" onclick="window.loadDeliveriesAdmin?.()">↻ Refresh</button>
         </div>
         <div id="deliveriesExceptionsMount" style="margin-bottom:18px"></div>
-        <div id="deliveriesListMount"></div>
+        <div id="deliveriesListMount" style="margin-bottom:18px"></div>
+        <!-- Stage 13b feedback, folded into this Unit F view per the plan's
+             own note rather than a separate admin build. -->
+        <div id="deliveriesFeedbackMount"></div>
       </section>
 
       <!-- Delivery Pricing: delivery_pricing_config CRUD. New version row on
@@ -4308,8 +4311,56 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
     excMount.innerHTML = '<p style="color:var(--muted)">Loading exceptions…</p>';
     listMount.innerHTML = '<p style="color:var(--muted)">Loading deliveries…</p>';
-    await Promise.all([ loadDeliveriesExceptions(), loadDeliveriesList() ]);
+    await Promise.all([ loadDeliveriesExceptions(), loadDeliveriesList(), loadDeliveriesFeedback() ]);
   };
+
+  /* Stage 13b — recent compliments/complaints, folded into this Unit F view
+     per the plan's own note ("natural fit inside Stage 16 Unit F, not a
+     separate admin build"), joined with delivery_events timeline access
+     already available via the delivery-row drill-in above for investigation. */
+  async function loadDeliveriesFeedback(){
+    const mount = document.getElementById('deliveriesFeedbackMount');
+    if(!mount) return;
+    mount.innerHTML = '<p style="color:var(--muted)">Loading feedback…</p>';
+    try {
+      const { data, error } = await supabaseClient
+        .from('delivery_feedback')
+        .select('id, feedback_type, category, message, delivery_id, order_id, seller_id, driver_id, created_at, orders(order_number), sellers(shop_name)')
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if(error){ console.warn('loadDeliveriesFeedback error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load feedback</p>'; return; }
+      const rows = data || [];
+      if(!rows.length){ mount.innerHTML = '<h3 style="margin-bottom:8px">💬 Recent Feedback</h3><p style="color:var(--muted)">No feedback submitted yet.</p>'; return; }
+      mount.innerHTML = '<h3 style="margin-bottom:8px">💬 Recent Feedback</h3><div style="display:flex;flex-direction:column;gap:8px">' +
+        rows.map(f => {
+          const isCompliment = f.feedback_type === 'compliment';
+          const badge = isCompliment
+            ? '<span style="background:#dcfce7;color:#14532d;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700">♡ Compliment</span>'
+            : '<span style="background:#fee2e2;color:#991b1b;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700">⚠ Complaint</span>';
+          const shopName = f.sellers && f.sellers.shop_name ? escapeHtml(f.sellers.shop_name) : '';
+          const orderRef = (f.orders && f.orders.order_number) ? f.orders.order_number : String(f.order_id || '').slice(0,8);
+          return `<div style="background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">${badge}
+              <span style="font-size:12px;color:#6b7280">Order ${escapeHtml(String(orderRef))}${shopName ? ' &middot; ' + shopName : ''}</span>
+              ${f.category ? `<span style="font-size:11px;color:#9ca3af">${escapeHtml(f.category)}</span>` : ''}
+            </div>
+            ${f.message ? `<div style="font-size:13px;color:#374151">${escapeHtml(f.message)}</div>` : '<div style="font-size:12px;color:var(--muted);font-style:italic">No message left.</div>'}
+            <div style="font-size:11px;color:#9ca3af;margin-top:6px">${new Date(f.created_at).toLocaleString('en-ZA')} &middot; <a href="#" data-drill-delivery="${escapeHtml(f.delivery_id)}" style="color:var(--accent)">View delivery timeline</a></div>
+          </div>`;
+        }).join('') + '</div>';
+      mount.querySelectorAll('[data-drill-delivery]').forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const row = document.querySelector(`.delivery-row[data-delivery-id="${a.getAttribute('data-drill-delivery')}"]`);
+          if(row){ row.scrollIntoView({ behavior: 'smooth', block: 'center' }); toggleDeliveryTimeline(a.getAttribute('data-drill-delivery')); }
+          else showToast('Open this delivery in the list above (older than the last 50 shown)');
+        });
+      });
+    } catch(e){
+      console.warn('loadDeliveriesFeedback failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load feedback</p>';
+    }
+  }
 
   async function loadDeliveriesExceptions(){
     const mount = document.getElementById('deliveriesExceptionsMount');

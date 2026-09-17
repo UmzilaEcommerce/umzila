@@ -196,6 +196,7 @@
           <div id="mapMount"></div>
           <div id="mapNote" class="t-map-note"></div>
         </div>
+        <div id="feedbackMount"></div>
         ${backLink()}
       `;
     } else {
@@ -231,6 +232,88 @@
       clearInterval(pollTimer);
       pollTimer = null;
     }
+
+    if (isDone) await renderFeedbackPrompt(row.delivery_id);
+  }
+
+  // ── Stage 13b: post-delivery compliment/complaint prompt (plan §97) ────
+  const FEEDBACK_CATEGORIES = ["My order was late", "My order was missing something", "I couldn't meet the driver", "Another delivery problem"];
+  let feedbackLoaded = false;
+
+  async function renderFeedbackPrompt(deliveryId) {
+    const mount = document.getElementById('feedbackMount');
+    if (!mount || feedbackLoaded) return;
+    feedbackLoaded = true;
+
+    const { data: existing } = await sb.from('delivery_feedback').select('id').eq('delivery_id', deliveryId).maybeSingle();
+    if (existing) {
+      mount.innerHTML = `<div class="t-card" style="text-align:center;color:var(--muted);font-size:13px">Thanks for your feedback on this delivery! 🙏</div>`;
+      return;
+    }
+
+    mount.innerHTML = `<div class="t-card" id="feedbackPromptCard">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px">How was your Umzila delivery?</div>
+      <div style="display:flex;gap:10px">
+        <button class="fb-choice-btn" id="fbLovedBtn" style="flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--border);background:#fff;font-weight:700;cursor:pointer">♡ Loved it</button>
+        <button class="fb-choice-btn" id="fbProblemBtn" style="flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--border);background:#fff;font-weight:700;cursor:pointer">Something went wrong</button>
+      </div>
+      <div id="feedbackFormWrap"></div>
+    </div>`;
+
+    document.getElementById('fbLovedBtn').addEventListener('click', () => showFeedbackForm(deliveryId, 'compliment'));
+    document.getElementById('fbProblemBtn').addEventListener('click', () => showFeedbackForm(deliveryId, 'complaint'));
+  }
+
+  function showFeedbackForm(deliveryId, feedbackType) {
+    const wrap = document.getElementById('feedbackFormWrap');
+    if (!wrap) return;
+    document.querySelectorAll('.fb-choice-btn').forEach(b => b.style.display = 'none');
+
+    const categoryHtml = feedbackType === 'complaint'
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0" id="fbCategoryChoices">${FEEDBACK_CATEGORIES.map(c => `<button type="button" class="fb-cat-btn" data-cat="${esc(c)}" style="padding:7px 12px;border-radius:999px;border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer">${esc(c)}</button>`).join('')}</div>`
+      : '';
+
+    wrap.innerHTML = `
+      <div style="margin-top:10px;font-size:13px;color:var(--muted)">${feedbackType === 'compliment' ? 'Tell us what went well' : 'Tell us what happened'}</div>
+      ${categoryHtml}
+      <textarea id="fbMessage" rows="3" placeholder="${feedbackType === 'compliment' ? 'Great service, friendly rider...' : 'What went wrong?'}" style="width:100%;margin-top:8px;padding:10px;border:1.5px solid var(--border);border-radius:8px;font-family:inherit;font-size:13px;resize:vertical;box-sizing:border-box"></textarea>
+      <div id="fbError" style="color:#c0392b;font-size:12px;margin-top:6px"></div>
+      <button id="fbSubmitBtn" style="margin-top:10px;width:100%;padding:12px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer">Submit</button>
+    `;
+
+    let selectedCategory = null;
+    wrap.querySelectorAll('.fb-cat-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        wrap.querySelectorAll('.fb-cat-btn').forEach(b => { b.style.background = '#fff'; b.style.color = '#111'; });
+        btn.style.background = 'var(--accent)'; btn.style.color = '#fff';
+        selectedCategory = btn.dataset.cat;
+      });
+    });
+
+    document.getElementById('fbSubmitBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('fbSubmitBtn');
+      const errEl = document.getElementById('fbError');
+      const message = document.getElementById('fbMessage').value.trim();
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch('/.netlify/functions/submit-delivery-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session ? session.access_token : '') },
+          body: JSON.stringify({ deliveryId, feedbackType, category: selectedCategory, message })
+        });
+        if (!res.ok) {
+          const result = await res.json().catch(() => ({}));
+          if (errEl) errEl.textContent = result.error || 'Could not submit feedback. Please try again.';
+          btn.disabled = false; btn.textContent = 'Submit';
+          return;
+        }
+        document.getElementById('feedbackPromptCard').innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px">Thanks for your feedback on this delivery! 🙏</div>`;
+      } catch (e) {
+        if (errEl) errEl.textContent = 'Could not submit feedback — check your connection and try again.';
+        btn.disabled = false; btn.textContent = 'Submit';
+      }
+    });
   }
 
   await loadTracking();
