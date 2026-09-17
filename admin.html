@@ -8,6 +8,8 @@
 <title>Admin Dashboard — Shop Control</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Leaflet (Delivery Ops live map) — same free/keyless OSM setup track.html already uses -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 <style>
   /* ── Design Tokens ── */
   :root {
@@ -316,6 +318,8 @@
 
 <!-- Chart.js v4 -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Leaflet v1.9.4 (Delivery Ops live map — same version/CDN as track.html) -->
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Supabase initialization via Netlify function -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
@@ -406,6 +410,9 @@ const supabaseClient = supabase.createClient(
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
           <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
           <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
+          <li data-section="delivery-ops"><span class="menu-icon">🛵</span><span class="menu-label">Delivery Ops</span></li>
+          <li data-section="deliveries"><span class="menu-icon">📮</span><span class="menu-label">Deliveries</span></li>
+          <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
@@ -962,6 +969,42 @@ const supabaseClient = supabase.createClient(
             </table>
           </div>
         </div>
+      </section>
+
+      <!-- Delivery Ops: live map of active drivers/routes + riders roster.
+           Stage 16 unit A+C. See docs/systems/delivery-network-spec.md §O. -->
+      <section id="section-delivery-ops" style="display:none">
+        <div class="section-top">
+          <h2>🛵 Delivery Ops</h2>
+          <button id="refreshDeliveryOpsBtn" class="small-btn" onclick="window.loadDeliveryOps?.()">↻ Refresh</button>
+        </div>
+        <div id="deliveryOpsMapMount" style="margin-bottom:18px"></div>
+        <div id="deliveryOpsRidersMount"></div>
+      </section>
+
+      <!-- Deliveries: list + delivery_events timeline drill-in + exceptions
+           (locked PINs, unaccepted offers, failed deliveries) with the
+           PIN-unlock admin action. Stage 16 unit B+F.
+           See docs/systems/delivery-network-spec.md §O. -->
+      <section id="section-deliveries" style="display:none">
+        <div class="section-top">
+          <h2>📮 Deliveries</h2>
+          <button id="refreshDeliveriesBtn" class="small-btn" onclick="window.loadDeliveriesAdmin?.()">↻ Refresh</button>
+        </div>
+        <div id="deliveriesExceptionsMount" style="margin-bottom:18px"></div>
+        <div id="deliveriesListMount"></div>
+      </section>
+
+      <!-- Delivery Pricing: delivery_pricing_config CRUD. New version row on
+           every save -- never mutate a version already referenced by a
+           locked delivery_quote, so historical quotes stay accurate against
+           the version they were priced under. Stage 16 unit D. -->
+      <section id="section-delivery-pricing" style="display:none">
+        <div class="section-top">
+          <h2>💰 Delivery Pricing</h2>
+          <button id="refreshDeliveryPricingBtn" class="small-btn" onclick="window.loadDeliveryPricing?.()">↻ Refresh</button>
+        </div>
+        <div id="deliveryPricingMount"></div>
       </section>
 
       <!-- Settings -->
@@ -2079,7 +2122,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'product-reviews': document.getElementById('section-product-reviews'),
     'ad-campaigns': document.getElementById('section-ad-campaigns'),
     'marketing': document.getElementById('section-marketing'),
-    'service-areas': document.getElementById('section-service-areas')
+    'service-areas': document.getElementById('section-service-areas'),
+    'delivery-ops': document.getElementById('section-delivery-ops'),
+    'deliveries': document.getElementById('section-deliveries'),
+    'delivery-pricing': document.getElementById('section-delivery-pricing')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -2637,6 +2683,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Lazy-load service areas when that tab is first clicked
   document.querySelector('[data-section="service-areas"]')?.addEventListener('click', loadServiceZones);
+
+  // Lazy-load Stage 16 delivery-network admin sections when first clicked
+  // (functions defined further down, same window.foo?.() deferred pattern
+  // as service-orders/disputes above).
+  document.querySelector('[data-section="delivery-ops"]')?.addEventListener('click', () => window.loadDeliveryOps?.());
+  document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
+  document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
 
   // Manage-shops sub-tabs
   document.querySelectorAll('.sub-tab[data-shtab]').forEach(btn => {
@@ -4030,6 +4083,670 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.getElementById('saveZoneBtn')?.addEventListener('click', saveServiceZone);
   document.getElementById('zoneEditCancel')?.addEventListener('click', (e)=>{ e.preventDefault(); cancelEditServiceZone(); });
   /* ============================================================ end Service Areas */
+
+  /* ============================================================ Delivery Ops
+     Stage 16 unit A+C: live map of online drivers + a riders roster with an
+     eligible/suspended toggle. drivers.last_location is a PostGIS geography
+     column that comes back as raw EWKB hex over PostgREST (same problem
+     route_stops.location had — see get_route_stop_coordinates), so the map
+     uses the new list_online_driver_locations() RPC (SECURITY INVOKER —
+     relies on the caller's own RLS via the drivers_admin_all policy, same
+     pattern as get_route_stop_coordinates) to get lat/lon instead of decoding
+     EWKB in JS. The riders table is a plain direct read/write against
+     `drivers` (drivers_admin_all grants admins full access), no RPC needed.
+     See docs/systems/delivery-network-spec.md §O. */
+
+  const DELIVERY_OPS_STALENESS_SECONDS = 90; // matches dispatch.js / track.html's DRIVER_STALENESS_SECONDS
+  const DELIVERY_OPS_DEFAULT_CENTER = [-26.1929, 28.0305]; // same campus coordinate already used as this build's default map center (Service Areas placeholder)
+
+  let deliveryOpsMap = null;
+  const deliveryOpsMarkers = new Map(); // driver_id -> L.CircleMarker
+
+  function deliveryOpsRelativeTime(dateStr){
+    if(!dateStr) return 'never';
+    const ageSec = (Date.now() - new Date(dateStr).getTime()) / 1000;
+    if(ageSec < 60) return 'moments ago';
+    const mins = Math.floor(ageSec / 60);
+    if(mins === 1) return '1 minute ago';
+    if(mins < 60) return `${mins} minutes ago`;
+    const hrs = Math.floor(mins / 60);
+    if(hrs === 1) return '1 hour ago';
+    if(hrs < 24) return `${hrs} hours ago`;
+    const days = Math.floor(hrs / 24);
+    return days === 1 ? '1 day ago' : `${days} days ago`;
+  }
+
+  function ensureDeliveryOpsMap(){
+    if(deliveryOpsMap) return deliveryOpsMap;
+    const mount = document.getElementById('deliveryOpsMapMount');
+    if(!mount || typeof L === 'undefined') return null;
+    mount.innerHTML = `
+      <h3 style="margin-bottom:8px">🗺️ Online Riders</h3>
+      <div id="deliveryOpsMapNote" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+      <div id="deliveryOpsMap" style="width:100%;height:360px;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04)"></div>
+    `;
+    deliveryOpsMap = L.map('deliveryOpsMap', { zoomControl: true, attributionControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(deliveryOpsMap);
+    deliveryOpsMap.setView(DELIVERY_OPS_DEFAULT_CENTER, 13);
+    return deliveryOpsMap;
+  }
+
+  async function loadDeliveryOpsMap(){
+    const map = ensureDeliveryOpsMap();
+    const note = document.getElementById('deliveryOpsMapNote');
+    if(!map){ const mount = document.getElementById('deliveryOpsMapMount'); if(mount) mount.innerHTML = '<p style="color:var(--muted)">Map could not load.</p>'; return; }
+    if(!supabaseClient){ if(note) note.textContent = 'Supabase not available'; return; }
+    try {
+      const { data, error } = await supabaseClient.rpc('list_online_driver_locations');
+      if(error){ console.warn('list_online_driver_locations error', error); if(note) note.textContent = 'Failed to load driver locations.'; return; }
+      const rows = data || [];
+
+      // Drop markers for drivers that are no longer online/located
+      const liveIds = new Set(rows.map(r => r.driver_id));
+      deliveryOpsMarkers.forEach((marker, id) => {
+        if(!liveIds.has(id)){ map.removeLayer(marker); deliveryOpsMarkers.delete(id); }
+      });
+
+      if(note) note.textContent = rows.length
+        ? `${rows.length} driver${rows.length === 1 ? '' : 's'} online.`
+        : 'No drivers currently online.';
+
+      const bounds = [];
+      rows.forEach(r => {
+        if(!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) return;
+        const ageSec = r.last_location_at ? (Date.now() - new Date(r.last_location_at).getTime()) / 1000 : Infinity;
+        const isStale = ageSec > DELIVERY_OPS_STALENESS_SECONDS;
+        const color = isStale ? '#9ca3af' : '#22c55e';
+        const popup = `<strong>${escapeHtml(r.vehicle_description || 'Rider')}</strong><br>` +
+          `Last seen ${escapeHtml(deliveryOpsRelativeTime(r.last_location_at))}` +
+          (r.eligibility_status ? `<br>Status: ${escapeHtml(r.eligibility_status)}` : '');
+        let marker = deliveryOpsMarkers.get(r.driver_id);
+        if(marker){
+          marker.setLatLng([r.lat, r.lon]);
+          marker.setStyle({ color, fillColor: color });
+          marker.setPopupContent(popup);
+        } else {
+          marker = L.circleMarker([r.lat, r.lon], { radius: 9, color, fillColor: color, fillOpacity: 0.9, weight: 3 }).addTo(map);
+          marker.bindPopup(popup);
+          deliveryOpsMarkers.set(r.driver_id, marker);
+        }
+        bounds.push([r.lat, r.lon]);
+      });
+
+      if(bounds.length){
+        map.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 15 });
+      } else {
+        map.setView(DELIVERY_OPS_DEFAULT_CENTER, 13);
+      }
+    } catch(e){
+      console.warn('loadDeliveryOpsMap failed', e);
+      if(note) note.textContent = 'Failed to load driver locations.';
+    }
+  }
+
+  let deliveryOpsRidersCache = [];
+
+  async function loadDeliveryOpsRiders(){
+    const mount = document.getElementById('deliveryOpsRidersMount');
+    if(!mount) return;
+    if(!supabaseClient){ mount.innerHTML = '<p style="color:var(--muted)">Supabase not available</p>'; return; }
+    if(!document.getElementById('deliveryOpsRidersTable')){
+      mount.innerHTML = `
+        <h3>🧑‍✈️ Riders</h3>
+        <div style="overflow:auto;margin-top:8px">
+          <table id="deliveryOpsRidersTable" aria-live="polite">
+            <thead><tr><th>Vehicle</th><th>Status</th><th>Eligibility</th><th>Last Seen</th><th>Capabilities</th><th>Actions</th></tr></thead>
+            <tbody><tr><td colspan="6" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      `;
+    }
+    const tbody = document.querySelector('#deliveryOpsRidersTable tbody');
+    try {
+      const { data, error } = await supabaseClient
+        .from('drivers')
+        .select('id, user_id, is_online, last_seen_at, vehicle_description, eligibility_status, can_do_live_delivery, can_do_scheduled_collections')
+        .order('is_online', { ascending: false });
+      if(error){ console.warn('loadDeliveryOpsRiders error', error); if(tbody) tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>'; return; }
+      deliveryOpsRidersCache = data || [];
+      renderDeliveryOpsRidersTable();
+    } catch(e){
+      console.warn('loadDeliveryOpsRiders failed', e);
+      if(tbody) tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>';
+    }
+  }
+
+  function renderDeliveryOpsRidersTable(){
+    const tbody = document.querySelector('#deliveryOpsRidersTable tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    if(!deliveryOpsRidersCache.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px">No riders registered yet.</td></tr>';
+      return;
+    }
+    const eligColors = { eligible: '#16a34a', suspended: '#dc2626', pending: '#d97706' };
+    deliveryOpsRidersCache.forEach(d => {
+      const tr = document.createElement('tr');
+      const onlineBadge = d.is_online
+        ? '<span style="color:#16a34a;font-size:12px;font-weight:600">● Online</span>'
+        : '<span style="color:#6b7280;font-size:12px;font-weight:600">● Offline</span>';
+      const elig = (d.eligibility_status || 'pending').toLowerCase();
+      const eligColor = eligColors[elig] || '#6b7280';
+      const eligBadge = `<span style="background:${eligColor}1a;color:${eligColor};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;text-transform:capitalize">${escapeHtml(elig)}</span>`;
+      const caps = [d.can_do_live_delivery ? 'Live' : null, d.can_do_scheduled_collections ? 'Scheduled' : null].filter(Boolean).join(', ') || '—';
+      tr.innerHTML = `
+        <td>${escapeHtml(d.vehicle_description || '—')}</td>
+        <td>${onlineBadge}</td>
+        <td>${eligBadge}</td>
+        <td style="font-size:12px;color:#6b7280">${escapeHtml(deliveryOpsRelativeTime(d.last_seen_at))}</td>
+        <td style="font-size:12px;color:#6b7280">${escapeHtml(caps)}</td>
+        <td class="actions"></td>
+      `;
+      const actionsTd = tr.querySelector('.actions');
+      // No UI path to set 'pending' — that's an internal-only pre-approval state.
+      if(elig === 'suspended'){
+        const reinstateBtn = document.createElement('button');
+        reinstateBtn.textContent = '✔ Reinstate';
+        reinstateBtn.onclick = ()=> setDriverEligibility(d.id, 'eligible');
+        actionsTd.appendChild(reinstateBtn);
+      } else if(elig === 'eligible'){
+        const suspendBtn = document.createElement('button');
+        suspendBtn.textContent = '⛔ Suspend';
+        suspendBtn.onclick = ()=> confirmModal('Suspend rider', `Suspend "${d.vehicle_description || 'this rider'}"? They will stop receiving new delivery offers.`, ()=> setDriverEligibility(d.id, 'suspended'));
+        actionsTd.appendChild(suspendBtn);
+      } else {
+        actionsTd.innerHTML = '<span style="font-size:11px;color:var(--muted)">Awaiting approval</span>';
+      }
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function setDriverEligibility(driverId, newStatus){
+    if(!['eligible','suspended'].includes(newStatus)) return;
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update riders'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+    try {
+      const { error } = await supabaseClient.from('drivers').update({ eligibility_status: newStatus }).eq('id', driverId);
+      if(error){ console.warn('setDriverEligibility error', error); showToast('Update failed: ' + error.message); return; }
+      showToast(newStatus === 'suspended' ? 'Rider suspended' : 'Rider reinstated');
+      await loadDeliveryOpsRiders();
+    } catch(e){
+      console.warn('setDriverEligibility failed', e);
+      showToast('Update failed');
+    }
+  }
+
+  window.loadDeliveryOps = async function(){
+    await Promise.all([loadDeliveryOpsMap(), loadDeliveryOpsRiders()]);
+  };
+  /* ============================================================ end Delivery Ops */
+
+  /* ============================================================ Deliveries (Stage 16 unit B+F)
+     Admin operations view over the existing deliveries/delivery_events/driver_offers
+     tables (no new tables — RLS added this session: deliveries_admin_all,
+     delivery_events_admin_all, delivery_quotes_admin_all, driver_offers_admin_all).
+     Exceptions mount surfaces PIN-locked deliveries (with the real "Unlock PIN"
+     action this stage exists to build — see confirm-delivery-pin.js's own
+     comment block, Stage 13's tracked gap), stale unaccepted driver_offers, and
+     FAILED deliveries (both read-only visibility). List mount is a recent
+     deliveries table with a click-to-expand delivery_events timeline. Manual
+     refresh only, same as the rest of this admin page — no live polling here. */
+
+  let deliveriesListCache = [];
+
+  window.loadDeliveriesAdmin = async function(){
+    const excMount = document.getElementById('deliveriesExceptionsMount');
+    const listMount = document.getElementById('deliveriesListMount');
+    if(!excMount || !listMount) return;
+    if(!supabaseClient){
+      excMount.innerHTML = '';
+      listMount.innerHTML = '<p style="color:var(--muted)">Supabase not available</p>';
+      return;
+    }
+    excMount.innerHTML = '<p style="color:var(--muted)">Loading exceptions…</p>';
+    listMount.innerHTML = '<p style="color:var(--muted)">Loading deliveries…</p>';
+    await Promise.all([ loadDeliveriesExceptions(), loadDeliveriesList() ]);
+  };
+
+  async function loadDeliveriesExceptions(){
+    const mount = document.getElementById('deliveriesExceptionsMount');
+    if(!mount) return;
+    try {
+      const nowIso = new Date().toISOString();
+      const [lockedRes, staleOffersRes, failedRes] = await Promise.all([
+        supabaseClient.from('deliveries').select('id, order_id, pin_locked_at, pin_attempt_count, orders(order_number)').not('pin_locked_at', 'is', null).order('pin_locked_at', { ascending: false }),
+        supabaseClient.from('driver_offers').select('id, delivery_id, driver_id, expires_at').eq('status', 'pending').lt('expires_at', nowIso).order('expires_at', { ascending: false }),
+        supabaseClient.from('deliveries').select('id, order_id, created_at, failure_reason, orders(order_number)').eq('status', 'FAILED').order('created_at', { ascending: false }).limit(50)
+      ]);
+      if(lockedRes.error) console.warn('deliveries pin_locked query error', lockedRes.error);
+      if(staleOffersRes.error) console.warn('driver_offers stale query error', staleOffersRes.error);
+      if(failedRes.error) console.warn('deliveries FAILED query error', failedRes.error);
+
+      const locked = lockedRes.data || [];
+      const staleOffers = staleOffersRes.data || [];
+      const failed = failedRes.data || [];
+
+      if(!locked.length && !staleOffers.length && !failed.length){
+        mount.innerHTML = '<div style="background:var(--card);border-radius:14px;padding:20px;text-align:center;color:#059669;font-weight:700">✅ No exceptions — all clear</div>';
+        return;
+      }
+
+      const orderRef = d => (d.orders && d.orders.order_number) ? d.orders.order_number : d.order_id;
+      let html = '';
+
+      if(locked.length){
+        html += `<div style="background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="font-size:14px;font-weight:800;color:#991b1b;margin-bottom:10px">🔒 PIN-locked deliveries (${locked.length})</h3>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${locked.map(d => `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fef2f2;border-radius:8px;padding:8px 12px;flex-wrap:wrap">
+              <div style="font-size:13px">
+                <strong>Order ${escapeHtml(String(orderRef(d)))}</strong>
+                <span style="color:#6b7280"> &middot; delivery ${escapeHtml(String(d.id).slice(0,8))} &middot; locked ${escapeHtml(new Date(d.pin_locked_at).toLocaleString('en-ZA'))} &middot; ${d.pin_attempt_count||0} attempts</span>
+              </div>
+              <button class="small-btn" data-unlock-id="${escapeHtml(d.id)}" style="background:#dc2626">🔓 Unlock PIN</button>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      if(staleOffers.length){
+        html += `<div style="background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="font-size:14px;font-weight:800;color:#92400e;margin-bottom:10px">⏰ Stale unaccepted offers (${staleOffers.length})</h3>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${staleOffers.map(o => `<div style="font-size:12px;color:#6b7280;background:#fffbeb;border-radius:8px;padding:8px 12px">
+              delivery ${escapeHtml(String(o.delivery_id).slice(0,8))} &middot; offer ${escapeHtml(String(o.id).slice(0,8))} &middot; expired ${escapeHtml(new Date(o.expires_at).toLocaleString('en-ZA'))}
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      if(failed.length){
+        html += `<div style="background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+          <h3 style="font-size:14px;font-weight:800;color:#6b7280;margin-bottom:10px">❌ Failed deliveries (${failed.length})</h3>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            ${failed.map(d => `<div style="font-size:12px;color:#6b7280;background:#f9fafb;border-radius:8px;padding:8px 12px">
+              Order ${escapeHtml(String(orderRef(d)))} &middot; ${escapeHtml(new Date(d.created_at).toLocaleString('en-ZA'))}${d.failure_reason ? ' &middot; ' + escapeHtml(d.failure_reason) : ''}
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+
+      mount.innerHTML = html;
+      mount.querySelectorAll('[data-unlock-id]').forEach(btn => {
+        btn.addEventListener('click', () => unlockDeliveryPin(btn.getAttribute('data-unlock-id')));
+      });
+    } catch(e){
+      console.warn('loadDeliveriesExceptions failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load exceptions</p>';
+    }
+  }
+
+  async function unlockDeliveryPin(deliveryId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to unlock a delivery'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    confirmModal('Unlock PIN', 'This bypasses a security lockout put in place after repeated incorrect PIN attempts. Only unlock once you\'ve verified the situation with the driver/customer directly. Continue?', async () => {
+      try {
+        const { error: updateError } = await supabaseClient.from('deliveries').update({ pin_locked_at: null, pin_attempt_count: 0 }).eq('id', deliveryId);
+        if(updateError){ console.warn('unlockDeliveryPin update error', updateError); showToast('Unlock failed: ' + updateError.message); return; }
+
+        const adminUser = await getSupabaseUser();
+        const { error: eventError } = await supabaseClient.from('delivery_events').insert({
+          delivery_id: deliveryId,
+          event_type: 'PIN_UNLOCKED',
+          actor_type: 'admin',
+          actor_id: adminUser ? adminUser.id : null,
+          metadata: {}
+        });
+        if(eventError) console.warn('unlockDeliveryPin event log error', eventError);
+
+        showToast('Delivery unlocked');
+        await loadDeliveriesExceptions();
+        await loadDeliveriesList();
+      } catch(e){
+        console.warn('unlockDeliveryPin failed', e);
+        showToast('Unlock failed');
+      }
+    });
+  }
+
+  async function loadDeliveriesList(){
+    const mount = document.getElementById('deliveriesListMount');
+    if(!mount) return;
+    try {
+      const { data, error } = await supabaseClient
+        .from('deliveries')
+        .select('id, order_id, status, created_at, dispatched_at, delivered_at, orders(order_number)')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if(error){ console.warn('loadDeliveriesList error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load deliveries</p>'; return; }
+      deliveriesListCache = data || [];
+      renderDeliveriesListTable();
+    } catch(e){
+      console.warn('loadDeliveriesList failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load deliveries</p>';
+    }
+  }
+
+  function deliveryStatusBadge(status){
+    const map = {
+      PENDING: '#f3f4f6|#374151', READY_FOR_DISPATCH: '#e0f2fe|#0369a1', OFFERED: '#fef3c7|#92400e',
+      ASSIGNED: '#fef3c7|#92400e', DRIVER_AT_PICKUP: '#fef3c7|#92400e', PARTIALLY_PICKED_UP: '#fef3c7|#92400e',
+      PICKED_UP: '#dbeafe|#1e40af', IN_ROUTE: '#dbeafe|#1e40af', NEXT_STOP: '#dbeafe|#1e40af', ARRIVING: '#dbeafe|#1e40af',
+      PIN_REQUIRED: '#ede9fe|#5b21b6', DELIVERED: '#d1fae5|#065f46',
+      CANCELLED: '#f3f4f6|#6b7280', FAILED: '#fee2e2|#991b1b', REASSIGNING: '#fef3c7|#92400e', RETURNED: '#fee2e2|#991b1b'
+    };
+    const [bg, fg] = (map[status] || '#f3f4f6|#374151').split('|');
+    return `<span style="background:${bg};color:${fg};padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700">${escapeHtml(status||'')}</span>`;
+  }
+
+  function renderDeliveriesListTable(){
+    const mount = document.getElementById('deliveriesListMount');
+    if(!mount) return;
+    if(!deliveriesListCache.length){
+      mount.innerHTML = '<h3 style="margin-bottom:8px">Recent Deliveries</h3><p style="color:var(--muted)">No deliveries yet.</p>';
+      return;
+    }
+    const fmt = v => v ? new Date(v).toLocaleString('en-ZA') : '—';
+    mount.innerHTML = `<h3 style="margin-bottom:8px">Recent Deliveries</h3>
+      <div style="overflow:auto">
+        <table id="deliveriesTable">
+          <thead><tr><th>Order</th><th>Status</th><th>Created</th><th>Dispatched</th><th>Delivered</th></tr></thead>
+          <tbody>${deliveriesListCache.map(d => {
+            const ref = (d.orders && d.orders.order_number) ? d.orders.order_number : d.order_id;
+            return `<tr class="delivery-row" data-delivery-id="${escapeHtml(d.id)}" style="cursor:pointer">
+              <td>${escapeHtml(String(ref))}</td>
+              <td>${deliveryStatusBadge(d.status)}</td>
+              <td>${fmt(d.created_at)}</td>
+              <td>${fmt(d.dispatched_at)}</td>
+              <td>${fmt(d.delivered_at)}</td>
+            </tr>
+            <tr class="delivery-timeline-row" data-delivery-timeline-for="${escapeHtml(d.id)}" style="display:none">
+              <td colspan="5" style="background:#f9fafb;padding:14px 18px"></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+
+    mount.querySelectorAll('.delivery-row').forEach(tr => {
+      tr.addEventListener('click', () => toggleDeliveryTimeline(tr.getAttribute('data-delivery-id')));
+    });
+  }
+
+  async function toggleDeliveryTimeline(deliveryId){
+    const timelineRow = deliveriesFindTimelineRow(deliveryId);
+    if(!timelineRow) return;
+    const cell = timelineRow.querySelector('td');
+    const isOpen = timelineRow.style.display !== 'none';
+
+    // collapse any other open timeline rows first (one open at a time)
+    document.querySelectorAll('.delivery-timeline-row').forEach(r => { if(r !== timelineRow) r.style.display = 'none'; });
+
+    if(isOpen){
+      timelineRow.style.display = 'none';
+      return;
+    }
+
+    timelineRow.style.display = 'table-row';
+    cell.innerHTML = '<span style="color:var(--muted)">Loading timeline…</span>';
+    try {
+      const { data, error } = await supabaseClient
+        .from('delivery_events')
+        .select('event_type, actor_type, created_at')
+        .eq('delivery_id', deliveryId)
+        .order('created_at', { ascending: true });
+      if(error){ console.warn('toggleDeliveryTimeline error', error); cell.innerHTML = '<span style="color:#dc2626">Failed to load timeline</span>'; return; }
+      if(!data || !data.length){ cell.innerHTML = '<span style="color:var(--muted)">No events recorded.</span>'; return; }
+      cell.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+        ${data.map(ev => `<div style="font-size:12px;display:flex;gap:10px;flex-wrap:wrap">
+          <span style="color:#9ca3af;min-width:150px">${escapeHtml(new Date(ev.created_at).toLocaleString('en-ZA'))}</span>
+          <span style="font-weight:700">${escapeHtml(ev.event_type || '')}</span>
+          <span style="color:#6b7280">(${escapeHtml(ev.actor_type || 'system')})</span>
+        </div>`).join('')}
+      </div>`;
+    } catch(e){
+      console.warn('toggleDeliveryTimeline failed', e);
+      cell.innerHTML = '<span style="color:#dc2626">Failed to load timeline</span>';
+    }
+  }
+
+  function deliveriesFindTimelineRow(deliveryId){
+    const rows = document.querySelectorAll('.delivery-timeline-row');
+    for(const r of rows){ if(r.getAttribute('data-delivery-timeline-for') === deliveryId) return r; }
+    return null;
+  }
+  /* ============================================================ end Deliveries */
+
+  /* ============================================================ Delivery Pricing
+     delivery_pricing_config CRUD (Stage 16 unit D). Every save inserts a NEW
+     version row and flips the previous active row's is_active to false --
+     existing version numbers are NEVER mutated, since delivery_quotes rows
+     reference a version number and must stay accurate against the config
+     they were actually priced under (see docs/systems/delivery-network-
+     spec.md, Stage 16 section). */
+
+  let deliveryPricingCache = [];
+  let deliveryPricingEditing = false;
+
+  window.loadDeliveryPricing = async function loadDeliveryPricing(){
+    const mount = document.getElementById('deliveryPricingMount');
+    if(!mount) return;
+    if(!supabaseClient){ mount.innerHTML = '<p style="color:#6b7280">Supabase not available</p>'; return; }
+    mount.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+    try {
+      const { data, error } = await supabaseClient
+        .from('delivery_pricing_config')
+        .select('*')
+        .order('version', { ascending: false });
+      if(error){ console.warn('loadDeliveryPricing error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load pricing config</p>'; return; }
+      deliveryPricingCache = data || [];
+      deliveryPricingEditing = false;
+      renderDeliveryPricing();
+    } catch(e){
+      console.warn('loadDeliveryPricing failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load pricing config</p>';
+    }
+  };
+
+  function renderDeliveryPricing(){
+    const mount = document.getElementById('deliveryPricingMount');
+    if(!mount) return;
+    const active = deliveryPricingCache.find(c => c.is_active) || deliveryPricingCache[0];
+    if(!active){
+      mount.innerHTML = '<p style="color:#6b7280">No pricing config found.</p>';
+      return;
+    }
+
+    if(deliveryPricingEditing){
+      mount.innerHTML = renderDeliveryPricingForm(active);
+      wireDeliveryPricingForm(active);
+      return;
+    }
+
+    const tiersRows = (active.distance_tiers || []).map(t =>
+      `<tr><td>0–${escapeHtml(String(t.max_km))}km</td><td>R${escapeHtml(String(t.fee))}</td></tr>`
+    ).join('');
+    const units = active.default_units_per_trip || {};
+
+    const historyRows = deliveryPricingCache.map(c =>
+      `<tr>
+        <td>v${escapeHtml(String(c.version))}</td>
+        <td>${c.is_active ? '<span style="color:#16a34a;font-weight:700">● Active</span>' : '<span style="color:#9ca3af">Inactive</span>'}</td>
+        <td style="font-size:12px;color:#6b7280">${c.effective_from ? new Date(c.effective_from).toLocaleString('en-ZA') : ''}</td>
+      </tr>`
+    ).join('');
+
+    mount.innerHTML = `
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h3 style="font-size:15px;font-weight:800;margin:0">Active Pricing — v${escapeHtml(String(active.version))}</h3>
+          <button class="small-btn" id="editPricingBtn">✏️ Edit (creates new version)</button>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">
+          <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb"><th style="padding:6px 10px">Distance</th><th style="padding:6px 10px">Base fee</th></tr></thead>
+          <tbody>${tiersRows}</tbody>
+        </table>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:13px">
+          <div><strong>Per-seller fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.per_seller_fee))}</div></div>
+          <div><strong>Priority fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.priority_fee))}</div></div>
+          <div><strong>Free delivery over</strong><div style="color:#6b7280">R${escapeHtml(String(active.free_delivery_threshold))}</div></div>
+          <div><strong>Max delivery fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.max_delivery_fee))}</div></div>
+          <div><strong>Large overflow fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.large_overflow_fee))}</div></div>
+          <div><strong>Extended zone fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.extended_zone_fee))}</div></div>
+          <div><strong>Units/trip (S/M/L)</strong><div style="color:#6b7280">${escapeHtml(String(units.small ?? '—'))} / ${escapeHtml(String(units.medium ?? '—'))} / ${escapeHtml(String(units.large ?? '—'))}</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3 style="font-size:14px;font-weight:800;margin-bottom:10px">Version History</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb"><th style="padding:6px 10px">Version</th><th style="padding:6px 10px">Status</th><th style="padding:6px 10px">Effective from</th></tr></thead>
+          <tbody>${historyRows}</tbody>
+        </table>
+        <p style="font-size:11px;color:#9ca3af;margin-top:10px">Past versions are never edited or deleted — orders quoted under an older version stay accurate against the numbers they were actually priced with.</p>
+      </div>
+    `;
+    document.getElementById('editPricingBtn')?.addEventListener('click', () => { deliveryPricingEditing = true; renderDeliveryPricing(); });
+  }
+
+  function renderDeliveryPricingForm(active){
+    const tiers = active.distance_tiers || [];
+    const units = active.default_units_per_trip || {};
+    const tierRowsHtml = tiers.map((t, i) => `
+      <div class="row" data-tier-row="${i}" style="gap:8px;margin-bottom:6px">
+        <div style="flex:1"><label style="font-size:11px">Max km</label><input type="number" step="0.1" class="tier-max-km" value="${escapeHtml(String(t.max_km))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+        <div style="flex:1"><label style="font-size:11px">Fee (R)</label><input type="number" step="0.01" class="tier-fee" value="${escapeHtml(String(t.fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+        <button type="button" class="removeTierBtn" data-idx="${i}" style="align-self:flex-end;padding:6px 10px;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer">✕</button>
+      </div>`).join('');
+
+    return `
+      <div class="card">
+        <h3 style="font-size:15px;font-weight:800;margin-bottom:4px">Edit Pricing — creates v${escapeHtml(String(active.version + 1))}</h3>
+        <div style="background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px">
+          Saving does not modify v${escapeHtml(String(active.version))} — it creates a new version and makes it active. Historical orders/quotes keep referencing the version they were actually priced under.
+        </div>
+
+        <h4 style="font-size:13px;font-weight:700;margin-bottom:6px">Distance tiers</h4>
+        <div id="tierRowsMount">${tierRowsHtml}</div>
+        <button type="button" id="addTierBtn" class="small-btn" style="margin:8px 0 16px">+ Add tier</button>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+          <div><label style="font-size:11px">Per-seller fee (R)</label><input type="number" step="0.01" id="pcPerSellerFee" value="${escapeHtml(String(active.per_seller_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Priority fee (R)</label><input type="number" step="0.01" id="pcPriorityFee" value="${escapeHtml(String(active.priority_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Free delivery over (R)</label><input type="number" step="0.01" id="pcFreeThreshold" value="${escapeHtml(String(active.free_delivery_threshold))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Max delivery fee (R)</label><input type="number" step="0.01" id="pcMaxFee" value="${escapeHtml(String(active.max_delivery_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Large overflow fee (R)</label><input type="number" step="0.01" id="pcOverflowFee" value="${escapeHtml(String(active.large_overflow_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Extended zone fee (R)</label><input type="number" step="0.01" id="pcExtendedFee" value="${escapeHtml(String(active.extended_zone_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Units/trip — small</label><input type="number" id="pcUnitsSmall" value="${escapeHtml(String(units.small ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Units/trip — medium</label><input type="number" id="pcUnitsMedium" value="${escapeHtml(String(units.medium ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Units/trip — large</label><input type="number" id="pcUnitsLarge" value="${escapeHtml(String(units.large ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+        </div>
+
+        <div id="pricingFormError" style="color:#dc2626;font-size:12px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:10px">
+          <button type="button" id="savePricingVersionBtn" style="padding:10px 20px;background:#0a2f66;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Save as v${escapeHtml(String(active.version + 1))}</button>
+          <button type="button" id="cancelPricingEditBtn" style="padding:10px 20px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function wireDeliveryPricingForm(active){
+    document.getElementById('cancelPricingEditBtn')?.addEventListener('click', () => { deliveryPricingEditing = false; renderDeliveryPricing(); });
+
+    document.getElementById('addTierBtn')?.addEventListener('click', () => {
+      const wrap = document.getElementById('tierRowsMount');
+      const idx = wrap.children.length;
+      const row = document.createElement('div');
+      row.className = 'row'; row.dataset.tierRow = String(idx);
+      row.style.cssText = 'gap:8px;margin-bottom:6px';
+      row.innerHTML = `
+        <div style="flex:1"><label style="font-size:11px">Max km</label><input type="number" step="0.1" class="tier-max-km" value="" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+        <div style="flex:1"><label style="font-size:11px">Fee (R)</label><input type="number" step="0.01" class="tier-fee" value="" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+        <button type="button" class="removeTierBtn" style="align-self:flex-end;padding:6px 10px;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer">✕</button>`;
+      wrap.appendChild(row);
+      row.querySelector('.removeTierBtn').addEventListener('click', () => row.remove());
+    });
+    document.querySelectorAll('.removeTierBtn').forEach(btn => {
+      btn.addEventListener('click', () => btn.closest('[data-tier-row]')?.remove());
+    });
+
+    document.getElementById('savePricingVersionBtn')?.addEventListener('click', async () => {
+      const errEl = document.getElementById('pricingFormError');
+      if(errEl) errEl.textContent = '';
+      if(!(await isAdminAuthenticated())){ showToast('Must be signed in as admin to update pricing'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+
+      const tiers = [];
+      let tiersValid = true;
+      document.querySelectorAll('#tierRowsMount > div').forEach(row => {
+        const maxKmEl = row.querySelector('.tier-max-km');
+        const feeEl = row.querySelector('.tier-fee');
+        if(!maxKmEl || !feeEl) return;
+        const maxKm = parseFloat(maxKmEl.value);
+        const fee = parseFloat(feeEl.value);
+        if(!Number.isFinite(maxKm) || !Number.isFinite(fee) || maxKm <= 0 || fee < 0) { tiersValid = false; return; }
+        tiers.push({ max_km: maxKm, fee: fee });
+      });
+      if(!tiersValid || !tiers.length){ if(errEl) errEl.textContent = 'Distance tiers must all have a positive max km and a non-negative fee.'; return; }
+      tiers.sort((a,b) => a.max_km - b.max_km);
+
+      const numFields = {
+        per_seller_fee: parseFloat(document.getElementById('pcPerSellerFee').value),
+        priority_fee: parseFloat(document.getElementById('pcPriorityFee').value),
+        free_delivery_threshold: parseFloat(document.getElementById('pcFreeThreshold').value),
+        max_delivery_fee: parseFloat(document.getElementById('pcMaxFee').value),
+        large_overflow_fee: parseFloat(document.getElementById('pcOverflowFee').value),
+        extended_zone_fee: parseFloat(document.getElementById('pcExtendedFee').value)
+      };
+      for(const [k, v] of Object.entries(numFields)){
+        if(!Number.isFinite(v) || v < 0){ if(errEl) errEl.textContent = `"${k}" must be a non-negative number.`; return; }
+      }
+      const units = {
+        small: parseInt(document.getElementById('pcUnitsSmall').value, 10),
+        medium: parseInt(document.getElementById('pcUnitsMedium').value, 10),
+        large: parseInt(document.getElementById('pcUnitsLarge').value, 10)
+      };
+      for(const [k, v] of Object.entries(units)){
+        if(!Number.isFinite(v) || v <= 0){ if(errEl) errEl.textContent = `Units per trip for "${k}" must be a positive whole number.`; return; }
+      }
+
+      const btn = document.getElementById('savePricingVersionBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const user = await getSupabaseUser();
+        const nextVersion = active.version + 1;
+        const { error: insertError } = await supabaseClient.from('delivery_pricing_config').insert({
+          version: nextVersion,
+          effective_from: new Date().toISOString(),
+          per_seller_fee: numFields.per_seller_fee,
+          free_delivery_threshold: numFields.free_delivery_threshold,
+          max_delivery_fee: numFields.max_delivery_fee,
+          default_units_per_trip: units,
+          large_overflow_fee: numFields.large_overflow_fee,
+          priority_fee: numFields.priority_fee,
+          distance_tiers: tiers,
+          extended_zone_fee: numFields.extended_zone_fee,
+          is_active: true,
+          created_by: user ? user.id : null
+        });
+        if(insertError){ if(errEl) errEl.textContent = 'Save failed: ' + insertError.message; btn.disabled = false; btn.textContent = `Save as v${nextVersion}`; return; }
+
+        // Flip the previously active row inactive -- its own numeric fields
+        // are never touched, only is_active, so it stays an accurate
+        // historical record for any quote that referenced it.
+        const { error: deactivateError } = await supabaseClient.from('delivery_pricing_config').update({ is_active: false }).eq('id', active.id);
+        if(deactivateError) console.warn('Failed to deactivate previous pricing version (new version is still active):', deactivateError.message);
+
+        showToast(`Pricing v${nextVersion} is now active ✓`);
+        deliveryPricingEditing = false;
+        await loadDeliveryPricing();
+      } catch(e){
+        if(errEl) errEl.textContent = 'Save failed: ' + (e && e.message ? e.message : 'unknown error');
+        btn.disabled = false; btn.textContent = `Save as v${active.version + 1}`;
+      }
+    });
+  }
+  /* ============================================================ end Delivery Pricing */
 
   // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();
