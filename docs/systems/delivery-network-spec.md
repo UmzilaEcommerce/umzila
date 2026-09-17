@@ -1,6 +1,6 @@
 # Umzila Delivery Network — Master Spec
 
-Status: **STAGE 5 (CHECKOUT INTEGRATION) COMPLETE, 2026-09-17.** Stages 1-3 done (§A, §F, §G). Stage 4 is a confirmed no-op (bundle engine deferred, true by construction — §B item 2). Stage 5 is built and verified: `orders` now carries `delivery_quote_id`/`priority_fee`, a new `deliveries` table exists, and a Postgres trigger (the founder-confirmed approach) creates a delivery job the moment an order is marked paid — **tested directly in the database** with a synthetic seller-enrollment-style order (correctly ignored) and a synthetic quoted product order (correctly created a `deliveries` row with a real PIN, correctly did not duplicate on a simulated ITN retry). `checkout.html` now writes the quote id onto the order **only when the server actually confirmed it applied** — verified this exact gating logic directly. No PayFast file touched. See §H below for full detail, including a real cross-flow bug this stage's verification caught and designed around (seller-enrollment payments share the `orders` table). Next real stage: Stage 6 (delivery status state machine — `delivery_status` enum, `delivery_events` timeline, shared transition-validation helper). Everything from here still won't visibly activate until `GOOGLE_ROUTES_SERVER_KEY` lands (no quotes = `delivery_quote_id` stays null = the Stage 5 trigger correctly never fires) — that's expected, not a blocker to continuing to build ahead of it.
+Status: **STAGES 1-6 COMPLETE, 2026-09-17** (audit §A; address infra §F; quote engine §G; checkout integration/payment trigger §H; state machine §I). Stage 4 (bundle engine) is a confirmed no-op by design (§B item 2). Everything built so far is verified — either with real transactional tests directly in the database, or logic tests of the JS involved — not just code review. **Nothing is visibly live yet on the real site**: the whole pipeline is gated on `GOOGLE_ROUTES_SERVER_KEY` (§C), which hasn't been provided — no quotes can succeed, so `delivery_quote_id` stays null, so the Stage 5 payment trigger correctly never fires on real traffic. That's expected, not a blocker to continuing. Next: Stage 7 (seller "mark ready" — the first thing that actually calls Stage 6's `transitionDelivery()` helper) — first stage since Stage 2 that's genuinely safe to parallelize again.
 Owner note: this is the living reference document for the delivery network build. Keep coming back to this file across sessions instead of re-explaining the plan. Update it as stages complete (see `docs/CHANGELOG.md` policy in `CLAUDE.md`).
 
 ---
@@ -546,6 +546,26 @@ Built entirely directly (migrations, `checkout.html`) — no subagent, since thi
 - `checkout.html`: `validateCheckout()` now tracks `state.appliedDeliveryQuoteId` — set **only** when the server's response (`result.quoteApplied`) confirms it actually used that quote, never from the client's own optimistic `state.deliveryQuoteId`. The order insert writes this (not the raw client-side quote id) into `delivery_quote_id`, so a stale/rejected/mismatched quote id can never reach the trigger. Verified directly: simulated both a server-confirmed-applied response and a server-rejected response, confirmed `state.appliedDeliveryQuoteId` came out correct in both cases.
 
 **Verified NOT touched:** `payfast-itn.js`, `generate-payfast-signature.js`, `charge-payfast-token.js`. `complete-order-payment.js` was read for reference only (confirming the trigger's `UPDATE`-based assumption), never edited.
+
+---
+
+## I. Stage 6 — what actually shipped (2026-09-17)
+
+Built entirely directly, no subagent (small, tightly-coupled: the enum values, the auto-logging triggers, and the JS transition map all have to agree with each other exactly — not a good split-across-agents task).
+
+**Migrations (live, verified with a real transactional test):**
+- `delivery_status` Postgres enum, 16 states from plan §112 verbatim. `deliveries.status` retyped to it (safe — table had 0 rows).
+- New `delivery_events` table (append-only, RLS scoped to the owning customer).
+- `trg_log_delivery_created` (`AFTER INSERT ON deliveries`) and `trg_log_delivery_status_change` (`AFTER UPDATE OF status`, only fires on an actual value change) — together mean **every** delivery's timeline has a real starting point and **every** status change is captured, regardless of which future code path causes it.
+- **Verified directly in the database:** creation logged exactly once; a real status change logged exactly once; re-setting the same status value again correctly did *not* double-log; an invalid enum value was correctly rejected by Postgres itself (`invalid_text_representation`), not just by application code. All test data cleaned up, confirmed zero leftover rows.
+
+**Files:**
+- `netlify/functions/lib/delivery-state.js` (new, shared): `TRANSITIONS` map (allowed next-states per current state — generous on the exception paths CANCELLED/FAILED/REASSIGNING per plan §81/82, since real operational exceptions need that flexibility; explicitly designed to get corrected as Stages 7-13 actually exercise it, not treated as final) and `transitionDelivery(supabase, deliveryId, toStatus, actor, options)` — validates the transition, applies an optimistic-concurrency guard (`UPDATE ... WHERE status = <the status just read>`, so two racing callers can't both silently succeed), sets the relevant timestamp columns (`dispatched_at`/`delivered_at`/`cancelled_at`) automatically, and optionally logs a specific named event with actor attribution on top of the database's own automatic generic logging.
+- **Verified with an 11-assertion logic test** (mocked Supabase client, not committed — scratch-only): valid transition succeeds and returns the updated row; invalid transition rejected without touching the DB; a simulated concurrent status change surfaces as an explicit `conflict`, never silently ignored; a named event gets logged with the correct `event_type`/`actor_type`/`actor_id`; an invalid `actor.type` is rejected before any DB call. All 11 passed.
+
+**A deliberate design note worth remembering:** a wrong PIN entry (plan §163) must never change delivery status at all — enforced simply by `PIN_REQUIRED` not listing itself as a valid destination in its own transition list. Stage 13's PIN-confirmation function must only call `transitionDelivery()` on an actual match, never on a failed attempt (which should instead just increment a retry counter directly).
+
+**Verified NOT touched:** no PayFast file, `checkout.html`, or `validate-cart.js` were touched this stage.
 
 ---
 
