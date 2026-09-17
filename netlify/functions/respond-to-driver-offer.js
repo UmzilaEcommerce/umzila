@@ -17,6 +17,63 @@ const headers = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
+// Delivery network Stage 10 — builds the (pickup, drop) route for a freshly-
+// accepted 'new_route' offer. Kept local to this file rather than a shared
+// lib for now: it's specific to first-time route creation on offer
+// acceptance, not something any other caller needs yet. Once Stage 11 adds
+// 'batch_addition' offers (appending a stop to an EXISTING route instead of
+// creating a new one), this will need to branch on offer_type — not done
+// here, since dispatch.js only ever creates 'new_route' offers today.
+async function createRouteForAcceptedOffer(admin, offer, delivery, driverId) {
+  if (!delivery.quote_id) return { ok: false, reason: 'no_quote' };
+
+  const { data: quote, error: quoteError } = await admin
+    .from('delivery_quotes')
+    .select('pickup_seller_ids')
+    .eq('id', delivery.quote_id)
+    .maybeSingle();
+  if (quoteError || !quote) return { ok: false, reason: 'no_quote', detail: quoteError && quoteError.message };
+
+  const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
+  if (pickupSellerIds.length !== 1) return { ok: false, reason: 'multi_seller_unsupported' }; // same deferred TODO as dispatch.js/get-delivery-quote.js
+  const sellerId = pickupSellerIds[0];
+
+  const { data: seller, error: sellerError } = await admin
+    .from('sellers')
+    .select('pickup_geo')
+    .eq('id', sellerId)
+    .maybeSingle();
+  if (sellerError || !seller || !seller.pickup_geo) return { ok: false, reason: 'no_pickup_location', detail: sellerError && sellerError.message };
+
+  if (!delivery.destination_geo) return { ok: false, reason: 'no_destination' };
+
+  const { data: route, error: routeError } = await admin
+    .from('routes')
+    .insert({ driver_id: driverId, status: 'assigned' })
+    .select('id')
+    .single();
+  if (routeError) return { ok: false, reason: 'db_error', detail: routeError.message };
+
+  const { error: stopsError } = await admin.from('route_stops').insert([
+    { route_id: route.id, stop_type: 'pickup', seq_order: 1, seller_id: sellerId, delivery_id: delivery.id, location: seller.pickup_geo, status: 'pending' },
+    { route_id: route.id, stop_type: 'drop', seq_order: 2, seller_id: null, delivery_id: delivery.id, location: delivery.destination_geo, status: 'pending' }
+  ]);
+  if (stopsError) {
+    await admin.from('routes').delete().eq('id', route.id); // best-effort rollback of the orphaned route
+    return { ok: false, reason: 'db_error', detail: stopsError.message };
+  }
+
+  // Link the delivery and the accepted offer back to this route -- the
+  // offer's route_id is what the payout trigger sums by when the route
+  // eventually completes (compute_driver_payout_on_route_completion).
+  const { error: deliveryLinkError } = await admin.from('deliveries').update({ route_id: route.id }).eq('id', delivery.id);
+  if (deliveryLinkError) return { ok: false, reason: 'db_error', detail: deliveryLinkError.message };
+  const { error: offerLinkError } = await admin.from('driver_offers').update({ route_id: route.id }).eq('id', offer.id);
+  if (offerLinkError) return { ok: false, reason: 'db_error', detail: offerLinkError.message };
+
+  return { ok: true, routeId: route.id };
+}
+
 exports.handler = async function (event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
   if (event.httpMethod !== 'POST') {
@@ -136,7 +193,26 @@ exports.handler = async function (event) {
       };
     }
 
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, response: 'accept', delivery: transitionResult.delivery }) };
+    // Delivery network Stage 10 -- an ASSIGNED delivery with no route is a
+    // dead end for the driver (nothing to navigate to, nothing to check off),
+    // so route creation is treated as part of accepting, not a best-effort
+    // afterthought: any failure here rolls back the transition and the offer
+    // claim, same as the transition-failure branch above, rather than
+    // leaving the driver "assigned" to a delivery with no actual route.
+    const routeResult = await createRouteForAcceptedOffer(admin, offer, transitionResult.delivery, callerDriver.id);
+    if (!routeResult.ok) {
+      await transitionDelivery(admin, offer.delivery_id, 'REASSIGNING', { type: 'system' }, { eventType: 'ROUTE_CREATION_FAILED', metadata: { offer_id: offer.id, reason: routeResult.reason } })
+        .catch(() => {}); // best-effort -- the error below is returned regardless
+      const { error: revertError2 } = await admin
+        .from('driver_offers')
+        .update({ status: 'pending', responded_at: null })
+        .eq('id', offer.id)
+        .eq('status', 'accepted');
+      if (revertError2) console.warn('respond-to-driver-offer: failed to revert offer after route-creation failure', revertError2.message);
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Could not create route for this delivery', detail: routeResult.detail || routeResult.reason }) };
+    }
+
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, response: 'accept', delivery: transitionResult.delivery, routeId: routeResult.routeId }) };
   }
 
   // response === 'decline'

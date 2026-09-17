@@ -532,8 +532,12 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
       </div>
     </div>
 
-    <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--muted)">DELIVERY OFFERS</div>
-    <div id="delivery-offers-list"><div class="orders-empty">Go online to start receiving delivery offers</div></div>
+    <div id="delivery-active-route" style="display:none;margin-bottom:16px"></div>
+
+    <div id="delivery-offers-wrap">
+      <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--muted)">DELIVERY OFFERS</div>
+      <div id="delivery-offers-list"><div class="orders-empty">Go online to start receiving delivery offers</div></div>
+    </div>
   </section>
 
   <!-- Stores -->
@@ -628,6 +632,11 @@ document.addEventListener('sb-ready', function(e){
   let deliveryOnline = false;
   let deliveryHeartbeatTimer = null;
   let deliveryOffersTimer = null;
+  let ACTIVE_ROUTE = null;
+  let ACTIVE_ROUTE_STOPS = [];
+  let pickupItemsBlocked = false;
+  let pickupItems = [];
+  let collectedItemIds = new Set();
 
   /* ═══════════════════════════════════════════
      AUTH
@@ -2198,7 +2207,7 @@ document.addEventListener('sb-ready', function(e){
   function startDeliveryIntervals(){
     stopDeliveryIntervals();
     deliveryHeartbeatTimer = setInterval(()=>{ sendDriverHeartbeat(true).catch(()=>{}); }, 30000);
-    deliveryOffersTimer = setInterval(renderDeliveryOffers, 10000);
+    deliveryOffersTimer = setInterval(refreshDeliveryPanel, 10000);
   }
 
   async function setDeliveryOnline(next){
@@ -2293,20 +2302,266 @@ document.addEventListener('sb-ready', function(e){
     }
   }
 
+  /* ── Active route (Stage 9/10 — route progression UI) ──
+     routes/route_stops/route_stop_items are RLS-scoped to the caller's own
+     driver row (routes_select_own / route_stops_select_own /
+     route_stop_items_select_own), so — same as driver_offers above — they're
+     read directly here, no function needed.
+
+     The current delivery "stage" is derived from routes.status +
+     route_stops.status rather than deliveries.status: drivers currently have
+     no RLS SELECT policy on `deliveries` at all (only deliveries_select_own,
+     scoped to the paying customer), so that table can't be read from this
+     client for a driver session — confirmed against the live schema, not
+     assumed. advance-route.js keeps routes/route_stops in lockstep with the
+     delivery state machine on every transition, so this derivation is a
+     reliable stand-in. See handback report for the precise RLS gap. */
+  async function loadActiveRoute(){
+    const { data, error } = await sb.from('routes')
+      .select('id, driver_id, status, created_at')
+      .eq('driver_id', DRIVER_ID)
+      .neq('status', 'completed')
+      .order('created_at', { ascending:false })
+      .limit(1);
+    if(error || !data || !data.length) return null;
+    return data[0];
+  }
+
+  async function loadRouteStops(routeId){
+    const { data, error } = await sb.from('route_stops')
+      .select('id, route_id, stop_type, seq_order, seller_id, delivery_id, status')
+      .eq('route_id', routeId)
+      .order('seq_order', { ascending:true });
+    if(error || !data) return [];
+    return data;
+  }
+
+  async function loadPickupChecklist(pickupStop){
+    pickupItemsBlocked = false; pickupItems = []; collectedItemIds = new Set();
+    // Already-collected items — route_stop_items is readable by the driver.
+    const { data: rsi } = await sb.from('route_stop_items').select('order_item_id, collected').eq('route_stop_id', pickupStop.id);
+    (rsi||[]).forEach(r=>{ if(r.collected) collectedItemIds.add(r.order_item_id); });
+
+    // deliveries_select_assigned_driver / order_items_select_assigned_driver
+    // RLS policies now grant a driver read access along the
+    // route_stops -> routes -> drivers chain (added same day this panel was
+    // built — a genuine gap the first pass of this UI correctly caught and
+    // worked around rather than silently failing; fixed properly since,
+    // this fallback stays as defense-in-depth, not because it's expected to
+    // trigger in normal operation).
+    const { data: deliveryRow } = await sb.from('deliveries').select('order_id').eq('id', pickupStop.delivery_id).maybeSingle();
+    if(!deliveryRow || !deliveryRow.order_id){ pickupItemsBlocked = true; return; }
+
+    const { data: items, error: itemsErr } = await sb.from('order_items')
+      .select('id, product_name, quantity')
+      .eq('order_id', deliveryRow.order_id)
+      .eq('seller_id', pickupStop.seller_id);
+    if(itemsErr || !items || !items.length){ pickupItemsBlocked = true; return; }
+    pickupItems = items;
+  }
+
+  function mapsLink(query){
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+  }
+
+  // route_stops.location (geography) comes back over PostgREST as raw EWKB
+  // hex, not directly usable — get_route_stop_coordinates() (SECURITY
+  // INVOKER, so route_stops_select_own's RLS still applies — a driver can
+  // only ever get coordinates for their own stop) decodes it to plain
+  // lat/lon server-side. This is what makes a real "Navigate to customer"
+  // link possible at all (destination_snapshot lives on `deliveries`, which
+  // has its own access story — going through the stop's own coordinates
+  // instead sidesteps that entirely for navigation purposes).
+  async function stopMapsLink(stopId, fallbackQuery){
+    try{
+      const { data, error } = await sb.rpc('get_route_stop_coordinates', { p_route_stop_id: stopId });
+      const row = Array.isArray(data) ? data[0] : data;
+      if(!error && row && Number.isFinite(row.lat) && Number.isFinite(row.lon)){
+        return mapsLink(row.lat + ',' + row.lon);
+      }
+    } catch(_) {}
+    return fallbackQuery ? mapsLink(fallbackQuery) : null;
+  }
+
+  function hideActiveRouteCard(){
+    const container = document.getElementById('delivery-active-route');
+    const offersWrap = document.getElementById('delivery-offers-wrap');
+    if(container){ container.style.display = 'none'; container.innerHTML = ''; }
+    if(offersWrap) offersWrap.style.display = '';
+  }
+
+  async function renderActiveRoute(route){
+    const container = document.getElementById('delivery-active-route');
+    const offersWrap = document.getElementById('delivery-offers-wrap');
+    if(!container) return;
+    container.style.display = '';
+    if(offersWrap) offersWrap.style.display = 'none';
+
+    const stops = await loadRouteStops(route.id);
+    ACTIVE_ROUTE = route; ACTIVE_ROUTE_STOPS = stops;
+    const pickupStop = stops.find(s=>s.stop_type==='pickup');
+    const dropStop = stops.find(s=>s.stop_type==='drop');
+    if(!pickupStop || !dropStop){
+      container.innerHTML = '<div class="item-card"><div class="orders-empty">This route is missing its stops — contact dispatch.</div></div>';
+      return;
+    }
+
+    // sellers is publicly readable (sellers_select_public), so the shop name
+    // and its free-text address are available even though the pickup stop's
+    // own `location` (PostGIS geography) is not — see handback report.
+    const { data: seller } = await sb.from('sellers').select('shop_name, location').eq('id', pickupStop.seller_id).maybeSingle();
+    const shopName = seller?.shop_name || 'Pickup store';
+
+    // ── before pickup: route accepted, not yet started ──
+    if(route.status==='assigned' && pickupStop.status==='pending'){
+      const pickupNavLink = await stopMapsLink(pickupStop.id, seller?.location);
+      container.innerHTML = `<div class="item-card">
+        <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Route accepted — head to the store to start pickup.</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          ${pickupNavLink ? `<a class="btn btn-ghost btn-sm" href="${pickupNavLink}" target="_blank" rel="noopener">Navigate to store</a>` : ''}
+          <button class="btn btn-primary btn-sm" id="routeStartBtn">Start Route</button>
+        </div>
+      </div>`;
+      document.getElementById('routeStartBtn')?.addEventListener('click', ()=>callAdvanceRoute('start_route'));
+      return;
+    }
+
+    // ── during pickup: DRIVER_AT_PICKUP or PARTIALLY_PICKED_UP — same UI ──
+    if(pickupStop.status==='active'){
+      await loadPickupChecklist(pickupStop);
+      let itemsHtml;
+      if(pickupItemsBlocked){
+        itemsHtml = `<div class="orders-empty" style="text-align:left;padding:10px 0">Pickup items couldn't be loaded right now. Confirm the order with the store directly before marking pickup complete — dispatch has been notified.</div>`;
+      } else {
+        itemsHtml = pickupItems.map(it=>`
+          <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px">
+            <input type="checkbox" class="pickup-item-cb" data-item-id="${esc(it.id)}" ${collectedItemIds.has(it.id)?'checked':''}/>
+            ${esc(it.product_name||'Item')}${it.quantity>1?` × ${it.quantity}`:''}
+          </label>`).join('');
+      }
+      const pickupNavLink2 = await stopMapsLink(pickupStop.id, seller?.location);
+      container.innerHTML = `<div class="item-card">
+        <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
+        <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Orders to collect:</div>
+        <div id="pickupItemsList">${itemsHtml}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          ${pickupNavLink2 ? `<a class="btn btn-ghost btn-sm" href="${pickupNavLink2}" target="_blank" rel="noopener">Navigate to store</a>` : ''}
+          <button class="btn btn-primary btn-sm" id="pickupCompleteBtn" ${pickupItemsBlocked?'disabled':''}>Mark pickup complete</button>
+        </div>
+      </div>`;
+      document.getElementById('pickupCompleteBtn')?.addEventListener('click', ()=>{
+        const checked = Array.from(document.querySelectorAll('.pickup-item-cb:checked')).map(cb=>cb.dataset.itemId);
+        callAdvanceRoute('complete_pickup', { collectedOrderItemIds: checked });
+      });
+      return;
+    }
+
+    // ── pickup done, delivery leg not started yet ──
+    if(pickupStop.status==='completed' && dropStop.status==='pending'){
+      const dropNavLink = await stopMapsLink(dropStop.id, null);
+      container.innerHTML = `<div class="item-card">
+        <div style="font-weight:700;font-size:14px">Pickup complete</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Ready to head to the customer.</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          ${dropNavLink ? `<a class="btn btn-ghost btn-sm" href="${dropNavLink}" target="_blank" rel="noopener">Navigate to customer</a>` : ''}
+          <button class="btn btn-primary btn-sm" id="startDeliveryBtn">Start Delivery Route</button>
+        </div>
+      </div>`;
+      document.getElementById('startDeliveryBtn')?.addEventListener('click', ()=>callAdvanceRoute('start_delivery'));
+      return;
+    }
+
+    // ── en route to customer (IN_ROUTE) ──
+    if(dropStop.status==='active'){
+      const dropNavLink2 = await stopMapsLink(dropStop.id, null);
+      container.innerHTML = `<div class="item-card">
+        <div style="font-weight:700;font-size:14px">On the way to the customer</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Tap once you've arrived at the drop-off location.</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          ${dropNavLink2 ? `<a class="btn btn-ghost btn-sm" href="${dropNavLink2}" target="_blank" rel="noopener">Navigate to customer</a>` : ''}
+          <button class="btn btn-primary btn-sm" id="arriveBtn">I've Arrived</button>
+        </div>
+      </div>`;
+      document.getElementById('arriveBtn')?.addEventListener('click', ()=>callAdvanceRoute('arrive_at_drop'));
+      return;
+    }
+
+    // ── arrived (ARRIVING / PIN_REQUIRED) — PIN confirmation isn't built
+    // yet (Stage 13, confirm-delivery-pin.js). This is the deliberate,
+    // documented stopping point for this stage — honest waiting state, not
+    // a dead button. ──
+    if(dropStop.status==='arriving'){
+      container.innerHTML = `<div class="item-card">
+        <div style="font-weight:700;font-size:14px">Arrived</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">Ask the customer for their delivery PIN to confirm drop-off.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">PIN confirmation isn't live yet — this step is coming soon. Hang tight with the customer.</div>
+        <button class="btn btn-ghost btn-sm" disabled style="margin-top:10px">Confirm delivery (coming soon)</button>
+      </div>`;
+      return;
+    }
+
+    container.innerHTML = `<div class="item-card"><div class="orders-empty">Route status: ${esc(route.status)} / pickup: ${esc(pickupStop.status)} / drop: ${esc(dropStop.status)}</div></div>`;
+  }
+
+  async function callAdvanceRoute(action, extra){
+    if(!ACTIVE_ROUTE) return;
+    document.querySelectorAll('#delivery-active-route button').forEach(b=>b.disabled=true);
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      const res = await fetch('/.netlify/functions/advance-route', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
+        body: JSON.stringify(Object.assign({ routeId: ACTIVE_ROUTE.id, action }, extra||{}))
+      });
+      const result = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(result.error || 'Could not update route');
+      if(action==='complete_pickup' && result.allCollected===false){
+        toast('Some items still need to be collected', '');
+      } else {
+        toast('Updated', 'success');
+      }
+    } catch(err){
+      toast(err.message || 'Could not update route', 'error');
+    } finally {
+      const route = await loadActiveRoute();
+      if(route) await renderActiveRoute(route); else hideActiveRouteCard();
+    }
+  }
+
+  async function refreshDeliveryPanel(){
+    if(activePanel!=='delivery') return;
+    await ensureDriverId();
+    if(!DRIVER_ID) return;
+    const route = await loadActiveRoute();
+    if(route){
+      await renderActiveRoute(route);
+    } else {
+      hideActiveRouteCard();
+      if(deliveryOnline) renderDeliveryOffers();
+    }
+  }
+
   async function renderDeliveryPanel(){
     await ensureDriverId();
     updateDeliveryToggleUI();
-    if(deliveryOnline){
-      startDeliveryIntervals();
-      renderDeliveryOffers();
+    if(deliveryOnline) startDeliveryIntervals();
+    const route = DRIVER_ID ? await loadActiveRoute() : null;
+    if(route){
+      await renderActiveRoute(route);
     } else {
-      const el = document.getElementById('delivery-offers-list');
-      if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
+      hideActiveRouteCard();
+      if(deliveryOnline){
+        renderDeliveryOffers();
+      } else {
+        const el = document.getElementById('delivery-offers-list');
+        if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
+      }
     }
   }
 
   document.getElementById('deliveryToggleBtn')?.addEventListener('click', ()=> setDeliveryOnline(!deliveryOnline));
-  document.getElementById('refreshDeliveryOffers')?.addEventListener('click', renderDeliveryOffers);
+  document.getElementById('refreshDeliveryOffers')?.addEventListener('click', refreshDeliveryPanel);
 
   /* ═══════════════════════════════════════════
      STORES
