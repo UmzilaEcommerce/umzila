@@ -17,6 +17,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
 const { dispatchDelivery } = require('./lib/dispatch');
+const { evaluateBatchCandidates } = require('./lib/batch-dispatch');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -82,6 +83,22 @@ exports.handler = async function (event) {
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true, skipped: true, reason: 'concurrent_advance' }) };
       }
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to advance delivery', detail: result.detail || result.reason }) };
+    }
+
+    // Delivery network Stage 11 -- try batching onto an already-moving
+    // driver's route FIRST (cheaper for the pilot's 2-driver fleet than
+    // always waiting on/tying up a separate idle driver), and only fall
+    // through to Stage 8's idle-driver dispatch if no batchable route is
+    // close enough. Same non-blocking guarantee as dispatch: this must never
+    // turn a successful fulfillment update into an error response.
+    try {
+      const batchResult = await evaluateBatchCandidates(supabase, delivery.id);
+      if (batchResult.batched) {
+        return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: result.delivery, batched: true, offerId: batchResult.offerId }) };
+      }
+      console.warn('advance-delivery-on-fulfillment: batch evaluation did not offer', batchResult.reason, batchResult.detail || '');
+    } catch (batchError) {
+      console.warn('advance-delivery-on-fulfillment: evaluateBatchCandidates threw', batchError && batchError.message);
     }
 
     // Delivery network Stage 8 -- immediately try to offer this delivery to

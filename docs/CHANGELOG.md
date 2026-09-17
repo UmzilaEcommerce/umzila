@@ -23,6 +23,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Delivery network Stage 11 (optional dynamic batch offers) built — and a missed Stage 13b found
+
+**What happened:** Thirteenth implementation stage. Explicitly marked optional by the plan itself, built anyway per the founder's standing "nothing gets left out" instruction. Built entirely by me (touches the shared dispatch/accept code path). While closing this out, found that "Stage 13b — Delivery feedback (compliments/complaints)" — a real stage added during the original plan reconciliation, between Stage 13 and 14 — was never built, having been missed while working through 12/13/14/15/16 in a different order. Tracked explicitly, not silently dropped; it's next.
+
+**What shipped:** new `find_batchable_routes()` RPC (mirrors `find_nearest_eligible_drivers`'s exact pattern/lockdown) finds an already-moving driver's route close enough to a new pickup to add it as a batch stop. `netlify/functions/lib/batch-dispatch.js`'s `evaluateBatchCandidates()` tries this first when a delivery becomes `READY_FOR_DISPATCH`, only falling through to the existing idle-driver dispatch if nothing's close enough. `respond-to-driver-offer.js`'s accept path now branches on `offer_type` — a `'batch_addition'` offer appends (pickup, drop) stops to the end of the existing route instead of creating a new one, closing a gap that file's own Stage 10 comment had explicitly flagged and left open. Deliberately simplified to append-only (not the plan's fuller 3-option route-insertion comparison) — tracked as a future enhancement once a driver carries 3+ simultaneous stops.
+
+**Founder input still pending, used as a placeholder, not invented silently:** the real ETA-impact threshold (already tracked in the spec's action list) has no live routing/duration available internally, so it's a straight-line-distance proxy (1.5km) until a real number is given and Google Routes is live.
+
+**Verified in the database:** the new RPC tested for real (fresh nearby driver found; stale/not-yet-started routes correctly excluded); a full batch scenario mirrored at the SQL level end to end (existing route, new delivery, candidate found, offer created, stops correctly appended at the right sequence, delivery correctly linked to the shared route) — all cleaned up, zero leftover rows. Security advisor sweep clean relative to this stage. No PayFast/checkout/seller-dashboard/admin/logistics/track file touched.
+
+**Known limitation, tracked not hidden:** no local Netlify dev environment to exercise the real HTTP path end to end — verified via direct SQL mirroring the JS's exact operations, plus syntax checks, not a live function invocation.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §R.
+**Commit:** *(pending — see this entry's own commit)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 15 (homepage active-delivery widget) built
 
 **What happened:** Twelfth implementation stage. The plan itself notes this is "substantially delivered by Stage 12," kept as its own stage only for numbering — cosmetic polish per plan §50's exact state-by-state widget spec. Built entirely by me, small and self-contained, no new migration.

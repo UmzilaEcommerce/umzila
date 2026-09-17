@@ -17,13 +17,73 @@ const headers = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
+// Delivery network Stage 11 — appends a (pickup, drop) pair to an EXISTING
+// route for an accepted 'batch_addition' offer, instead of creating a new
+// route (createRouteForAcceptedOffer, below, still handles 'new_route').
+// Append-to-end-of-current-stops only -- the same deliberate simplification
+// lib/batch-dispatch.js documents (full route-insertion-point optimization
+// is plan §33, more machinery than this pilot needs yet).
+async function appendToExistingRoute(admin, offer, delivery, driverId) {
+  if (!offer.route_id) return { ok: false, reason: 'no_route_on_offer' };
+  if (!delivery.quote_id) return { ok: false, reason: 'no_quote' };
+
+  // Re-validate the route is still live and still this driver's -- time may
+  // have passed between the offer being created and being accepted.
+  const { data: route, error: routeError } = await admin
+    .from('routes')
+    .select('id, driver_id, status')
+    .eq('id', offer.route_id)
+    .maybeSingle();
+  if (routeError || !route) return { ok: false, reason: 'route_not_found', detail: routeError && routeError.message };
+  if (route.driver_id !== driverId) return { ok: false, reason: 'route_driver_mismatch' };
+  if (!['started', 'active'].includes(route.status)) return { ok: false, reason: 'route_no_longer_active' };
+
+  const { data: quote, error: quoteError } = await admin
+    .from('delivery_quotes')
+    .select('pickup_seller_ids')
+    .eq('id', delivery.quote_id)
+    .maybeSingle();
+  if (quoteError || !quote) return { ok: false, reason: 'no_quote', detail: quoteError && quoteError.message };
+
+  const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
+  if (pickupSellerIds.length !== 1) return { ok: false, reason: 'multi_seller_unsupported' };
+  const sellerId = pickupSellerIds[0];
+
+  const { data: seller, error: sellerError } = await admin
+    .from('sellers')
+    .select('pickup_geo')
+    .eq('id', sellerId)
+    .maybeSingle();
+  if (sellerError || !seller || !seller.pickup_geo) return { ok: false, reason: 'no_pickup_location', detail: sellerError && sellerError.message };
+  if (!delivery.destination_geo) return { ok: false, reason: 'no_destination' };
+
+  const { data: existingStops, error: stopsReadError } = await admin
+    .from('route_stops')
+    .select('seq_order')
+    .eq('route_id', route.id)
+    .order('seq_order', { ascending: false })
+    .limit(1);
+  if (stopsReadError) return { ok: false, reason: 'db_error', detail: stopsReadError.message };
+  const nextSeq = (existingStops && existingStops[0] ? existingStops[0].seq_order : 0) + 1;
+
+  const { error: stopsError } = await admin.from('route_stops').insert([
+    { route_id: route.id, stop_type: 'pickup', seq_order: nextSeq, seller_id: sellerId, delivery_id: delivery.id, location: seller.pickup_geo, status: 'pending' },
+    { route_id: route.id, stop_type: 'drop', seq_order: nextSeq + 1, seller_id: null, delivery_id: delivery.id, location: delivery.destination_geo, status: 'pending' }
+  ]);
+  if (stopsError) return { ok: false, reason: 'db_error', detail: stopsError.message };
+
+  const { error: deliveryLinkError } = await admin.from('deliveries').update({ route_id: route.id }).eq('id', delivery.id);
+  if (deliveryLinkError) return { ok: false, reason: 'db_error', detail: deliveryLinkError.message };
+  // offer.route_id was already set when evaluateBatchCandidates() created
+  // this offer (the route already existed then) -- nothing to link back.
+
+  return { ok: true, routeId: route.id };
+}
+
 // Delivery network Stage 10 — builds the (pickup, drop) route for a freshly-
 // accepted 'new_route' offer. Kept local to this file rather than a shared
 // lib for now: it's specific to first-time route creation on offer
-// acceptance, not something any other caller needs yet. Once Stage 11 adds
-// 'batch_addition' offers (appending a stop to an EXISTING route instead of
-// creating a new one), this will need to branch on offer_type — not done
-// here, since dispatch.js only ever creates 'new_route' offers today.
+// acceptance, not something any other caller needs yet.
 async function createRouteForAcceptedOffer(admin, offer, delivery, driverId) {
   if (!delivery.quote_id) return { ok: false, reason: 'no_quote' };
 
@@ -124,7 +184,7 @@ exports.handler = async function (event) {
 
   const { data: offer, error: offerError } = await admin
     .from('driver_offers')
-    .select('id, delivery_id, driver_id, status, expires_at')
+    .select('id, delivery_id, driver_id, status, expires_at, offer_type, route_id')
     .eq('id', offerId)
     .maybeSingle();
   if (offerError) {
@@ -193,13 +253,17 @@ exports.handler = async function (event) {
       };
     }
 
-    // Delivery network Stage 10 -- an ASSIGNED delivery with no route is a
+    // Delivery network Stage 10/11 -- an ASSIGNED delivery with no route is a
     // dead end for the driver (nothing to navigate to, nothing to check off),
-    // so route creation is treated as part of accepting, not a best-effort
-    // afterthought: any failure here rolls back the transition and the offer
-    // claim, same as the transition-failure branch above, rather than
-    // leaving the driver "assigned" to a delivery with no actual route.
-    const routeResult = await createRouteForAcceptedOffer(admin, offer, transitionResult.delivery, callerDriver.id);
+    // so route creation/appending is treated as part of accepting, not a
+    // best-effort afterthought: any failure here rolls back the transition
+    // and the offer claim, same as the transition-failure branch above,
+    // rather than leaving the driver "assigned" to a delivery with no actual
+    // route. 'batch_addition' offers append to their existing route instead
+    // of creating a new one.
+    const routeResult = offer.offer_type === 'batch_addition'
+      ? await appendToExistingRoute(admin, offer, transitionResult.delivery, callerDriver.id)
+      : await createRouteForAcceptedOffer(admin, offer, transitionResult.delivery, callerDriver.id);
     if (!routeResult.ok) {
       await transitionDelivery(admin, offer.delivery_id, 'REASSIGNING', { type: 'system' }, { eventType: 'ROUTE_CREATION_FAILED', metadata: { offer_id: offer.id, reason: routeResult.reason } })
         .catch(() => {}); // best-effort -- the error below is returned regardless
