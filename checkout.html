@@ -3509,6 +3509,14 @@ async function validateCheckout() {
         // by handlePayment instead of recomputing client-side at pay time.
         state.serverFees = result.fees || null;
 
+        // Stage 5 — only write delivery_quote_id onto the order if the server
+        // actually applied it (valid, unexpired, ours). A quote id that the
+        // server rejected must never reach the order row: the Postgres
+        // trigger that creates the deliveries row keys off this column being
+        // set, so a rejected/stale quote id here would let a delivery job get
+        // created against a fee the server never actually charged.
+        state.appliedDeliveryQuoteId = result.quoteApplied ? state.deliveryQuoteId : null;
+
         // Server-authoritative discount — this, not state.discount, is what
         // actually gets written to the order. Keep state.discount/couponCode/
         // appliedPromoCode in sync too so the on-screen summary reflects the
@@ -4530,7 +4538,16 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // box for the same thing at checkout — same value, dedicated column so the
                 // delivery system has its own field to read without depending on "notes"
                 // staying delivery-related if it's ever repurposed.
-                delivery_instructions: elements.orderNotes.value.trim() || null
+                delivery_instructions: elements.orderNotes.value.trim() || null,
+                // Stage 5 — only ever the server-confirmed quote (see validateCheckout()).
+                // The Postgres trigger create_delivery_on_payment() only creates a
+                // deliveries row when this is set, so an order without a real quote
+                // (e.g. before GOOGLE_ROUTES_SERVER_KEY exists) correctly gets no
+                // delivery job -- same reasoning as the ineligible-quote case.
+                delivery_quote_id: state.appliedDeliveryQuoteId || null,
+                // No customer-facing priority opt-in UI yet (plan §21, future stage) --
+                // always 0 today. Wired through now so nothing needs revisiting when it lands.
+                priority_fee: 0
             };
 
             const { data: order, error } = await supabaseClient
