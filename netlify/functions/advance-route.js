@@ -111,18 +111,33 @@ exports.handler = async function (event) {
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: transitionResult.delivery }) };
   }
 
-  // ── complete_pickup: check off route_stop_items, DRIVER_AT_PICKUP -> PICKED_UP or PARTIALLY_PICKED_UP ──
+  // ── complete_pickup: check off route_stop_items for the CURRENT pickup
+  // stop; DRIVER_AT_PICKUP -> PICKED_UP or PARTIALLY_PICKED_UP only once
+  // EVERY pickup stop for this delivery is done (Stage 4, 2026-09-17: a
+  // bundled delivery has N pickup stops, seq_order 1..N, only one ever
+  // 'active' at a time -- no client-supplied stop id needed, the server
+  // resolves it). deliveries.status deliberately stays at DRIVER_AT_PICKUP
+  // while moving between stores: delivery-state.js's TRANSITIONS map has no
+  // "at pickup stop N of M" state, and PARTIALLY_PICKED_UP has no path back
+  // to DRIVER_AT_PICKUP, so "transition once, after the last stop" is the
+  // only design that doesn't require touching the state machine's enum. ──
   if (action === 'complete_pickup') {
     const collectedIds = Array.isArray(body.collectedOrderItemIds) ? body.collectedOrderItemIds : [];
 
-    // Resolve which order_items actually belong to this pickup stop's seller
-    // on the underlying order (route_stop_items rows are created lazily here,
-    // on first checklist submission, rather than pre-populated when the
-    // route is created -- simpler, and the checklist UI already knows the
-    // full set of item ids to send from its own order/product view).
+    const pickupStops = stops.filter(s => s.stop_type === 'pickup'); // already seq_order-sorted
+    const currentPickupStop = pickupStops.find(s => s.status === 'active') || pickupStops.find(s => s.status === 'pending');
+    if (!currentPickupStop) {
+      return { statusCode: 409, headers, body: JSON.stringify({ error: 'No active pickup stop to complete' }) };
+    }
+
+    // Resolve which order_items actually belong to THIS stop's seller on the
+    // underlying order (route_stop_items rows are created lazily here, on
+    // first checklist submission, rather than pre-populated when the route
+    // is created -- simpler, and the checklist UI already knows the full set
+    // of item ids to send from its own order/product view).
     const { data: delivery, error: deliveryError } = await admin.from('deliveries').select('order_id').eq('id', deliveryId).maybeSingle();
     if (deliveryError || !delivery) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
-    const { data: allItems, error: itemsError } = await admin.from('order_items').select('id').eq('order_id', delivery.order_id).eq('seller_id', pickupStop.seller_id);
+    const { data: allItems, error: itemsError } = await admin.from('order_items').select('id').eq('order_id', delivery.order_id).eq('seller_id', currentPickupStop.seller_id);
     if (itemsError) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order items for this pickup' }) };
     const allItemIds = (allItems || []).map(i => i.id);
 
@@ -132,28 +147,45 @@ exports.handler = async function (event) {
 
     // Upsert a route_stop_items row per item -- collected:true only for ids
     // the driver actually checked off this call (plan §38: partial pickup is
-    // a real, valid state, not an error).
+    // a real, valid state, not an error, and must not block moving to the
+    // next store in a bundled pickup).
     const nowIso = new Date().toISOString();
     for (const itemId of allItemIds) {
       const collected = collectedIds.includes(itemId);
-      const { data: existing } = await admin.from('route_stop_items').select('id').eq('route_stop_id', pickupStop.id).eq('order_item_id', itemId).maybeSingle();
+      const { data: existing } = await admin.from('route_stop_items').select('id').eq('route_stop_id', currentPickupStop.id).eq('order_item_id', itemId).maybeSingle();
       if (existing) {
         if (collected) await admin.from('route_stop_items').update({ collected: true, collected_at: nowIso }).eq('id', existing.id);
       } else {
-        await admin.from('route_stop_items').insert({ route_stop_id: pickupStop.id, order_item_id: itemId, collected, collected_at: collected ? nowIso : null });
+        await admin.from('route_stop_items').insert({ route_stop_id: currentPickupStop.id, order_item_id: itemId, collected, collected_at: collected ? nowIso : null });
       }
     }
 
-    const { data: finalItems } = await admin.from('route_stop_items').select('collected').eq('route_stop_id', pickupStop.id);
-    const allCollected = (finalItems || []).length >= allItemIds.length && (finalItems || []).every(i => i.collected);
+    // This stop is done regardless of full/partial collection -- always mark
+    // it completed before deciding what's next.
+    await admin.from('route_stops').update({ status: 'completed', completed_at: nowIso }).eq('id', currentPickupStop.id);
+
+    const nextPickupStop = pickupStops.find(s => s.id !== currentPickupStop.id && s.status !== 'completed');
+    if (nextPickupStop) {
+      // More stores to visit -- activate the next one, no transitionDelivery
+      // call at all (status stays DRIVER_AT_PICKUP).
+      await admin.from('route_stops').update({ status: 'active' }).eq('id', nextPickupStop.id).eq('status', 'pending');
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true, movedToNextPickup: true, nextSellerId: nextPickupStop.seller_id }) };
+    }
+
+    // Last pickup stop for this delivery -- aggregate collection across
+    // EVERY pickup stop (not just the one just completed) before deciding
+    // PICKED_UP vs PARTIALLY_PICKED_UP.
+    const pickupStopIds = pickupStops.map(s => s.id);
+    const bundleSellerIds = pickupStops.map(s => s.seller_id);
+    const { data: finalItems } = await admin.from('route_stop_items').select('collected').in('route_stop_id', pickupStopIds);
+    const { data: allBundleItems } = await admin.from('order_items').select('id').eq('order_id', delivery.order_id).in('seller_id', bundleSellerIds);
+    const totalItemCount = (allBundleItems || []).length;
+    const allCollected = (finalItems || []).length >= totalItemCount && (finalItems || []).every(i => i.collected);
 
     const targetStatus = allCollected ? 'PICKED_UP' : 'PARTIALLY_PICKED_UP';
     const transitionResult = await transitionDelivery(admin, deliveryId, targetStatus, { type: 'driver', id: driverId }, { eventType: 'ORDER_PICKED_UP', metadata: { all_collected: allCollected } });
     if (!transitionResult.ok) {
       return { statusCode: transitionResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not update pickup status', detail: transitionResult.detail || transitionResult.reason }) };
-    }
-    if (allCollected) {
-      await admin.from('route_stops').update({ status: 'completed', completed_at: nowIso }).eq('id', pickupStop.id);
     }
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, allCollected, delivery: transitionResult.delivery }) };
   }

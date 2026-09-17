@@ -97,38 +97,40 @@ async function dispatchDelivery(supabase, deliveryId) {
     return { dispatched: false, reason: 'no_quote', detail: quoteError && quoteError.message };
   }
 
-  // Multi-seller bundling/split-delivery is an explicitly deferred concern
-  // (plan §15/§137, same TODO as get-delivery-quote.js's MULTI_SELLER_REASON
-  // path) — for this pilot pickup_seller_ids is always exactly one id.
+  // Stage 4 (real build 2026-09-17): up to MAX_BUNDLE_SELLERS distinct
+  // sellers per delivery, matching get-delivery-quote.js's own cap -- a
+  // quote can never have more than that many pickup_seller_ids, so this is
+  // just a defensive match, not an independent limit.
+  const MAX_BUNDLE_SELLERS = 2;
   const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
-  if (pickupSellerIds.length !== 1) {
+  if (!pickupSellerIds.length || pickupSellerIds.length > MAX_BUNDLE_SELLERS) {
     return { dispatched: false, reason: 'multi_seller_unsupported' };
   }
-  const sellerId = pickupSellerIds[0];
 
-  const { data: seller, error: sellerError } = await supabase
+  const { data: sellersData, error: sellersError } = await supabase
     .from('sellers')
     .select('id, pickup_geo')
-    .eq('id', sellerId)
-    .maybeSingle();
-  if (sellerError) {
-    console.warn('dispatchDelivery: failed to load seller pickup location', sellerError.message);
-    return { dispatched: false, reason: 'no_pickup_location', detail: sellerError.message };
+    .in('id', pickupSellerIds);
+  if (sellersError) {
+    console.warn('dispatchDelivery: failed to load seller pickup location', sellersError.message);
+    return { dispatched: false, reason: 'no_pickup_location', detail: sellersError.message };
   }
-  if (!seller || !seller.pickup_geo) {
+  const allSellersHavePickup = pickupSellerIds.every(id => (sellersData || []).some(s => s.id === id && s.pickup_geo));
+  if (!allSellersHavePickup) {
     return { dispatched: false, reason: 'no_pickup_location' };
   }
 
-  // find_nearest_eligible_drivers (delivery_stage8_dispatch_helpers migration)
-  // does the online/eligible/live-delivery/90s-staleness filtering and
-  // nearest-first ST_Distance ordering server-side — PostgREST can't express
-  // "order by distance to this seller's pickup point" as a plain .select()
+  // find_nearest_eligible_drivers (delivery_stage8_dispatch_helpers migration,
+  // Stage 4: p_seller_id -> p_seller_ids array) does the online/eligible/
+  // live-delivery/90s-staleness filtering and nearest-first ST_Distance
+  // ordering server-side (ranking by distance to whichever of the bundle's
+  // sellers is closest) — PostgREST can't express this as a plain .select()
   // query, same reason get-delivery-quote.js's find_service_zone_for_point
   // RPC exists. Full multi-factor ranking (plan's original rider-scoring
   // model) is deliberately deferred for this 2-driver pilot; nearest-first is
   // the whole ranking for now.
   const { data: candidates, error: candidatesError } = await supabase.rpc('find_nearest_eligible_drivers', {
-    p_seller_id: sellerId,
+    p_seller_ids: pickupSellerIds,
     p_max_age_seconds: DRIVER_STALENESS_SECONDS
   });
   if (candidatesError) {
@@ -145,9 +147,13 @@ async function dispatchDelivery(supabase, deliveryId) {
   const distanceKm = Number.isFinite(nearest.distance_m) ? nearest.distance_m / 1000 : null;
 
   // Pre-acceptance estimate — a single-delivery new route has no "extra"
-  // pickups/drops (this is the only stop pair), so extraDrops/extraPickups
-  // stay 0. Real formula, see lib/payout-formula.js.
-  const payoutAmount = estimatePayout({ distanceKm: quote.distance_km, durationMin: quote.duration_min });
+  // drops (this is the only drop), but Stage 4 bundling can mean extra
+  // pickups beyond the first. Real formula, see lib/payout-formula.js.
+  const payoutAmount = estimatePayout({
+    distanceKm: quote.distance_km,
+    durationMin: quote.duration_min,
+    extraPickups: pickupSellerIds.length - 1
+  });
 
   const expiresAt = new Date(Date.now() + OFFER_TTL_MINUTES * 60 * 1000).toISOString();
 

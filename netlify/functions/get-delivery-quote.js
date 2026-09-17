@@ -24,6 +24,14 @@ const QUOTE_TTL_MINUTES = 15; // no existing convention in this repo for quote T
 const OUTSIDE_ZONE_REASON = "We can't deliver to this address yet. This location is currently outside Umzila's delivery area.";
 const MULTI_SELLER_REASON = "This basket needs separate deliveries. Some items are currently too far apart to be combined into one delivery.";
 
+// Stage 4 (delivery-network-spec.md §B.2 -> real build 2026-09-17): a cart
+// spanning more than this many distinct sellers still refuses with
+// MULTI_SELLER_REASON. Capped at 2 deliberately -- it keeps the quote-time
+// route sequencing below a cheap 2-permutation Google Routes comparison
+// instead of needing real route optimization (which bills at a materially
+// higher rate). Revisit once a third real seller has a nearby pickup_geo.
+const MAX_BUNDLE_SELLERS = 2;
+
 const headers = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*'
@@ -84,6 +92,46 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Stage 4 -- one computeRoutes call for a specific 2-pickup visiting order
+// (origin -> intermediate -> destination). Requests routes.legs so the
+// origin->intermediate leg (the real inter-store distance) is available
+// from the same call, at no extra cost, for the max_bundle_leg_km check --
+// no separate straight-line-only lookup needed. Returns null on any
+// failure; the caller treats that the same as the existing hard-error path
+// (never falls back to straight-line distance for pricing, plan §11).
+async function computeBundleRoute(googleRoutesKey, originPoint, intermediatePoint, destLat, destLon) {
+  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': googleRoutesKey,
+      'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.legs.distanceMeters'
+    },
+    body: JSON.stringify({
+      origin: { location: { latLng: { latitude: originPoint.lat, longitude: originPoint.lon } } },
+      intermediates: [{ location: { latLng: { latitude: intermediatePoint.lat, longitude: intermediatePoint.lon } } }],
+      destination: { location: { latLng: { latitude: destLat, longitude: destLon } } },
+      travelMode: 'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',
+      units: 'METRIC'
+    })
+  }).catch(() => null);
+  if (!res) return null;
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || !Array.isArray(json.routes) || !json.routes.length) return null;
+  const route = json.routes[0];
+  const distanceMeters = Number(route.distanceMeters);
+  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return null;
+  const durationSeconds = typeof route.duration === 'string' ? parseFloat(route.duration.replace(/s$/, '')) : Number(route.duration);
+  const legs = Array.isArray(route.legs) ? route.legs : [];
+  const interStoreLegMeters = legs.length && Number.isFinite(Number(legs[0].distanceMeters)) ? Number(legs[0].distanceMeters) : null;
+  return {
+    totalDistanceKm: distanceMeters / 1000,
+    totalDurationMin: Number.isFinite(durationSeconds) ? durationSeconds / 60 : null,
+    interStoreLegKm: interStoreLegMeters != null ? interStoreLegMeters / 1000 : null
+  };
 }
 
 function resolveDistanceBaseFee(distanceKm, tiers, extendedZoneFee, zoneType) {
@@ -210,18 +258,16 @@ exports.handler = async function (event, context) {
       return badRequest('No deliverable items in cart');
     }
 
-    // ---- Multi-store handling (deliberately simple for the pilot) ----
-    // TODO(bundle-engine, deferred per delivery-network-spec.md §B.2): once a
-    // second store is onboarded this needs real inter-store route scoring and
-    // split-delivery decisioning (plan §15/§137). For the pilot there's only
-    // ever one seller (Isqalo), so this path is currently unreachable but
-    // must be handled correctly rather than silently mis-pricing a
-    // multi-seller cart.
+    // ---- Multi-store handling (Stage 4, real build 2026-09-17) ----
+    // Up to MAX_BUNDLE_SELLERS distinct sellers in one cart get bundled into
+    // one delivery with multiple pickup stops; beyond that, still refused
+    // (plan §15/§137's full inter-store route scoring is more than a 2-seller
+    // pilot needs -- see delivery-network-spec.md §B.2/§4 for what's deferred
+    // and why).
     const pickupSellerIds = [...new Set(productItems.map(i => i.seller_id))];
-    if (pickupSellerIds.length > 1) {
+    if (pickupSellerIds.length > MAX_BUNDLE_SELLERS) {
       return ineligible(MULTI_SELLER_REASON);
     }
-    const sellerId = pickupSellerIds[0];
 
     // ---- Self-arranged sellers (admin-set, founder ask 2026-09-17): a
     // hyperlocal seller (e.g. a residence-based student selling ice-cream/
@@ -230,23 +276,25 @@ exports.handler = async function (event, context) {
     // sort out the handoff directly, exactly like every order did before
     // this build existed. Checked before the zone check / paid Routes call
     // since it's a completely separate, cheaper path. Only ever applies to
-    // a single-seller cart -- a self-arranged seller's items never combine
-    // with a real-delivery seller's items in one quote.
-    const { data: selfArrangedSeller, error: selfArrangedSellerError } = await supabase
-      .from('sellers')
-      .select('self_arranged_radius_km, pickup_geo')
-      .eq('id', sellerId)
-      .maybeSingle();
-    if (selfArrangedSellerError) {
-      return serverError('Failed to check self-arranged eligibility', selfArrangedSellerError);
-    }
-    if (selfArrangedSeller && selfArrangedSeller.self_arranged_radius_km && selfArrangedSeller.pickup_geo
-        && productItems.every(i => i.free_delivery)) {
-      const selfArrangedPoint = parseGeographyPoint(selfArrangedSeller.pickup_geo);
-      if (selfArrangedPoint) {
-        const distanceToSellerKm = haversineKm(selfArrangedPoint.lat, selfArrangedPoint.lon, destinationLat, destinationLon);
-        if (distanceToSellerKm <= Number(selfArrangedSeller.self_arranged_radius_km)) {
-          return ineligible('self_arranged');
+    // a genuinely single-seller cart -- a self-arranged seller's items never
+    // combine with a bundled/real-delivery seller's items in one quote.
+    if (pickupSellerIds.length === 1) {
+      const { data: selfArrangedSeller, error: selfArrangedSellerError } = await supabase
+        .from('sellers')
+        .select('self_arranged_radius_km, pickup_geo')
+        .eq('id', pickupSellerIds[0])
+        .maybeSingle();
+      if (selfArrangedSellerError) {
+        return serverError('Failed to check self-arranged eligibility', selfArrangedSellerError);
+      }
+      if (selfArrangedSeller && selfArrangedSeller.self_arranged_radius_km && selfArrangedSeller.pickup_geo
+          && productItems.every(i => i.free_delivery)) {
+        const selfArrangedPoint = parseGeographyPoint(selfArrangedSeller.pickup_geo);
+        if (selfArrangedPoint) {
+          const distanceToSellerKm = haversineKm(selfArrangedPoint.lat, selfArrangedPoint.lon, destinationLat, destinationLon);
+          if (distanceToSellerKm <= Number(selfArrangedSeller.self_arranged_radius_km)) {
+            return ineligible('self_arranged');
+          }
         }
       }
     }
@@ -285,21 +333,25 @@ exports.handler = async function (event, context) {
       return serverError('No active delivery_pricing_config row found — cannot price delivery.');
     }
 
-    // ---- Seller pickup location ----
-    const { data: seller, error: sellerError } = await supabase
+    // ---- Seller pickup location(s) ----
+    const { data: sellersData, error: sellersError } = await supabase
       .from('sellers')
       .select('id, pickup_geo')
-      .eq('id', sellerId)
-      .maybeSingle();
-    if (sellerError) {
-      return serverError('Failed to load seller pickup location', sellerError);
+      .in('id', pickupSellerIds);
+    if (sellersError) {
+      return serverError('Failed to load seller pickup location', sellersError);
     }
-    if (!seller || !seller.pickup_geo) {
-      return serverError('Seller pickup location is not yet configured; delivery quotes cannot be generated for this store.');
-    }
-    const pickupPoint = parseGeographyPoint(seller.pickup_geo);
-    if (!pickupPoint) {
-      return serverError('Failed to read seller pickup location.');
+    const pickupPointBySellerId = {};
+    for (const id of pickupSellerIds) {
+      const row = (sellersData || []).find(s => s.id === id);
+      if (!row || !row.pickup_geo) {
+        return serverError('Seller pickup location is not yet configured; delivery quotes cannot be generated for this store.');
+      }
+      const pt = parseGeographyPoint(row.pickup_geo);
+      if (!pt) {
+        return serverError('Failed to read seller pickup location.');
+      }
+      pickupPointBySellerId[id] = pt;
     }
 
     // ---- Road distance via Google Routes API ----
@@ -309,37 +361,80 @@ exports.handler = async function (event, context) {
     // straight-line distance for pricing (plan §11) — a Routes API failure
     // is a hard error, not a silent downgrade.
     let distanceKm, durationMin;
-    try {
-      const routesRes = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': googleRoutesKey,
-          'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
-        },
-        body: JSON.stringify({
-          origin: { location: { latLng: { latitude: pickupPoint.lat, longitude: pickupPoint.lon } } },
-          destination: { location: { latLng: { latitude: destinationLat, longitude: destinationLon } } },
-          travelMode: 'DRIVE',
-          routingPreference: 'TRAFFIC_AWARE',
-          units: 'METRIC'
-        })
-      });
+    // Stage 4: for a bundled 2-seller cart, `orderedSellerIds` may differ
+    // from `pickupSellerIds` -- it's the actual visiting order the quote was
+    // priced against, stored into delivery_quotes.pickup_seller_ids below.
+    // respond-to-driver-offer.js re-sequences independently at offer-
+    // acceptance time from the real driver's position, so this is only ever
+    // a reasonable pre-driver estimate, not a promise (see spec §W... §Stage4).
+    let orderedSellerIds = pickupSellerIds;
 
-      const routesJson = await routesRes.json().catch(() => null);
-      if (!routesRes.ok || !routesJson || !Array.isArray(routesJson.routes) || !routesJson.routes.length) {
-        return serverError('Failed to compute delivery route (Google Routes API error).', { status: routesRes.status, body: routesJson });
+    if (pickupSellerIds.length === 1) {
+      const pickupPoint = pickupPointBySellerId[pickupSellerIds[0]];
+      try {
+        const routesRes = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': googleRoutesKey,
+            'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
+          },
+          body: JSON.stringify({
+            origin: { location: { latLng: { latitude: pickupPoint.lat, longitude: pickupPoint.lon } } },
+            destination: { location: { latLng: { latitude: destinationLat, longitude: destinationLon } } },
+            travelMode: 'DRIVE',
+            routingPreference: 'TRAFFIC_AWARE',
+            units: 'METRIC'
+          })
+        });
+
+        const routesJson = await routesRes.json().catch(() => null);
+        if (!routesRes.ok || !routesJson || !Array.isArray(routesJson.routes) || !routesJson.routes.length) {
+          return serverError('Failed to compute delivery route (Google Routes API error).', { status: routesRes.status, body: routesJson });
+        }
+        const route = routesJson.routes[0];
+        const distanceMeters = Number(route.distanceMeters);
+        const durationSeconds = typeof route.duration === 'string' ? parseFloat(route.duration.replace(/s$/, '')) : Number(route.duration);
+        if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
+          return serverError('Google Routes API returned an invalid distance.');
+        }
+        distanceKm = distanceMeters / 1000;
+        durationMin = Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
+      } catch (err) {
+        return serverError('Failed to reach Google Routes API.', err);
       }
-      const route = routesJson.routes[0];
-      const distanceMeters = Number(route.distanceMeters);
-      const durationSeconds = typeof route.duration === 'string' ? parseFloat(route.duration.replace(/s$/, '')) : Number(route.duration);
-      if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
-        return serverError('Google Routes API returned an invalid distance.');
+    } else {
+      // Exactly 2 sellers (MAX_BUNDLE_SELLERS): try both visiting orders --
+      // A->B->customer vs B->A->customer -- and price off whichever totals
+      // less distance. optimizeWaypointOrder exists but bills at a materially
+      // higher rate for what's only ever 2 possible orderings here, so 2
+      // plain calls is the cheaper, simpler choice for this pilot.
+      const [a, b] = pickupSellerIds;
+      let optionAB, optionBA;
+      try {
+        [optionAB, optionBA] = await Promise.all([
+          computeBundleRoute(googleRoutesKey, pickupPointBySellerId[a], pickupPointBySellerId[b], destinationLat, destinationLon),
+          computeBundleRoute(googleRoutesKey, pickupPointBySellerId[b], pickupPointBySellerId[a], destinationLat, destinationLon)
+        ]);
+      } catch (err) {
+        return serverError('Failed to reach Google Routes API.', err);
       }
-      distanceKm = distanceMeters / 1000;
-      durationMin = Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
-    } catch (err) {
-      return serverError('Failed to reach Google Routes API.', err);
+      if (!optionAB && !optionBA) {
+        return serverError('Failed to compute delivery route (Google Routes API error).');
+      }
+      const winner = (!optionBA || (optionAB && optionAB.totalDistanceKm <= optionBA.totalDistanceKm)) ? optionAB : optionBA;
+      orderedSellerIds = (winner === optionAB) ? [a, b] : [b, a];
+
+      if (winner.interStoreLegKm == null) {
+        return serverError('Google Routes API did not return the inter-store leg distance.');
+      }
+      const maxBundleLegKm = Number(pricingConfig.max_bundle_leg_km);
+      if (Number.isFinite(maxBundleLegKm) && winner.interStoreLegKm > maxBundleLegKm) {
+        return ineligible(MULTI_SELLER_REASON);
+      }
+
+      distanceKm = winner.totalDistanceKm;
+      durationMin = winner.totalDurationMin;
     }
 
     // ---- Base fee: distance tier lookup (replaces DELIVERY_CLASS_PRICES) ----
@@ -395,7 +490,7 @@ exports.handler = async function (event, context) {
       const customBaseFee = customItems.length ? Math.max(...customItems.map(i => i.delivery_price)) : 0;
       const baseFee = Math.max(classBaseFee, customBaseFee);
 
-      perSellerFeeTotal = (pickupSellerIds.length - 1) * PER_SELLER_FEE; // always 0 for the pilot's single-seller path
+      perSellerFeeTotal = (pickupSellerIds.length - 1) * PER_SELLER_FEE; // Stage 4: +PER_SELLER_FEE for a genuinely bundled 2-seller cart, 0 otherwise
       overflowSurcharge = extraTrips * LARGE_OVERFLOW_FEE;
       baseFeeUsed = baseFee;
       productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, baseFee + perSellerFeeTotal + overflowSurcharge));
@@ -410,7 +505,11 @@ exports.handler = async function (event, context) {
       .from('delivery_quotes')
       .insert({
         customer_id: userId || null,
-        pickup_seller_ids: pickupSellerIds,
+        // Stage 4: for a bundled cart this is the winning VISITING ORDER
+        // (not just an unordered set of sellers) -- respond-to-driver-offer.js
+        // may re-sequence independently at offer-acceptance time from the
+        // real driver's position; see the note above the road-distance block.
+        pickup_seller_ids: orderedSellerIds,
         destination_geo: `SRID=4326;POINT(${destinationLon} ${destinationLat})`,
         destination_snapshot: { lat: destinationLat, lon: destinationLon, zone_id: zone.id || null, zone_name: zone.name || null, zone_type: zone.zone_type || null },
         distance_km: distanceKm,

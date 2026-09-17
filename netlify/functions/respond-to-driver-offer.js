@@ -45,6 +45,12 @@ async function appendToExistingRoute(admin, offer, delivery, driverId) {
     .maybeSingle();
   if (quoteError || !quote) return { ok: false, reason: 'no_quote', detail: quoteError && quoteError.message };
 
+  // Stage 4 (2026-09-17): deliberately stays single-seller-only, unlike
+  // createRouteForAcceptedOffer below. A bundled order only ever gets a
+  // FRESH route via idle-driver dispatch -- combining Stage 11's append-to-
+  // an-already-moving-route model with multi-seller stop sequencing is real
+  // added combinatorics not justified yet for a 2-driver pilot. Named
+  // limitation, not a stale TODO (delivery-network-spec.md, Stage 4 section).
   const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
   if (pickupSellerIds.length !== 1) return { ok: false, reason: 'multi_seller_unsupported' };
   const sellerId = pickupSellerIds[0];
@@ -80,10 +86,13 @@ async function appendToExistingRoute(admin, offer, delivery, driverId) {
   return { ok: true, routeId: route.id };
 }
 
-// Delivery network Stage 10 — builds the (pickup, drop) route for a freshly-
-// accepted 'new_route' offer. Kept local to this file rather than a shared
-// lib for now: it's specific to first-time route creation on offer
-// acceptance, not something any other caller needs yet.
+// Delivery network Stage 10 (Stage 4, 2026-09-17: N pickups) — builds the
+// route for a freshly-accepted 'new_route' offer: one pickup stop per
+// bundled seller (seq_order 1..N, first pending stop is the only one
+// 'active' at a time — see advance-route.js's complete_pickup) followed by
+// one drop stop. Kept local to this file rather than a shared lib for now:
+// it's specific to first-time route creation on offer acceptance, not
+// something any other caller needs yet.
 async function createRouteForAcceptedOffer(admin, offer, delivery, driverId) {
   if (!delivery.quote_id) return { ok: false, reason: 'no_quote' };
 
@@ -94,18 +103,41 @@ async function createRouteForAcceptedOffer(admin, offer, delivery, driverId) {
     .maybeSingle();
   if (quoteError || !quote) return { ok: false, reason: 'no_quote', detail: quoteError && quoteError.message };
 
-  const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
-  if (pickupSellerIds.length !== 1) return { ok: false, reason: 'multi_seller_unsupported' }; // same deferred TODO as dispatch.js/get-delivery-quote.js
-  const sellerId = pickupSellerIds[0];
+  const quoteSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
+  const MAX_BUNDLE_SELLERS = 2; // matches get-delivery-quote.js/dispatch.js's own cap
+  if (!quoteSellerIds.length || quoteSellerIds.length > MAX_BUNDLE_SELLERS) {
+    return { ok: false, reason: 'multi_seller_unsupported' };
+  }
 
-  const { data: seller, error: sellerError } = await admin
+  const { data: sellersData, error: sellersError } = await admin
     .from('sellers')
-    .select('pickup_geo')
-    .eq('id', sellerId)
-    .maybeSingle();
-  if (sellerError || !seller || !seller.pickup_geo) return { ok: false, reason: 'no_pickup_location', detail: sellerError && sellerError.message };
+    .select('id, pickup_geo')
+    .in('id', quoteSellerIds);
+  if (sellersError) return { ok: false, reason: 'no_pickup_location', detail: sellersError.message };
+  const pickupGeoBySellerId = {};
+  for (const id of quoteSellerIds) {
+    const row = (sellersData || []).find(s => s.id === id);
+    if (!row || !row.pickup_geo) return { ok: false, reason: 'no_pickup_location' };
+    pickupGeoBySellerId[id] = row.pickup_geo;
+  }
 
   if (!delivery.destination_geo) return { ok: false, reason: 'no_destination' };
+
+  // Re-sequence independently from the quote's own (pre-driver) ordering,
+  // nearest-pickup-first from this driver's real current position -- these
+  // are allowed to disagree (see get-delivery-quote.js's note on why). Falls
+  // back to the quote's stored order if the driver has no GPS fix yet,
+  // rather than failing route creation over a missing heartbeat.
+  let orderedSellerIds = quoteSellerIds;
+  if (quoteSellerIds.length > 1) {
+    const { data: sequenced, error: sequenceError } = await admin.rpc('order_pickups_by_driver_distance', {
+      p_driver_id: driverId,
+      p_seller_ids: quoteSellerIds
+    });
+    if (!sequenceError && Array.isArray(sequenced) && sequenced.length === quoteSellerIds.length) {
+      orderedSellerIds = sequenced.map(r => r.seller_id);
+    }
+  }
 
   const { data: route, error: routeError } = await admin
     .from('routes')
@@ -114,10 +146,16 @@ async function createRouteForAcceptedOffer(admin, offer, delivery, driverId) {
     .single();
   if (routeError) return { ok: false, reason: 'db_error', detail: routeError.message };
 
-  const { error: stopsError } = await admin.from('route_stops').insert([
-    { route_id: route.id, stop_type: 'pickup', seq_order: 1, seller_id: sellerId, delivery_id: delivery.id, location: seller.pickup_geo, status: 'pending' },
-    { route_id: route.id, stop_type: 'drop', seq_order: 2, seller_id: null, delivery_id: delivery.id, location: delivery.destination_geo, status: 'pending' }
-  ]);
+  const pickupStopRows = orderedSellerIds.map((sellerId, idx) => ({
+    route_id: route.id, stop_type: 'pickup', seq_order: idx + 1, seller_id: sellerId,
+    delivery_id: delivery.id, location: pickupGeoBySellerId[sellerId], status: 'pending'
+  }));
+  const dropStopRow = {
+    route_id: route.id, stop_type: 'drop', seq_order: orderedSellerIds.length + 1, seller_id: null,
+    delivery_id: delivery.id, location: delivery.destination_geo, status: 'pending'
+  };
+
+  const { error: stopsError } = await admin.from('route_stops').insert([...pickupStopRows, dropStopRow]);
   if (stopsError) {
     await admin.from('routes').delete().eq('id', route.id); // best-effort rollback of the orphaned route
     return { ok: false, reason: 'db_error', detail: stopsError.message };

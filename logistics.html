@@ -2336,6 +2336,8 @@ document.addEventListener('sb-ready', function(e){
     return data;
   }
 
+  // Stage 4 (2026-09-17): pickupStop -> pickupStop (still singular per call,
+  // just resolved as "the current one" among possibly several).
   async function loadPickupChecklist(pickupStop){
     pickupItemsBlocked = false; pickupItems = []; collectedItemIds = new Set();
     // Already-collected items — route_stop_items is readable by the driver.
@@ -2399,25 +2401,37 @@ document.addEventListener('sb-ready', function(e){
 
     const stops = await loadRouteStops(route.id);
     ACTIVE_ROUTE = route; ACTIVE_ROUTE_STOPS = stops;
-    const pickupStop = stops.find(s=>s.stop_type==='pickup');
+    // Stage 4 (2026-09-17): a route can carry N pickup stops (one per bundled
+    // seller) before its one drop — only one is ever 'active' at a time
+    // (advance-route.js resolves this server-side too, same rule).
+    const pickupStops = stops.filter(s=>s.stop_type==='pickup');
     const dropStop = stops.find(s=>s.stop_type==='drop');
-    if(!pickupStop || !dropStop){
+    if(!pickupStops.length || !dropStop){
       container.innerHTML = '<div class="item-card"><div class="orders-empty">This route is missing its stops — contact dispatch.</div></div>';
       return;
     }
+    const currentPickupStop = pickupStops.find(s=>s.status!=='completed'); // undefined once every pickup is done
+    const allPickupsCompleted = !currentPickupStop;
+    const pickupProgressLabel = pickupStops.length > 1 && currentPickupStop
+      ? `Store ${pickupStops.indexOf(currentPickupStop)+1} of ${pickupStops.length}`
+      : '';
 
     // sellers is publicly readable (sellers_select_public), so the shop name
     // and its free-text address are available even though the pickup stop's
     // own `location` (PostGIS geography) is not — see handback report.
-    const { data: seller } = await sb.from('sellers').select('shop_name, location').eq('id', pickupStop.seller_id).maybeSingle();
-    const shopName = seller?.shop_name || 'Pickup store';
+    let seller = null, shopName = 'Pickup store';
+    if(currentPickupStop){
+      const { data: sellerRow } = await sb.from('sellers').select('shop_name, location').eq('id', currentPickupStop.seller_id).maybeSingle();
+      seller = sellerRow;
+      shopName = seller?.shop_name || 'Pickup store';
+    }
 
     // ── before pickup: route accepted, not yet started ──
-    if(route.status==='assigned' && pickupStop.status==='pending'){
-      const pickupNavLink = await stopMapsLink(pickupStop.id, seller?.location);
+    if(route.status==='assigned' && currentPickupStop && pickupStops[0].status==='pending'){
+      const pickupNavLink = await stopMapsLink(currentPickupStop.id, seller?.location);
       container.innerHTML = `<div class="item-card">
         <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Route accepted — head to the store to start pickup.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">${pickupProgressLabel ? esc(pickupProgressLabel)+' — ' : ''}Route accepted — head to the store to start pickup.</div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           ${pickupNavLink ? `<a class="btn btn-ghost btn-sm" href="${pickupNavLink}" target="_blank" rel="noopener">Navigate to store</a>` : ''}
           <button class="btn btn-primary btn-sm" id="routeStartBtn">Start Route</button>
@@ -2428,8 +2442,8 @@ document.addEventListener('sb-ready', function(e){
     }
 
     // ── during pickup: DRIVER_AT_PICKUP or PARTIALLY_PICKED_UP — same UI ──
-    if(pickupStop.status==='active'){
-      await loadPickupChecklist(pickupStop);
+    if(currentPickupStop && currentPickupStop.status==='active'){
+      await loadPickupChecklist(currentPickupStop);
       let itemsHtml;
       if(pickupItemsBlocked){
         itemsHtml = `<div class="orders-empty" style="text-align:left;padding:10px 0">Pickup items couldn't be loaded right now. Confirm the order with the store directly before marking pickup complete — dispatch has been notified.</div>`;
@@ -2440,9 +2454,10 @@ document.addEventListener('sb-ready', function(e){
             ${esc(it.product_name||'Item')}${it.quantity>1?` × ${it.quantity}`:''}
           </label>`).join('');
       }
-      const pickupNavLink2 = await stopMapsLink(pickupStop.id, seller?.location);
+      const pickupNavLink2 = await stopMapsLink(currentPickupStop.id, seller?.location);
       container.innerHTML = `<div class="item-card">
         <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
+        ${pickupProgressLabel ? `<div style="font-size:11px;color:var(--muted);font-weight:600">${esc(pickupProgressLabel)}</div>` : ''}
         <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Orders to collect:</div>
         <div id="pickupItemsList">${itemsHtml}</div>
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -2458,7 +2473,7 @@ document.addEventListener('sb-ready', function(e){
     }
 
     // ── pickup done, delivery leg not started yet ──
-    if(pickupStop.status==='completed' && dropStop.status==='pending'){
+    if(allPickupsCompleted && dropStop.status==='pending'){
       const dropNavLink = await stopMapsLink(dropStop.id, null);
       container.innerHTML = `<div class="item-card">
         <div style="font-weight:700;font-size:14px">Pickup complete</div>
@@ -2533,7 +2548,8 @@ document.addEventListener('sb-ready', function(e){
       return;
     }
 
-    container.innerHTML = `<div class="item-card"><div class="orders-empty">Route status: ${esc(route.status)} / pickup: ${esc(pickupStop.status)} / drop: ${esc(dropStop.status)}</div></div>`;
+    const pickupStatusLabel = currentPickupStop ? currentPickupStop.status : 'all completed';
+    container.innerHTML = `<div class="item-card"><div class="orders-empty">Route status: ${esc(route.status)} / pickup: ${esc(pickupStatusLabel)} / drop: ${esc(dropStop.status)}</div></div>`;
   }
 
   async function callAdvanceRoute(action, extra){
@@ -2548,7 +2564,9 @@ document.addEventListener('sb-ready', function(e){
       });
       const result = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(result.error || 'Could not update route');
-      if(action==='complete_pickup' && result.allCollected===false){
+      if(action==='complete_pickup' && result.movedToNextPickup){
+        toast('Store pickup complete — next store up', 'success');
+      } else if(action==='complete_pickup' && result.allCollected===false){
         toast('Some items still need to be collected', '');
       } else {
         toast('Updated', 'success');

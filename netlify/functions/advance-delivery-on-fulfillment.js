@@ -67,6 +67,47 @@ exports.handler = async function (event) {
       return { statusCode: 200, headers, body: JSON.stringify({ ok: true, skipped: true, reason: 'already_advanced', status: delivery.status }) };
     }
 
+    // Stage 4 (2026-09-17): a bundled order must only advance once EVERY
+    // seller with items on it has marked their own portion ready -- this
+    // used to transition unconditionally the instant ANY seller called this
+    // endpoint, which was only correct by accident for a single-seller order
+    // (the only case exercised until Stage 4). Ports the exact order-wide
+    // order_item_statuses aggregation seller-dashboard.html's old fulfillment
+    // dropdown already did client-side (loadOrders()'s _mySellerStatus
+    // derivation), server-side, so it's authoritative regardless of which
+    // seller's click triggered this call. order_items (not orders.items
+    // jsonb) is the real seller-set source here since this session's earlier
+    // populate_order_items_on_payment fix made it reliably populated.
+    const { data: orderItems, error: orderItemsError } = await supabase
+      .from('order_items')
+      .select('id, seller_id')
+      .eq('order_id', orderId);
+    if (orderItemsError) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order items', detail: orderItemsError.message }) };
+    }
+    if (orderItems && orderItems.length) {
+      const { data: statusRows, error: statusError } = await supabase
+        .from('order_item_statuses')
+        .select('seller_id, status')
+        .eq('order_id', orderId);
+      if (statusError) {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order item statuses', detail: statusError.message }) };
+      }
+      const READY_STATUSES = ['fulfilled', 'delivered', 'refunded'];
+      const sellersOnOrder = [...new Set(orderItems.map(i => i.seller_id).filter(Boolean))];
+      const allSellersReady = sellersOnOrder.every(sellerId => {
+        const sellerItemCount = orderItems.filter(i => i.seller_id === sellerId).length;
+        const sellerReadyCount = (statusRows || []).filter(s => s.seller_id === sellerId && READY_STATUSES.includes(s.status)).length;
+        return sellerReadyCount >= sellerItemCount;
+      });
+      if (!allSellersReady) {
+        return { statusCode: 200, headers, body: JSON.stringify({ ok: true, skipped: true, reason: 'awaiting_other_sellers' }) };
+      }
+    }
+    // else: order_items unexpectedly empty for this order -- fall through to
+    // today's behavior rather than stranding a legitimately single-seller
+    // order over missing rows that shouldn't happen for a paid order.
+
     const result = await transitionDelivery(
       supabase,
       delivery.id,

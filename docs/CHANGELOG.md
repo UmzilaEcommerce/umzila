@@ -14,6 +14,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Stage 4: real multi-seller cart bundling
+
+**What shipped:** a cart spanning up to 2 distinct sellers now gets bundled into one delivery with multiple pickup stops before its one drop, instead of being refused. New migration adds `delivery_pricing_config.max_bundle_leg_km` (real target 3km, seeded at 15 during build) and changes `find_nearest_eligible_drivers` to rank across multiple sellers, plus a new `order_pickups_by_driver_distance` to sequence pickups from the driver's real position. `get-delivery-quote.js` prices a 2-seller cart via 2 plain Google Routes calls (cheaper than `optimizeWaypointOrder` for just 2 orderings) and stores the winning visiting order. `advance-route.js`'s `complete_pickup` now resolves the current pickup stop server-side and only transitions `deliveries.status` once every stop for a delivery is done (partial pickups no longer block moving to the next store). Fixed a real correctness bug this surfaced in `advance-delivery-on-fulfillment.js`: it was transitioning to `READY_FOR_DISPATCH` the instant any one seller on a shared order called it, correct only by accident for single-seller orders — now waits for every seller.
+
+**Verified:** full transactional lifecycle test including the real (unmodified) payout trigger firing correctly for a 2-pickup route; live HTTP regression tests against `netlify dev` for the refusal/self-arranged paths. **Not yet verified:** the real Google Routes API call (no live key) and the live driver-auth HTTP/UI flow (no active browser session) — both named, tracked limitations, not silently skipped. `max_bundle_leg_km` stays at 15 (not dropped to the real 3) until those pass for real.
+
+**Files:** `netlify/functions/get-delivery-quote.js`, `netlify/functions/lib/dispatch.js`, `netlify/functions/respond-to-driver-offer.js`, `netlify/functions/advance-route.js`, `netlify/functions/advance-delivery-on-fulfillment.js`, `netlify/functions/lib/batch-dispatch.js`, `logistics.html`, migration `delivery_stage4_multi_seller_bundling`.
+**Full write-up:** `docs/systems/delivery-network-spec.md` §Y.
+**Commit:** *(pending — see this entry's own commit; not pushed yet, per founder instruction)*
+
+---
+
 ## 2026-09-17 — Founder correction: seller "ready" toggle, premature "delivered" popup, tracking-activation gate
 
 **What was broken:** the seller dashboard let sellers pick any of 5 states (`Pending/Packaging/Fulfilled/Delivered/Returned`) for delivery-network orders. Marking `Fulfilled` (packed, not yet shipped) wrote `order_item_statuses.status='fulfilled'`, which `profile.html` reads as "Seller marked this as delivered. Did you receive it?" — so customers were prompted to confirm delivery before the order had even left the store. Root cause: an earlier same-session design correction (§J, Stage 7) reused this existing 5-state dropdown instead of building the plan's own §40 "simple binary ready toggle" — the aggregation logic was reused correctly, but the semantics ("fulfilled" == "delivered" from the customer's POV) weren't.

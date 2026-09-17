@@ -97,8 +97,13 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
     .maybeSingle();
   if (quoteError || !quote) return { batched: false, reason: 'no_quote', detail: quoteError && quoteError.message };
 
+  // Stage 4 (2026-09-17): deliberately stays single-seller-only here too --
+  // a bundled (2-seller) delivery only ever gets a FRESH route via idle-
+  // driver dispatch.js, never appended onto another driver's already-moving
+  // route (matches appendToExistingRoute's own limitation in
+  // respond-to-driver-offer.js). Named limitation, not a stale TODO.
   const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
-  if (pickupSellerIds.length !== 1) return { batched: false, reason: 'multi_seller_unsupported' }; // same deferred TODO as dispatch.js
+  if (pickupSellerIds.length !== 1) return { batched: false, reason: 'multi_seller_unsupported' };
   const sellerId = pickupSellerIds[0];
 
   const { data: seller, error: sellerError } = await supabase
