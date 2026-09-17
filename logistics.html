@@ -2487,17 +2487,49 @@ document.addEventListener('sb-ready', function(e){
       return;
     }
 
-    // ── arrived (ARRIVING / PIN_REQUIRED) — PIN confirmation isn't built
-    // yet (Stage 13, confirm-delivery-pin.js). This is the deliberate,
-    // documented stopping point for this stage — honest waiting state, not
-    // a dead button. ──
+    // ── arrived (ARRIVING / PIN_REQUIRED) — confirm-delivery-pin.js (Stage 13) ──
     if(dropStop.status==='arriving'){
       container.innerHTML = `<div class="item-card">
         <div style="font-weight:700;font-size:14px">Arrived</div>
         <div style="font-size:13px;color:var(--muted);margin-top:6px">Ask the customer for their delivery PIN to confirm drop-off.</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:8px">PIN confirmation isn't live yet — this step is coming soon. Hang tight with the customer.</div>
-        <button class="btn btn-ghost btn-sm" disabled style="margin-top:10px">Confirm delivery (coming soon)</button>
+        <div id="pinConfirmMsg" style="font-size:12px;color:#c0392b;margin-top:6px"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+          <input type="text" id="deliveryPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit PIN"
+                 style="width:110px;padding:8px 10px;border:1px solid var(--border,#ddd);border-radius:8px;font-size:16px;letter-spacing:2px;text-align:center">
+          <button class="btn btn-primary btn-sm" id="pinConfirmBtn">Confirm delivery</button>
+        </div>
       </div>`;
+      const pinInput = document.getElementById('deliveryPinInput');
+      pinInput?.addEventListener('input', ()=>{ pinInput.value = pinInput.value.replace(/\D/g,'').slice(0,4); });
+      document.getElementById('pinConfirmBtn')?.addEventListener('click', async ()=>{
+        const pin = (pinInput?.value || '').trim();
+        const msgEl = document.getElementById('pinConfirmMsg');
+        if(!/^\d{4}$/.test(pin)){ if(msgEl) msgEl.textContent = 'Enter the 4-digit PIN.'; return; }
+        if(msgEl) msgEl.textContent = '';
+        const btn = document.getElementById('pinConfirmBtn');
+        if(btn) btn.disabled = true;
+        try{
+          const { data:{ session } } = await sb.auth.getSession();
+          const res = await fetch('/.netlify/functions/confirm-delivery-pin', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
+            body: JSON.stringify({ deliveryId: dropStop.delivery_id, pin })
+          });
+          const result = await res.json().catch(()=>({}));
+          if(!res.ok){
+            if(msgEl) msgEl.textContent = result.error || 'PIN incorrect. Please try again.';
+            if(btn) btn.disabled = false;
+            if(pinInput){ pinInput.value=''; pinInput.focus(); }
+            return;
+          }
+          toast('Delivered ✓');
+          container.innerHTML = `<div class="item-card"><div style="font-weight:700;font-size:14px;color:var(--success)">Delivered ✓</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Nice work. Looking for your next delivery…</div></div>`;
+          setTimeout(refreshDeliveryPanel, 1500);
+        } catch(e){
+          if(msgEl) msgEl.textContent = 'Could not confirm delivery — check your connection and try again.';
+          if(btn) btn.disabled = false;
+        }
+      });
       return;
     }
 
