@@ -2969,20 +2969,39 @@ async function saveCartToServer() {
     }
 
     /********************
-     * ADDRESS AUTOCOMPLETE (OpenStreetMap Photon — free, no key)
+     * ADDRESS AUTOCOMPLETE (Google Places, via the server-side google-places.js
+     * proxy — never a browser-facing Google key, per the founder's earlier,
+     * explicit rejection of exposing any Google Maps key client-side.
+     * Switched from OpenStreetMap Photon 2026-09-17 (founder feedback: Photon's
+     * suggestions weren't accurate enough), WITH a Photon fallback: this is a
+     * live, payment-adjacent checkout field, and GOOGLE_ROUTES_SERVER_KEY isn't
+     * live in Netlify yet at the time this shipped, so a hard cutover would
+     * have meant zero address suggestions for every real customer until the
+     * key is added. Google is tried first; only on failure (key not yet
+     * configured, network error, anything) does it fall back to the exact
+     * Photon call this file used before — automatically stops falling back
+     * the moment the key goes live, no further code changes needed.
+     * onSelect(props, geometry) keeps the same shape either source produces,
+     * so applyAddressSuggestion() below needed zero changes.
      ********************/
-    // Biased near UKZN Westville campus so results are relevant to who's
-    // actually shopping here, without needing any signup/API key anywhere.
     const CAMPUS_LAT = -29.8175;
     const CAMPUS_LON = 30.9436;
-    // Photon's lat/lon params are only a soft ranking bias, not a hard
-    // filter — generic words like "Road"/"Block"/"Campus" in a query pull
-    // in unrelated matches from anywhere on earth (seen in practice:
-    // Karachi/Gurgaon/Dhaka results for a UKZN address). Delivery only
-    // happens within South Africa anyway, so restrict the search to a
-    // South Africa bounding box server-side, then drop anything that still
-    // slips through without a ZA country code as a defensive backstop.
-    const SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // minLon,minLat,maxLon,maxLat
+    const SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // minLon,minLat,maxLon,maxLat — Photon fallback only
+
+    async function fetchGoogleSuggestions(query, signal) {
+      const res = await fetch(`/.netlify/functions/google-places?action=autocomplete&input=${encodeURIComponent(query)}`, { signal });
+      if (!res.ok) return null; // signals "unavailable, fall back to Photon"
+      const data = await res.json();
+      return (data && data.suggestions) || [];
+    }
+
+    async function fetchPhotonFeatures(query, signal) {
+      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}&bbox=${SOUTH_AFRICA_BBOX}`;
+      const res = await fetch(url, { signal });
+      const data = await res.json();
+      const allFeatures = (data && data.features) || [];
+      return allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
+    }
 
     function wireAddressAutocomplete(inputEl, onSelect) {
       if (!inputEl) return;
@@ -3006,24 +3025,48 @@ async function saveCartToServer() {
         debounceTimer = setTimeout(async () => {
           abortCtrl?.abort();
           abortCtrl = new AbortController();
+          const signal = abortCtrl.signal;
           try {
-            const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}&bbox=${SOUTH_AFRICA_BBOX}`;
-            const res = await fetch(url, { signal: abortCtrl.signal });
-            const data = await res.json();
-            const allFeatures = (data && data.features) || [];
-            const features = allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
-            if (!features.length) { closeDropdown(); return; }
-            dropdown.innerHTML = features.map((f, i) => {
-              const p = f.properties || {};
-              const label = [p.housenumber, p.street || p.name, p.city].filter(Boolean).join(' ');
+            let source = 'google';
+            let suggestions = await fetchGoogleSuggestions(query, signal).catch(e => { if (e.name === 'AbortError') throw e; return null; });
+            if (suggestions === null) {
+              source = 'photon';
+              const features = await fetchPhotonFeatures(query, signal);
+              suggestions = features.map(f => ({
+                __photonFeature: f,
+                mainText: [((f.properties || {}).housenumber), ((f.properties || {}).street || (f.properties || {}).name)].filter(Boolean).join(' '),
+                secondaryText: (f.properties || {}).city || ''
+              }));
+            }
+            if (!suggestions.length) { closeDropdown(); return; }
+            dropdown.innerHTML = suggestions.map((s, i) => {
+              const label = s.mainText ? [s.mainText, s.secondaryText].filter(Boolean).join(', ') : (s.text || 'Unknown address');
               return `<div class="address-suggestion" data-idx="${i}">${escapeHtmlLite(label || 'Unknown address')}</div>`;
             }).join('');
             dropdown.classList.remove('hidden');
             dropdown.querySelectorAll('.address-suggestion').forEach(el => {
-              el.addEventListener('click', () => {
-                const feature = features[Number(el.dataset.idx)];
-                if (feature) onSelect(feature.properties || {}, feature.geometry || null);
+              el.addEventListener('click', async () => {
+                const suggestion = suggestions[Number(el.dataset.idx)];
                 closeDropdown();
+                if (!suggestion) return;
+                if (source === 'photon') {
+                  const f = suggestion.__photonFeature;
+                  if (f) onSelect(f.properties || {}, f.geometry || null);
+                  return;
+                }
+                if (!suggestion.placeId) return;
+                try {
+                  const detailsRes = await fetch(`/.netlify/functions/google-places?action=details&placeId=${encodeURIComponent(suggestion.placeId)}`);
+                  if (!detailsRes.ok) return;
+                  const details = await detailsRes.json();
+                  const props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
+                  const geometry = Number.isFinite(details.lat) && Number.isFinite(details.lon)
+                    ? { type: 'Point', coordinates: [details.lon, details.lat] }
+                    : null;
+                  onSelect(props, geometry);
+                } catch (e) {
+                  console.warn('google-places details lookup failed', e);
+                }
               });
             });
           } catch (e) {

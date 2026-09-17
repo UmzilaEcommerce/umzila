@@ -93,6 +93,21 @@
   }
   function backLink() { return '<a class="t-back-link" href="profile.html">&larr; Back to my orders</a>'; }
 
+  // Support entry point (plan §96) -- real WhatsApp/call number confirmed
+  // by the founder 2026-09-17. Same number used in confirm-delivery-pin's
+  // FAILED-delivery email (netlify/functions/lib/notify.js's UMZILA_WA).
+  const UMZILA_WA = '27797662768';
+  function supportCard() {
+    const msg = encodeURIComponent('Hi Umzila! I need help with my delivery (order ' + orderId + ').');
+    return `<div class="t-card" style="text-align:center">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px">Need help?</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <a href="https://wa.me/${UMZILA_WA}?text=${msg}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700;font-size:13px">💬 WhatsApp us</a>
+        <a href="tel:+${UMZILA_WA}" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent-light);color:var(--accent);padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700;font-size:13px">📞 Call us</a>
+      </div>
+    </div>`;
+  }
+
   // ── friendly status mapping — mirrors the same collapsing-raw-enum-into-
   // customer-language approach profile.html's statusBadge() already uses
   // for order status, applied here to the finer-grained delivery_status ──
@@ -197,6 +212,7 @@
           <div id="mapNote" class="t-map-note"></div>
         </div>
         <div id="feedbackMount"></div>
+        ${supportCard()}
         ${backLink()}
       `;
     } else {

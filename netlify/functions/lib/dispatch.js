@@ -11,6 +11,7 @@
 // transitionDelivery() (./delivery-state.js) — this module never writes
 // deliveries.status itself.
 const { transitionDelivery } = require('./delivery-state');
+const { estimatePayout } = require('./payout-formula');
 
 // Matches track.html/§B.1's live-tracking staleness rule exactly (a driver
 // whose last heartbeat is older than this is treated as not really
@@ -24,12 +25,10 @@ const DRIVER_STALENESS_SECONDS = 90;
 // order); easy to tune later via a config row if that's ever needed.
 const OFFER_TTL_MINUTES = 2;
 
-// Rider payout formula is an explicit unresolved founder decision (plan §102,
-// delivery-network-spec.md §C) — this is a placeholder only. §102's stated
-// principle is "the rider should generally receive the majority of that
-// delivery revenue", so 75% of the quoted delivery fee is used as a
-// reasonable stand-in until the founder locks in the real formula.
-const PLACEHOLDER_PAYOUT_RATE = 0.75;
+// Rider payout formula confirmed by the founder 2026-09-17 (plan §102,
+// delivery-network-spec.md §C item 6) -- see lib/payout-formula.js for the
+// real formula and why this is only an ESTIMATE (the actual payout is
+// computed from the route's real final stats once it's completed).
 
 /**
  * Attempts to dispatch a single READY_FOR_DISPATCH delivery to the nearest
@@ -90,7 +89,7 @@ async function dispatchDelivery(supabase, deliveryId) {
   }
   const { data: quote, error: quoteError } = await supabase
     .from('delivery_quotes')
-    .select('id, pickup_seller_ids, total_delivery_fee')
+    .select('id, pickup_seller_ids, total_delivery_fee, distance_km, duration_min')
     .eq('id', delivery.quote_id)
     .maybeSingle();
   if (quoteError || !quote) {
@@ -145,9 +144,10 @@ async function dispatchDelivery(supabase, deliveryId) {
   const nearest = candidates[0];
   const distanceKm = Number.isFinite(nearest.distance_m) ? nearest.distance_m / 1000 : null;
 
-  // Placeholder payout — see PLACEHOLDER_PAYOUT_RATE comment above.
-  const totalDeliveryFee = Number(quote.total_delivery_fee) || 0;
-  const payoutAmount = Math.round(totalDeliveryFee * PLACEHOLDER_PAYOUT_RATE * 100) / 100;
+  // Pre-acceptance estimate — a single-delivery new route has no "extra"
+  // pickups/drops (this is the only stop pair), so extraDrops/extraPickups
+  // stay 0. Real formula, see lib/payout-formula.js.
+  const payoutAmount = estimatePayout({ distanceKm: quote.distance_km, durationMin: quote.duration_min });
 
   const expiresAt = new Date(Date.now() + OFFER_TTL_MINUTES * 60 * 1000).toISOString();
 

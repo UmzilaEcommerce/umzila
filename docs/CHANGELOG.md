@@ -23,6 +23,25 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Founder decisions applied: real payout formula, real batch threshold, support contact, Google address search
+
+**What happened:** Immediately after Stage 17 closed the full plan, the founder answered every remaining open item in §C in one message. Applied same-session: real driver payout formula, real batching ETA threshold, real support contact number, and the Photon→Google address-autocomplete switch.
+
+**What shipped:**
+- **Payout formula** (`base + per_km*route_km + per_extra_drop*(drops-1) + per_extra_pickup*(pickups-1) + per_min_over*max(route_minutes-free_minutes,0)`, real Rand values) replaces the old 75%-of-fee placeholder in both the authoritative Postgres completion trigger (uses the route's real final distance/duration/stop-count) and the pre-acceptance JS estimate shown to drivers (`netlify/functions/lib/payout-formula.js`).
+- **Batching threshold** (90min hard cap, ~60min target) replaces the old flat-distance placeholder — estimated without an extra paid Google Routes call by combining a straight-line proxy for the unknown leg with the delivery's own already-real quoted duration for the known leg.
+- **Support contact** (+27797662768) added as a real "Need help?" WhatsApp/call entry point on `track.html`.
+- **Google Places autocomplete** replaces OpenStreetMap Photon on `checkout.html`/`profile.html`/`seller-dashboard.html`, via a new server-side proxy (`netlify/functions/google-places.js` — never a browser-facing key). **Ships with an automatic Photon fallback**, added after flagging the regression risk to the founder: since the real Google key isn't in Netlify yet and checkout is a live, payment-adjacent flow, a hard cutover would have broken address entry everywhere until the key is added. Google is preferred when available; Photon is the safety net until then, with zero further code changes needed once the key lands.
+
+**Verified:** payout formula tested against two real completed-route scenarios with hand-computed expected amounts (both matched exactly, including the minimum-floor clamp); the Photon-fallback control flow tested via simulation (Google-success/Google-failure/aborted-request all behave correctly). All 8 touched/new files pass syntax checks. Security advisor sweep clean. No PayFast file touched.
+
+**Known limitation, tracked not hidden:** the Google Places integration can't be live-tested until the real key exists in Netlify — built faithfully from documented API shapes, not yet exercised against a real response.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §U.
+**Commit:** *(pending — see this entry's own commit)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 17 (analytics) built — the full 196-section plan is now complete
 
 **What happened:** Fifteenth and final implementation stage of the delivery network build. Unlike every other stage, the plan itself frames this one as explicitly lowest priority and "post-pilot-validation... not part of the launch checklist," since it needs real operational data to be meaningful — built anyway, structurally correct, per the founder's standing "nothing gets left out" instruction, with the honest caveat that it will show near-empty numbers until real delivery volume exists.

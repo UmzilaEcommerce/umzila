@@ -17,25 +17,41 @@
 // transitionDelivery() (./delivery-state.js) -- this module never writes
 // deliveries.status itself.
 const { transitionDelivery } = require('./delivery-state');
+const { estimatePayout } = require('./payout-formula');
 
 const DRIVER_STALENESS_SECONDS = 90; // same constant as dispatch.js/track.html
 const OFFER_TTL_MINUTES = 2; // same as dispatch.js
 
-// ── Founder input needed, not invented silently (delivery-network-spec.md
-// §C / plan §86/132 explicitly ask for a real ETA-impact threshold number,
-// e.g. "don't offer a batch that would push an existing customer's ETA past
-// +X minutes"). No live routing/duration is available internally (the paid
-// Google Routes API is reserved for get-delivery-quote.js's customer-facing
-// quote, same reasoning dispatch.js already documents for omitting
-// duration_impact_min) -- so this placeholder is expressed as a straight-
-// line distance proxy instead of true ETA minutes. 1.5km is a deliberately
-// conservative guess for a small campus service area; TRACKED as an open
-// "ACTION NEEDED FROM YOU" item (§C) until the founder gives a real number,
-// at which point this should become a true minutes-based check once
-// GOOGLE_ROUTES_SERVER_KEY is live. ──
-const PLACEHOLDER_BATCH_IMPACT_KM = 1.5;
+// Founder-confirmed 2026-09-17 (delivery-network-spec.md §C item 5): max 90
+// minutes of added time to justify a batch addition, ~60 minutes as a
+// typical/average target (tracked for later analytics review, not a second
+// hard gate -- one clear threshold is operationally less ambiguous than two
+// active at once).
+const MAX_BATCH_IMPACT_MINUTES = 90;
+const TARGET_AVERAGE_BATCH_IMPACT_MINUTES = 60;
 
-const PLACEHOLDER_PAYOUT_RATE = 0.75; // same placeholder as dispatch.js, same founder-pending formula
+// Estimating added minutes without a live Google Routes call for THIS leg
+// specifically (that stays reserved for get-delivery-quote.js's paid,
+// customer-facing quote -- calling it again per batch-evaluation would add
+// ongoing cost for a low-stakes internal dispatch decision). Decomposed into
+// two legs: driver's current position -> new pickup (unknown; estimated from
+// find_batchable_routes' straight-line distance at an assumed urban speed),
+// and new pickup -> destination (REAL: the delivery's own delivery_quotes
+// row already has this from Google Routes at quote-creation time -- reused
+// here rather than re-estimated). This is an approximation, not exact, but
+// meaningfully better than a flat distance-only proxy since half of it is
+// real routed-duration data.
+const ASSUMED_URBAN_SPEED_KMH = 25;
+
+function estimateAddedMinutes(driverToPickupKm, quoteDurationMin) {
+  const legToPickupMin = (driverToPickupKm / ASSUMED_URBAN_SPEED_KMH) * 60;
+  const legPickupToDropMin = Number.isFinite(quoteDurationMin) ? quoteDurationMin : legToPickupMin; // fall back to a symmetric guess if the quote has no duration for some reason
+  return legToPickupMin + legPickupToDropMin;
+}
+
+// Rider payout formula confirmed by the founder 2026-09-17 -- see
+// lib/payout-formula.js for the real formula and why this is only an
+// ESTIMATE (the actual payout is computed once the whole route completes).
 
 /**
  * Attempts to add a single READY_FOR_DISPATCH delivery onto an existing,
@@ -76,7 +92,7 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
   if (!delivery.quote_id) return { batched: false, reason: 'no_quote' };
   const { data: quote, error: quoteError } = await supabase
     .from('delivery_quotes')
-    .select('id, pickup_seller_ids, total_delivery_fee')
+    .select('id, pickup_seller_ids, total_delivery_fee, distance_km, duration_min')
     .eq('id', delivery.quote_id)
     .maybeSingle();
   if (quoteError || !quote) return { batched: false, reason: 'no_quote', detail: quoteError && quoteError.message };
@@ -108,14 +124,23 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
 
   const nearest = candidates[0];
   const distanceKm = Number.isFinite(nearest.distance_m) ? nearest.distance_m / 1000 : Infinity;
-  if (distanceKm > PLACEHOLDER_BATCH_IMPACT_KM) {
+  const addedMinutes = estimateAddedMinutes(distanceKm, quote.duration_min);
+  if (addedMinutes > MAX_BATCH_IMPACT_MINUTES) {
     // Correctly stays READY_FOR_DISPATCH -- the caller falls through to the
     // normal idle-driver dispatchDelivery() path.
-    return { batched: false, reason: 'over_impact_threshold', detail: `${distanceKm.toFixed(2)}km > ${PLACEHOLDER_BATCH_IMPACT_KM}km threshold` };
+    return { batched: false, reason: 'over_impact_threshold', detail: `~${addedMinutes.toFixed(1)}min > ${MAX_BATCH_IMPACT_MINUTES}min threshold` };
+  }
+  if (addedMinutes > TARGET_AVERAGE_BATCH_IMPACT_MINUTES) {
+    // Still allowed (under the hard cap) but worth a log line -- this is the
+    // founder's "average" figure, tracked for future analytics review rather
+    // than gated on right now.
+    console.warn('evaluateBatchCandidates: batch offer above the target average impact', addedMinutes.toFixed(1), 'min (allowed, under the', MAX_BATCH_IMPACT_MINUTES, 'min hard cap)');
   }
 
-  const totalDeliveryFee = Number(quote.total_delivery_fee) || 0;
-  const payoutAmount = Math.round(totalDeliveryFee * PLACEHOLDER_PAYOUT_RATE * 100) / 100;
+  // Pre-acceptance estimate — a batch addition is, by definition, one extra
+  // pickup + one extra drop tacked onto whatever route it joins, so those
+  // count as 1 each. Real formula, see lib/payout-formula.js.
+  const payoutAmount = estimatePayout({ distanceKm: quote.distance_km, durationMin: quote.duration_min, extraDrops: 1, extraPickups: 1 });
   const expiresAt = new Date(Date.now() + OFFER_TTL_MINUTES * 60 * 1000).toISOString();
 
   const { data: offer, error: offerInsertError } = await supabase
@@ -127,6 +152,7 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
       offer_type: 'batch_addition',
       payout_amount: payoutAmount,
       distance_impact_km: distanceKm,
+      duration_impact_min: addedMinutes,
       status: 'pending',
       expires_at: expiresAt
     })
@@ -156,4 +182,4 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
   return { batched: true, offerId: offer.id, routeId: nearest.route_id, driverId: nearest.driver_id };
 }
 
-module.exports = { evaluateBatchCandidates, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES, PLACEHOLDER_BATCH_IMPACT_KM };
+module.exports = { evaluateBatchCandidates, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES, MAX_BATCH_IMPACT_MINUTES, TARGET_AVERAGE_BATCH_IMPACT_MINUTES };

@@ -912,15 +912,36 @@
   }
 
   /********************
-   * ADDRESS AUTOCOMPLETE (OpenStreetMap Photon — free, no key)
-   * Same pattern as checkout.html's wireAddressAutocomplete()/
+   * ADDRESS AUTOCOMPLETE (Google Places, via the server-side google-places.js
+   * proxy — never a browser-facing Google key. Switched from OpenStreetMap
+   * Photon 2026-09-17 (founder feedback: Photon's suggestions weren't
+   * accurate enough), WITH a Photon fallback — same reasoning as checkout.html:
+   * GOOGLE_ROUTES_SERVER_KEY isn't live yet, so Google is tried first and only
+   * on failure does it fall back to the exact Photon call this file used
+   * before, so profile address entry doesn't silently stop working in the
+   * meantime. Same pattern as checkout.html's wireAddressAutocomplete()/
    * applyAddressSuggestion() — no shared JS module in this codebase, so
    * this is a faithful copy of that logic, not an import.
    ********************/
   let savedAddressGeo = null; // { lat, lon } from a picked suggestion, or null if unset/stale
   const PROFILE_CAMPUS_LAT = -29.8175;
   const PROFILE_CAMPUS_LON = 30.9436;
-  const PROFILE_SA_BBOX = '16.3,-34.9,32.95,-22.0';
+  const PROFILE_SA_BBOX = '16.3,-34.9,32.95,-22.0'; // Photon fallback only
+
+  async function fetchGoogleSuggestionsProfile(query, signal) {
+    const res = await fetch(`/.netlify/functions/google-places?action=autocomplete&input=${encodeURIComponent(query)}`, { signal });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data && data.suggestions) || [];
+  }
+
+  async function fetchPhotonFeaturesProfile(query, signal) {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${PROFILE_CAMPUS_LAT}&lon=${PROFILE_CAMPUS_LON}&bbox=${PROFILE_SA_BBOX}`;
+    const res = await fetch(url, { signal });
+    const data = await res.json();
+    const allFeatures = (data && data.features) || [];
+    return allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
+  }
 
   function wireProfileAddressAutocomplete(inputEl, onSelect) {
     if (!inputEl) return;
@@ -938,24 +959,48 @@
       debounceTimer = setTimeout(async () => {
         abortCtrl?.abort();
         abortCtrl = new AbortController();
+        const signal = abortCtrl.signal;
         try {
-          const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${PROFILE_CAMPUS_LAT}&lon=${PROFILE_CAMPUS_LON}&bbox=${PROFILE_SA_BBOX}`;
-          const res = await fetch(url, { signal: abortCtrl.signal });
-          const data = await res.json();
-          const allFeatures = (data && data.features) || [];
-          const features = allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
-          if (!features.length) { closeDropdown(); return; }
-          dropdown.innerHTML = features.map((f, i) => {
-            const p = f.properties || {};
-            const label = [p.housenumber, p.street || p.name, p.city].filter(Boolean).join(' ');
+          let source = 'google';
+          let suggestions = await fetchGoogleSuggestionsProfile(query, signal).catch(e => { if (e.name === 'AbortError') throw e; return null; });
+          if (suggestions === null) {
+            source = 'photon';
+            const features = await fetchPhotonFeaturesProfile(query, signal);
+            suggestions = features.map(f => ({
+              __photonFeature: f,
+              mainText: [((f.properties || {}).housenumber), ((f.properties || {}).street || (f.properties || {}).name)].filter(Boolean).join(' '),
+              secondaryText: (f.properties || {}).city || ''
+            }));
+          }
+          if (!suggestions.length) { closeDropdown(); return; }
+          dropdown.innerHTML = suggestions.map((s, i) => {
+            const label = s.mainText ? [s.mainText, s.secondaryText].filter(Boolean).join(', ') : (s.text || 'Unknown address');
             return `<div class="address-suggestion" data-idx="${i}">${esc(label || 'Unknown address')}</div>`;
           }).join('');
           dropdown.classList.remove('hidden');
           dropdown.querySelectorAll('.address-suggestion').forEach(el => {
-            el.addEventListener('click', () => {
-              const feature = features[Number(el.dataset.idx)];
-              if (feature) onSelect(feature.properties || {}, feature.geometry || null);
+            el.addEventListener('click', async () => {
+              const suggestion = suggestions[Number(el.dataset.idx)];
               closeDropdown();
+              if (!suggestion) return;
+              if (source === 'photon') {
+                const f = suggestion.__photonFeature;
+                if (f) onSelect(f.properties || {}, f.geometry || null);
+                return;
+              }
+              if (!suggestion.placeId) return;
+              try {
+                const detailsRes = await fetch(`/.netlify/functions/google-places?action=details&placeId=${encodeURIComponent(suggestion.placeId)}`);
+                if (!detailsRes.ok) return;
+                const details = await detailsRes.json();
+                const props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
+                const geometry = Number.isFinite(details.lat) && Number.isFinite(details.lon)
+                  ? { type: 'Point', coordinates: [details.lon, details.lat] }
+                  : null;
+                onSelect(props, geometry);
+              } catch (e) {
+                console.warn('google-places details lookup failed', e);
+              }
             });
           });
         } catch (e) {
