@@ -76,6 +76,29 @@
     @media (max-width: 540px) { .form-row, .form-row-3 { grid-template-columns: 1fr; } }
     .section-divider { border: none; border-top: 1px solid #eee; margin: 24px 0 20px; }
     .section-heading { font-size: 15px; font-weight: 800; color: var(--accent); margin-bottom: 16px; display: flex; align-items: center; gap: 6px; }
+    .hidden { display: none; }
+
+    /* Address autocomplete suggestions (Photon — same pattern as checkout.html) */
+    .address-suggestions {
+      position: absolute;
+      left: 0; right: 0; top: 100%;
+      z-index: 40;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(16,24,40,0.12);
+      margin-top: 4px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .address-suggestion {
+      padding: 10px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .address-suggestion:last-child { border-bottom: none; }
+    .address-suggestion:hover { background: #f8f9fa; }
 
     /* Sale toggle row */
     .sale-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fffbf0; border: 1px solid #ffe58c; border-radius: 9px; margin-bottom: 10px; }
@@ -453,6 +476,22 @@
           <label class="form-label">Return / Refund Policy <span class="opt">(optional)</span></label>
           <textarea id="editReturnPolicy" class="form-control" placeholder="e.g. We accept returns within 7 days of delivery..."></textarea>
         </div>
+
+        <hr class="section-divider">
+        <!-- Pickup Address — the only delivery detail sellers control. Price,
+             radius and rider assignment are all decided elsewhere; sellers just
+             confirm the physical spot a rider collects orders from. -->
+        <div class="section-heading">📍 Pickup Address</div>
+        <p class="panel-subtitle" style="margin-top:-12px">Where should a rider collect your orders from? This is the only delivery detail you set — delivery pricing, radius and rider assignment are all handled by Umzila.</p>
+        <div class="form-group" id="pickupAddressSearchGroup" style="position:relative">
+          <label class="form-label">Search for your pickup address</label>
+          <input type="text" id="pickupAddressInput" class="form-control" placeholder="Start typing your pickup address…" autocomplete="off">
+        </div>
+        <div id="pickupAddressConfirmedRow" class="hidden" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-8px 0 16px">
+          <span id="pickupAddressConfirmedText" style="font-size:14px;color:var(--success);font-weight:700"></span>
+          <button type="button" class="btn ghost" id="pickupAddressChangeBtn" style="padding:4px 14px;font-size:12px">Change</button>
+        </div>
+        <div id="pickupAddressMsg" class="msg"></div>
 
         <hr class="section-divider">
         <!-- About / Story section -->
@@ -2099,7 +2138,148 @@
       if (lp && s.logo_url) { lp.src = s.logo_url; lp.style.display = ''; }
       var bp = document.getElementById('editBannerPreview');
       if (bp && s.banner_url) { bp.src = s.banner_url; bp.style.display = ''; }
+      renderPickupAddressState();
     }
+
+    /* ─────────────────────────────────────────
+       PICKUP ADDRESS (delivery-network-spec.md §9)
+       The only delivery detail a seller controls — price, radius and rider
+       assignment are all decided elsewhere. Reuses the exact Photon
+       autocomplete pattern already shipped in checkout.html (free, keyless,
+       South-Africa-bounded, 400ms debounce) — duplicated locally since this
+       file has no shared JS module with checkout.html, but kept faithful to
+       the original rather than reinvented.
+    ───────────────────────────────────────── */
+    var PICKUP_CAMPUS_LAT = -29.8175;
+    var PICKUP_CAMPUS_LON = 30.9436;
+    var PICKUP_SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // minLon,minLat,maxLon,maxLat
+
+    function escapeHtmlLite(s) {
+      return String(s || '').replace(/[&<>"']/g, function(c) {
+        return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+      });
+    }
+
+    function wireAddressAutocomplete(inputEl, onSelect) {
+      if (!inputEl) return;
+      var debounceTimer = null;
+      var abortCtrl = null;
+
+      var dropdown = document.createElement('div');
+      dropdown.className = 'address-suggestions hidden';
+      inputEl.parentNode.style.position = inputEl.parentNode.style.position || 'relative';
+      inputEl.parentNode.appendChild(dropdown);
+
+      function closeDropdown() {
+        dropdown.classList.add('hidden');
+        dropdown.innerHTML = '';
+      }
+
+      inputEl.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        var query = inputEl.value.trim();
+        if (query.length < 3) { closeDropdown(); return; }
+        debounceTimer = setTimeout(async function() {
+          if (abortCtrl) abortCtrl.abort();
+          abortCtrl = new AbortController();
+          try {
+            var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=5&lang=en&lat=' + PICKUP_CAMPUS_LAT + '&lon=' + PICKUP_CAMPUS_LON + '&bbox=' + PICKUP_SOUTH_AFRICA_BBOX;
+            var res = await fetch(url, { signal: abortCtrl.signal });
+            var data = await res.json();
+            var allFeatures = (data && data.features) || [];
+            var features = allFeatures.filter(function(f) { return (f.properties || {}).countrycode === 'ZA'; });
+            if (!features.length) { closeDropdown(); return; }
+            dropdown.innerHTML = features.map(function(f, i) {
+              var p = f.properties || {};
+              var label = [p.housenumber, p.street || p.name, p.city].filter(Boolean).join(' ');
+              return '<div class="address-suggestion" data-idx="' + i + '">' + escapeHtmlLite(label || 'Unknown address') + '</div>';
+            }).join('');
+            dropdown.classList.remove('hidden');
+            dropdown.querySelectorAll('.address-suggestion').forEach(function(el) {
+              el.addEventListener('click', function() {
+                var feature = features[Number(el.dataset.idx)];
+                if (feature) onSelect(feature.properties || {}, feature.geometry || null);
+                closeDropdown();
+              });
+            });
+          } catch (e) {
+            if (e.name !== 'AbortError') closeDropdown();
+          }
+        }, 400);
+      });
+
+      document.addEventListener('click', function(e) {
+        if (e.target !== inputEl && !dropdown.contains(e.target)) closeDropdown();
+      });
+    }
+
+    // Picking a suggestion saves straight away — sellers only ever confirm
+    // WHERE a rider collects from, there's no separate "save" step/button.
+    async function applyPickupAddressSuggestion(props, geometry) {
+      if (!geometry || geometry.type !== 'Point' || !Array.isArray(geometry.coordinates)) return;
+      var lon = geometry.coordinates[0], lat = geometry.coordinates[1];
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      if (!SD.seller || !SD.seller.id) return;
+
+      var input = document.getElementById('pickupAddressInput');
+      var label = [props.housenumber, props.street || props.name, props.city].filter(Boolean).join(' ') ||
+                   (input ? input.value.trim() : '');
+
+      setMsg('pickupAddressMsg', '');
+      var ewkt = 'SRID=4326;POINT(' + lon + ' ' + lat + ')';
+      var { data, error } = await SD.sb.from('sellers').update({
+        pickup_geo:          ewkt,
+        pickup_confirmed_at: new Date().toISOString()
+      }).eq('id', SD.seller.id).select().single();
+
+      if (error) { setMsg('pickupAddressMsg', 'Could not save pickup address: ' + error.message); return; }
+      SD.seller = data;
+      // Best-effort local echo of the human-readable address next to the
+      // stored coordinates — sellers.pickup_geo/pickup_confirmed_at (the
+      // source of truth) hold no formatted-address text column, so this is
+      // purely a same-device convenience for redisplay, never relied on for
+      // logic or synced anywhere.
+      try { localStorage.setItem('umzila_pickup_label_' + SD.seller.id, label); } catch (e) {}
+      renderPickupAddressState(label);
+      toast('Pickup address confirmed ✓');
+    }
+
+    function renderPickupAddressState(freshLabel) {
+      var s = SD.seller || {};
+      var searchGroup   = document.getElementById('pickupAddressSearchGroup');
+      var confirmedRow  = document.getElementById('pickupAddressConfirmedRow');
+      var confirmedText = document.getElementById('pickupAddressConfirmedText');
+      var input         = document.getElementById('pickupAddressInput');
+      if (!searchGroup || !confirmedRow || !confirmedText || !input) return;
+
+      if (s.pickup_confirmed_at) {
+        var label = freshLabel;
+        if (!label) {
+          try { label = localStorage.getItem('umzila_pickup_label_' + s.id); } catch (e) { label = null; }
+        }
+        confirmedText.textContent = label ? ('✓ Address confirmed: ' + label) : '✓ Address confirmed';
+        confirmedRow.classList.remove('hidden');
+        searchGroup.classList.add('hidden');
+      } else {
+        confirmedRow.classList.add('hidden');
+        searchGroup.classList.remove('hidden');
+        input.value = '';
+      }
+    }
+
+    var pickupAddressChangeBtnEl = document.getElementById('pickupAddressChangeBtn');
+    if (pickupAddressChangeBtnEl) {
+      pickupAddressChangeBtnEl.addEventListener('click', function() {
+        var searchGroup  = document.getElementById('pickupAddressSearchGroup');
+        var confirmedRow = document.getElementById('pickupAddressConfirmedRow');
+        if (confirmedRow) confirmedRow.classList.add('hidden');
+        if (searchGroup)  searchGroup.classList.remove('hidden');
+        var input = document.getElementById('pickupAddressInput');
+        if (input) { input.value = ''; input.focus(); }
+      });
+    }
+
+    wireAddressAutocomplete(document.getElementById('pickupAddressInput'), applyPickupAddressSuggestion);
 
     document.getElementById('saveShopBtn').addEventListener('click', async function() {
       var shopName = (document.getElementById('editShopName').value || '').trim();

@@ -624,7 +624,16 @@
             <option value="">Select your delivery area…</option>
           </select>
         </div>
+        <div class="p-field">
+          <label class="p-label">Delivery Instructions <span style="font-weight:400;color:var(--muted);font-size:12px">(optional)</span></label>
+          <textarea class="p-input" id="addrInstructions" rows="2" placeholder="e.g. Blue gate, ring the bell, Unit 4"></textarea>
+        </div>
         <button id="addAddressBtn" class="p-btn">Save Address</button>
+      </div>
+      <div class="p-card">
+        <div class="p-card-title"><span>Your Delivery PIN</span></div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px">When a driver hands you an order, just tell them this PIN to confirm you received it.</p>
+        <div id="deliveryPinDisplay" style="font-size:28px;font-weight:800;letter-spacing:6px;color:var(--accent,#0a2f66)">••••</div>
       </div>
     </div>
 
@@ -875,11 +884,98 @@
       document.getElementById('addrProvince').value     = prof.province    || '';
       document.getElementById('addrPostal').value       = prof.postal_code || '';
       document.getElementById('addrZone').value         = prof.delivery_zone || '';
+      document.getElementById('addrInstructions').value = prof.delivery_instructions || '';
+      const pinEl = document.getElementById('deliveryPinDisplay');
+      if (pinEl) pinEl.textContent = prof.delivery_pin || '••••';
+      // Coordinates only get (re)captured on a fresh autocomplete pick, so a
+      // returning visit with an already-saved address doesn't accidentally
+      // clear saved_address_geo on the next save (see savedAddressGeo below).
+      savedAddressGeo = null;
       renderAddrPreview(prof);
     } else {
       await sb.from('profiles').insert([{ user_id: user.id, email: user.email, first_name: '', last_name: '', phone: '' }]).catch(() => {});
     }
   }
+
+  /********************
+   * ADDRESS AUTOCOMPLETE (OpenStreetMap Photon — free, no key)
+   * Same pattern as checkout.html's wireAddressAutocomplete()/
+   * applyAddressSuggestion() — no shared JS module in this codebase, so
+   * this is a faithful copy of that logic, not an import.
+   ********************/
+  let savedAddressGeo = null; // { lat, lon } from a picked suggestion, or null if unset/stale
+  const PROFILE_CAMPUS_LAT = -29.8175;
+  const PROFILE_CAMPUS_LON = 30.9436;
+  const PROFILE_SA_BBOX = '16.3,-34.9,32.95,-22.0';
+
+  function wireProfileAddressAutocomplete(inputEl, onSelect) {
+    if (!inputEl) return;
+    let debounceTimer = null;
+    let abortCtrl = null;
+    const dropdown = document.createElement('div');
+    dropdown.className = 'address-suggestions hidden';
+    inputEl.parentNode.style.position = inputEl.parentNode.style.position || 'relative';
+    inputEl.parentNode.appendChild(dropdown);
+    function closeDropdown() { dropdown.classList.add('hidden'); dropdown.innerHTML = ''; }
+    inputEl.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const query = inputEl.value.trim();
+      if (query.length < 3) { closeDropdown(); return; }
+      debounceTimer = setTimeout(async () => {
+        abortCtrl?.abort();
+        abortCtrl = new AbortController();
+        try {
+          const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${PROFILE_CAMPUS_LAT}&lon=${PROFILE_CAMPUS_LON}&bbox=${PROFILE_SA_BBOX}`;
+          const res = await fetch(url, { signal: abortCtrl.signal });
+          const data = await res.json();
+          const allFeatures = (data && data.features) || [];
+          const features = allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
+          if (!features.length) { closeDropdown(); return; }
+          dropdown.innerHTML = features.map((f, i) => {
+            const p = f.properties || {};
+            const label = [p.housenumber, p.street || p.name, p.city].filter(Boolean).join(' ');
+            return `<div class="address-suggestion" data-idx="${i}">${esc(label || 'Unknown address')}</div>`;
+          }).join('');
+          dropdown.classList.remove('hidden');
+          dropdown.querySelectorAll('.address-suggestion').forEach(el => {
+            el.addEventListener('click', () => {
+              const feature = features[Number(el.dataset.idx)];
+              if (feature) onSelect(feature.properties || {}, feature.geometry || null);
+              closeDropdown();
+            });
+          });
+        } catch (e) {
+          if (e.name !== 'AbortError') closeDropdown();
+        }
+      }, 400);
+    });
+    document.addEventListener('click', (e) => {
+      if (e.target !== inputEl && !dropdown.contains(e.target)) closeDropdown();
+    });
+  }
+
+  function applyProfileAddressSuggestion(props, geometry) {
+    const streetLine = [props.housenumber, props.street || props.name].filter(Boolean).join(' ');
+    if (streetLine) document.getElementById('addrLine').value = streetLine;
+    if (props.city) document.getElementById('addrCity').value = props.city;
+    if (props.postcode) document.getElementById('addrPostal').value = props.postcode;
+    if (geometry && geometry.type === 'Point' && Array.isArray(geometry.coordinates)) {
+      const [lon, lat] = geometry.coordinates;
+      if (Number.isFinite(lon) && Number.isFinite(lat)) savedAddressGeo = { lat, lon };
+    } else {
+      savedAddressGeo = null;
+    }
+  }
+
+  (function initProfileAddressAutocomplete() {
+    const addrLine = document.getElementById('addrLine');
+    if (!addrLine) return;
+    wireProfileAddressAutocomplete(addrLine, applyProfileAddressSuggestion);
+    // Manual edits after a pick invalidate the captured coordinates — same
+    // reasoning as checkout.html (programmatic .value assignment above
+    // doesn't fire 'input', so this only catches genuine typing).
+    addrLine.addEventListener('input', () => { savedAddressGeo = null; });
+  })();
 
   function renderAddrPreview(row) {
     const el = document.getElementById('addressPreview');
@@ -929,8 +1025,16 @@
       province:   document.getElementById('addrProvince').value.trim(),
       postal_code: document.getElementById('addrPostal').value.trim(),
       delivery_zone: document.getElementById('addrZone').value || null,
+      delivery_instructions: document.getElementById('addrInstructions').value.trim() || null,
       updated_at: new Date().toISOString()
     };
+    // Only overwrite saved_address_geo when a fresh Photon suggestion was
+    // actually picked this session — omitting the key on a plain profile
+    // save (name/phone edit, no address touch) leaves whatever coordinates
+    // were already saved untouched instead of blanking them.
+    if (savedAddressGeo) {
+      payload.saved_address_geo = `SRID=4326;POINT(${savedAddressGeo.lon} ${savedAddressGeo.lat})`;
+    }
     const { error } = await sb.from('profiles').upsert([payload], { onConflict: ['user_id'] });
     btn.disabled = false; btn.textContent = 'Save Changes';
     if (error) setStatus('profileStatus', 'Error: ' + error.message, false);

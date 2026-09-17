@@ -1918,9 +1918,12 @@
       tip: 0,                    // optional driver tip, buyer-elected, added straight into the total
       paymentMethods: [],        // this buyer's saved cards, most-recently-used first
       selectedPaymentMethodId: null, // which one "Pay with saved card" will charge
-      isBuyNow: false             // set by loadCart() — a buy-now cart is a single isolated
+      isBuyNow: false,            // set by loadCart() — a buy-now cart is a single isolated
                                    // item, never the buyer's real ss_cart/server cart, so
                                    // syncCartOnLogin() must leave it alone (see there)
+      destinationGeo: null,       // { lat, lon } captured from a picked Photon suggestion —
+                                   // delivery-network Stage 2, see applyAddressSuggestion()
+      addressValidatedAt: null
     };
 
     // Tip is buyer-favorable money on top of the order — no fraud surface,
@@ -3011,7 +3014,7 @@ async function saveCartToServer() {
             dropdown.querySelectorAll('.address-suggestion').forEach(el => {
               el.addEventListener('click', () => {
                 const feature = features[Number(el.dataset.idx)];
-                if (feature) onSelect(feature.properties || {});
+                if (feature) onSelect(feature.properties || {}, feature.geometry || null);
                 closeDropdown();
               });
             });
@@ -3027,7 +3030,13 @@ async function saveCartToServer() {
     }
 
     // Maps a picked Photon feature onto the address form fields.
-    function applyAddressSuggestion(props) {
+    // geometry is the GeoJSON Point Photon returned alongside this suggestion
+    // (coordinates: [lon, lat]) — captured for Stage 2 of the delivery network
+    // (docs/systems/delivery-network-spec.md) so checkout can store a real
+    // destination_geo without a separate geocoding call. Manual typing (no
+    // suggestion picked) leaves state.destinationGeo null — handled as a
+    // no-coordinates case by later stages, not by this one.
+    function applyAddressSuggestion(props, geometry) {
       const streetLine = [props.housenumber, props.street || props.name].filter(Boolean).join(' ');
       if (streetLine) elements.shippingAddress.value = streetLine;
       if (props.city) elements.city.value = props.city;
@@ -3037,6 +3046,16 @@ async function saveCartToServer() {
           o.value && (props.state.includes(o.value) || o.value.includes(props.state))
         );
         if (match) { elements.provinceSelect.value = match.value; selectProvince(match.value); }
+      }
+      if (geometry && geometry.type === 'Point' && Array.isArray(geometry.coordinates)) {
+        const [lon, lat] = geometry.coordinates;
+        if (Number.isFinite(lon) && Number.isFinite(lat)) {
+          state.destinationGeo = { lat, lon };
+          state.addressValidatedAt = new Date().toISOString();
+        }
+      } else {
+        state.destinationGeo = null;
+        state.addressValidatedAt = null;
       }
     }
 
@@ -4450,7 +4469,21 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // resolved to 0, e.g. a multi-use code a guest never signed in to use).
                 coupon_code: (discount > 0 && state.serverDiscount?.valid) ? state.serverDiscount.code : null,
                 delivery_class: fees.deliveryClass || null,
-                seller_count:   fees.sellerCount || null
+                seller_count:   fees.sellerCount || null,
+                // Delivery network Stage 2 (docs/systems/delivery-network-spec.md) — order-level
+                // destination snapshot, independent of whatever the profile's saved address
+                // later becomes (plan §123). Only set when a Photon suggestion was actually
+                // picked (see applyAddressSuggestion()); null for manually-typed addresses,
+                // handled as a no-coordinates case by later stages, not by this one.
+                destination_geo: state.destinationGeo
+                    ? `SRID=4326;POINT(${state.destinationGeo.lon} ${state.destinationGeo.lat})`
+                    : null,
+                address_validated_at: state.addressValidatedAt || null,
+                // Reuses the existing order-notes text rather than adding a second free-text
+                // box for the same thing at checkout — same value, dedicated column so the
+                // delivery system has its own field to read without depending on "notes"
+                // staying delivery-related if it's ever repurposed.
+                delivery_instructions: elements.orderNotes.value.trim() || null
             };
 
             const { data: order, error } = await supabaseClient
@@ -4648,6 +4681,16 @@ async function submitToPayFast(cartItems, orderId, total) {
     function setupEventListeners() {
       // Live address autocomplete (free, no key — OpenStreetMap Photon)
       wireAddressAutocomplete(elements.shippingAddress, applyAddressSuggestion);
+      // Manually editing the street field after picking a suggestion means
+      // the previously-captured coordinates may no longer match what's
+      // typed — invalidate them rather than silently sending a stale
+      // destination_geo. applyAddressSuggestion() re-sets both together
+      // when a new suggestion is picked; this only fires on genuine typing
+      // (programmatic .value assignment doesn't dispatch 'input').
+      elements.shippingAddress.addEventListener('input', () => {
+        state.destinationGeo = null;
+        state.addressValidatedAt = null;
+      });
 
       // Province select change
       elements.provinceSelect.addEventListener('change', (e) => {

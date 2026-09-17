@@ -1,6 +1,6 @@
 # Umzila Delivery Network — Master Spec
 
-Status: **PLANNING COMPLETE, ALL SIGN-OFFS RESOLVED, STAGE 2 NOT YET STARTED.** Stage 1 (audit) is done (§A). Execution plan for Stages 2–17 is done (§E), reconciled against the full original plan. All three judgment-call decisions are resolved (§B items 4, 8, 9 — R36 tariff table confirmed, no browser-facing Google key at all, Postgres trigger confirmed). No implementation code written yet. Next: Stage 2 (address infrastructure) — blocked only by §C's remaining founder-input items (server-only Google key, Isqalo's pickup address, initial zone boundary), none of which block Stage 2's Units A/B/C from starting.
+Status: **STAGE 2 (ADDRESS INFRASTRUCTURE) COMPLETE, 2026-09-17.** Stage 1 (audit, §A) and the Stages 2–17 execution plan (§E) are done. All three judgment-call decisions resolved (§B items 4, 8, 9). Stage 2 itself is built and verified: migrations live, `checkout.html`/`profile.html` capture and store real coordinates from the existing free Photon autocomplete, `seller-dashboard.html` has a pickup-address confirmation UI, `admin.html` has a Service Areas editor, `netlify/functions/check-service-zone.js` does the eligibility check. See §F below for exactly what shipped, what's still a placeholder pending founder input, and one tracked gap. Next: Stage 3 (delivery quote engine — real road-distance pricing) once §C's remaining founder inputs land, or sooner if the founder wants Stage 3 scaffolded ahead of the API key.
 Owner note: this is the living reference document for the delivery network build. Keep coming back to this file across sessions instead of re-explaining the plan. Update it as stages complete (see `docs/CHANGELOG.md` policy in `CLAUDE.md`).
 
 ---
@@ -485,6 +485,31 @@ Six genuinely independent units touching disjoint `admin.html` sections and disj
 - New Netlify functions: `geocode-address.js`, `check-service-zone.js`, `get-delivery-quote.js`, `mark-order-ready.js`, `driver-heartbeat.js`, `dispatch-delivery.js`, `accept-driver-offer.js`, `evaluate-batch-candidates.js`, `confirm-delivery-pin.js`, `netlify/functions/lib/delivery-state.js`, `netlify/functions/lib/notify.js`
 - New page: `track.html` (standalone, no shared JS module, per repo convention)
 - Files explicitly never touched: `netlify/functions/payfast-itn.js`, `netlify/functions/generate-payfast-signature.js`, `netlify/functions/charge-payfast-token.js`
+
+---
+
+## F. Stage 2 — what actually shipped (2026-09-17)
+
+Built directly (migrations, `checkout.html`) plus three parallel subagents on genuinely disjoint files (`check-service-zone.js`, `seller-dashboard.html`, `admin.html`) — each verified independently (syntax-checked, RLS assumptions confirmed against real `pg_policies`, PayFast files confirmed untouched) before being accepted.
+
+**Migrations (live in Supabase, project `ojwnjtcxbitwmtlsbjnx`):**
+- `profiles`: `delivery_pin` (backfilled for all 31 existing profiles), `delivery_instructions`, `saved_address_geo`, `saved_address_place_id`.
+- `sellers`: `pickup_geo`, `pickup_place_id` (present but unused — Photon doesn't provide place_ids the way Google does), `pickup_confirmed_at`.
+- `orders`: `destination_geo`, `destination_place_id`, `delivery_instructions`, `address_validated_at`.
+- New `service_zones` table + RLS (public read, admin-only write via the `admins` table — **not** `Logistics`, confirmed unused anywhere else in the codebase; deprioritized fixing its RLS gap since it isn't actually load-bearing for anything).
+- Two RPC helper functions: `find_service_zone_for_point(lat, lon)` (used by `check-service-zone.js`) and `upsert_service_zone_circle(...)` (used by `admin.html`'s zone editor to build a circular polygon from center+radius without raw PostGIS in JS).
+- **Note for future PostGIS migrations on this project:** PostGIS types live in the `extensions` schema, not `public` — any new `SECURITY DEFINER` function using geometry/geography types needs `set search_path = public, extensions` or it'll fail with `type "geometry" does not exist`.
+
+**Files:**
+- `checkout.html`: the existing free Photon autocomplete now also captures the picked suggestion's coordinates (`state.destinationGeo`), invalidates them if the address is hand-edited afterward, and writes `destination_geo`/`address_validated_at`/`delivery_instructions` (reusing the existing order-notes field's value rather than adding a second free-text box) into the order insert. Verified live: typed "Varsity Drive Westville" → picked the real Photon suggestion → `state.destinationGeo` populated with real coordinates → manually appending text to the field correctly cleared it again.
+- `profile.html`: same Photon pattern added for the saved address field, plus a new "Your Delivery PIN" card displaying `profiles.delivery_pin`, plus a delivery-instructions textarea. Saves are non-destructive — editing name/phone without touching the address field doesn't blank out previously-saved coordinates.
+- `seller-dashboard.html`: new "Pickup Address" section in the shop-settings panel — search, pick, confirmed instantly (no separate save button, matching plan §9's "seller only confirms" framing), with a "Change" action to redo it.
+- `admin.html`: new "Service Areas" section — create/edit zones by center+radius (calls `upsert_service_zone_circle`), list/toggle-active/delete, gated by the same `isAdminAuthenticated()` UX check every other admin write uses (real enforcement is the RLS policy).
+- `netlify/functions/check-service-zone.js` (new): public POST endpoint, `{lat, lon}` → `{eligible, zone_id, zone_name, zone_type}` or `{eligible:false, reason: "..."}` using plan §20's exact wording. Uses the anon key (public read-only check), not the service role.
+
+**One tracked gap, not blocking:** `sellers` has no formatted-address *text* column — only `pickup_geo` (coordinates). `seller-dashboard.html` shows the real address text right after a fresh pick, falling back to a same-device `localStorage` echo (never treated as source of truth) or plain "✓ Address confirmed" on a fresh session elsewhere. This will matter once Stage 16 (admin ops) or Stage 8 (dispatch) needs to *display* a pickup address as readable text — revisit then with a proper `pickup_address_text` column rather than adding one speculatively now.
+
+**Verified NOT touched:** `payfast-itn.js`, `generate-payfast-signature.js`, `charge-payfast-token.js` — confirmed via `git status` across the whole Stage 2 diff.
 
 ---
 

@@ -405,6 +405,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
           <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
+          <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
@@ -896,6 +897,69 @@ const supabaseClient = supabase.createClient(
             <div id="dePreviewWrap" style="display:none;margin-top:14px">
               <iframe id="dePreviewFrame" style="width:100%;height:480px;border:1px solid #e5e7eb;border-radius:10px;background:#fff"></iframe>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Service Areas: circle-defined delivery zones (service_zones table).
+           v1 admin tool — zones are created/edited by re-entering center lat/lng + radius
+           each time (the table only stores the resulting polygon, not the original
+           center/radius, so "edit" means re-supplying fresh circle params, not
+           pre-filling old ones). See docs/systems/delivery-network-spec.md §6-8. -->
+      <section id="section-service-areas" style="display:none">
+        <div class="section-top">
+          <h2>🗺️ Service Areas</h2>
+          <button id="refreshServiceAreasBtn" class="small-btn" onclick="loadServiceZones()">↻ Refresh</button>
+        </div>
+        <div class="panel-form">
+          <div class="form" aria-labelledby="addZoneTitle">
+            <h3 id="addZoneTitle" style="font-size:15px;font-weight:800;margin-bottom:4px">Add / Update Service Zone</h3>
+            <input type="hidden" id="zoneEditId" value="" />
+            <div id="zoneEditingNotice" style="display:none;background:#fef3c7;color:#92400e;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px">
+              Editing an existing zone — re-enter the center &amp; radius (previous circle values aren't stored). <a href="#" id="zoneEditCancel" style="color:#92400e;font-weight:700">Cancel edit</a>
+            </div>
+
+            <label>Zone Name</label>
+            <input id="zoneName" type="text" placeholder="e.g. Wits Main Campus" />
+
+            <label>Zone Type</label>
+            <select id="zoneType">
+              <option value="core">Core</option>
+              <option value="extended">Extended</option>
+              <option value="restricted">Restricted</option>
+            </select>
+
+            <div class="row">
+              <div style="flex:1">
+                <label>Center Latitude</label>
+                <input id="zoneLat" type="number" step="any" placeholder="-26.1929" />
+              </div>
+              <div style="flex:1">
+                <label>Center Longitude</label>
+                <input id="zoneLng" type="number" step="any" placeholder="28.0305" />
+              </div>
+              <div style="width:120px">
+                <label>Radius (km)</label>
+                <input id="zoneRadius" type="number" step="any" min="0.01" placeholder="2.5" />
+              </div>
+            </div>
+
+            <label style="margin-top:8px"><input id="zoneActive" type="checkbox" checked /> Active</label>
+
+            <label>Notes <span style="font-weight:400;color:#6b7280;font-size:12px">(optional)</span></label>
+            <textarea id="zoneNotes" rows="2" placeholder="Internal notes about this zone"></textarea>
+
+            <button id="saveZoneBtn" class="small-btn" style="margin-top:10px">Save Zone</button>
+          </div>
+        </div>
+
+        <div>
+          <h3>Existing Zones</h3>
+          <div style="overflow:auto;margin-top:8px">
+            <table id="serviceZonesTable" aria-live="polite">
+              <thead><tr><th>Name</th><th>Type</th><th>Active</th><th>Notes</th><th>Actions</th></tr></thead>
+              <tbody><tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -2014,7 +2078,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'disputes': document.getElementById('section-disputes'),
     'product-reviews': document.getElementById('section-product-reviews'),
     'ad-campaigns': document.getElementById('section-ad-campaigns'),
-    'marketing': document.getElementById('section-marketing')
+    'marketing': document.getElementById('section-marketing'),
+    'service-areas': document.getElementById('section-service-areas')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -2569,6 +2634,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // Lazy-load manage-shops when that tab is first clicked
   document.querySelector('[data-section="manage-shops"]').addEventListener('click', loadManageShops);
   document.getElementById('refreshShopsBtn').addEventListener('click', loadManageShops);
+
+  // Lazy-load service areas when that tab is first clicked
+  document.querySelector('[data-section="service-areas"]')?.addEventListener('click', loadServiceZones);
 
   // Manage-shops sub-tabs
   document.querySelectorAll('.sub-tab[data-shtab]').forEach(btn => {
@@ -3793,6 +3861,175 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     await loadAdminDisputes();
   };
   /* ============================================================ end Disputes */
+
+  /* ============================================================ Service Areas
+     service_zones table: admin-managed delivery zone polygons. v1 uses a
+     Postgres RPC (upsert_service_zone_circle) that builds a circular polygon
+     from center lat/lng + radius so no raw PostGIS geometry is built in JS.
+     Editing a zone re-enters fresh center/radius rather than pre-filling old
+     values, since the table only stores the resulting polygon (see spec). */
+
+  let serviceZonesCache = [];
+
+  async function loadServiceZones(){
+    const tbody = document.querySelector('#serviceZonesTable tbody');
+    if(!tbody) return;
+    if(!supabaseClient) { tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">Supabase not available</td></tr>'; return; }
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr>';
+    try {
+      const { data, error } = await supabaseClient
+        .from('service_zones')
+        .select('id, name, zone_type, active, notes, created_at')
+        .order('created_at', { ascending: false });
+      if(error){ console.warn('loadServiceZones error', error); tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>'; return; }
+      serviceZonesCache = data || [];
+      renderServiceZonesTable();
+    } catch(e){
+      console.warn('loadServiceZones failed', e);
+      tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>';
+    }
+  }
+
+  function renderServiceZonesTable(){
+    const tbody = document.querySelector('#serviceZonesTable tbody');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    if(!serviceZonesCache.length){
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">No service zones yet.</td></tr>';
+      return;
+    }
+    serviceZonesCache.forEach(z => {
+      const tr = document.createElement('tr');
+      const activeBadge = z.active
+        ? '<span style="color:#16a34a;font-size:12px;font-weight:600">● Active</span>'
+        : '<span style="color:#dc2626;font-size:12px;font-weight:600">● Inactive</span>';
+      const typeBadge = '<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;text-transform:capitalize">' + escapeHtml(z.zone_type || '') + '</span>';
+      tr.innerHTML = `
+        <td>${escapeHtml(z.name || '')}</td>
+        <td>${typeBadge}</td>
+        <td>${activeBadge}</td>
+        <td style="font-size:12px;color:#6b7280;max-width:260px">${z.notes ? escapeHtml(z.notes) : '—'}</td>
+        <td class="actions"></td>
+      `;
+      const actionsTd = tr.querySelector('.actions');
+
+      const editBtn = document.createElement('button'); editBtn.textContent = '✏️ Edit'; editBtn.onclick = ()=> startEditServiceZone(z.id);
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = z.active ? '⏸ Deactivate' : '▶ Activate';
+      toggleBtn.onclick = ()=> toggleServiceZoneActive(z.id, z.active);
+      const delBtn = document.createElement('button'); delBtn.textContent = '🗑️ Delete';
+      delBtn.onclick = ()=> confirmModal('Delete service zone', `Delete "${z.name}"? This cannot be undone.`, ()=> deleteServiceZone(z.id));
+
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(toggleBtn); actionsTd.appendChild(delBtn);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function startEditServiceZone(zoneId){
+    const z = serviceZonesCache.find(x => x.id === zoneId);
+    if(!z) return;
+    document.getElementById('zoneEditId').value = z.id;
+    document.getElementById('zoneName').value = z.name || '';
+    document.getElementById('zoneType').value = z.zone_type || 'core';
+    document.getElementById('zoneActive').checked = !!z.active;
+    document.getElementById('zoneNotes').value = z.notes || '';
+    // center/radius aren't stored server-side for a circle-built polygon — re-enter fresh
+    document.getElementById('zoneLat').value = '';
+    document.getElementById('zoneLng').value = '';
+    document.getElementById('zoneRadius').value = '';
+    document.getElementById('zoneEditingNotice').style.display = 'block';
+    document.getElementById('zoneName').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function cancelEditServiceZone(){
+    document.getElementById('zoneEditId').value = '';
+    document.getElementById('zoneEditingNotice').style.display = 'none';
+    clearServiceZoneForm();
+  }
+
+  function clearServiceZoneForm(){
+    document.getElementById('zoneName').value = '';
+    document.getElementById('zoneType').value = 'core';
+    document.getElementById('zoneLat').value = '';
+    document.getElementById('zoneLng').value = '';
+    document.getElementById('zoneRadius').value = '';
+    document.getElementById('zoneActive').checked = true;
+    document.getElementById('zoneNotes').value = '';
+  }
+
+  async function saveServiceZone(){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to manage service zones'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+
+    const editId = document.getElementById('zoneEditId').value || null;
+    const name = document.getElementById('zoneName').value.trim();
+    const zoneType = document.getElementById('zoneType').value;
+    const lat = parseFloat(document.getElementById('zoneLat').value);
+    const lng = parseFloat(document.getElementById('zoneLng').value);
+    const radius = parseFloat(document.getElementById('zoneRadius').value);
+    const active = document.getElementById('zoneActive').checked;
+    const notes = document.getElementById('zoneNotes').value.trim() || null;
+
+    if(!name){ showToast('Zone name required'); return; }
+    if(!['core','extended','restricted'].includes(zoneType)){ showToast('Invalid zone type'); return; }
+    if(!Number.isFinite(lat) || lat < -90 || lat > 90){ showToast('Valid center latitude required'); return; }
+    if(!Number.isFinite(lng) || lng < -180 || lng > 180){ showToast('Valid center longitude required'); return; }
+    if(!Number.isFinite(radius) || radius <= 0){ showToast('Valid radius (km) required'); return; }
+
+    try {
+      const { error } = await supabaseClient.rpc('upsert_service_zone_circle', {
+        p_id: editId,
+        p_name: name,
+        p_zone_type: zoneType,
+        p_center_lat: lat,
+        p_center_lng: lng,
+        p_radius_km: radius,
+        p_active: active,
+        p_notes: notes
+      });
+      if(error){ console.warn('saveServiceZone error', error); showToast('Save failed: ' + error.message); return; }
+      showToast(editId ? 'Service zone updated' : 'Service zone created');
+      document.getElementById('zoneEditId').value = '';
+      document.getElementById('zoneEditingNotice').style.display = 'none';
+      clearServiceZoneForm();
+      await loadServiceZones();
+    } catch(e){
+      console.warn('saveServiceZone failed', e);
+      showToast('Save failed');
+    }
+  }
+
+  async function toggleServiceZoneActive(zoneId, currentActive){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to update service zones'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+    try {
+      const { error } = await supabaseClient.from('service_zones').update({ active: !currentActive }).eq('id', zoneId);
+      if(error){ console.warn('toggleServiceZoneActive error', error); showToast('Update failed'); return; }
+      showToast(currentActive ? 'Zone deactivated' : 'Zone activated');
+      await loadServiceZones();
+    } catch(e){
+      console.warn('toggleServiceZoneActive failed', e);
+      showToast('Update failed');
+    }
+  }
+
+  async function deleteServiceZone(zoneId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to delete service zones'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+    try {
+      const { error } = await supabaseClient.from('service_zones').delete().eq('id', zoneId);
+      if(error){ console.warn('deleteServiceZone error', error); showToast('Delete failed'); return; }
+      showToast('Service zone deleted');
+      await loadServiceZones();
+    } catch(e){
+      console.warn('deleteServiceZone failed', e);
+      showToast('Delete failed');
+    }
+  }
+
+  document.getElementById('saveZoneBtn')?.addEventListener('click', saveServiceZone);
+  document.getElementById('zoneEditCancel')?.addEventListener('click', (e)=>{ e.preventDefault(); cancelEditServiceZone(); });
+  /* ============================================================ end Service Areas */
 
   // initial load: fetch categories + sellers then products, then dashboard KPIs
   await fetchCategories();
