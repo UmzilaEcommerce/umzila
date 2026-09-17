@@ -161,7 +161,20 @@
 
     <!-- MAIN -->
     <main id="mainContent">
-      <!-- HERO — clean clickable images, no text overlay -->    
+      <!-- Active delivery widget (Stage 15, delivery-network-spec.md §50) —
+           hidden by default, shown/populated by supabase-ready listener
+           below only when the signed-in customer has an active or recently
+           delivered order. Disappears again with no permanent homepage
+           real estate, per §50. -->
+      <a class="active-delivery-widget" id="activeDeliveryWidget" style="display:none" href="#">
+        <div class="adw-icon" id="adwIcon">📦</div>
+        <div class="adw-text">
+          <div class="adw-status" id="adwStatus">Your order is being prepared</div>
+          <div class="adw-cta">Track order →</div>
+        </div>
+      </a>
+
+      <!-- HERO — clean clickable images, no text overlay -->
       <div class="hero fade-up" id="hero">
         <div class="slides" id="slides">
           <div class="slide" data-slide="hotDeals" data-href="shop.html?shop=Isqalo%20Shisanyama" data-filter=""></div>
@@ -1022,6 +1035,72 @@
         }
       });
     }
+
+    /* ── Active delivery widget (Stage 15, §50) — most recent non-terminal
+       delivery for the signed-in customer, or a just-delivered one shown
+       briefly. Deliberately no live ETA minutes (no ETA-recompute engine
+       exists in this build, and the plan's "Arriving in about 7 minutes"
+       is illustrative, not a literal requirement) -- status-driven copy
+       instead, same honesty principle track.html's staleness label uses. ── */
+    document.addEventListener('supabase-ready', async function(ev) {
+      var sb = ev.detail && ev.detail.supabase;
+      if (!sb) return;
+      var widget = document.getElementById('activeDeliveryWidget');
+      if (!widget) return;
+      try {
+        var sessionRes = await sb.auth.getSession();
+        var user = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user;
+        if (!user) return;
+
+        var res = await sb.from('deliveries')
+          .select('id, order_id, status, delivered_at')
+          .eq('customer_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        var d = res && res.data;
+        if (!d) return;
+
+        var TERMINAL_HIDE = ['CANCELLED', 'FAILED', 'RETURNED']; // not part of §50's widget states
+        if (TERMINAL_HIDE.indexOf(d.status) !== -1) return;
+
+        var statusEl = document.getElementById('adwStatus');
+        var iconEl = document.getElementById('adwIcon');
+        var PREPARING = ['PENDING', 'READY_FOR_DISPATCH', 'OFFERED', 'REASSIGNING'];
+        var WITH_DRIVER = ['ASSIGNED', 'DRIVER_AT_PICKUP', 'PARTIALLY_PICKED_UP', 'PICKED_UP'];
+        var TRAVELLING = ['IN_ROUTE', 'NEXT_STOP'];
+        var ARRIVING = ['ARRIVING', 'PIN_REQUIRED'];
+
+        if (d.status === 'DELIVERED') {
+          // Only show the transient "delivered" transform for a couple of
+          // hours -- after that it correctly stops occupying homepage real
+          // estate at all, per §50 ("no need to permanently occupy...").
+          var deliveredMs = d.delivered_at ? (Date.now() - new Date(d.delivered_at).getTime()) : Infinity;
+          if (deliveredMs > 2 * 60 * 60 * 1000) return;
+          statusEl.textContent = 'Order delivered ✓';
+          iconEl.textContent = '✅';
+        } else if (ARRIVING.indexOf(d.status) !== -1) {
+          statusEl.textContent = "Your driver has arrived";
+          iconEl.textContent = '📍';
+        } else if (TRAVELLING.indexOf(d.status) !== -1) {
+          statusEl.textContent = 'Your order is on the way';
+          iconEl.textContent = '🛵';
+        } else if (WITH_DRIVER.indexOf(d.status) !== -1) {
+          statusEl.textContent = 'Your order is with a driver';
+          iconEl.textContent = '🛵';
+        } else if (PREPARING.indexOf(d.status) !== -1) {
+          statusEl.textContent = 'Your order is being prepared';
+          iconEl.textContent = '📦';
+        } else {
+          return; // unrecognized status -- fail safe by staying hidden
+        }
+
+        widget.href = 'track.html?order=' + encodeURIComponent(d.order_id);
+        widget.style.display = '';
+      } catch (e) {
+        console.warn('active delivery widget failed to load', e);
+      }
+    });
 
     /* ── Featured Shops — load top 3 by product count after supabase-ready ── */
     document.addEventListener('supabase-ready', async function(ev) {

@@ -2361,3 +2361,23 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
   }
   /* .featured-shops-section h2 mobile size now lives with the base rule above. */
 }
+
+/* ── Active delivery widget (Stage 15, delivery-network-spec.md §50) ── */
+.active-delivery-widget {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  text-decoration: none;
+  box-shadow: 0 4px 16px rgba(10,47,102,0.18);
+  transition: transform .15s;
+}
+.active-delivery-widget:hover { transform: translateY(-1px); }
+.active-delivery-widget .adw-icon { font-size: 26px; line-height: 1; flex-shrink: 0; }
+.active-delivery-widget .adw-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.active-delivery-widget .adw-status { font-weight: 700; font-size: 14px; }
+.active-delivery-widget .adw-cta { font-size: 12px; opacity: 0.85; font-weight: 600; }

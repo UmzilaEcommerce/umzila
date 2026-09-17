@@ -23,6 +23,21 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Delivery network Stage 15 (homepage active-delivery widget) built
+
+**What happened:** Twelfth implementation stage. The plan itself notes this is "substantially delivered by Stage 12," kept as its own stage only for numbering — cosmetic polish per plan §50's exact state-by-state widget spec. Built entirely by me, small and self-contained, no new migration.
+
+**What shipped:** a widget at the top of `index.html`, above the hero carousel, shown only to a signed-in customer with a non-terminal or recently-delivered `deliveries` row. Status-driven copy through "being prepared" → "with a driver" → "on the way"/"arrived" → "delivered ✓" (which then correctly disappears again 2 hours after `delivered_at`, per §50's "no need to permanently occupy homepage real estate").
+
+**One deliberate scope narrowing:** §50's "During active travel" example text is a literal ETA ("Arriving in about 7 minutes") — this build has no ETA-recompute engine (consistent with the founder's own early instruction ruling out in-page routing machinery), so a fabricated minutes figure would be dishonest. Used honest status copy instead, the same principle `track.html`'s staleness label already applies.
+
+**Verified:** `index.html`/`style.css` inline scripts syntax-check clean; the widget's exact `deliveries` query tested for real against the database as the owning customer, confirmed correct. No new migration or RLS change — reuses the existing `deliveries_select_own` policy.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §Q.
+**Commit:** *(pending — see this entry's own commit)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 16 (admin operations dashboard) built — closes Stage 13's PIN-unlock gap
 
 **What happened:** Tenth implementation stage. The plan's own text for this stage was terse but its execution breakdown flagged it as the most parallelizable stage in the whole build (6 independent units, disjoint files/tables). Fixed a security prerequisite and built the pricing editor personally; dispatched two genuinely parallel subagents for the rest — same pattern as Stage 8, every claim independently re-verified against the real database and every diff hunk read personally before trusting it.
