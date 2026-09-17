@@ -103,7 +103,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, userId, couponCode, customerEmail } = JSON.parse(event.body);
+        const { cartItems, userId, couponCode, customerEmail, quoteId } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -409,6 +409,39 @@ variants.forEach(v => {
             }
         }
 
+        // Delivery network Stage 3 (docs/systems/delivery-network-spec.md §E) — a
+        // locked pre-payment quote (plan §104-105) is the trusted delivery total
+        // when one was supplied and is still genuinely valid. This never trusts
+        // the client's own claim about what the quote said -- it re-reads the row
+        // from delivery_quotes itself. Falls through to today's exact computeFees()
+        // behavior (unchanged) whenever no quoteId is given, or the quote doesn't
+        // check out -- fully backward compatible with every caller that predates
+        // quotes entirely.
+        let fees = computeFees(validatedCart);
+        let quoteApplied = false;
+        if (quoteId) {
+            const { data: quoteRow, error: quoteError } = await supabase
+                .from('delivery_quotes')
+                .select('id, customer_id, total_delivery_fee, status, expires_at')
+                .eq('id', quoteId)
+                .maybeSingle();
+
+            const quoteBelongsToCaller = quoteRow && (
+                quoteRow.customer_id === null || quoteRow.customer_id === userId
+            );
+            const quoteStillValid = quoteRow
+                && quoteRow.status === 'active'
+                && new Date(quoteRow.expires_at).getTime() > Date.now();
+
+            if (!quoteError && quoteRow && quoteBelongsToCaller && quoteStillValid) {
+                fees = { ...fees, total: Number(quoteRow.total_delivery_fee), quotedFee: Number(quoteRow.total_delivery_fee) };
+                quoteApplied = true;
+            }
+            // An invalid/expired/mismatched quote is not an error -- it just means
+            // the fallback computeFees() total (already assigned above) is used,
+            // same as if no quoteId had been sent at all.
+        }
+
         return {
             statusCode: 200,
             headers: {
@@ -418,7 +451,8 @@ variants.forEach(v => {
                 validatedCart,
                 total,
                 hasChanges,
-                fees: computeFees(validatedCart),
+                fees,
+                quoteApplied,
                 discount,
                 message: hasChanges ? 'Cart has been updated with current prices and stock' : 'Cart is valid'
             })

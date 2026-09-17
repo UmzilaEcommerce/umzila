@@ -1,6 +1,6 @@
 # Umzila Delivery Network — Master Spec
 
-Status: **STAGE 2 (ADDRESS INFRASTRUCTURE) COMPLETE, 2026-09-17.** Stage 1 (audit, §A) and the Stages 2–17 execution plan (§E) are done. All three judgment-call decisions resolved (§B items 4, 8, 9). Stage 2 itself is built and verified: migrations live, `checkout.html`/`profile.html` capture and store real coordinates from the existing free Photon autocomplete, `seller-dashboard.html` has a pickup-address confirmation UI, `admin.html` has a Service Areas editor, `netlify/functions/check-service-zone.js` does the eligibility check. See §F below for exactly what shipped, what's still a placeholder pending founder input, and one tracked gap. Next: Stage 3 (delivery quote engine — real road-distance pricing) once §C's remaining founder inputs land, or sooner if the founder wants Stage 3 scaffolded ahead of the API key.
+Status: **STAGE 3 (DELIVERY QUOTE ENGINE) COMPLETE, 2026-09-17 — code-complete, not yet live pending one founder input.** Stages 1-2 (§A, §F) done. Stage 3 is fully built and wired end-to-end (migrations, `get-delivery-quote.js`, `validate-cart.js` quote-aware extension, `checkout.html` opportunistic quote fetch) — verified live that it changes nothing about today's working checkout (tested: address picked, quote silently unavailable since no Google key yet, existing pricing renders exactly as before). It will start actually pricing real quotes the moment `GOOGLE_ROUTES_SERVER_KEY` is added in Netlify — no further code changes needed for that to happen. See §G below for exactly what shipped. Next: Stage 4 is a no-op (bundle engine deferred, already true by construction — see §B item 2). Stage 5 (checkout integration / hard requirement + PayFast-adjacent trigger) is the next real stage, or Stage 6 (delivery state machine) if the founder wants to keep building ahead of the Google key landing.
 Owner note: this is the living reference document for the delivery network build. Keep coming back to this file across sessions instead of re-explaining the plan. Update it as stages complete (see `docs/CHANGELOG.md` policy in `CLAUDE.md`).
 
 ---
@@ -510,6 +510,23 @@ Built directly (migrations, `checkout.html`) plus three parallel subagents on ge
 **One tracked gap, not blocking:** `sellers` has no formatted-address *text* column — only `pickup_geo` (coordinates). `seller-dashboard.html` shows the real address text right after a fresh pick, falling back to a same-device `localStorage` echo (never treated as source of truth) or plain "✓ Address confirmed" on a fresh session elsewhere. This will matter once Stage 16 (admin ops) or Stage 8 (dispatch) needs to *display* a pickup address as readable text — revisit then with a proper `pickup_address_text` column rather than adding one speculatively now.
 
 **Verified NOT touched:** `payfast-itn.js`, `generate-payfast-signature.js`, `charge-payfast-token.js` — confirmed via `git status` across the whole Stage 2 diff.
+
+---
+
+## G. Stage 3 — what actually shipped (2026-09-17)
+
+Built directly (migrations, `validate-cart.js`, `checkout.html`) plus one parallel subagent (`get-delivery-quote.js`, the largest single new file in the build so far — 414 lines) — verified independently (syntax-checked, reviewed line-by-line including its custom EWKB point parser, confirmed no PayFast files touched, confirmed `node-fetch` is a real project dependency) before being accepted.
+
+**Migrations (live):**
+- `delivery_pricing_config`: one active row (version 1), seeded with the founder-confirmed R36 tariff (§B item 4) — `distance_tiers` exactly as specified, plus a placeholder `extended_zone_fee` (R100, same as the last named tier) for the plan's unspecified "20km+ → extended-zone logic" case, admin-editable once Stage 16 ships. Public read, admin-only write.
+- `delivery_quotes`: locked pre-payment quotes, service-role-writable only, customers can read their own.
+
+**Files:**
+- `netlify/functions/get-delivery-quote.js` (new): the actual pricing engine. Checks service-zone eligibility *before* calling the (paid) Google Routes API. Refuses multi-seller carts with the plan's exact §20 wording (tracked `TODO(bundle-engine)`, unreachable today). Ports `validate-cart.js`'s existing fee-calculation supporting logic (per-seller surcharge, free-delivery exclusion/threshold, bulk-quantity stepping, custom per-product override, max-fee cap) verbatim, swapping only the base-fee source from class lookup to distance-tier lookup. Never falls back to straight-line distance on a Routes API failure — hard errors instead, per plan §11. Currently returns a clear, specific 500 ("missing GOOGLE_ROUTES_SERVER_KEY") until that key is added — code-complete, not live.
+- `validate-cart.js`: now accepts an optional `quoteId`. When present and the referenced quote is still active, unexpired, and belongs to the requesting customer (or is a guest quote), its `total_delivery_fee` becomes the authoritative `fees.total` instead of the existing `computeFees()` recomputation. Falls through to today's exact unchanged behavior whenever no quote is supplied or it doesn't check out — fully backward compatible, verified by reading the diff against a fresh checkout of the untouched fallback path.
+- `checkout.html`: opportunistically requests a quote the moment a real address is picked (via the Photon autocomplete already wired in Stage 2), storing `state.deliveryQuoteId` only on success. **Deliberately non-blocking** — any failure (missing key today, network error, ineligible address, anything) leaves `deliveryQuoteId` null and checkout proceeds exactly as before. Verified live: picked a real address, confirmed `state.deliveryQuoteId` correctly stayed null (no function exists to call yet in the local harness), confirmed the order summary rendered the identical R22/R121 figures as every prior test this session — Stage 3 changes nothing observable about the live site until the Google key lands.
+
+**Verified NOT touched:** `payfast-itn.js`, `generate-payfast-signature.js`, `charge-payfast-token.js`.
 
 ---
 

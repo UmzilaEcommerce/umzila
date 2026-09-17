@@ -1923,7 +1923,15 @@
                                    // syncCartOnLogin() must leave it alone (see there)
       destinationGeo: null,       // { lat, lon } captured from a picked Photon suggestion —
                                    // delivery-network Stage 2, see applyAddressSuggestion()
-      addressValidatedAt: null
+      addressValidatedAt: null,
+      deliveryQuoteId: null,       // Stage 3 — see fetchDeliveryQuote(). Null until a quote
+                                    // succeeds (won't yet, until GOOGLE_ROUTES_SERVER_KEY is
+                                    // added in Netlify) -- validateCheckout() only sends it
+                                    // along when set, and validate-cart.js already falls back
+                                    // to its existing pricing whenever no quote is supplied.
+      priorityDelivery: false     // No customer-facing opt-in UI yet (future stage per plan
+                                    // §21) -- always false today, just wired through so
+                                    // fetchDeliveryQuote() doesn't need changing when it lands.
     };
 
     // Tip is buyer-favorable money on top of the order — no fraud surface,
@@ -3052,10 +3060,44 @@ async function saveCartToServer() {
         if (Number.isFinite(lon) && Number.isFinite(lat)) {
           state.destinationGeo = { lat, lon };
           state.addressValidatedAt = new Date().toISOString();
+          fetchDeliveryQuote();
         }
       } else {
         state.destinationGeo = null;
         state.addressValidatedAt = null;
+        state.deliveryQuoteId = null;
+      }
+    }
+
+    // Delivery network Stage 3 (docs/systems/delivery-network-spec.md §E) — asks
+    // the server for a locked road-distance delivery quote once a real address
+    // has been picked. Deliberately opportunistic and non-blocking: this cannot
+    // succeed yet (GOOGLE_ROUTES_SERVER_KEY hasn't been added in Netlify), and
+    // when it fails for any reason at all -- missing key, network error,
+    // ineligible address, anything -- state.deliveryQuoteId simply stays null
+    // and checkout proceeds exactly as it does today. validate-cart.js already
+    // falls back to its existing pricing whenever no quoteId is sent, so this
+    // can never make checkout worse, only better once the key lands.
+    async function fetchDeliveryQuote() {
+      state.deliveryQuoteId = null;
+      if (!state.destinationGeo || !state.cart.length) return;
+      try {
+        const res = await fetch('/.netlify/functions/get-delivery-quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cartItems: state.cart,
+            destinationLat: state.destinationGeo.lat,
+            destinationLon: state.destinationGeo.lon,
+            priority: !!state.priorityDelivery,
+            userId: state.user?.id || null
+          })
+        });
+        if (!res.ok) return; // not configured yet, or ineligible -- silent fallback
+        const data = await res.json();
+        if (data && data.quoteId) state.deliveryQuoteId = data.quoteId;
+      } catch (e) {
+        console.warn('Delivery quote unavailable, using existing pricing:', e);
       }
     }
 
@@ -3439,7 +3481,12 @@ async function validateCheckout() {
                 cartItems: state.cart,
                 userId: state.user?.id,
                 couponCode: state.couponCode || undefined,
-                customerEmail: state.user?.email || elements.customerEmail?.value || ''
+                customerEmail: state.user?.email || elements.customerEmail?.value || '',
+                // Stage 3 — only present once fetchDeliveryQuote() has actually
+                // succeeded; validate-cart.js ignores this key entirely when
+                // absent/invalid and uses its existing pricing, same as before
+                // this field existed.
+                quoteId: state.deliveryQuoteId || undefined
             })
         });
 
