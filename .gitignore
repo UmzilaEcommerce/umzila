@@ -6,3 +6,6 @@ node_modules/
 
 # Local Netlify folder
 .netlify
+
+# Netlify Dev's Deno lockfile (local dev-server artifact, not project source)
+deno.lock

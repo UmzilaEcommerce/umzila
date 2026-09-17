@@ -42,6 +42,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Full live end-to-end browser test finds and fixes two real production-blocking bugs
+
+**What happened:** discovered mid-session that `umzila.store`'s Netlify deploys had silently stopped after Stage 6 — the account ran out of build-credit minutes, and every deploy since has failed with `"Skipped due to account credit usage exceeded"` (confirmed via the Netlify API's deploy history). Nothing from Stage 7 onward had ever run for real anywhere. Linked the local repo to the real Netlify site and ran `netlify dev` (pulling real env vars directly from Netlify, never through chat), then drove a real test order through the entire real pipeline across three real, separately-logged-in browser tabs (customer/seller/driver).
+
+**Two real bugs found, both invisible to every earlier SQL-only test:**
+1. **Every delivery offer acceptance was silently broken in production.** `transitionDelivery()` never selected `quote_id`/`destination_geo` on its `deliveries` queries; `respond-to-driver-offer.js` reads both directly off its return value, so both were always `undefined` and route creation failed with `reason: 'no_quote'` on every real accept, every time, silently reverting to `REASSIGNING`. A driver could never actually be assigned a route in this entire build until this test caught it. Fixed by adding both columns to `lib/delivery-state.js`'s two `SELECT`s.
+2. **The pickup checklist could never load for a real order.** The live checkout flow has never once written to `order_items` (confirmed by a full codebase grep — zero write sites anywhere); only `orders.items` (jsonb) is reliably populated, but the Stage 9+10 pickup checklist and `route_stop_items`'s real foreign key both depend on `order_items`. Root-cause fixed (not a read-path patch) with a new trigger, `populate_order_items_on_payment()`, mirroring the existing `create_delivery_on_payment()` trigger exactly — purely additive, fires for every paid order.
+
+**Verified:** both fixes re-verified live in the same browser session immediately after fixing — the full order flowed all the way through to `DELIVERED`, with a real auto-computed payout (R20.00, matching the real formula exactly), real live tracking, real feedback submission visible on the seller and admin dashboards, and 3 real confirmation emails sent via Resend (confirms Stage 14 genuinely works). All 4 new admin tabs confirmed rendering correctly with real data for the first time, including Stage 16's subagent-built Delivery Ops map. All test data (order, delivery, route, driver, feedback, notification log) cleaned from the real database afterward — zero leftover rows.
+
+**Why this matters:** every prior stage's database-level testing this session was real and rigorous, but this was the first time the actual integration between functions — not each function's logic in isolation — was exercised. Both bugs were integration bugs, invisible to any test that manually assembled the data a function expected rather than actually calling the function that was supposed to produce it.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §V.
+**Commit:** *(pending — see this entry's own commit; not pushed yet per founder instruction, Netlify is out of deploy credits)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 17 (analytics) built — the full 196-section plan is now complete
 
 **What happened:** Fifteenth and final implementation stage of the delivery network build. Unlike every other stage, the plan itself frames this one as explicitly lowest priority and "post-pilot-validation... not part of the launch checklist," since it needs real operational data to be meaningful — built anyway, structurally correct, per the founder's standing "nothing gets left out" instruction, with the honest caveat that it will show near-empty numbers until real delivery volume exists.

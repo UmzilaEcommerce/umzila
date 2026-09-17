@@ -67,6 +67,18 @@ function isValidTransition(fromStatus, toStatus) {
 // { ok: false, reason: 'invalid_transition' | 'not_found' | 'conflict' | 'db_error', detail? }
 // on failure. Never throws for an expected failure mode -- callers decide
 // what HTTP status/message that maps to.
+//
+// The returned `delivery` MUST include quote_id and destination_geo --
+// respond-to-driver-offer.js's createRouteForAcceptedOffer()/
+// appendToExistingRoute() read both directly off this returned object (not
+// a separate fetch) to build the route. A real bug, found via a full
+// browser-driven end-to-end test (not caught by any earlier SQL-only test,
+// since those manually constructed the delivery object rather than going
+// through this exact function): both SELECTs below originally omitted
+// quote_id/destination_geo, so every single real ASSIGNED transition failed
+// route creation with reason:'no_quote' and silently reverted to
+// REASSIGNING -- accepting a delivery offer never actually worked in
+// production. Fixed 2026-09-17.
 async function transitionDelivery(supabase, deliveryId, toStatus, actor, options = {}) {
   if (!supabase || !deliveryId || !toStatus) {
     return { ok: false, reason: 'invalid_transition', detail: 'Missing supabase/deliveryId/toStatus' };
@@ -77,7 +89,7 @@ async function transitionDelivery(supabase, deliveryId, toStatus, actor, options
 
   const { data: current, error: readError } = await supabase
     .from('deliveries')
-    .select('id, status, order_id, customer_id, route_id')
+    .select('id, status, order_id, customer_id, route_id, quote_id, destination_geo')
     .eq('id', deliveryId)
     .maybeSingle();
 
@@ -103,7 +115,7 @@ async function transitionDelivery(supabase, deliveryId, toStatus, actor, options
     .update(patch)
     .eq('id', deliveryId)
     .eq('status', current.status) // optimistic concurrency guard
-    .select('id, status, order_id, customer_id, route_id, dispatched_at, delivered_at, cancelled_at, failure_reason')
+    .select('id, status, order_id, customer_id, route_id, quote_id, destination_geo, dispatched_at, delivered_at, cancelled_at, failure_reason')
     .maybeSingle();
 
   if (updateError) return { ok: false, reason: 'db_error', detail: updateError.message };
