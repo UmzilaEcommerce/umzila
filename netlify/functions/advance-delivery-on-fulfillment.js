@@ -16,6 +16,7 @@
 // seller-dashboard.html and stays there unchanged.
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
+const { dispatchDelivery } = require('./lib/dispatch');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -81,6 +82,22 @@ exports.handler = async function (event) {
         return { statusCode: 200, headers, body: JSON.stringify({ ok: true, skipped: true, reason: 'concurrent_advance' }) };
       }
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to advance delivery', detail: result.detail || result.reason }) };
+    }
+
+    // Delivery network Stage 8 -- immediately try to offer this delivery to
+    // the nearest eligible online driver, same request, no separate
+    // cron/polling dispatcher needed for the 2-rider pilot. This must never
+    // turn a successful fulfillment update into an error response: if no
+    // driver is online (or anything else about dispatch goes wrong), the
+    // delivery correctly just stays at READY_FOR_DISPATCH for a later
+    // heartbeat or manual admin redispatch (dispatch-delivery.js) to pick up.
+    try {
+      const dispatchResult = await dispatchDelivery(supabase, delivery.id);
+      if (!dispatchResult.dispatched) {
+        console.warn('advance-delivery-on-fulfillment: dispatch not completed', dispatchResult.reason, dispatchResult.detail || '');
+      }
+    } catch (dispatchError) {
+      console.warn('advance-delivery-on-fulfillment: dispatchDelivery threw', dispatchError && dispatchError.message);
     }
 
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: result.delivery }) };

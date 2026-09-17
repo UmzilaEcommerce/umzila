@@ -305,6 +305,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
       <span>Service Tasks</span>
     </button>
+    <button class="nav-item" data-panel="delivery">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      <span>Delivery</span>
+    </button>
     <button class="nav-item" data-panel="stores">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       <span>Stores</span>
@@ -347,6 +351,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   <button class="bnav-item" data-panel="services">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
     <span>Services</span>
+  </button>
+  <button class="bnav-item" data-panel="delivery">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    <span>Delivery</span>
   </button>
   <button class="bnav-item" data-panel="analytics">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
@@ -507,6 +515,27 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
     <div id="available-service-tasks-list"><div class="orders-empty">Loading…</div></div>
   </section>
 
+  <!-- Delivery -->
+  <section id="panel-delivery" class="panel">
+    <div class="panel-title">
+      Delivery
+      <button class="btn btn-ghost btn-sm" id="refreshDeliveryOffers">Refresh</button>
+    </div>
+
+    <div class="item-card" style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px" id="deliveryStatusLabel">You're offline</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="deliveryStatusSub">Go online to start receiving delivery offers</div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="deliveryToggleBtn">Go Online for Delivery</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--muted)">DELIVERY OFFERS</div>
+    <div id="delivery-offers-list"><div class="orders-empty">Go online to start receiving delivery offers</div></div>
+  </section>
+
   <!-- Stores -->
   <section id="panel-stores" class="panel">
     <div class="panel-title">
@@ -595,6 +624,10 @@ document.addEventListener('sb-ready', function(e){
   let _storesLoaded = false;
   let _allStores = [];
   let _searchPreState = null;
+  let DRIVER_ID = null;
+  let deliveryOnline = false;
+  let deliveryHeartbeatTimer = null;
+  let deliveryOffersTimer = null;
 
   /* ═══════════════════════════════════════════
      AUTH
@@ -841,17 +874,20 @@ document.addEventListener('sb-ready', function(e){
      PANEL NAVIGATION
   ═══════════════════════════════════════════ */
   function showPanel(name){
+    const prevPanel=activePanel;
     activePanel=name;
     document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     document.getElementById('panel-'+name)?.classList.add('active');
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
     document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
+    if(prevPanel==='delivery'&&name!=='delivery') stopDeliveryIntervals();
     if(name==='orders') renderOrders();
     if(name==='past') renderPast();
     if(name==='overview') renderOverview();
     if(name==='stores') loadStores();
     if(name==='baskets') loadBaskets();
     if(name==='services') renderServiceTasks();
+    if(name==='delivery') renderDeliveryPanel();
     if(name==='analytics') initAnalytics();
     if(name==='settings') renderSettings();
   }
@@ -2086,6 +2122,191 @@ document.addEventListener('sb-ready', function(e){
       }
     });
   }
+
+  /* ═══════════════════════════════════════════
+     DELIVERY (live rider dispatch — same reps, new capability;
+     driver-heartbeat.js / respond-to-driver-offer.js do the writes,
+     driver_offers is read directly since RLS already scopes it to
+     the caller's own driver row)
+  ═══════════════════════════════════════════ */
+  function getGeoPosition(){
+    return new Promise(resolve=>{
+      if(!navigator.geolocation){ resolve(null); return; }
+      navigator.geolocation.getCurrentPosition(
+        pos=>resolve({
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          heading: pos.coords.heading==null?undefined:pos.coords.heading,
+          speed: pos.coords.speed==null?undefined:pos.coords.speed
+        }),
+        ()=>resolve(null),
+        { enableHighAccuracy:false, timeout:5000, maximumAge:15000 }
+      );
+    });
+  }
+
+  async function sendDriverHeartbeat(isOnline){
+    const geo = await getGeoPosition();
+    const body = { isOnline };
+    if(geo){
+      body.lat = geo.lat; body.lon = geo.lon;
+      if(geo.heading!==undefined) body.heading = geo.heading;
+      if(geo.speed!==undefined) body.speed = geo.speed;
+    }
+    const { data:{ session } } = await sb.auth.getSession();
+    const res = await fetch('/.netlify/functions/driver-heartbeat', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
+      body: JSON.stringify(body)
+    });
+    const result = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(result.error||'Could not update delivery status');
+    if(result?.id) DRIVER_ID = result.id;
+    return result;
+  }
+
+  async function ensureDriverId(){
+    if(DRIVER_ID || !CURRENT_USER_ID) return DRIVER_ID;
+    const { data } = await sb.from('drivers').select('id').eq('user_id', CURRENT_USER_ID).maybeSingle();
+    if(data?.id) DRIVER_ID = data.id;
+    return DRIVER_ID;
+  }
+
+  function updateDeliveryToggleUI(){
+    const btn = document.getElementById('deliveryToggleBtn');
+    const label = document.getElementById('deliveryStatusLabel');
+    const sub = document.getElementById('deliveryStatusSub');
+    if(!btn) return;
+    if(deliveryOnline){
+      btn.textContent = "You're Online";
+      btn.classList.remove('btn-primary'); btn.classList.add('btn-ghost');
+      if(label){ label.textContent = "You're online"; label.style.color = 'var(--success)'; }
+      if(sub) sub.textContent = "We'll notify you when a delivery offer comes in.";
+    } else {
+      btn.textContent = 'Go Online for Delivery';
+      btn.classList.remove('btn-ghost'); btn.classList.add('btn-primary');
+      if(label){ label.textContent = "You're offline"; label.style.color = ''; }
+      if(sub) sub.textContent = 'Go online to start receiving delivery offers';
+    }
+  }
+
+  function stopDeliveryIntervals(){
+    if(deliveryHeartbeatTimer){ clearInterval(deliveryHeartbeatTimer); deliveryHeartbeatTimer=null; }
+    if(deliveryOffersTimer){ clearInterval(deliveryOffersTimer); deliveryOffersTimer=null; }
+  }
+
+  function startDeliveryIntervals(){
+    stopDeliveryIntervals();
+    deliveryHeartbeatTimer = setInterval(()=>{ sendDriverHeartbeat(true).catch(()=>{}); }, 30000);
+    deliveryOffersTimer = setInterval(renderDeliveryOffers, 10000);
+  }
+
+  async function setDeliveryOnline(next){
+    const btn = document.getElementById('deliveryToggleBtn');
+    if(btn) btn.disabled = true;
+    try{
+      await sendDriverHeartbeat(next);
+      deliveryOnline = next;
+      updateDeliveryToggleUI();
+      if(next){
+        startDeliveryIntervals();
+        await renderDeliveryOffers();
+      } else {
+        stopDeliveryIntervals();
+        const el = document.getElementById('delivery-offers-list');
+        if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
+      }
+    } catch(err){
+      toast(err.message || 'Could not update delivery status', 'error');
+    } finally {
+      if(btn) btn.disabled = false;
+    }
+  }
+
+  function renderDeliveryOfferCard(o){
+    return `<div class="item-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:14px">NEW DELIVERY</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:2px">Estimated payout: <strong style="color:var(--text)">${fmt(o.payout_amount)}</strong></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" data-offer-respond="accept" data-offer-id="${esc(o.id)}">Accept</button>
+          <button class="btn btn-ghost btn-sm" data-offer-respond="decline" data-offer-id="${esc(o.id)}">Decline</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function wireDeliveryOfferActions(){
+    document.querySelectorAll('[data-offer-respond]').forEach(btn=>{
+      btn.addEventListener('click', ()=> respondToDriverOffer(btn.dataset.offerId, btn.dataset.offerRespond));
+    });
+  }
+
+  async function respondToDriverOffer(offerId, response){
+    const card = document.querySelector(`[data-offer-id="${offerId}"]`)?.closest('.item-card');
+    document.querySelectorAll(`[data-offer-id="${offerId}"]`).forEach(b=>b.disabled=true);
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      const res = await fetch('/.netlify/functions/respond-to-driver-offer', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
+        body: JSON.stringify({ offerId, response })
+      });
+      const result = await res.json().catch(()=>({}));
+      if(!res.ok) throw new Error(result.error || 'Could not respond to offer');
+      if(card) card.remove();
+      toast(response==='accept' ? 'Delivery accepted' : 'Offer declined');
+    } catch(err){
+      toast(err.message || 'Could not respond to offer', 'error');
+    } finally {
+      renderDeliveryOffers();
+    }
+  }
+
+  async function renderDeliveryOffers(){
+    if(!deliveryOnline || activePanel!=='delivery') return;
+    const listEl = document.getElementById('delivery-offers-list');
+    if(!listEl) return;
+    try{
+      await ensureDriverId();
+      if(!DRIVER_ID){
+        listEl.innerHTML = '<div class="orders-empty">No delivery offers right now — we\'ll notify you when one comes in.</div>';
+        return;
+      }
+      const { data, error } = await sb.from('driver_offers')
+        .select('id, payout_amount, status, expires_at, created_at')
+        .eq('driver_id', DRIVER_ID)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending:false });
+      if(error){ listEl.innerHTML = `<div class="orders-empty">Error: ${esc(error.message)}</div>`; return; }
+      if(!data || !data.length){
+        listEl.innerHTML = '<div class="orders-empty">No delivery offers right now — we\'ll notify you when one comes in.</div>';
+        return;
+      }
+      listEl.innerHTML = data.map(renderDeliveryOfferCard).join('');
+      wireDeliveryOfferActions();
+    } catch(_){
+      listEl.innerHTML = '<div class="orders-empty">Could not load delivery offers.</div>';
+    }
+  }
+
+  async function renderDeliveryPanel(){
+    await ensureDriverId();
+    updateDeliveryToggleUI();
+    if(deliveryOnline){
+      startDeliveryIntervals();
+      renderDeliveryOffers();
+    } else {
+      const el = document.getElementById('delivery-offers-list');
+      if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
+    }
+  }
+
+  document.getElementById('deliveryToggleBtn')?.addEventListener('click', ()=> setDeliveryOnline(!deliveryOnline));
+  document.getElementById('refreshDeliveryOffers')?.addEventListener('click', renderDeliveryOffers);
 
   /* ═══════════════════════════════════════════
      STORES
