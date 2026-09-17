@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { emailShell, esc } = require('./lib/notify');
 
 const RESEND_RATE_LIMIT_MS = 2 * 60 * 60 * 1000; // 2h — a rep shouldn't be able to spam "we're off" repeatedly
 
@@ -114,38 +115,23 @@ exports.handler = async function (event) {
         ? `${formatSAST(slotStart, { weekday: 'short', day: 'numeric', month: 'short' })} around ${formatSAST(slotStart, { hour: '2-digit', minute: '2-digit', hour12: false })}`
         : null;
 
-    const esc = (s) => (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
     const subject = "And we're off! 🛵 Your Umzila rep is on the move";
     const leadHtml = leg === 'collect'
         ? `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rep is heading out to collect <strong>${esc(itemName)}</strong> now${slotLabel ? ` — you picked <strong>${esc(slotLabel)}</strong>` : ''}. Have it ready to go!</p>`
         : `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Good news — <strong>${esc(itemName)}</strong> is finished and your Umzila rep is on the way to bring it to you${slotLabel ? `, around <strong>${esc(slotLabel)}</strong>` : ''}.</p>`;
 
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif">
-<div style="max-width:580px;margin:30px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
-  <div style="background:#0a2f66;padding:28px 36px;text-align:center">
-    <div style="font-size:28px;font-weight:900;color:#fff;margin:0">Umzila</div>
-    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">campus marketplace</div>
-  </div>
-  <div style="padding:32px 36px">
-    <h2 style="color:#0a2f66;margin:0 0 12px;font-size:22px">And we're off! 🛵</h2>
-    ${leadHtml}
+    // Shared header/footer chrome now lives in lib/notify.js (Stage 14) so
+    // this and the delivery-network's own transactional emails don't each
+    // carry a separate copy of the same boilerplate -- only this function's
+    // own rep-collection copy/trigger logic stays here, unchanged.
+    const bodyHtml = `${leadHtml}
     <div style="background:#f8faff;border-radius:10px;padding:14px 18px;margin:20px 0;font-size:13px;color:#555">
       Order <strong>#${esc(orderRef)}</strong>
-    </div>
-    <div style="text-align:center;margin:28px 0 8px">
+    </div>`;
+    const ctaHtml = `<div style="text-align:center;margin:28px 0 8px">
       <a href="${esc(SITE_BASE_URL)}/profile.html" style="display:inline-block;background:#0a2f66;color:#fff;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px">Track my order</a>
-    </div>
-  </div>
-  <div style="background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0">
-    <strong><a href="${esc(SITE_BASE_URL)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; campus marketplace
-  </div>
-</div>
-</body>
-</html>`;
+    </div>`;
+    const html = emailShell(SITE_BASE_URL, "And we're off! 🛵", bodyHtml, ctaHtml);
 
     try {
         const res = await fetch('https://api.resend.com/emails', {

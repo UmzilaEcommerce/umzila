@@ -4,6 +4,25 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Delivery network Stage 14 (notification system) built
+
+**What happened:** Eleventh implementation stage, built entirely by me (touches the shared `lib/delivery-state.js` central to every delivery function, kept out of subagent hands). Plan §168 asks for centralized notification triggering rather than scattering calls across dispatch/pickup/PIN functions — `notify()` is now called from a single place, `transitionDelivery()` itself, so every future status-changing code path gets notifications automatically.
+
+**Scope decision, made explicitly:** email only, not email+in-app. No customer-facing in-app notification feed exists anywhere in this codebase, and `track.html` (Stage 12) already gives customers live in-app status visibility — building a duplicate in-app notification center wasn't justified for a pilot with no real delivery volume yet. The `channel` column still supports `'in_app'` for later.
+
+**What shipped:** new `notification_log` table with a unique dedup index (plan §111/169 — never double-send the same delivery-status email); new `netlify/functions/lib/notify.js` sending Resend emails for the 5 delivery states a customer actually needs to know about (`IN_ROUTE`, `ARRIVING`, `DELIVERED`, `FAILED`, `CANCELLED`), in the plan's specified warm/expressive tone, with the delivery PIN and a `track.html` link embedded directly in the relevant emails. `transitionDelivery()` now calls it on every successful transition (awaited, not fire-and-forget — a Netlify Function process can freeze the instant its handler resolves, so this matches the existing awaited-but-error-tolerant pattern already used for dispatch).
+
+**Reconciled, not rewritten:** `send-on-the-way.js` (the existing service-collection "rep is on the way" email, a separate live system) had its own inline copy of the exact email header/footer chrome `lib/notify.js` also needs — per the plan's explicit "reconcile, don't duplicate... extend/wrap, don't rewrite" instruction, only that shared chrome now comes from `lib/notify.js`'s exported `emailShell()`/`esc()` helpers. The function's own trigger logic, auth, and rate-limiting are completely untouched. Verified byte-for-byte identical HTML output before/after via a side-by-side Node script — a true no-op refactor of a live path, not a behavior change.
+
+**Verified:** all 3 touched files pass `node --check`; `notify()`'s two fast-paths (missing `RESEND_API_KEY`, non-notifiable event) unit-tested directly with a garbage Supabase client to guarantee no accidental real call; the dedup unique index tested for real against the database (exact duplicate correctly rejected, different event correctly allowed); `send-on-the-way.js`'s refactored output confirmed byte-identical to the original. Security advisor sweep clean relative to this stage. No PayFast/checkout/seller-dashboard/admin/logistics file touched.
+
+**Known limitation, tracked not hidden:** no real Resend send was exercised end-to-end in this session's sandbox (no `RESEND_API_KEY` available locally) — verified at the unit/DB level only, same class of limitation already flagged for other frontend/integration work this session.
+
+**Full write-up:** `docs/systems/delivery-network-spec.md` §P.
+**Commit:** *(pending — see this entry's own commit)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 16 (admin operations dashboard) built — closes Stage 13's PIN-unlock gap
 
 **What happened:** Tenth implementation stage. The plan's own text for this stage was terse but its execution breakdown flagged it as the most parallelizable stage in the whole build (6 independent units, disjoint files/tables). Fixed a security prerequisite and built the pricing editor personally; dispatched two genuinely parallel subagents for the rest — same pattern as Stage 8, every claim independently re-verified against the real database and every diff hunk read personally before trusting it.

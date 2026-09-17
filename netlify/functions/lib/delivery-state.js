@@ -13,6 +13,8 @@
 // Does not touch payfast-itn.js, generate-payfast-signature.js,
 // charge-payfast-token.js, checkout.html, or validate-cart.js.
 
+const { notify } = require('./notify');
+
 // Allowed next-states per current state. Deliberately generous on the
 // exception paths (CANCELLED/FAILED/REASSIGNING reachable from most active,
 // non-terminal states) per plan §81/82 — real operational exceptions need
@@ -120,6 +122,21 @@ async function transitionDelivery(supabase, deliveryId, toStatus, actor, options
       metadata: options.metadata || null
     });
     if (eventError) console.warn('transitionDelivery: named event log failed (transition itself still succeeded):', eventError.message);
+  }
+
+  // Stage 14 (plan §168): customer notification is centralized here, on
+  // every successful transition, rather than scattered across dispatch/
+  // pickup/PIN functions. notify() itself decides whether toStatus is
+  // actually notifiable and never throws -- awaited (not truly fire-and-
+  // forget) because a Netlify Function's process can be frozen the instant
+  // its handler's promise resolves, so an un-awaited call here could be cut
+  // off mid-send; matches this codebase's existing dispatchDelivery() call
+  // in advance-delivery-on-fulfillment.js, which is awaited but wrapped so
+  // its own failure never fails the caller.
+  try {
+    await notify(supabase, deliveryId, toStatus);
+  } catch (notifyError) {
+    console.warn('transitionDelivery: notify() threw (transition itself still succeeded):', notifyError.message);
   }
 
   return { ok: true, delivery: updated };
