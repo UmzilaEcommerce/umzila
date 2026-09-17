@@ -1104,6 +1104,7 @@
   // ── ORDERS ───────────────────────────────────────────────────
   let ordersData = [];
   let itemStatusesCache = {};
+  let deliveryStatusCache = {}; // order_id -> deliveries.status, delivery-network orders only
 
   async function loadOrders() {
     const user = await requireUser(); if (!user) return;
@@ -1142,6 +1143,17 @@
         if (!itemStatusesCache[s.order_id]) itemStatusesCache[s.order_id] = [];
         itemStatusesCache[s.order_id].push(s);
       });
+
+      // Delivery-network orders (delivery_quote_id set at checkout) have a real,
+      // driver-confirmed status in `deliveries` -- for these, that's the only
+      // source of truth for "has this actually been delivered", never the
+      // order_item_statuses/order_status derived below (see renderOrder).
+      const deliveryOrderIds = orders.filter(o => o.delivery_quote_id).map(o => o.id);
+      deliveryStatusCache = {};
+      if (deliveryOrderIds.length) {
+        const { data: deliveryRows } = await sb.from('deliveries').select('order_id, status').in('order_id', deliveryOrderIds);
+        (deliveryRows || []).forEach(d => { deliveryStatusCache[d.order_id] = d.status; });
+      }
 
       // Fetch product images
       const productIds = [...new Set(orders.flatMap(o => (o.items||[]).map(i => i.product_id||i.id).filter(Boolean)))];
@@ -1337,6 +1349,7 @@
     const map = {
       paid: ['badge-paid','Paid'],
       Delivered: ['badge-delivered','Delivered'],
+      'Out for Delivery': ['badge-paid','Out for Delivery'],
       cancelled: ['badge-cancelled','Cancelled'],
       Cancelled: ['badge-cancelled','Cancelled'],
       Returned: ['badge-returned','Returned'],
@@ -1345,13 +1358,35 @@
     return `<span class="order-badge ${cls}">${label}</span>`;
   }
 
+  // Delivery-network header status: maps the real deliveries.status (driver/
+  // PIN-confirmed, see confirm-delivery-pin.js) to what the customer should
+  // see -- deliberately collapses everything before the driver is actually
+  // en route to the customer into "Paid" (not "Fulfilled"/"Packaging"), since
+  // those in-between states are store/dispatch mechanics the customer never
+  // needs to track. Only DELIVERED is ever "Delivered" here.
+  function deliveryHeaderStatus(deliveryStatus) {
+    if (deliveryStatus === 'DELIVERED') return 'Delivered';
+    if (['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED'].includes(deliveryStatus)) return 'Out for Delivery';
+    if (deliveryStatus === 'CANCELLED') return 'Cancelled';
+    if (deliveryStatus === 'FAILED' || deliveryStatus === 'RETURNED') return 'Returned';
+    return 'paid';
+  }
+
   function renderOrder(o, imageMap) {
     const items = o.items || [];
     const statuses = itemStatusesCache[o.id] || [];
     const createdMs = o.created_at ? new Date(o.created_at).getTime() : 0;
     const canRefund = (Date.now() - createdMs) / 60000 < 5;
     const orderRef = o.order_number || String(o.id).slice(0,8).toUpperCase();
-    const headerStatus = statuses.length && items.every((_,i) => { const st=statuses.find(s=>s.item_index===i); return st && ['delivered','refunded'].includes(st.status); }) ? 'Delivered' : (o.order_status || 'paid');
+    // Delivery-network orders: the seller's fulfillment dropdown / order_item_statuses
+    // is NOT the source of truth for "delivered" -- only the driver's real PIN
+    // confirmation (deliveries.status) is. Using the order_item_statuses aggregate
+    // here caused a "delivered" popup the moment a seller marked items ready, before
+    // the order had even left the store.
+    const isDeliveryNetwork = !!o.delivery_quote_id && Object.prototype.hasOwnProperty.call(deliveryStatusCache, o.id);
+    const headerStatus = isDeliveryNetwork
+      ? deliveryHeaderStatus(deliveryStatusCache[o.id])
+      : (statuses.length && items.every((_,i) => { const st=statuses.find(s=>s.item_index===i); return st && ['delivered','refunded'].includes(st.status); }) ? 'Delivered' : (o.order_status || 'paid'));
 
     // Thumbs (up to 3)
     const thumbsHtml = items.slice(0,3).map(it => {
@@ -1394,10 +1429,17 @@
 
       const status = st?.status || 'pending';
       const badgeMap = { delivered:['ib-delivered','✓ Delivered'], disputed:['ib-disputed','⚠ Disputed'], refunded:['ib-refunded','↩ Refunded'], fulfilled:['ib-pending','Fulfilled — confirm?'] };
+      // Delivery-network items: 'fulfilled' here just means the seller packed it
+      // for pickup, not that it reached the customer -- don't show the "confirm?"
+      // wording or ask the buyer to self-report receipt for these. The driver's
+      // PIN confirmation (deliveryStatusCache) is the only real delivered signal.
+      if (isDeliveryNetwork && status === 'fulfilled') {
+        badgeMap.fulfilled = deliveryStatusCache[o.id] === 'DELIVERED' ? ['ib-delivered','✓ Delivered'] : ['ib-pending','Preparing'];
+      }
       const [bc, bl] = badgeMap[status] || ['ib-pending','Pending'];
 
       let actionHtml = '';
-      if (st?.status === 'fulfilled' && !st.buyer_confirmed_at) {
+      if (st?.status === 'fulfilled' && !st.buyer_confirmed_at && !isDeliveryNetwork) {
         actionHtml = `<div style="margin-top:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px;font-size:12px;color:#14532d">
           Seller marked this as delivered. Did you receive it?
           <div style="display:flex;gap:8px;margin-top:8px">

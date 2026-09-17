@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-17 — Founder correction: seller "ready" toggle, premature "delivered" popup, tracking-activation gate
+
+**What was broken:** the seller dashboard let sellers pick any of 5 states (`Pending/Packaging/Fulfilled/Delivered/Returned`) for delivery-network orders. Marking `Fulfilled` (packed, not yet shipped) wrote `order_item_statuses.status='fulfilled'`, which `profile.html` reads as "Seller marked this as delivered. Did you receive it?" — so customers were prompted to confirm delivery before the order had even left the store. Root cause: an earlier same-session design correction (§J, Stage 7) reused this existing 5-state dropdown instead of building the plan's own §40 "simple binary ready toggle" — the aggregation logic was reused correctly, but the semantics ("fulfilled" == "delivered" from the customer's POV) weren't.
+
+**What changed:**
+- `seller-dashboard.html`: delivery-network orders (have a `deliveries` row) now get a binary `[Mark Ready for Pickup]` → `✓ Ready for Pickup` control instead of the 5-state dropdown; non-delivery-network orders are unaffected. New `sellers_select_own_order_deliveries` RLS policy on `deliveries` (there was none for sellers before) makes this possible.
+- `profile.html`: delivery-network orders now derive customer-facing status from the real `deliveries.status`, not the `order_item_statuses` aggregate; the premature "did you receive it?" self-report prompt is suppressed for these orders — the driver's real PIN confirmation is now the only thing that can show "Delivered".
+- `track.html`: fixed a related copy bug found while closing this out — the "no rider assigned yet" fallback text was still shown whenever driver coordinates are hidden by the earlier tracking-activation gate, even once a rider actually is assigned and collecting (just not yet visible per design). Now shows accurate copy for that state.
+- Confirmed `advance-route.js`'s pickup-acceptance path never gated on seller readiness in the first place (verified by reading it, no change needed) — a biker showing up before the seller clicks "ready" was never blocked.
+- Answered the standing "is order bundling built" question: multi-store cart bundling (different sellers in one delivery) is deliberately deferred per §B.2 (only one store exists to test against); multi-delivery route batching (different customers on one route) is already built and live (`evaluateBatchCandidates`, Stage 11).
+
+**Files:** `seller-dashboard.html`, `profile.html`, `track.html`, migration `sellers_select_own_order_deliveries`.
+**Full write-up:** `docs/systems/delivery-network-spec.md` §W.
+**Commit:** *(pending — see this entry's own commit; not pushed yet, per founder instruction)*
+
+---
+
 ## 2026-09-17 — Delivery network Stage 14 (notification system) built
 
 **What happened:** Eleventh implementation stage, built entirely by me (touches the shared `lib/delivery-state.js` central to every delivery function, kept out of subagent hands). Plan §168 asks for centralized notification triggering rather than scattering calls across dispatch/pickup/PIN functions — `notify()` is now called from a single place, `transitionDelivery()` itself, so every future status-changing code path gets notifications automatically.

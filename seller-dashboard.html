@@ -3220,13 +3220,27 @@
       // from those instead (see updateOrderFulfillment for the write side).
       var orderIds = myOrders.map(function(o) { return o.id; });
       var myStatuses = [];
+      var deliveryRows = [];
       if (orderIds.length) {
         var { data: statusRows } = await SD.sb.from('order_item_statuses')
           .select('order_id, item_index, status, buyer_confirmed_at')
           .eq('seller_id', SD.seller.id)
           .in('order_id', orderIds);
         myStatuses = statusRows || [];
+
+        // Delivery-network orders (plan §40 "store readiness") get a simple
+        // binary Mark Ready control instead of the 5-state dropdown below --
+        // see renderOrders(). A seller being able to pick 'Fulfilled'/
+        // 'Delivered' on these orders is what corrupted profile.html's
+        // customer-facing status (fixed there too, same day).
+        var { data: dRows } = await SD.sb.from('deliveries').select('order_id, status').in('order_id', orderIds);
+        deliveryRows = dRows || [];
       }
+      var deliveryByOrder = {};
+      deliveryRows.forEach(function(d) { deliveryByOrder[d.order_id] = d.status; });
+      myOrders.forEach(function(o) {
+        o._deliveryStatus = deliveryByOrder.hasOwnProperty(o.id) ? deliveryByOrder[o.id] : null;
+      });
       myOrders.forEach(function(o) {
         var rows = myStatuses.filter(function(s) { return s.order_id === o.id; });
         var myItemCount = (Array.isArray(o.items) ? o.items : []).filter(function(i) {
@@ -3273,6 +3287,73 @@
         servicePanel.style.display = '';
         loadServiceOrders();
       }
+    };
+
+    // order._deliveryStatus === null means this order has no `deliveries` row
+    // (not a delivery-network order, e.g. no Google key was live at checkout)
+    // -- keep the original 5-state dropdown fully unchanged for those. Every
+    // other order gets the plan's simple binary toggle instead: sellers were
+    // able to jump straight to 'Fulfilled'/'Delivered', which wrote a
+    // premature 'delivered' status that leaked into the customer's profile
+    // page before the order had even left the store (fixed there too).
+    function renderFulfillmentControl(order, fulfillStatus) {
+      if (order._deliveryStatus === null) {
+        return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
+          '<select class="fulfillment-select" data-order-id="' + order.id + '" onchange="updateOrderFulfillment(this)">' +
+            ['Pending','Packaging','Fulfilled','Delivered','Returned'].map(function(s) {
+              return '<option' + (s === fulfillStatus ? ' selected' : '') + '>' + s + '</option>';
+            }).join('') +
+          '</select>';
+      }
+      if (order._deliveryStatus === 'PENDING') {
+        return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>' +
+          '<button class="btn primary sm" data-order-id="' + order.id + '" onclick="markOrderReady(this)">Mark Ready for Pickup</button>';
+      }
+      return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>' +
+        '<span class="payment-pill paid">✓ Ready for Pickup</span>';
+    }
+
+    // Binary "not ready -> ready" toggle for delivery-network orders (plan
+    // §40, "no logistics controls are needed"). This is one-way and does not
+    // gate biker pickup acceptance at all -- advance-route.js's complete_pickup
+    // never checks this, so a biker who shows up before the seller clicks
+    // this button still gets accepted (Fix C, advance-route.js).
+    window.markOrderReady = async function(btn) {
+      var orderId = btn.dataset.orderId;
+      var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
+      btn.disabled = true;
+      btn.textContent = 'Marking ready…';
+
+      // Same per-item write the old 'Fulfilled' dropdown option made (kept so
+      // seller past-orders / order_item_statuses-based views elsewhere still
+      // work) -- but this path can never write 'delivered'; only the driver's
+      // real PIN confirmation (confirm-delivery-pin.js) may do that.
+      if (order) {
+        var myProductIds = SD.products.map(function(p){ return p.id; });
+        var myItems = (Array.isArray(order.items)?order.items:[]).filter(function(i){ return myProductIds.includes(i.id||i.product_id); });
+        for (var idx = 0; idx < myItems.length; idx++) {
+          var it = myItems[idx];
+          var itemIdx = (Array.isArray(order.items)?order.items:[]).indexOf(it);
+          var { data: existing } = await SD.sb.from('order_item_statuses').select('id').eq('order_id',orderId).eq('item_index',itemIdx).maybeSingle();
+          if (existing) {
+            await SD.sb.from('order_item_statuses').update({ status:'fulfilled', seller_confirmed_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id',existing.id);
+          } else {
+            await SD.sb.from('order_item_statuses').insert([{ order_id:orderId, item_index:itemIdx, product_id:it.product_id||it.id||null, seller_id:SD.seller.id, status:'fulfilled', seller_confirmed_at:new Date().toISOString() }]);
+          }
+        }
+      }
+
+      try {
+        await fetch('/.netlify/functions/advance-delivery-on-fulfillment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderId: orderId })
+        });
+      } catch (e) { console.warn('advance-delivery-on-fulfillment failed:', e); }
+
+      toast('Marked ready for pickup ✓');
+      ordersLoaded = false;
+      await loadOrders();
     };
 
     function renderOrders(orders, myProductIds) {
@@ -3336,12 +3417,7 @@
           buyerAddressHtml +
           (order.notes ? '<div class="order-buyer" style="color:#0a2f66">🚚 Preferred delivery: ' + order.notes + '</div>' : '') +
           '<div class="order-status-row">' +
-            '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
-            '<select class="fulfillment-select" data-order-id="' + order.id + '" onchange="updateOrderFulfillment(this)">' +
-              ['Pending','Packaging','Fulfilled','Delivered','Returned'].map(function(s) {
-                return '<option' + (s === fulfillStatus ? ' selected' : '') + '>' + s + '</option>';
-              }).join('') +
-            '</select>' +
+            renderFulfillmentControl(order, fulfillStatus) +
           '</div>' +
         '</div>';
       }).join('');

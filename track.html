@@ -238,7 +238,12 @@
         firstDriverFit = false;
       }
     } else if (mapNote) {
-      mapNote.textContent = isProblem ? '' : 'A rider hasn\'t been assigned to your delivery yet.';
+      // No live coordinates doesn't mean no rider yet -- Fix D (delivery-network-spec.md)
+      // deliberately hides position until the rider is actually heading to the
+      // customer (STAGE_ONWAY+), even once one is ASSIGNED and collecting the order.
+      mapNote.textContent = isProblem ? '' :
+        STAGE_PICKUP.includes(row.status) ? 'Your rider is on the way to collect your order — live tracking starts once they head your way.' :
+        'A rider hasn\'t been assigned to your delivery yet.';
     }
 
     // No in-page turn-by-turn navigation is intentional here (per plan) --
