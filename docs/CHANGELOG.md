@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-18 — Stage 4 live end-to-end test: two real bugs found and fixed
+
+**What happened:** tested the full multi-seller bundling flow live (seller → rider → customer) with `max_bundle_leg_km` temporarily raised to 15km so the real Isqalo/Sweet Corner pair could be used, since the real value (3km) is below their real distance. A real order was built through the actual payment triggers (not faked) since the Google Routes key still isn't live. The whole flow worked end to end — readiness gating, real 2-store pickup sequencing (correctly picked whichever store was actually nearer the driver, disagreeing with the quote's guess), partial-pickup handling, PIN confirmation, and a real GPS-computed payout (R75.30, correctly including the extra-pickup component).
+
+**Two real bugs found and fixed:**
+1. `advance-route.js`'s `start_delivery` couldn't handle `PARTIALLY_PICKED_UP` — a pre-existing gap (not introduced by Stage 4) where a partially-collected pickup could never start its delivery leg, since the state machine only allows `PICKED_UP → IN_ROUTE`, not `PARTIALLY_PICKED_UP → IN_ROUTE`. Fixed by upgrading to `PICKED_UP` first when needed.
+2. `get_delivery_tracking()` (built in an earlier part of this session, before bundling existed) threw a real SQL error for any bundled delivery — its pickup-status subquery assumed exactly one pickup stop per route. `track.html` silently swallowed the error as "no tracking available," hiding the failure from the customer entirely. Fixed to report the earliest not-yet-completed pickup stop.
+
+**Verified:** both fixes confirmed via SQL first, then live in the browser. All real test data cleaned up, zero leftover rows. `max_bundle_leg_km` dropped to its real target of 3 after the live pass succeeded — Stage 4 is now fully closed out.
+
+**Files:** `netlify/functions/advance-route.js`, migration `fix_get_delivery_tracking_bundle_regression`.
+**Full write-up:** `docs/systems/delivery-network-spec.md` §Z.
+**Commit:** *(pending — see this entry's own commit; not pushed yet, per founder instruction)*
+
+---
+
 ## 2026-09-17 — Admin-set self-arranged radius: skip the delivery network for hyperlocal sellers
 
 **What shipped:** hyperlocal sellers (e.g. a residence student selling ice-cream/water) can now be flagged by an admin, via `admin.html`'s Manage Shops section, with a radius (km) within which their free-delivery orders never enter the driver/delivery pipeline at all — buyer and seller coordinate the handoff directly, same as every order did before this build. Mechanism: `get-delivery-quote.js` now checks this before the paid Google Routes call and returns `ineligible('self_arranged')`, which the existing checkout flow already silently treats as "no delivery quote" — zero changes needed to checkout.html or the delivery-creation trigger. New `sellers.self_arranged_radius_km` column; new admin-only RLS policy `sellers_admin_all` (there was no admin UPDATE policy on `sellers` at all before this).

@@ -191,7 +191,24 @@ exports.handler = async function (event) {
   }
 
   // ── start_delivery: PICKED_UP -> IN_ROUTE, drop stop pending -> active, route started -> active ──
+  // Real bug found via live testing 2026-09-18 (pre-existing, not introduced
+  // by Stage 4's multi-pickup work -- it already affected a single partially-
+  // collected pickup): PARTIALLY_PICKED_UP has no direct transition to
+  // IN_ROUTE in delivery-state.js's TRANSITIONS map (only PICKED_UP does), so
+  // a driver who left even one item uncollected (plan §38's explicitly valid
+  // "partial pickup" state) could never start the delivery leg -- "Start
+  // Delivery Route" failed every time with no way forward. Fixed by routing
+  // through PICKED_UP first when starting from PARTIALLY_PICKED_UP -- both
+  // are legitimate "all pickup stops are done, ready to head out" states.
   if (action === 'start_delivery') {
+    const { data: currentDelivery, error: currentDeliveryError } = await admin.from('deliveries').select('status').eq('id', deliveryId).maybeSingle();
+    if (currentDeliveryError || !currentDelivery) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
+    if (currentDelivery.status === 'PARTIALLY_PICKED_UP') {
+      const upgradeResult = await transitionDelivery(admin, deliveryId, 'PICKED_UP', { type: 'driver', id: driverId }, { eventType: 'ORDER_PICKED_UP', metadata: { note: 'auto-upgrade from partial before starting delivery leg' } });
+      if (!upgradeResult.ok) {
+        return { statusCode: upgradeResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not start delivery leg', detail: upgradeResult.detail || upgradeResult.reason }) };
+      }
+    }
     const transitionResult = await transitionDelivery(admin, deliveryId, 'IN_ROUTE', { type: 'driver', id: driverId }, { eventType: 'ROUTE_STARTED' });
     if (!transitionResult.ok) {
       return { statusCode: transitionResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not start delivery leg', detail: transitionResult.detail || transitionResult.reason }) };
