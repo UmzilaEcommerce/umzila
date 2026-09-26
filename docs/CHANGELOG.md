@@ -4,6 +4,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-26 — Checkout: split the value-anchor line from the time estimate, scale wait time per store
+
+**What changed (founder follow-up to the time-saved anchor below):**
+- The italic reframe line ("Delivery is based on distance, not basket size...") moved from inside `#timeSavedBlock` to directly below the order Total in the price summary — reads as the reason for the number the buyer is looking at, right where they're looking. The time-saved figure itself stays where it was (below the address, above the summary).
+- Wait time now scales per store instead of a single flat 30-45min: `WAIT_MIN_PER_STORE_LOW`/`HIGH` (20-30min) × the number of distinct sellers in the cart, not just the farthest one. Reasoning: a customer collecting a 2-store order themselves genuinely queues twice, not once — the old flat range understated multi-seller orders. A single-seller order's range also shifted slightly (was 30-45min base, now 20-30min base) since that's the same per-store unit, just ×1.
+
+**Verified:** live against `netlify dev`. Single real seller (Isqalo, 8.98km straight-line): "1hr5min – 1hr15min" (down from the old flat-wait "1hr15min – 1hr30min", as expected from the lower per-store base). Real 2-seller cart (Isqalo + Lumina, only one with a known pickup point — travel distance still keys off whichever seller's location is known, but the wait time counts both stores): "1hr25min – 1hr45min", matching the formula by hand. Confirmed the italic line now renders directly under the Total row. Test cart data cleaned up afterward.
+
+**Files:** `checkout.html`.
+
+---
+
 ## 2026-09-26 — Checkout: time-saved value anchor, replacing the earlier fee-ratio note
 
 **What changed:** replaces the same-day "anchor note under the delivery fee" entry below with a more prominent, always-on version per founder follow-up. A new block sits below the delivery address and above the price summary — on-screen with the total the buyer is about to pay — showing `⏱ Time saved compared to collecting yourself: <range>` plus a short italic line ("Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to."). The old ratio-gated note under the "Delivery" line in the Order Summary is removed; this supersedes it with one clearer message instead of two competing ones in different places.

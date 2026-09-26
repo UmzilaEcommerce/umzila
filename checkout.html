@@ -1420,7 +1420,6 @@
                a real address and seller pickup location are known. -->
           <div id="timeSavedBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px">
             <div id="timeSavedLine" style="font-size:13px;font-weight:700;color:#1a1a2e"></div>
-            <div style="font-size:11px;color:#6b7280;font-style:italic;margin-top:3px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
           </div>
 
           <!-- Completeness gate — a service left unfinished (e.g. a required
@@ -1501,6 +1500,12 @@
                 <span>Total</span>
                 <span id="totalAmount" class="amount-roll">R0.00</span>
               </div>
+              <!-- Value-anchor line (founder ask 2026-09-26): moved below
+                   the total itself, on purpose -- reads as a reason for the
+                   number the buyer is looking at, right where they're
+                   looking. Static; the time-saved figure lives in
+                   #timeSavedBlock above the address instead. -->
+              <div style="font-size:11px;color:#6b7280;font-style:italic;text-align:center;margin-top:6px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
             </div>
 
             <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
@@ -3175,13 +3180,16 @@ async function saveCartToServer() {
     // Straight-line (haversine) distance, seller pickup point -> the picked
     // address -- an approximation of the real road distance since there's
     // no live GOOGLE_ROUTES_SERVER_KEY yet to get a real one from
-    // get-delivery-quote.js. For a multi-seller cart, uses the farthest
-    // seller (the real single round trip has to cover whichever store is
-    // furthest out). Formula per the founder's own spec: 2.5 min/km one way,
-    // doubled for the round trip, plus a 30-45min wait-in-queue range.
+    // get-delivery-quote.js. For a multi-seller cart, travel uses the
+    // farthest seller (the real single round trip has to cover whichever
+    // store is furthest out), but the wait-in-queue time is per store
+    // (founder ask 2026-09-26: buying from N stores yourself means N real
+    // queues, not one) -- 20-30min per store, summed across every distinct
+    // seller in the cart, not just the farthest one. Travel: 2.5 min/km one
+    // way, doubled for the round trip.
     const KM_TIME_MIN_PER_KM = 2.5;
-    const WAIT_MIN_LOW = 30;
-    const WAIT_MIN_HIGH = 45;
+    const WAIT_MIN_PER_STORE_LOW = 20;
+    const WAIT_MIN_PER_STORE_HIGH = 30;
 
     function updateTimeSavedEstimate() {
       const block = document.getElementById('timeSavedBlock');
@@ -3207,9 +3215,10 @@ async function saveCartToServer() {
         return;
       }
 
+      const storeCount = sellers.length;
       const roundTripTravelMin = maxDistanceKm * KM_TIME_MIN_PER_KM * 2;
-      const lowMin = roundTripTravelMin + WAIT_MIN_LOW;
-      const highMin = roundTripTravelMin + WAIT_MIN_HIGH;
+      const lowMin = roundTripTravelMin + storeCount * WAIT_MIN_PER_STORE_LOW;
+      const highMin = roundTripTravelMin + storeCount * WAIT_MIN_PER_STORE_HIGH;
 
       line.textContent = `⏱ Time saved compared to collecting yourself: ${formatMinutesRange(lowMin, highMin)}`;
       block.classList.remove('hidden');
