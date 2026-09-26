@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-26 — Delivery pricing overhaul: fee now tracks real driver cost, hard 20km cutoff, per-zone launch promo
+
+**What was broken:** a live test (real Isqalo Shisanyama order to a real Umgudulu Rd address, ~14.6km real road distance) showed the existing `distance_tiers`/`max_delivery_fee` model would charge a student **R80** for that delivery — capped down from a nominal R85. Checking the same distance against the real driver-payout formula showed the driver would only be paid **R62.54** for that route: the R80 fee wasn't sized to actual cost. Worse, because the payout formula scales unbounded with distance while the old fee capped at R80, **any order past ~19km was already losing money**, before this change and independent of it. The founder decided: since deliveries are currently done in-house (no hired drivers), the fee should equal real cost, no more, no arbitrary cap.
+
+**Root cause:** the distance-tier table and the driver-payout formula were two independent, hand-tuned pricing models for the same real-world cost — a classic "two sources of truth for one concept" flaw, not just a wrong number.
+
+**What changed:**
+- `get-delivery-quote.js`: base delivery fee is now `estimatePayout(...)` (the exact function that pays the driver, from `lib/payout-formula.js`) × `(1 + margin_percent/100)`. `margin_percent` defaults to 0 — fee == driver pay today; raising it later (admin panel, one field) is the entire "turn on profit once real drivers are hired" step. The old `distance_tiers`/`max_delivery_fee`/`extended_zone_fee` columns and the `resolveDistanceBaseFee()` tier lookup are gone.
+- New hard cutoff: `delivery_pricing_config.max_service_distance_km` (default 20) — a real route longer than this is refused outright rather than priced, replacing the old cap-and-still-serve behavior that was quietly losing money on long routes.
+- New per-zone, time-boxed launch promo: `service_zones.promo_active`/`promo_cap_fee`/`promo_expires_at` — lets a zone's delivery fee be capped **below real cost** for a launch window (e.g. first few days), with an optional auto-expiry. `find_service_zone_for_point()` now returns these alongside the zone match so pricing needs no extra query.
+- `admin.html`: replaced the tier-editor UI in Delivery Pricing with `margin_percent` + `max_service_distance_km` fields; added a "Launch promo" column with inline cap/expiry controls to the Service Areas table (same direct-update pattern as the existing self-arranged-radius control).
+- Incidental fix: the pricing-editor's version-insert never carried `max_bundle_leg_km` forward, so every past edit through the admin panel would have silently reset it to the column default (15) instead of the founder's real value (3). Now preserved on save.
+
+**Verified:** `GOOGLE_ROUTES_SERVER_KEY` still isn't live, so the new code can't be exercised over real HTTP past the Google Routes call (same limitation as everything else blocked on that key) — confirmed instead by extracting the exact new logic and running it against the real active config + a real OSRM road distance for the same order used in the live test (margin=0 reproduces the real payout exactly; margin=20% scales correctly; the 20km cutoff is exact at the boundary; the promo cap correctly overrides cost, correctly ignores expiry, correctly persists with no expiry set). Confirmed live against `netlify dev` that the missing-key error path is unchanged. Did not click through the new admin.html UI live (no admin credentials this session) — recommend a quick visual check.
+
+**Files:** `netlify/functions/get-delivery-quote.js`, `admin.html`, migration `delivery_payout_based_pricing_and_zone_promo`.
+**Full write-up:** `docs/systems/delivery-network-spec.md` §AA.
+
+---
+
 ## 2026-09-18 — Stage 4 live end-to-end test: two real bugs found and fixed
 
 **What happened:** tested the full multi-seller bundling flow live (seller → rider → customer) with `max_bundle_leg_km` temporarily raised to 15km so the real Isqalo/Sweet Corner pair could be used, since the real value (3km) is below their real distance. A real order was built through the actual payment triggers (not faked) since the Google Routes key still isn't live. The whole flow worked end to end — readiness gating, real 2-store pickup sequencing (correctly picked whichever store was actually nearer the driver, disagreeing with the quote's guess), partial-pickup handling, PIN confirmation, and a real GPS-computed payout (R75.30, correctly including the extra-pickup component).

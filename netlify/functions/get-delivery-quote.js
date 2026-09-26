@@ -8,16 +8,27 @@
 //
 // This mirrors validate-cart.js's supporting fee logic (per-seller surcharge,
 // free_delivery exclusion, bulk-quantity stepping via units_per_trip, the
-// custom per-product delivery_price override, the MAX_DELIVERY_FEE cap, the
-// FREE_DELIVERY_THRESHOLD full-waiver) but swaps the base fee from a
-// class-based lookup (DELIVERY_CLASS_PRICES) to a road-distance tier lookup
-// against delivery_pricing_config.distance_tiers. delivery_class still feeds
-// the bulk-stepping capacity lookup only — it no longer determines the base
-// fee, distance does.
+// custom per-product delivery_price override, the FREE_DELIVERY_THRESHOLD
+// full-waiver).
+//
+// Base-fee model (founder decision 2026-09-26, §AA): the base fee is no
+// longer an independent distance-tier lookup — it IS the real driver payout
+// estimate (lib/payout-formula.js), plus an admin-set margin_percent on top
+// (0 for now, since the founder/partner are driving deliveries themselves;
+// bumping margin_percent in the admin panel is the entire "turn on profit"
+// step once real drivers are hired, no code change needed). Anything beyond
+// `delivery_pricing_config.max_service_distance_km` (real road distance) is
+// refused outright rather than capped, so "fee == cost (+margin)" stays true
+// instead of quietly eating a loss on far routes — the old MAX_DELIVERY_FEE
+// cap did exactly that (see docs/systems/delivery-network-spec.md §AA for
+// the real numbers that drove this). A per-zone, time-boxed promo cap
+// (service_zones.promo_*) can still deliberately price below cost for a
+// launch window — that's an intentional loss-leader, not a bug.
 //
 // Does not touch validate-cart.js, checkout.html, or any PayFast file.
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
+const { estimatePayout } = require('./lib/payout-formula');
 
 const QUOTE_TTL_MINUTES = 15; // no existing convention in this repo for quote TTLs — 15 min is a reasonable default for a checkout session.
 
@@ -79,10 +90,6 @@ function parseGeographyPoint(hex) {
   }
 }
 
-// First distance tier where distance_km <= tier.max_km; if distance exceeds
-// every tier, fall back to extended_zone_fee ONLY when the destination is in
-// an 'extended' zone. Any other case here means "priceable is not possible"
-// and the caller must treat it as ineligible rather than guess a fee.
 // Straight-line only -- self-arranged eligibility is a simple "close enough
 // to sort out yourselves" radius check, not a real road-distance quote, so
 // there's no reason to spend a paid Google Routes call on it.
@@ -132,16 +139,6 @@ async function computeBundleRoute(googleRoutesKey, originPoint, intermediatePoin
     totalDurationMin: Number.isFinite(durationSeconds) ? durationSeconds / 60 : null,
     interStoreLegKm: interStoreLegMeters != null ? interStoreLegMeters / 1000 : null
   };
-}
-
-function resolveDistanceBaseFee(distanceKm, tiers, extendedZoneFee, zoneType) {
-  const sorted = Array.isArray(tiers)
-    ? [...tiers].filter(t => Number.isFinite(t && t.max_km) && Number.isFinite(t && t.fee)).sort((a, b) => a.max_km - b.max_km)
-    : [];
-  const tier = sorted.find(t => distanceKm <= t.max_km);
-  if (tier) return { fee: tier.fee, ineligible: false };
-  if (zoneType === 'extended' && Number.isFinite(extendedZoneFee)) return { fee: extendedZoneFee, ineligible: false };
-  return { fee: null, ineligible: true };
 }
 
 exports.handler = async function (event, context) {
@@ -437,23 +434,29 @@ exports.handler = async function (event, context) {
       durationMin = winner.totalDurationMin;
     }
 
-    // ---- Base fee: distance tier lookup (replaces DELIVERY_CLASS_PRICES) ----
-    const { fee: distanceBaseFee, ineligible: distanceIneligible } = resolveDistanceBaseFee(
-      distanceKm, pricingConfig.distance_tiers, pricingConfig.extended_zone_fee, zone.zone_type
-    );
-    if (distanceIneligible) {
+    // ---- Hard distance cutoff (founder decision 2026-09-26, §AA): a real
+    // route longer than this is refused outright, not capped -- see the file
+    // header for why. Checked before pricing, same as any other ineligible
+    // path (200 + eligible:false, never a 500).
+    const maxServiceDistanceKm = Number(pricingConfig.max_service_distance_km);
+    if (Number.isFinite(maxServiceDistanceKm) && distanceKm > maxServiceDistanceKm) {
       return ineligible(OUTSIDE_ZONE_REASON);
     }
 
+    // ---- Base fee: real driver-payout estimate + admin-set margin (see the
+    // file header — this replaces the old independent distance-tier table). ----
+    const MARGIN_PERCENT = Number(pricingConfig.margin_percent) || 0;
+    const payoutEstimate = estimatePayout({ distanceKm, durationMin });
+    const distanceBaseFee = Math.round(payoutEstimate * (1 + MARGIN_PERCENT / 100) * 100) / 100;
+
     const PER_SELLER_FEE = Number(pricingConfig.per_seller_fee) || 0;
     const FREE_DELIVERY_THRESHOLD = Number(pricingConfig.free_delivery_threshold) || 0;
-    const MAX_DELIVERY_FEE = Number(pricingConfig.max_delivery_fee) || 0;
     const DEFAULT_UNITS_PER_TRIP = pricingConfig.default_units_per_trip || { small: 8, medium: 4, large: 2 };
     const LARGE_OVERFLOW_FEE = Number(pricingConfig.large_overflow_fee) || 0;
     const PRIORITY_FEE = Number(pricingConfig.priority_fee) || 0;
 
     // ---- Fee calc — ports validate-cart.js's computeFees() product-delivery
-    // branch, swapping the class-based base fee for the distance tier above. ----
+    // branch, swapping the class-based base fee for the payout-based fee above. ----
     const subtotal = productItems.reduce((s, i) => s + i.price * i.quantity, 0);
     const feeItems = productItems.filter(i => !i.free_delivery);
 
@@ -493,7 +496,16 @@ exports.handler = async function (event, context) {
       perSellerFeeTotal = (pickupSellerIds.length - 1) * PER_SELLER_FEE; // Stage 4: +PER_SELLER_FEE for a genuinely bundled 2-seller cart, 0 otherwise
       overflowSurcharge = extraTrips * LARGE_OVERFLOW_FEE;
       baseFeeUsed = baseFee;
-      productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, baseFee + perSellerFeeTotal + overflowSurcharge));
+      productDelivery = Math.max(0, baseFee + perSellerFeeTotal + overflowSurcharge);
+
+      // ---- Launch promo cap (admin-set per zone, §AA) -- deliberately
+      // allows pricing BELOW real driver cost for a launch window; that's
+      // the point (loss-leader), not a bug. promo_expires_at is a safety
+      // net so it lapses on its own even if nobody flips it off by hand.
+      if (zone.promo_active && Number.isFinite(Number(zone.promo_cap_fee)) &&
+          (!zone.promo_expires_at || new Date(zone.promo_expires_at) > new Date())) {
+        productDelivery = Math.min(productDelivery, Number(zone.promo_cap_fee));
+      }
     }
 
     const priorityFee = priority ? PRIORITY_FEE : 0; // flat, belongs to Umzila — unaffected by the free-delivery waiver/cap
@@ -516,8 +528,8 @@ exports.handler = async function (event, context) {
         duration_min: durationMin,
         delivery_class: deliveryClass,
         base_fee: baseFeeUsed,
-        // No separate distance-surcharge layer exists in this tier model — the
-        // tier fee already fully prices distance. This column instead carries
+        // No separate distance-surcharge layer exists in this model — the
+        // payout-based base fee already fully prices distance. This column instead carries
         // the bulk-quantity overflow surcharge (extra trips beyond the top
         // class), the closest fit among the existing audit columns.
         distance_surcharge: overflowSurcharge,

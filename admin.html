@@ -965,8 +965,8 @@ const supabaseClient = supabase.createClient(
           <h3>Existing Zones</h3>
           <div style="overflow:auto;margin-top:8px">
             <table id="serviceZonesTable" aria-live="polite">
-              <thead><tr><th>Name</th><th>Type</th><th>Active</th><th>Notes</th><th>Actions</th></tr></thead>
-              <tbody><tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+              <thead><tr><th>Name</th><th>Type</th><th>Active</th><th>Notes</th><th>Launch promo (cap delivery cost in this zone)</th><th>Actions</th></tr></thead>
+              <tbody><tr><td colspan="6" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -3984,14 +3984,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('service_zones')
-        .select('id, name, zone_type, active, notes, created_at')
+        .select('id, name, zone_type, active, notes, created_at, promo_active, promo_cap_fee, promo_expires_at')
         .order('created_at', { ascending: false });
-      if(error){ console.warn('loadServiceZones error', error); tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>'; return; }
+      if(error){ console.warn('loadServiceZones error', error); tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>'; return; }
       serviceZonesCache = data || [];
       renderServiceZonesTable();
     } catch(e){
       console.warn('loadServiceZones failed', e);
-      tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load service zones</td></tr>';
     }
   }
 
@@ -4000,7 +4000,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if(!tbody) return;
     tbody.innerHTML = '';
     if(!serviceZonesCache.length){
-      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">No service zones yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px">No service zones yet.</td></tr>';
       return;
     }
     serviceZonesCache.forEach(z => {
@@ -4009,11 +4009,28 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         ? '<span style="color:#16a34a;font-size:12px;font-weight:600">● Active</span>'
         : '<span style="color:#dc2626;font-size:12px;font-weight:600">● Inactive</span>';
       const typeBadge = '<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;text-transform:capitalize">' + escapeHtml(z.zone_type || '') + '</span>';
+      // Launch promo (founder ask 2026-09-26): a per-zone, time-boxed cap
+      // that can deliberately price delivery BELOW real driver cost for a
+      // launch window (e.g. first 3-7 days). promo_expires_at is optional --
+      // leaving it blank means "on until manually unchecked".
+      const promoStatusLine = z.promo_active
+        ? `<div style="font-size:11px;color:#16a34a;font-weight:700;margin-bottom:6px">● Capped at R${escapeHtml(String(z.promo_cap_fee ?? '?'))}${z.promo_expires_at ? ' until ' + new Date(z.promo_expires_at).toLocaleString('en-ZA', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ' (no auto-expiry set)'}</div>`
+        : '<div style="font-size:11px;color:#9ca3af;margin-bottom:6px">Not capped</div>';
+      const expiresLocalValue = z.promo_expires_at ? new Date(z.promo_expires_at).toISOString().slice(0,16) : '';
+      const promoCell = `
+        ${promoStatusLine}
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+          <input type="number" step="0.01" min="0" placeholder="Cap R" id="promoFee-${escapeHtml(z.id)}" value="${z.promo_cap_fee != null ? escapeHtml(String(z.promo_cap_fee)) : ''}" style="width:70px;padding:4px 6px;border:1px solid #dde1ea;border-radius:6px;font-size:12px">
+          <input type="datetime-local" id="promoUntil-${escapeHtml(z.id)}" value="${expiresLocalValue}" style="padding:4px 6px;border:1px solid #dde1ea;border-radius:6px;font-size:11px">
+          <button onclick="setZonePromo('${escapeHtml(z.id)}', true)" style="padding:4px 8px;border-radius:6px;border:none;background:#16a34a;color:#fff;font-size:11px;font-weight:600;cursor:pointer">Cap</button>
+          <button onclick="setZonePromo('${escapeHtml(z.id)}', false)" style="padding:4px 8px;border-radius:6px;border:none;background:#6b7280;color:#fff;font-size:11px;font-weight:600;cursor:pointer">Uncap</button>
+        </div>`;
       tr.innerHTML = `
         <td>${escapeHtml(z.name || '')}</td>
         <td>${typeBadge}</td>
         <td>${activeBadge}</td>
         <td style="font-size:12px;color:#6b7280;max-width:260px">${z.notes ? escapeHtml(z.notes) : '—'}</td>
+        <td style="min-width:220px">${promoCell}</td>
         <td class="actions"></td>
       `;
       const actionsTd = tr.querySelector('.actions');
@@ -4134,6 +4151,37 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   document.getElementById('saveZoneBtn')?.addEventListener('click', saveServiceZone);
   document.getElementById('zoneEditCancel')?.addEventListener('click', (e)=>{ e.preventDefault(); cancelEditServiceZone(); });
+
+  // Launch promo cap (founder ask 2026-09-26): direct .update() on plain
+  // columns -- permitted by the existing service_zones_admin_update RLS
+  // policy, same reasoning as setSellerSelfArrangedRadius above (no RPC
+  // needed for a simple admin-only scalar field). turningOn=false ("Uncap")
+  // always just flips promo_active off and leaves the cap fee / expiry
+  // fields in place so re-enabling it later doesn't need re-entering them.
+  window.setZonePromo = async function(zoneId, turningOn){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin to manage launch promos'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
+    if(!supabaseClient) { showToast('Supabase not available'); return; }
+
+    const update = { promo_active: turningOn };
+    if(turningOn){
+      const feeInput = document.getElementById('promoFee-' + zoneId);
+      const untilInput = document.getElementById('promoUntil-' + zoneId);
+      const fee = feeInput ? parseFloat(feeInput.value) : NaN;
+      if(!Number.isFinite(fee) || fee < 0){ showToast('Enter a valid cap fee (R) before capping this zone'); return; }
+      update.promo_cap_fee = fee;
+      update.promo_expires_at = (untilInput && untilInput.value) ? new Date(untilInput.value).toISOString() : null;
+    }
+
+    try {
+      const { error } = await supabaseClient.from('service_zones').update(update).eq('id', zoneId);
+      if(error){ console.warn('setZonePromo error', error); showToast('Save failed: ' + error.message); return; }
+      showToast(turningOn ? 'Launch promo cap active for this zone' : 'Launch promo cap removed');
+      await loadServiceZones();
+    } catch(e){
+      console.warn('setZonePromo failed', e);
+      showToast('Save failed');
+    }
+  };
   /* ============================================================ end Service Areas */
 
   /* ============================================================ Delivery Ops
@@ -4626,6 +4674,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
      they were actually priced under (see docs/systems/delivery-network-
      spec.md, Stage 16 section). */
 
+  // Mirrors netlify/functions/lib/payout-formula.js's constants for DISPLAY
+  // only -- the real computation always runs server-side in
+  // get-delivery-quote.js / the compute_driver_payout_on_route_completion
+  // trigger. Keep numerically identical to that file if it ever changes.
+  const PAYOUT_FORMULA_BASE = 4;
+  const PAYOUT_FORMULA_PER_KM = 4;
+  const PAYOUT_FORMULA_MIN = 20;
+
   let deliveryPricingCache = [];
   let deliveryPricingEditing = false;
 
@@ -4664,9 +4720,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       return;
     }
 
-    const tiersRows = (active.distance_tiers || []).map(t =>
-      `<tr><td>0–${escapeHtml(String(t.max_km))}km</td><td>R${escapeHtml(String(t.fee))}</td></tr>`
-    ).join('');
     const units = active.default_units_per_trip || {};
 
     const historyRows = deliveryPricingCache.map(c =>
@@ -4683,17 +4736,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <h3 style="font-size:15px;font-weight:800;margin:0">Active Pricing — v${escapeHtml(String(active.version))}</h3>
           <button class="small-btn" id="editPricingBtn">✏️ Edit (creates new version)</button>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px">
-          <thead><tr style="text-align:left;border-bottom:2px solid #e5e7eb"><th style="padding:6px 10px">Distance</th><th style="padding:6px 10px">Base fee</th></tr></thead>
-          <tbody>${tiersRows}</tbody>
-        </table>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px">Base delivery fee = real driver payout (base R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km, min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}) plus the margin below. Margin at 0% means you're charging exactly what the driver is paid — no profit yet, by design, while deliveries are done in-house.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:13px">
+          <div><strong>Margin on driver pay</strong><div style="color:#6b7280">${escapeHtml(String(active.margin_percent))}%</div></div>
+          <div><strong>Max service distance</strong><div style="color:#6b7280">${escapeHtml(String(active.max_service_distance_km))}km</div></div>
           <div><strong>Per-seller fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.per_seller_fee))}</div></div>
           <div><strong>Priority fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.priority_fee))}</div></div>
           <div><strong>Free delivery over</strong><div style="color:#6b7280">R${escapeHtml(String(active.free_delivery_threshold))}</div></div>
-          <div><strong>Max delivery fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.max_delivery_fee))}</div></div>
           <div><strong>Large overflow fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.large_overflow_fee))}</div></div>
-          <div><strong>Extended zone fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.extended_zone_fee))}</div></div>
           <div><strong>Units/trip (S/M/L)</strong><div style="color:#6b7280">${escapeHtml(String(units.small ?? '—'))} / ${escapeHtml(String(units.medium ?? '—'))} / ${escapeHtml(String(units.large ?? '—'))}</div></div>
         </div>
       </div>
@@ -4710,14 +4760,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   }
 
   function renderDeliveryPricingForm(active){
-    const tiers = active.distance_tiers || [];
     const units = active.default_units_per_trip || {};
-    const tierRowsHtml = tiers.map((t, i) => `
-      <div class="row" data-tier-row="${i}" style="gap:8px;margin-bottom:6px">
-        <div style="flex:1"><label style="font-size:11px">Max km</label><input type="number" step="0.1" class="tier-max-km" value="${escapeHtml(String(t.max_km))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-        <div style="flex:1"><label style="font-size:11px">Fee (R)</label><input type="number" step="0.01" class="tier-fee" value="${escapeHtml(String(t.fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-        <button type="button" class="removeTierBtn" data-idx="${i}" style="align-self:flex-end;padding:6px 10px;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer">✕</button>
-      </div>`).join('');
 
     return `
       <div class="card">
@@ -4726,17 +4769,17 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           Saving does not modify v${escapeHtml(String(active.version))} — it creates a new version and makes it active. Historical orders/quotes keep referencing the version they were actually priced under.
         </div>
 
-        <h4 style="font-size:13px;font-weight:700;margin-bottom:6px">Distance tiers</h4>
-        <div id="tierRowsMount">${tierRowsHtml}</div>
-        <button type="button" id="addTierBtn" class="small-btn" style="margin:8px 0 16px">+ Add tier</button>
+        <div style="background:#eff6ff;color:#1e3a8a;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px">
+          Base fee = driver payout (R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km, min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}) × (1 + margin%). Leave margin at 0 while you're driving deliveries yourselves; raise it once you hire real drivers — that's the whole "turn on profit" step.
+        </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">
+          <div><label style="font-size:11px">Margin on driver pay (%)</label><input type="number" step="0.1" min="0" id="pcMarginPercent" value="${escapeHtml(String(active.margin_percent))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Max service distance (km)</label><input type="number" step="0.1" min="0" id="pcMaxServiceDistance" value="${escapeHtml(String(active.max_service_distance_km))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Per-seller fee (R)</label><input type="number" step="0.01" id="pcPerSellerFee" value="${escapeHtml(String(active.per_seller_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Priority fee (R)</label><input type="number" step="0.01" id="pcPriorityFee" value="${escapeHtml(String(active.priority_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Free delivery over (R)</label><input type="number" step="0.01" id="pcFreeThreshold" value="${escapeHtml(String(active.free_delivery_threshold))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-          <div><label style="font-size:11px">Max delivery fee (R)</label><input type="number" step="0.01" id="pcMaxFee" value="${escapeHtml(String(active.max_delivery_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Large overflow fee (R)</label><input type="number" step="0.01" id="pcOverflowFee" value="${escapeHtml(String(active.large_overflow_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-          <div><label style="font-size:11px">Extended zone fee (R)</label><input type="number" step="0.01" id="pcExtendedFee" value="${escapeHtml(String(active.extended_zone_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Units/trip — small</label><input type="number" id="pcUnitsSmall" value="${escapeHtml(String(units.small ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Units/trip — medium</label><input type="number" id="pcUnitsMedium" value="${escapeHtml(String(units.medium ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Units/trip — large</label><input type="number" id="pcUnitsLarge" value="${escapeHtml(String(units.large ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
@@ -4754,49 +4797,18 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   function wireDeliveryPricingForm(active){
     document.getElementById('cancelPricingEditBtn')?.addEventListener('click', () => { deliveryPricingEditing = false; renderDeliveryPricing(); });
 
-    document.getElementById('addTierBtn')?.addEventListener('click', () => {
-      const wrap = document.getElementById('tierRowsMount');
-      const idx = wrap.children.length;
-      const row = document.createElement('div');
-      row.className = 'row'; row.dataset.tierRow = String(idx);
-      row.style.cssText = 'gap:8px;margin-bottom:6px';
-      row.innerHTML = `
-        <div style="flex:1"><label style="font-size:11px">Max km</label><input type="number" step="0.1" class="tier-max-km" value="" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-        <div style="flex:1"><label style="font-size:11px">Fee (R)</label><input type="number" step="0.01" class="tier-fee" value="" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-        <button type="button" class="removeTierBtn" style="align-self:flex-end;padding:6px 10px;background:#fee2e2;color:#991b1b;border:none;border-radius:6px;cursor:pointer">✕</button>`;
-      wrap.appendChild(row);
-      row.querySelector('.removeTierBtn').addEventListener('click', () => row.remove());
-    });
-    document.querySelectorAll('.removeTierBtn').forEach(btn => {
-      btn.addEventListener('click', () => btn.closest('[data-tier-row]')?.remove());
-    });
-
     document.getElementById('savePricingVersionBtn')?.addEventListener('click', async () => {
       const errEl = document.getElementById('pricingFormError');
       if(errEl) errEl.textContent = '';
       if(!(await isAdminAuthenticated())){ showToast('Must be signed in as admin to update pricing'); localStorage.removeItem('scp_current_user'); setTimeout(()=>{ location.href='login-admin.html'; }, 300); return; }
 
-      const tiers = [];
-      let tiersValid = true;
-      document.querySelectorAll('#tierRowsMount > div').forEach(row => {
-        const maxKmEl = row.querySelector('.tier-max-km');
-        const feeEl = row.querySelector('.tier-fee');
-        if(!maxKmEl || !feeEl) return;
-        const maxKm = parseFloat(maxKmEl.value);
-        const fee = parseFloat(feeEl.value);
-        if(!Number.isFinite(maxKm) || !Number.isFinite(fee) || maxKm <= 0 || fee < 0) { tiersValid = false; return; }
-        tiers.push({ max_km: maxKm, fee: fee });
-      });
-      if(!tiersValid || !tiers.length){ if(errEl) errEl.textContent = 'Distance tiers must all have a positive max km and a non-negative fee.'; return; }
-      tiers.sort((a,b) => a.max_km - b.max_km);
-
       const numFields = {
+        margin_percent: parseFloat(document.getElementById('pcMarginPercent').value),
+        max_service_distance_km: parseFloat(document.getElementById('pcMaxServiceDistance').value),
         per_seller_fee: parseFloat(document.getElementById('pcPerSellerFee').value),
         priority_fee: parseFloat(document.getElementById('pcPriorityFee').value),
         free_delivery_threshold: parseFloat(document.getElementById('pcFreeThreshold').value),
-        max_delivery_fee: parseFloat(document.getElementById('pcMaxFee').value),
-        large_overflow_fee: parseFloat(document.getElementById('pcOverflowFee').value),
-        extended_zone_fee: parseFloat(document.getElementById('pcExtendedFee').value)
+        large_overflow_fee: parseFloat(document.getElementById('pcOverflowFee').value)
       };
       for(const [k, v] of Object.entries(numFields)){
         if(!Number.isFinite(v) || v < 0){ if(errEl) errEl.textContent = `"${k}" must be a non-negative number.`; return; }
@@ -4818,14 +4830,18 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         const { error: insertError } = await supabaseClient.from('delivery_pricing_config').insert({
           version: nextVersion,
           effective_from: new Date().toISOString(),
+          margin_percent: numFields.margin_percent,
+          max_service_distance_km: numFields.max_service_distance_km,
           per_seller_fee: numFields.per_seller_fee,
           free_delivery_threshold: numFields.free_delivery_threshold,
-          max_delivery_fee: numFields.max_delivery_fee,
           default_units_per_trip: units,
           large_overflow_fee: numFields.large_overflow_fee,
           priority_fee: numFields.priority_fee,
-          distance_tiers: tiers,
-          extended_zone_fee: numFields.extended_zone_fee,
+          // max_bundle_leg_km has no editor UI yet -- carry the active row's
+          // value forward so saving a new version doesn't silently reset it
+          // to the column default (was a pre-existing bug: this insert never
+          // set it at all).
+          max_bundle_leg_km: active.max_bundle_leg_km,
           is_active: true,
           created_by: user ? user.id : null
         });
