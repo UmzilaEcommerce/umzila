@@ -4,6 +4,14 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-09-26 — Checkout: anchor note when the delivery fee looks steep next to a small basket
+
+**What changed:** `checkout.html`'s Order Summary now shows a small italic note under the delivery fee — "Flat fee no matter your basket size — still less hassle (and often less cash) than the round trip yourself." — whenever the fee is at least 40% of the cart subtotal (`DELIVERY_VALUE_NOTE_RATIO` in `updateShippingAndTotal()`). Reasoning: a real live-tested payout-based fee (see the entry below) can be a large fraction of a small order's price even when it's objectively a good deal against the alternative (an Uber round-trip to fetch it yourself runs R140+, a taxi round-trip R32 plus two waits and a walk) — the sticker shock comes from comparing the fee to the order price, not to the real alternative, so the note deliberately anchors against the latter instead of trying to justify the number against the former. Reflows automatically as the cart changes; doesn't reference a fixed time estimate since that varies too much to state as fact.
+
+**Files:** `checkout.html`.
+
+---
+
 ## 2026-09-26 — Delivery pricing overhaul: fee now tracks real driver cost, hard 20km cutoff, per-zone launch promo
 
 **What was broken:** a live test (real Isqalo Shisanyama order to a real Umgudulu Rd address, ~14.6km real road distance) showed the existing `distance_tiers`/`max_delivery_fee` model would charge a student **R80** for that delivery — capped down from a nominal R85. Checking the same distance against the real driver-payout formula showed the driver would only be paid **R62.54** for that route: the R80 fee wasn't sized to actual cost. Worse, because the payout formula scales unbounded with distance while the old fee capped at R80, **any order past ~19km was already losing money**, before this change and independent of it. The founder decided: since deliveries are currently done in-house (no hired drivers), the fee should equal real cost, no more, no arbitrary cap.

@@ -1469,6 +1469,12 @@
                 <span id="shippingAmount">—</span>
               </div>
               <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
+              <!-- Anchor note for when the delivery fee looks steep next to
+                   a small basket (founder ask 2026-09-26): flat fee, doesn't
+                   grow with the cart, reframes against doing the trip
+                   yourself instead of against the order's own price. Only
+                   shown past DELIVERY_VALUE_NOTE_RATIO — see updateShippingAndTotal(). -->
+              <div id="deliveryValueNote" style="font-size:10.5px;color:#8a8f9c;text-align:right;margin-top:-2px;margin-bottom:6px;font-style:italic;display:none"></div>
               <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
                 No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
               </div>
@@ -3711,10 +3717,12 @@ async function validateCheckout() {
       const shippingEl = elements.shippingAmount;
       const breakdownEl = document.getElementById('deliveryBreakdown');
       const multiSellerEl = document.getElementById('multiSellerNote');
+      const valueNoteEl = document.getElementById('deliveryValueNote');
 
       if (cartForFee.length === 0) {
         shippingEl.textContent = '—';
         if (breakdownEl) breakdownEl.style.display = 'none';
+        if (valueNoteEl) valueNoteEl.style.display = 'none';
       } else if (isFree) {
         const cartNow = state.validatedCart || state.cart;
         const svcOnly = cartHasServices(cartNow) && !cartHasProducts(cartNow);
@@ -3723,6 +3731,7 @@ async function validateCheckout() {
           breakdownEl.textContent = svcOnly ? 'Service order — no delivery fee' : (allFreeDelivery ? 'Free delivery on these items' : 'Free delivery on this order');
           breakdownEl.style.display = 'block';
         }
+        if (valueNoteEl) valueNoteEl.style.display = 'none';
       } else {
         shippingEl.textContent = formatCurrency(fee);
         if (breakdownEl) {
@@ -3730,6 +3739,20 @@ async function validateCheckout() {
           const sellerLabel = uniqueSellers === 1 ? '1 seller' : `${uniqueSellers} sellers`;
           breakdownEl.textContent = `${classLabel} parcel · ${sellerLabel}`;
           breakdownEl.style.display = 'block';
+        }
+        // Anchor note (founder ask 2026-09-26): once the fee stops looking
+        // trivial next to the order itself, reframe it against the round
+        // trip a buyer would otherwise make themselves, not against the
+        // order's own price — and make clear it's a flat per-trip cost, not
+        // per-item, so it doesn't look worse the more someone adds to cart.
+        const DELIVERY_VALUE_NOTE_RATIO = 0.4; // fee / subtotal
+        if (valueNoteEl) {
+          if (subtotal > 0 && (fee / subtotal) >= DELIVERY_VALUE_NOTE_RATIO) {
+            valueNoteEl.textContent = 'Flat fee no matter your basket size — still less hassle (and often less cash) than the round trip yourself.';
+            valueNoteEl.style.display = 'block';
+          } else {
+            valueNoteEl.style.display = 'none';
+          }
         }
       }
       if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1) ? 'inline' : 'none';
