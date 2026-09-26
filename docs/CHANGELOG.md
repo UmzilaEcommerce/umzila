@@ -4,7 +4,21 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
-## 2026-09-26 — Checkout: anchor note when the delivery fee looks steep next to a small basket
+## 2026-09-26 — Checkout: time-saved value anchor, replacing the earlier fee-ratio note
+
+**What changed:** replaces the same-day "anchor note under the delivery fee" entry below with a more prominent, always-on version per founder follow-up. A new block sits below the delivery address and above the price summary — on-screen with the total the buyer is about to pay — showing `⏱ Time saved compared to collecting yourself: <range>` plus a short italic line ("Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to."). The old ratio-gated note under the "Delivery" line in the Order Summary is removed; this supersedes it with one clearer message instead of two competing ones in different places.
+
+**Calculation (founder-specified formula):** straight-line (haversine) distance from the farthest cart seller's `pickup_geo` to the picked delivery address, × 2.5 min/km, doubled for the round trip, plus a 30–45min wait-in-queue range — e.g. 11km → 55min round-trip travel + 30–45min wait = "1hr25min – 1hr40min". Straight-line, not real road distance, since `GOOGLE_ROUTES_SERVER_KEY` still isn't live — a known approximation (real road distance is typically meaningfully longer; e.g. the Isqalo→Umgudulu Rd order used in earlier testing is 8.98km straight-line but 14.63km by real road). Swap in the real `distanceKm` from a `get-delivery-quote.js` quote once the key lands, instead of this client-side estimate.
+
+**Implementation:** `sellers.pickup_geo` (already public-SELECT via existing RLS, no policy change needed) is decoded client-side from PostgREST's hex-encoded EWKB — a browser port of `get-delivery-quote.js`'s existing `parseGeographyPoint()` (`DataView`/`Uint8Array` instead of Node `Buffer`, same algorithm) since there's no shared module between a Netlify function and a static page. Piggybacks on the existing `updateEstimatedDelivery()` seller fetch (added `pickup_geo` to its existing `.select()` — no new query).
+
+**Verified:** live against `netlify dev` with the real Isqalo Shisanyama pickup point and a real Umgudulu Rd/Palmiet address — decoded coordinates matched the known real values exactly (cross-checked against a direct SQL `ST_X`/`ST_Y` read), and the rendered text ("1hr15min – 1hr30min" for the real 8.98km straight-line distance) matches the formula by hand. Confirmed the block correctly stays hidden until both a real address and a seller pickup point are available. Test cart data cleaned up afterward.
+
+**Files:** `checkout.html`.
+
+---
+
+## 2026-09-26 — Checkout: anchor note when the delivery fee looks steep next to a small basket (superseded, see above)
 
 **What changed:** `checkout.html`'s Order Summary now shows a small italic note under the delivery fee — "Flat fee no matter your basket size — still less hassle (and often less cash) than the round trip yourself." — whenever the fee is at least 40% of the cart subtotal (`DELIVERY_VALUE_NOTE_RATIO` in `updateShippingAndTotal()`). Reasoning: a real live-tested payout-based fee (see the entry below) can be a large fraction of a small order's price even when it's objectively a good deal against the alternative (an Uber round-trip to fetch it yourself runs R140+, a taxi round-trip R32 plus two waits and a walk) — the sticker shock comes from comparing the fee to the order price, not to the real alternative, so the note deliberately anchors against the latter instead of trying to justify the number against the former. Reflows automatically as the cart changes; doesn't reference a fixed time estimate since that varies too much to state as fact.
 

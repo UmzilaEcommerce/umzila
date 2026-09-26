@@ -1410,6 +1410,19 @@
           <div id="shippingFormError" class="error-message hidden"></div>
           </div>
 
+          <!-- Time-saved value anchor (founder ask 2026-09-26): sits below
+               the delivery address and above the price summary so the
+               "why this fee is worth it" message is on-screen with the
+               total the buyer is about to pay. Distance is straight-line
+               (haversine, seller pickup_geo <-> the picked address) since
+               there's no live GOOGLE_ROUTES_SERVER_KEY yet for a real road
+               distance — see updateTimeSavedEstimate(). Hidden until both
+               a real address and seller pickup location are known. -->
+          <div id="timeSavedBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px">
+            <div id="timeSavedLine" style="font-size:13px;font-weight:700;color:#1a1a2e"></div>
+            <div style="font-size:11px;color:#6b7280;font-style:italic;margin-top:3px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
+          </div>
+
           <!-- Completeness gate — a service left unfinished (e.g. a required
                file/answer never provided) blocks Pay Now until fixed. This is
                the only checkout gate that's actually blocking; everything
@@ -1469,12 +1482,6 @@
                 <span id="shippingAmount">—</span>
               </div>
               <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
-              <!-- Anchor note for when the delivery fee looks steep next to
-                   a small basket (founder ask 2026-09-26): flat fee, doesn't
-                   grow with the cart, reframes against doing the trip
-                   yourself instead of against the order's own price. Only
-                   shown past DELIVERY_VALUE_NOTE_RATIO — see updateShippingAndTotal(). -->
-              <div id="deliveryValueNote" style="font-size:10.5px;color:#8a8f9c;text-align:right;margin-top:-2px;margin-bottom:6px;font-style:italic;display:none"></div>
               <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
                 No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
               </div>
@@ -3110,12 +3117,102 @@ async function saveCartToServer() {
           state.destinationGeo = { lat, lon };
           state.addressValidatedAt = new Date().toISOString();
           fetchDeliveryQuote();
+          updateTimeSavedEstimate();
         }
       } else {
         state.destinationGeo = null;
         state.addressValidatedAt = null;
         state.deliveryQuoteId = null;
+        updateTimeSavedEstimate();
       }
+    }
+
+    // ---- Time-saved value anchor (founder ask 2026-09-26) ----
+    // PostgREST returns a geography column as hex-encoded (E)WKB text by
+    // default. sellers.pickup_geo is always written as a plain
+    // `SRID=4326;POINT(lon lat)` (see seller-dashboard.html) -- this is the
+    // same decode get-delivery-quote.js's parseGeographyPoint() does
+    // server-side, ported here since there's no shared module between a
+    // Netlify function and a static page to import it from.
+    function decodeGeographyPointHex(hex) {
+      if (!hex || typeof hex !== 'string') return null;
+      try {
+        const bytes = new Uint8Array(hex.length / 2);
+        for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+        const view = new DataView(bytes.buffer);
+        const little = view.getUint8(0) === 1;
+        const type = little ? view.getUint32(1, true) : view.getUint32(1, false);
+        const hasSrid = (type & 0x20000000) !== 0;
+        let offset = 5;
+        if (hasSrid) offset += 4;
+        const lon = little ? view.getFloat64(offset, true) : view.getFloat64(offset, false);
+        const lat = little ? view.getFloat64(offset + 8, true) : view.getFloat64(offset + 8, false);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        return { lat, lon };
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function haversineKmClient(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    function formatMinutesRange(lowMin, highMin) {
+      const fmt = (mins) => {
+        const m = Math.round(mins);
+        const h = Math.floor(m / 60);
+        const rem = m % 60;
+        return h > 0 ? `${h}hr${rem > 0 ? rem + 'min' : ''}` : `${rem}min`;
+      };
+      return `${fmt(lowMin)} – ${fmt(highMin)}`;
+    }
+
+    // Straight-line (haversine) distance, seller pickup point -> the picked
+    // address -- an approximation of the real road distance since there's
+    // no live GOOGLE_ROUTES_SERVER_KEY yet to get a real one from
+    // get-delivery-quote.js. For a multi-seller cart, uses the farthest
+    // seller (the real single round trip has to cover whichever store is
+    // furthest out). Formula per the founder's own spec: 2.5 min/km one way,
+    // doubled for the round trip, plus a 30-45min wait-in-queue range.
+    const KM_TIME_MIN_PER_KM = 2.5;
+    const WAIT_MIN_LOW = 30;
+    const WAIT_MIN_HIGH = 45;
+
+    function updateTimeSavedEstimate() {
+      const block = document.getElementById('timeSavedBlock');
+      const line = document.getElementById('timeSavedLine');
+      if (!block || !line) return;
+
+      const dest = state.destinationGeo;
+      const sellers = state.sellerTurnarounds;
+      if (!dest || !Array.isArray(sellers) || !sellers.length) {
+        block.classList.add('hidden');
+        return;
+      }
+
+      let maxDistanceKm = null;
+      sellers.forEach(s => {
+        const point = decodeGeographyPointHex(s.pickup_geo);
+        if (!point) return;
+        const d = haversineKmClient(point.lat, point.lon, dest.lat, dest.lon);
+        if (maxDistanceKm === null || d > maxDistanceKm) maxDistanceKm = d;
+      });
+      if (maxDistanceKm === null) {
+        block.classList.add('hidden');
+        return;
+      }
+
+      const roundTripTravelMin = maxDistanceKm * KM_TIME_MIN_PER_KM * 2;
+      const lowMin = roundTripTravelMin + WAIT_MIN_LOW;
+      const highMin = roundTripTravelMin + WAIT_MIN_HIGH;
+
+      line.textContent = `⏱ Time saved compared to collecting yourself: ${formatMinutesRange(lowMin, highMin)}`;
+      block.classList.remove('hidden');
     }
 
     // Delivery network Stage 3 (docs/systems/delivery-network-spec.md §E) — asks
@@ -3717,12 +3814,10 @@ async function validateCheckout() {
       const shippingEl = elements.shippingAmount;
       const breakdownEl = document.getElementById('deliveryBreakdown');
       const multiSellerEl = document.getElementById('multiSellerNote');
-      const valueNoteEl = document.getElementById('deliveryValueNote');
 
       if (cartForFee.length === 0) {
         shippingEl.textContent = '—';
         if (breakdownEl) breakdownEl.style.display = 'none';
-        if (valueNoteEl) valueNoteEl.style.display = 'none';
       } else if (isFree) {
         const cartNow = state.validatedCart || state.cart;
         const svcOnly = cartHasServices(cartNow) && !cartHasProducts(cartNow);
@@ -3731,7 +3826,6 @@ async function validateCheckout() {
           breakdownEl.textContent = svcOnly ? 'Service order — no delivery fee' : (allFreeDelivery ? 'Free delivery on these items' : 'Free delivery on this order');
           breakdownEl.style.display = 'block';
         }
-        if (valueNoteEl) valueNoteEl.style.display = 'none';
       } else {
         shippingEl.textContent = formatCurrency(fee);
         if (breakdownEl) {
@@ -3739,20 +3833,6 @@ async function validateCheckout() {
           const sellerLabel = uniqueSellers === 1 ? '1 seller' : `${uniqueSellers} sellers`;
           breakdownEl.textContent = `${classLabel} parcel · ${sellerLabel}`;
           breakdownEl.style.display = 'block';
-        }
-        // Anchor note (founder ask 2026-09-26): once the fee stops looking
-        // trivial next to the order itself, reframe it against the round
-        // trip a buyer would otherwise make themselves, not against the
-        // order's own price — and make clear it's a flat per-trip cost, not
-        // per-item, so it doesn't look worse the more someone adds to cart.
-        const DELIVERY_VALUE_NOTE_RATIO = 0.4; // fee / subtotal
-        if (valueNoteEl) {
-          if (subtotal > 0 && (fee / subtotal) >= DELIVERY_VALUE_NOTE_RATIO) {
-            valueNoteEl.textContent = 'Flat fee no matter your basket size — still less hassle (and often less cash) than the round trip yourself.';
-            valueNoteEl.style.display = 'block';
-          } else {
-            valueNoteEl.style.display = 'none';
-          }
         }
       }
       if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1) ? 'inline' : 'none';
@@ -3801,11 +3881,12 @@ async function validateCheckout() {
       try {
         const { data: sellers } = await supabaseClient
           .from('sellers')
-          .select('id, shop_name, logo_url, turnaround_time')
+          .select('id, shop_name, logo_url, turnaround_time, pickup_geo')
           .in('id', sellerIds);
         if (sellers?.length) {
           state.sellerTurnarounds = sellers;
           refreshEstimatedTime();
+          updateTimeSavedEstimate();
           // Single-seller cart — light branding touch, never shown for a
           // mixed multi-seller cart so it can never misattribute an order.
           if (sellerIds.length === 1) renderShopBrandingBanner(sellers[0], cart);
