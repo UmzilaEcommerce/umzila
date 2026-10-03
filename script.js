@@ -109,6 +109,26 @@ const cartUpdateLimiter = {
 };
 
 // Sanitize cart data
+// Fields a cart item carries beyond the basics — service setup (booking,
+// intake answers, collection/return choices) and seller/delivery info. They
+// must survive the round trip through the signed-in buyer's `carts` row:
+// dropping them used to wipe a booking the moment the saved cart reloaded.
+const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
+  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery',
+  'delivery_class', 'free_delivery', 'units_per_trip'];
+function pickCartExtras(item) {
+  const out = {};
+  CART_EXTRA_FIELDS.forEach(k => {
+    const v = item[k];
+    if (v === undefined) return;
+    if (v !== null && typeof v === 'object') {
+      try { if (JSON.stringify(v).length > 5000) return; } catch (e) { return; }
+    }
+    out[k] = typeof v === 'string' ? v.substring(0, 500) : v;
+  });
+  return out;
+}
+
 function sanitizeCartData(cart) {
   return cart.map(item => {
     // Accept either item.id or item.product_id; normalize to id (string)
@@ -136,7 +156,8 @@ function sanitizeCartData(cart) {
       quantity,
       size: typeof item.size === 'string' ? item.size.substring(0, 20) : 'One Size',
       image: typeof item.image === 'string' ? item.image.substring(0, 500) : '',
-      variant_id: item.variant_id || item.variantId || null
+      variant_id: item.variant_id || item.variantId || null,
+      ...pickCartExtras(item)
     };
   })
   .filter(item => item.id && item.price > 0);
@@ -181,7 +202,8 @@ async function saveCartToServer() {
         image: item.img,
         variant_id: item.variantId || null,
         stock: item.stock || 0,
-        max_quantity: item.maxQuantity || item.qty
+        max_quantity: item.maxQuantity || item.qty,
+        ...pickCartExtras(item)
       })),
       updated_at: new Date().toISOString(),
       expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -239,7 +261,8 @@ async function loadCartWithSync() {
           img: item.image,
           variantId: item.variant_id,
           stock: item.stock,
-          maxQuantity: item.max_quantity
+          maxQuantity: item.max_quantity,
+          ...pickCartExtras(item)
         }));
         
         // Validate prices against current product data
@@ -355,9 +378,17 @@ async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '', servi
   const price = variant && variant.price_override ? variant.price_override : 
                 (p.sale && p.salePrice ? p.salePrice : p.price);
   
-  const existing = state.cart.find(i => i.id === id && i.size === size);
-  
-  if (existing) {
+  // Services are always added as 'One Size' (see push below), so match on that.
+  const existing = state.cart.find(i => i.id === id && i.size === (isService ? 'One Size' : size));
+
+  if (existing && isService && serviceExtra && serviceExtra.booking_id) {
+    // A new booking for a listing already in the cart replaces the old one
+    // (the modal released the old hold via replaceBookingId) rather than
+    // adding units onto a line that still points at the first booking.
+    existing.qty = qty;
+    existing.booking_id = serviceExtra.booking_id;
+    existing.booking_start_at = serviceExtra.booking_start_at || null;
+  } else if (existing) {
     // Check if we can add more
     if (existing.qty + qty > variantStock) {
       alert(`Cannot add more items. Only ${variantStock - existing.qty} more available for size ${size}`);
@@ -3332,7 +3363,7 @@ async function openProductModal(id) {
           </select>
         </div>` : ''}
 
-        <div class="product-modal-quantity">
+        <div class="product-modal-quantity"${currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? ' style="display:none"' : ''}>
           <h3>Quantity</h3>
           <div class="quantity-selector">
             <button class="quantity-btn" id="decrease-qty">-</button>
@@ -3517,18 +3548,18 @@ function wireServiceIntakeFileUploads() {
 }
 
 let selectedBookingSlot = null; // {start, end} ISO strings — reset each time a booking modal opens
+let selectedBookingUnits = 1;    // how many (e.g. quads) — only shown when the seller's capacity > 1
 
+// Appointment picker for scheduled in-person services. Guests can book too:
+// the hold itself is placed server-side by hold-service-booking.js. Load
+// comes from get_booking_load() (times + units only), because a buyer's own
+// RLS only shows their own bookings — the old direct query made every slot
+// look free.
 async function loadSlotPicker(p) {
   selectedBookingSlot = null;
+  selectedBookingUnits = 1;
   const container = document.getElementById('modal-slot-picker');
-  if (!container) return;
-  if (!currentUser) {
-    container.innerHTML = '<a href="#" id="modal-slot-login-link" style="color:var(--accent);font-weight:600">Sign in</a> to see and book this seller\'s available times.';
-    const link = document.getElementById('modal-slot-login-link');
-    if (link) link.addEventListener('click', (e) => { e.preventDefault(); closeProductModal(); showModal(loginModal); });
-    return;
-  }
-  if (!supabaseClient) return;
+  if (!container || !supabaseClient) return;
   const sellerId = p.seller && p.seller.id;
   if (!sellerId) { container.innerHTML = 'Booking unavailable for this listing.'; return; }
 
@@ -3536,29 +3567,45 @@ async function loadSlotPicker(p) {
   const horizonDays = 14;
   const rangeEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
 
-  const [availRes, bookingsRes] = await Promise.all([
+  const [availRes, loadRes, sellerRes] = await Promise.all([
     supabaseClient.from('seller_availability').select('day_of_week,start_time,end_time').eq('seller_id', sellerId),
-    supabaseClient.from('service_bookings').select('start_at,end_at,status')
-      .eq('seller_id', sellerId).in('status', ['held', 'confirmed'])
-      .gte('start_at', now.toISOString()).lte('start_at', rangeEnd.toISOString())
+    supabaseClient.rpc('get_booking_load', { p_seller_id: sellerId, p_from: now.toISOString(), p_to: rangeEnd.toISOString() }),
+    supabaseClient.from('sellers').select('booking_capacity, booking_start_interval_minutes').eq('id', sellerId).maybeSingle()
   ]);
 
   const availability = availRes.data || [];
-  const bookings = bookingsRes.data || [];
-  if (!availability.length) { container.innerHTML = "This seller hasn't set their availability yet."; return; }
-
+  const bookings = loadRes.data || [];
+  const capacity = (sellerRes.data && sellerRes.data.booking_capacity) || 1;
   const durationMin = p.slot_duration_minutes || 60;
-  const dayButtons = computeSlotDayButtons(availability, bookings, durationMin, horizonDays);
-
-  if (!dayButtons.length) { container.innerHTML = 'No upcoming availability in the next 2 weeks.'; return; }
+  const stepMin = (sellerRes.data && sellerRes.data.booking_start_interval_minutes) || durationMin;
+  if (!availability.length) { container.innerHTML = "This seller hasn't set their availability yet."; return; }
 
   let activeDayIdx = 0;
   function render() {
+    const dayButtons = computeSlotDayButtons(availability, bookings, durationMin, horizonDays, { capacity, units: selectedBookingUnits, stepMin });
+    if (!dayButtons.length) {
+      container.innerHTML = selectedBookingUnits > 1
+        ? 'Not enough free in the next 2 weeks for ' + selectedBookingUnits + '. <a href="#" id="modal-slot-fewer" style="color:var(--accent);font-weight:600">Try fewer</a>'
+        : 'No upcoming availability in the next 2 weeks.';
+      const fewer = document.getElementById('modal-slot-fewer');
+      if (fewer) fewer.addEventListener('click', e => { e.preventDefault(); selectedBookingUnits = 1; render(); });
+      return;
+    }
+    if (activeDayIdx >= dayButtons.length) activeDayIdx = 0;
+    if (selectedBookingSlot && !dayButtons.some(d => d.slots.some(sl => sl.start.toISOString() === selectedBookingSlot.start))) selectedBookingSlot = null;
     const day = dayButtons[activeDayIdx];
     container.innerHTML =
+      (capacity > 1 ? '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">' +
+        '<span style="font-size:13px;color:#374151;font-weight:600">How many? <span style="font-weight:400;color:#6b7280">(price is each)</span></span>' +
+        '<span style="display:inline-flex;align-items:center;gap:6px"><button type="button" id="modal-units-minus" class="quantity-btn">-</button>' +
+        '<strong id="modal-units-value" style="min-width:2ch;text-align:center">' + selectedBookingUnits + '</strong>' +
+        '<button type="button" id="modal-units-plus" class="quantity-btn">+</button></span></div>' : '') +
       '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px" id="modal-slot-days"></div>' +
       '<div style="display:flex;flex-wrap:wrap;gap:8px" id="modal-slot-times"></div>' +
       '<div id="modal-slot-selected" style="margin-top:8px;font-size:12px;color:#059669;font-weight:600"></div>';
+    const minus = document.getElementById('modal-units-minus'), plus = document.getElementById('modal-units-plus');
+    if (minus) { minus.disabled = selectedBookingUnits <= 1; minus.addEventListener('click', () => { selectedBookingUnits = Math.max(1, selectedBookingUnits - 1); render(); }); }
+    if (plus) { plus.disabled = selectedBookingUnits >= capacity; plus.addEventListener('click', () => { selectedBookingUnits = Math.min(capacity, selectedBookingUnits + 1); render(); }); }
     const daysEl = document.getElementById('modal-slot-days');
     dayButtons.forEach((d, i) => {
       const btn = document.createElement('button');
@@ -3574,17 +3621,20 @@ async function loadSlotPicker(p) {
       const btn = document.createElement('button');
       btn.type = 'button';
       const timeLabel = formatSAST(slot.start, { hour: '2-digit', minute: '2-digit' });
-      btn.textContent = timeLabel;
+      btn.innerHTML = esc(timeLabel) + (capacity > 1 && slot.left <= 3 ? '<span style="display:block;font-size:10px;font-weight:700;color:#b45309">' + slot.left + ' left</span>' : '');
       const isSelected = selectedBookingSlot && selectedBookingSlot.start === slot.start.toISOString();
-      btn.style.cssText = 'padding:8px 14px;border-radius:8px;border:1.5px solid ' + (isSelected ? 'var(--accent)' : '#e5e7eb') + ';background:' + (isSelected ? 'var(--accent)' : '#fff') + ';color:' + (isSelected ? '#fff' : '#374151') + ';font-size:13px;font-weight:600;cursor:pointer';
+      btn.style.cssText = 'padding:8px 14px;border-radius:8px;border:1.5px solid ' + (isSelected ? 'var(--accent)' : '#e5e7eb') + ';background:' + (isSelected ? 'var(--accent)' : '#fff') + ';color:' + (isSelected ? '#fff' : '#374151') + ';font-size:13px;font-weight:600;cursor:pointer;line-height:1.2';
       btn.addEventListener('click', () => {
         selectedBookingSlot = { start: slot.start.toISOString(), end: slot.end.toISOString() };
         render();
-        const selEl = document.getElementById('modal-slot-selected');
-        if (selEl) selEl.textContent = 'Selected: ' + day.label + ' at ' + timeLabel;
       });
       timesEl.appendChild(btn);
     });
+    const selEl = document.getElementById('modal-slot-selected');
+    if (selEl && selectedBookingSlot) {
+      selEl.textContent = 'Selected: ' + formatSAST(selectedBookingSlot.start, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) +
+        (selectedBookingUnits > 1 ? ' · ' + selectedBookingUnits + ' booked' : '');
+    }
   }
   render();
 }
@@ -3593,10 +3643,25 @@ async function loadSlotPicker(p) {
 // loadRepSlotPicker (rep collection/delivery windows) — turns raw
 // availability rows + existing bookings into a list of open day/slot
 // buttons, all computed in SAST regardless of the browser's own timezone.
-function computeSlotDayButtons(availability, bookings, durationMin, horizonDays) {
+// opts.capacity/units: a slot is open while the peak booked units across it
+// plus the requested units fit the seller's capacity (1 = one at a time).
+// opts.stepMin: how often a session may start (defaults to its duration).
+function computeSlotDayButtons(availability, bookings, durationMin, horizonDays, opts) {
+  const capacity = (opts && opts.capacity) || 1;
+  const units = (opts && opts.units) || 1;
+  const stepMin = (opts && opts.stepMin) || durationMin;
   const now = new Date();
+  const earliest = now.getTime() + 30 * 60000; // matches hold-service-booking's lead time
   const nowParts = sastParts(now);
   const todayMidnightSAST = sastDate(nowParts.year, nowParts.month, nowParts.day, 0, 0);
+
+  function peakLoad(slotStart, slotEnd) {
+    const overlapping = bookings.filter(b => new Date(b.start_at) < slotEnd && new Date(b.end_at) > slotStart);
+    const points = [slotStart.getTime()].concat(overlapping.map(b => new Date(b.start_at).getTime()).filter(t => t > slotStart.getTime()));
+    return points.reduce((max, t) => Math.max(max, overlapping
+      .filter(b => new Date(b.start_at).getTime() <= t && new Date(b.end_at).getTime() > t)
+      .reduce((sum, b) => sum + (b.units || 1), 0)), 0);
+  }
 
   function slotsForDay(dayDate) {
     const dp = sastParts(dayDate);
@@ -3611,14 +3676,11 @@ function computeSlotDayButtons(availability, bookings, durationMin, horizonDays)
       while (cursor.getTime() + durationMin * 60000 <= end.getTime()) {
         const slotStart = new Date(cursor);
         const slotEnd = new Date(cursor.getTime() + durationMin * 60000);
-        if (slotStart > now) {
-          const overlaps = bookings.some(b => {
-            const bs = new Date(b.start_at), be = new Date(b.end_at);
-            return slotStart < be && slotEnd > bs;
-          });
-          if (!overlaps) slots.push({ start: slotStart, end: slotEnd });
+        if (slotStart.getTime() >= earliest) {
+          const left = capacity - peakLoad(slotStart, slotEnd);
+          if (left >= units) slots.push({ start: slotStart, end: slotEnd, left });
         }
-        cursor = new Date(cursor.getTime() + durationMin * 60000);
+        cursor = new Date(cursor.getTime() + stepMin * 60000);
       }
     });
     return slots;
@@ -3906,35 +3968,43 @@ function setupProductModalEvents(bundleProduct) {
         });
       }
 
-      // Scheduled appointment — turn the selected slot into a booking hold
+      // Scheduled appointment — the server places the hold (guests too) and
+      // enforces the seller's capacity; quantity becomes the booked units.
       if (currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled') {
-        if (!currentUser) { closeProductModal(); showModal(loginModal); return; }
         if (!selectedBookingSlot) {
           const picker = document.getElementById('modal-slot-picker');
           if (picker) picker.scrollIntoView({ behavior: 'smooth', block: 'center' });
           showNotification('Please pick a time first.');
           return;
         }
-        quantity = 1; // one booking = one slot, regardless of the quantity stepper
         btn.disabled = true;
-        const holdExpiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
-        const { data: booking, error: bookingErr } = await supabaseClient.from('service_bookings').insert({
-          seller_id: currentModalProduct.seller.id,
-          product_id: currentModalProduct.id,
-          buyer_user_id: currentUser.id,
-          start_at: selectedBookingSlot.start,
-          end_at: selectedBookingSlot.end,
-          status: 'held',
-          hold_expires_at: holdExpiresAt
-        }).select().single();
-        btn.disabled = false;
-        if (bookingErr) {
-          // Most likely the exclusion constraint caught a race — someone else just took this slot.
-          showNotification("That time was just taken — please pick another.");
-          loadSlotPicker(currentModalProduct);
+        let booking = null;
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          const sess = supabaseClient ? (await supabaseClient.auth.getSession()).data.session : null;
+          if (sess && sess.access_token) headers.Authorization = 'Bearer ' + sess.access_token;
+          const res = await fetch('/.netlify/functions/hold-service-booking', {
+            method: 'POST', headers,
+            body: JSON.stringify({
+              productId: currentModalProduct.id, startAt: selectedBookingSlot.start, units: selectedBookingUnits,
+              replaceBookingId: (state.cart.find(i => i.id === currentModalProduct.id && i.booking_id) || {}).booking_id || undefined
+            })
+          });
+          const json = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            showNotification(json.error || 'That time was just taken — please pick another.');
+            loadSlotPicker(currentModalProduct);
+            return;
+          }
+          booking = json;
+        } catch (e) {
+          showNotification('Could not hold that time — check your connection and try again.');
           return;
+        } finally {
+          btn.disabled = false;
         }
-        serviceExtra = Object.assign({}, serviceExtra, { booking_id: booking.id, booking_start_at: booking.start_at });
+        quantity = booking.units;
+        serviceExtra = Object.assign({}, serviceExtra, { booking_id: booking.bookingId, booking_start_at: booking.startAt });
       }
     }
 

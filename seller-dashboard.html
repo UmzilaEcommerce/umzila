@@ -383,6 +383,7 @@
       <button class="tab-btn active"  data-tab="shop"          role="tab">🏪 My Shop</button>
       <button class="tab-btn"         data-tab="products"      role="tab">📦 Products</button>
       <button class="tab-btn"         data-tab="orders"        role="tab">🧾 Orders</button>
+      <button class="tab-btn"         data-tab="bookings"      role="tab">📅 Bookings</button>
       <button class="tab-btn"         data-tab="notifications" role="tab">🔔 Alerts<div class="tab-notif-dot" id="tabNotifDot"></div></button>
       <button class="tab-btn"         data-tab="analytics"     role="tab">📊 Analytics</button>
       <button class="tab-btn"         data-tab="advertise"     role="tab">📢 Advertise</button>
@@ -693,12 +694,14 @@
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Session length</label>
-                    <select id="newSlotDuration" class="form-control">
+                    <select id="newSlotDuration" class="form-control" data-booking-durations="1">
                       <option value="30">30 minutes</option>
                       <option value="45">45 minutes</option>
                       <option value="60" selected>60 minutes</option>
                       <option value="90">90 minutes</option>
-                      <option value="120">120 minutes</option>
+                      <option value="120">2 hours</option>
+<option value="180">3 hours</option>
+<option value="240">4 hours</option>
                     </select>
                   </div>
                   <div class="form-group">
@@ -706,6 +709,26 @@
                     <input type="text" id="newServiceLocationScheduled" class="form-control" placeholder="e.g. Res room 214, or a campus spot">
                   </div>
                 </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">How many can you take at the same time?</label>
+                    <input type="number" id="newBookingCapacity" class="form-control" min="1" max="500" value="1">
+                    <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">e.g. 1 for a single chair, 10 if you run 10 quad bikes. Shared by all your bookable listings.</small>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">New sessions start every</label>
+                    <select id="newStartInterval" class="form-control">
+                      <option value="">Back-to-back (session length)</option>
+                      <option value="15">15 minutes</option>
+                      <option value="30">30 minutes</option>
+                      <option value="60">Hour</option>
+                    </select>
+                  </div>
+                </div>
+                <label style="display:flex;align-items:flex-start;gap:8px;font-size:14px;margin:4px 0 14px;cursor:pointer">
+                  <input type="checkbox" id="newInstantConfirm" style="margin-top:3px">
+                  <span><strong>Confirm bookings instantly</strong><br><small style="color:#6b7280">Paid bookings are confirmed straight away instead of waiting for you to accept each one. Your calendar already stops double bookings.</small></span>
+                </label>
                 <div class="form-group">
                   <label class="form-label">Your weekly working hours</label>
                   <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">This becomes your booking calendar — buyers can only pick times you set here.</small>
@@ -926,12 +949,14 @@
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label">Session length</label>
-                  <select id="editSlotDuration" class="form-control">
+                  <select id="editSlotDuration" class="form-control" data-booking-durations="1">
                     <option value="30">30 minutes</option>
                     <option value="45">45 minutes</option>
                     <option value="60" selected>60 minutes</option>
                     <option value="90">90 minutes</option>
-                    <option value="120">120 minutes</option>
+                    <option value="120">2 hours</option>
+<option value="180">3 hours</option>
+<option value="240">4 hours</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -939,6 +964,26 @@
                   <input type="text" id="editServiceLocationScheduled" class="form-control" placeholder="e.g. Res room 214, or a campus spot">
                 </div>
               </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">How many can you take at the same time?</label>
+                  <input type="number" id="editBookingCapacity" class="form-control" min="1" max="500" value="1">
+                  <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">e.g. 1 for a single chair, 10 if you run 10 quad bikes. Shared by all your bookable listings.</small>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">New sessions start every</label>
+                  <select id="editStartInterval" class="form-control">
+                    <option value="">Back-to-back (session length)</option>
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="60">Hour</option>
+                  </select>
+                </div>
+              </div>
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:14px;margin:4px 0 14px;cursor:pointer">
+                <input type="checkbox" id="editInstantConfirm" style="margin-top:3px">
+                <span><strong>Confirm bookings instantly</strong><br><small style="color:#6b7280">Paid bookings are confirmed straight away instead of waiting for you to accept each one. Your calendar already stops double bookings.</small></span>
+              </label>
               <div class="form-group">
                 <label class="form-label">Your weekly working hours</label>
                 <small style="display:block;color:#6b7280;margin-bottom:6px;font-size:12px">This becomes your booking calendar — buyers can only pick times you set here.</small>
@@ -1019,6 +1064,27 @@
             <div class="empty-state-icon">📦</div>
             <div>No past orders yet. Orders move here once the buyer confirms delivery.</div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: Bookings ── every scheduled booking for this store, by day -->
+    <div id="tabBookings" class="tab-panel" style="display:none">
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <div>
+            <div style="font-weight:800;font-size:17px">Bookings</div>
+            <div id="bookingsCapacityNote" style="font-size:13px;color:var(--muted)"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="bookingsShowPast"> Show past
+          </label>
+        </div>
+        <div class="spinner-wrap" id="bookingsLoading" style="display:none"><div class="spinner"></div></div>
+        <div id="bookingsList"></div>
+        <div class="empty-state" id="bookingsEmpty" style="display:none">
+          <div class="empty-state-icon">📅</div>
+          <div>No bookings yet. When customers book a time, it shows up here.</div>
         </div>
       </div>
     </div>
@@ -1483,6 +1549,7 @@
 
       if (name === 'products')      loadProducts();
       if (name === 'orders')        loadOrders();
+      if (name === 'bookings')      loadBookings();
       if (name === 'analytics')     loadAnalytics();
       if (name === 'notifications') loadNotifications();
       if (name === 'advertise')     loadAdvertiseTab();
@@ -1492,6 +1559,87 @@
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { switchTab(btn.dataset.tab); });
     });
+
+    /* ── BOOKINGS TAB ──────────────────────────────────────────────────────── */
+    // service_bookings for this store (seller RLS via my_seller_ids()), with
+    // the listing name and, once paid, the buyer from the order. Unpaid holds
+    // are shown so the seller understands why a slot looks taken.
+    var SAST_OPTS = { timeZone: 'Africa/Johannesburg' };
+    async function loadBookings() {
+      if (!SD.seller) return;
+      var list = document.getElementById('bookingsList');
+      var empty = document.getElementById('bookingsEmpty');
+      var loading = document.getElementById('bookingsLoading');
+      var showPast = document.getElementById('bookingsShowPast').checked;
+      var cap = SD.seller.booking_capacity || 1;
+      document.getElementById('bookingsCapacityNote').textContent = cap > 1
+        ? 'Up to ' + cap + ' can be booked at the same time. Change this in any bookable listing.'
+        : 'One booking at a time. Raise this in any bookable listing if you can take more.';
+      list.innerHTML = ''; empty.style.display = 'none'; loading.style.display = '';
+
+      var q = SD.sb.from('service_bookings')
+        .select('id, product_id, order_id, start_at, end_at, units, status, hold_expires_at')
+        .eq('seller_id', SD.seller.id)
+        .in('status', ['held', 'confirmed', 'completed'])
+        .order('start_at', { ascending: !showPast })
+        .limit(300);
+      var nowIso = new Date().toISOString();
+      q = showPast ? q.lt('end_at', nowIso) : q.gte('end_at', nowIso);
+      var res = await q;
+      loading.style.display = 'none';
+      if (res.error) { toast('Failed to load bookings'); return; }
+      var rows = (res.data || []).filter(function(b) {
+        return b.status !== 'held' || (b.hold_expires_at && new Date(b.hold_expires_at) > new Date());
+      });
+      if (!rows.length) { empty.style.display = ''; return; }
+
+      var productIds = [...new Set(rows.map(function(b) { return b.product_id; }))];
+      var orderIds = [...new Set(rows.map(function(b) { return b.order_id; }).filter(Boolean))];
+      var [prodRes, orderRes] = await Promise.all([
+        SD.sb.from('products').select('id, name').in('id', productIds),
+        orderIds.length ? SD.sb.from('orders').select('id, order_number, customer_name, customer_phone, customer_email').in('id', orderIds) : Promise.resolve({ data: [] })
+      ]);
+      var prodMap = {}; (prodRes.data || []).forEach(function(r) { prodMap[r.id] = r; });
+      var orderMap = {}; (orderRes.data || []).forEach(function(r) { orderMap[r.id] = r; });
+
+      var groups = [];
+      rows.forEach(function(b) {
+        var day = new Date(b.start_at).toLocaleDateString('en-ZA', Object.assign({ weekday: 'long', day: 'numeric', month: 'long' }, SAST_OPTS));
+        var g = groups[groups.length - 1];
+        if (!g || g.day !== day) { g = { day: day, items: [], units: 0 }; groups.push(g); }
+        g.items.push(b);
+        if (b.status !== 'held') g.units += b.units || 1;
+      });
+      var tm = function(iso) { return new Date(iso).toLocaleTimeString('en-ZA', Object.assign({ hour: '2-digit', minute: '2-digit' }, SAST_OPTS)); };
+
+      list.innerHTML = groups.map(function(g) {
+        return '<div style="margin-bottom:18px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #eaecf0;padding-bottom:6px;margin-bottom:8px">' +
+            '<strong style="font-size:14px">' + escapeHtmlLite(g.day) + '</strong>' +
+            '<span style="font-size:12px;color:var(--muted)">' + g.items.length + ' booking' + (g.items.length === 1 ? '' : 's') + '</span>' +
+          '</div>' +
+          g.items.map(function(b) {
+            var o = orderMap[b.order_id] || null;
+            var product = prodMap[b.product_id] || {};
+            var held = b.status === 'held';
+            var who = o
+              ? '👤 ' + escapeHtmlLite(o.customer_name || 'Customer') +
+                (o.customer_phone ? ' · <a href="tel:' + escapeHtmlLite(o.customer_phone) + '">📞 ' + escapeHtmlLite(o.customer_phone) + '</a>' : '') +
+                (o.order_number ? ' · #' + escapeHtmlLite(o.order_number) : '')
+              : (held ? '⏳ Being paid for now — held until ' + tm(b.hold_expires_at) : '');
+            return '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:10px;background:' + (held ? '#fffbeb' : '#f8fafc') + ';margin-bottom:6px">' +
+              '<div style="min-width:62px;font-weight:800;color:#0a2f66;font-variant-numeric:tabular-nums">' + tm(b.start_at) + '<div style="font-weight:500;font-size:11px;color:var(--muted)">to ' + tm(b.end_at) + '</div></div>' +
+              '<div style="flex:1;min-width:0">' +
+                '<div style="font-weight:700;font-size:14px">' + escapeHtmlLite(product.name || 'Booking') + ((b.units || 1) > 1 ? ' <span style="color:#b45309">× ' + b.units + '</span>' : '') + '</div>' +
+                '<div style="font-size:12px;color:var(--muted);margin-top:2px">' + who + '</div>' +
+              '</div>' +
+              '<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;background:' + (held ? '#d97706' : b.status === 'completed' ? '#16a34a' : '#0a2f66') + '">' + (held ? 'Unpaid hold' : b.status === 'completed' ? 'Done' : 'Confirmed') + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
+      }).join('');
+    }
+    document.getElementById('bookingsShowPast').addEventListener('change', loadBookings);
 
     /* ── ADVERTISE TAB ─────────────────────────────────────────────────────── */
     var adTabInitialised = false;
@@ -1508,7 +1656,7 @@
           var { data: prods } = await SD.sb.from('products')
             .select('id, name').eq('seller_id', SD.seller.id).eq('visible', true).order('name');
           prodSel.innerHTML = (prods || []).map(p =>
-            `<option value="${p.id}">${p.name || p.id}</option>`).join('') || '<option value="">No visible products</option>';
+            `<option value="${p.id}">${escapeHtmlLite(p.name || p.id)}</option>`).join('') || '<option value="">No visible products</option>';
         } catch(e) { prodSel.innerHTML = '<option value="">Failed to load products</option>'; }
       }
 
@@ -1978,6 +2126,28 @@
       } catch(e) {
         console.warn('fetchSDCategories failed', e);
       }
+    }
+
+    // Store-wide booking settings (sellers.booking_capacity /
+    // booking_start_interval_minutes) shown inside each bookable listing's
+    // form, since that's where sellers think about their calendar.
+    function fillBookingSettings(prefix) {
+      var cap = document.getElementById(prefix + 'BookingCapacity');
+      var iv = document.getElementById(prefix + 'StartInterval');
+      if (cap) cap.value = (SD.seller && SD.seller.booking_capacity) || 1;
+      if (iv) iv.value = (SD.seller && SD.seller.booking_start_interval_minutes) ? String(SD.seller.booking_start_interval_minutes) : '';
+    }
+    async function saveBookingSettings(prefix) {
+      var cap = parseInt((document.getElementById(prefix + 'BookingCapacity') || {}).value, 10);
+      var ivRaw = (document.getElementById(prefix + 'StartInterval') || {}).value;
+      var patch = {
+        booking_capacity: Math.min(500, Math.max(1, isNaN(cap) ? 1 : cap)),
+        booking_start_interval_minutes: ivRaw ? parseInt(ivRaw, 10) : null
+      };
+      if (SD.seller && patch.booking_capacity === SD.seller.booking_capacity
+          && patch.booking_start_interval_minutes === (SD.seller.booking_start_interval_minutes || null)) return;
+      var res = await SD.sb.from('sellers').update(patch).eq('id', SD.seller.id).select().single();
+      if (!res.error && res.data) SD.seller = res.data;
     }
 
     function showDashboard() {
@@ -2643,7 +2813,7 @@
         return '<div class="product-row" data-id="' + p.id + '">' +
           '<img class="product-row-img" src="' + img + '" alt="' + (p.name||'') + '" onerror="this.src=\'https://picsum.photos/seed/' + p.id + '/80/80\'">' +
           '<div class="product-row-info">' +
-            '<div class="product-row-name">' + (p.name || 'Untitled') + '</div>' +
+            '<div class="product-row-name">' + escapeHtmlLite(p.name || 'Untitled') + '</div>' +
             '<div class="product-row-meta">' + price + ' · ' + (p.category||'') + favs + ' · ' + statusBadgeHtml(status) + '</div>' +
           '</div>' +
           '<div class="product-row-actions"><button class="btn ghost sm edit-prod-btn" data-id="' + p.id + '">Edit</button></div>' +
@@ -2812,6 +2982,7 @@
         if (scheduledFields) scheduledFields.style.display = isScheduled ? '' : 'none';
         if (flexibleFields) flexibleFields.style.display = isScheduled ? 'none' : '';
         if (isScheduled) buildAvailabilityGrid(prefix + 'AvailabilityGrid');
+        if (isScheduled && prefix === 'new') fillBookingSettings('new');
       }
       if (!bookingModeRadios[0] || bookingModeRadios[0].dataset.wired !== 'true') {
         bookingModeRadios.forEach(function(r) { r.addEventListener('change', updateBookingMode); r.dataset.wired = 'true'; });
@@ -2847,7 +3018,11 @@
       // Dead combo (no physical item back, but intake is file/none) already
       // auto-routes the fulfillment-type card to 'digital' in the UI — this
       // is the same guard applied again at save time as a safety net.
-      var intakeKind = (fulfillmentType === 'item_dropoff' && intakeKindEl && itemReturned) ? intakeKindEl.value : 'item';
+      // Only drop-off services hand over a physical item; in-person/online
+      // ones were wrongly saved as 'item', which showed buyers collection steps.
+      var intakeKind = fulfillmentType === 'item_dropoff'
+        ? ((intakeKindEl && itemReturned) ? intakeKindEl.value : 'item')
+        : 'none';
       var bookingModeEl = document.querySelector('input[name="newBookingMode"]:checked');
       var bookingMode = bookingModeEl ? bookingModeEl.value : null;
       var slotDuration = fulfillmentType === 'in_person' && bookingMode === 'scheduled'
@@ -2900,6 +3075,7 @@
         item_returned:  isService ? itemReturned : true,
         intake_kind:    isService ? intakeKind : 'item',
         booking_mode:   isService ? bookingMode : null,
+        instant_confirm: isService && fulfillmentType === 'in_person' && bookingMode === 'scheduled' && !!(document.getElementById('newInstantConfirm') || {}).checked,
         slot_duration_minutes: slotDuration,
         service_location: serviceLocation,
         intake_fields:  intakeFields,
@@ -2914,6 +3090,7 @@
       // replace-all rather than append, so editing hours in a later listing's
       // quiz doesn't create duplicate/conflicting day rows.
       if (availabilityRows.length) {
+        await saveBookingSettings('new');
         await SD.sb.from('seller_availability').delete().eq('seller_id', SD.seller.id);
         await SD.sb.from('seller_availability').insert(
           availabilityRows.map(function(r) { return Object.assign({ seller_id: SD.seller.id }, r); })
@@ -2996,6 +3173,9 @@
         if (bmEl) bmEl.checked = true;
         var sdEl = document.getElementById('editSlotDuration');
         if (sdEl) sdEl.value = p.slot_duration_minutes || 60;
+        fillBookingSettings('edit');
+        var icEl = document.getElementById('editInstantConfirm');
+        if (icEl) icEl.checked = p.instant_confirm === true;
         var locSchedEl = document.getElementById('editServiceLocationScheduled');
         var locFlexEl = document.getElementById('editServiceLocationFlexible');
         if (locSchedEl) locSchedEl.value = bmVal === 'scheduled' ? (p.service_location || '') : '';
@@ -3110,7 +3290,9 @@
       var itemReturnedEditEl = document.querySelector('input[name="editItemReturned"]:checked');
       var itemReturnedEdit = itemReturnedEditEl ? itemReturnedEditEl.value === 'true' : true;
       var intakeKindEditEl = document.querySelector('input[name="editIntakeKind"]:checked');
-      var intakeKindEdit = (fulfillmentTypeEdit === 'item_dropoff' && intakeKindEditEl && itemReturnedEdit) ? intakeKindEditEl.value : 'item';
+      var intakeKindEdit = fulfillmentTypeEdit === 'item_dropoff'
+        ? ((intakeKindEditEl && itemReturnedEdit) ? intakeKindEditEl.value : 'item')
+        : 'none';
       var bookingModeEditEl = document.querySelector('input[name="editBookingMode"]:checked');
       var bookingModeEdit = bookingModeEditEl ? bookingModeEditEl.value : null;
       var slotDurationEdit = fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled'
@@ -3150,6 +3332,7 @@
         item_returned:  isServiceEdit ? itemReturnedEdit : true,
         intake_kind:    isServiceEdit ? intakeKindEdit : 'item',
         booking_mode:   isServiceEdit ? bookingModeEdit : null,
+        instant_confirm: isServiceEdit && fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled' && !!(document.getElementById('editInstantConfirm') || {}).checked,
         slot_duration_minutes: slotDurationEdit,
         service_location: serviceLocationEdit,
         intake_fields:  intakeFieldsEdit
@@ -3159,6 +3342,7 @@
       if (error) { setMsg('editProdMsg', error.message); return; }
 
       if (availabilityRowsEdit.length) {
+        await saveBookingSettings('edit');
         await SD.sb.from('seller_availability').delete().eq('seller_id', SD.seller.id);
         await SD.sb.from('seller_availability').insert(
           availabilityRowsEdit.map(function(r) { return Object.assign({ seller_id: SD.seller.id }, r); })
@@ -3390,7 +3574,7 @@
           var qty   = i.qty || i.quantity || 1;
           var price = i.price || i.unit_price || 0;
           return '<div class="order-item-line">' +
-            '<span>' + iName + (i.size ? ' / ' + i.size : '') + ' × ' + qty + '</span>' +
+            '<span>' + escapeHtmlLite(iName) + (i.size ? ' / ' + escapeHtmlLite(i.size) : '') + ' × ' + escapeHtmlLite(String(qty)) + '</span>' +
             '<span>' + fmt(price * qty) + '</span>' +
           '</div>';
         }).join('');
@@ -3410,10 +3594,10 @@
         var city = order.city || '';
         if (deliveryAddr || city) {
           buyerAddressHtml = '<div class="order-buyer" style="margin-top:4px">📦 ' +
-            (order.customer_name || '') +
-            (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') +
-            (deliveryAddr ? ' · ' + deliveryAddr : '') +
-            (city ? ', ' + city : '') +
+            escapeHtmlLite(order.customer_name || '') +
+            (order.customer_phone ? ' · 📞 ' + escapeHtmlLite(order.customer_phone) : '') +
+            (deliveryAddr ? ' · ' + escapeHtmlLite(deliveryAddr) : '') +
+            (city ? ', ' + escapeHtmlLite(city) : '') +
           '</div>';
         }
 
@@ -3449,7 +3633,7 @@
           var iName = i.title || i.name || i.product_name || 'Product';
           var qty = i.qty || i.quantity || 1;
           var price = i.price || i.unit_price || 0;
-          return '<div class="order-item-line"><span>' + iName + (i.size?' / '+i.size:'') + ' × ' + qty + '</span><span>' + fmt(price*qty) + '</span></div>';
+          return '<div class="order-item-line"><span>' + escapeHtmlLite(iName) + (i.size?' / '+escapeHtmlLite(i.size):'') + ' × ' + escapeHtmlLite(String(qty)) + '</span><span>' + fmt(price*qty) + '</span></div>';
         }).join('');
         var total = items.reduce(function(s,i){ return s + ((i.price||i.unit_price||0) * (i.qty||i.quantity||1)); }, 0);
         return '<div class="order-row" style="opacity:0.85">' +
@@ -3646,8 +3830,13 @@
             '<span style="background:' + badgeColor + ';color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px">' + badgeLabel + '</span>' +
             '<span class="order-row-date">' + formatDate(s.created_at) + '</span>' +
           '</div>' +
-          '<div class="order-items-list"><div class="order-item-line"><span>🔧 ' + itemName + '</span></div></div>' +
-          (order.customer_name ? '<div class="order-buyer">👤 ' + order.customer_name + (order.customer_phone ? ' · 📞 ' + order.customer_phone : '') + '</div>' : '') +
+          // order.items / customer_* are written by the buyer's browser —
+          // always escape them (they were injected raw before).
+          '<div class="order-items-list"><div class="order-item-line"><span>🔧 ' + escapeHtmlLite(itemName) + '</span></div></div>' +
+          (item.booking_start_at ? '<div style="font-size:13px;font-weight:700;color:#0a2f66;margin-top:4px">📅 ' +
+            escapeHtmlLite(new Date(item.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) +
+            ((item.booking_units || item.quantity) > 1 ? ' · ' + escapeHtmlLite(String(item.booking_units || item.quantity)) + ' booked' : '') + '</div>' : '') +
+          (order.customer_name ? '<div class="order-buyer">👤 ' + escapeHtmlLite(order.customer_name) + (order.customer_phone ? ' · 📞 ' + escapeHtmlLite(order.customer_phone) : '') + '</div>' : '') +
           deadlineHtml +
           (actions ? '<div class="btn-row" style="margin-top:10px">' + actions + '</div>' : '') +
         '</div>';

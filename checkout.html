@@ -2730,6 +2730,19 @@
 }
 	
 	// Add cart sync function
+// Service setup on a cart item (booking hold, intake answers, collection/
+// return choices) exists only client-side — it must survive the merge with
+// the signed-in buyer's saved `carts` row and saveCartToServer(), or a fresh
+// booking silently disappears and checkout blocks on "pick a time".
+// Same list as script.js's CART_EXTRA_FIELDS.
+const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
+  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+function cartExtras(item) {
+  const out = {};
+  CART_EXTRA_FIELDS.forEach(k => { if (item && item[k] !== undefined) out[k] = item[k]; });
+  return out;
+}
+
 async function syncCartOnLogin(user) {
     if (!supabaseClient || !user) return;
     
@@ -2750,7 +2763,8 @@ async function syncCartOnLogin(user) {
             
             localCart.forEach(item => {
                 const itemKey = `${item.id}-${item.size}`;
-                if (!serverIds.includes(itemKey)) {
+                const idx = serverIds.indexOf(itemKey);
+                if (idx === -1) {
                     serverCart.items.push({
                         product_id: item.id,
                         name: item.name || item.title,
@@ -2759,8 +2773,15 @@ async function syncCartOnLogin(user) {
                         size: item.size,
                         image: item.image || item.img,
                         variant_id: item.variant_id || item.variantId,
-                        stock: item.stock || 0
+                        stock: item.stock || 0,
+                        ...cartExtras(item)
                     });
+                } else {
+                    // Same line on both sides: the local copy is the newer one
+                    // for service setup (e.g. a booking made just now). A booked
+                    // line's quantity is the booked units, so it follows too.
+                    Object.assign(serverCart.items[idx], cartExtras(item));
+                    if (item.booking_id) serverCart.items[idx].quantity = item.quantity || item.qty;
                 }
             });
             
@@ -2776,7 +2797,8 @@ async function syncCartOnLogin(user) {
                 quantity: item.quantity,
                 size: item.size,
                 image: item.image,
-                variant_id: item.variant_id
+                variant_id: item.variant_id,
+                ...cartExtras(item)
             })));
 
             // Save merged cart
@@ -2812,7 +2834,8 @@ async function saveCartToServer() {
                 size: item.size,
                 image: item.image,
                 variant_id: item.variant_id,
-                stock: item.stock || 0
+                stock: item.stock || 0,
+                ...cartExtras(item)
             })),
             updated_at: new Date().toISOString(),
             expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
@@ -4315,7 +4338,7 @@ function getCheckoutBlockers() {
             if (missing) blockers.push({ itemId: item.id, title, message: `Answer required: ${f.label}` });
         });
         if (item.fulfillment_type === 'in_person' && item.booking_mode === 'scheduled' && !item.booking_id) {
-            blockers.push({ itemId: item.id, title, message: 'Pick an appointment time' });
+            blockers.push({ itemId: item.id, title, message: 'Pick a time (your earlier hold expired or was never set)', svcField: 'booking', sellerId: item.seller_id || null });
         }
         // Collection/return always needs a committed time, not just an
         // address — the "Change" panel already requires one when set, but a
@@ -4340,11 +4363,22 @@ function renderCheckoutBlockers() {
     list.innerHTML = blockers.map(b => `
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">
         <span style="font-size:13px;color:#78350f"><strong>${b.title}</strong> — ${b.message}</span>
-        <button type="button" class="checkout-blocker-fix" data-item-id="${b.itemId}" data-svc-field="${b.svcField || ''}" style="flex-shrink:0;padding:6px 14px;background:#f59e0b;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">Complete now</button>
+        <button type="button" class="checkout-blocker-fix" data-item-id="${b.itemId}" data-svc-field="${b.svcField || ''}" data-seller-id="${b.sellerId || ''}" style="flex-shrink:0;padding:6px 14px;background:#f59e0b;color:#fff;border:none;border-radius:999px;font-size:12px;font-weight:700;cursor:pointer">Complete now</button>
       </div>`).join('');
     card.classList.remove('hidden');
     list.querySelectorAll('.checkout-blocker-fix').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
+        if (btn.dataset.svcField === 'booking') {
+          // Times are picked on the listing itself (live availability), so
+          // send the buyer back to that store with the listing opened.
+          let slug = null;
+          if (btn.dataset.sellerId && supabaseClient) {
+            const { data } = await supabaseClient.from('sellers').select('slug').eq('id', btn.dataset.sellerId).maybeSingle();
+            slug = data && data.slug;
+          }
+          window.location.href = (slug ? '/' + slug : '/') + '?product=' + encodeURIComponent(btn.dataset.itemId);
+          return;
+        }
         goToStep('checkout');
         const panel = document.querySelector('.svc-edit-panel[data-svc-panel="' + btn.dataset.itemId + '"]');
         const target = panel || document.getElementById('serviceDropoffBanner');

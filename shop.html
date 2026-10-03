@@ -546,7 +546,16 @@
       };
     }
 
+    // Services need setup this page doesn't have (a booked time, intake
+    // answers, collection/return choices) — hand them to the homepage's full
+    // product modal instead of adding a half-configured cart line that
+    // checkout would then block.
+    function openServiceSetup(product) {
+      window.location.href = '/?product=' + encodeURIComponent(product.id);
+    }
+
     function addToCart(product, size, qty, preferred_delivery) {
+      if (product && product.listing_type === 'service') { openServiceSetup(product); return; }
       var cart = getCart();
       var existing = cart.find(function(i) { return i.id === product.id && i.size === size; });
       if (existing) {
@@ -565,6 +574,7 @@
     // Same item shape as addToCart() above so checkout.html's existing
     // cart-loading logic needs no new format to understand.
     function buyNow(product, size, qty, preferred_delivery) {
+      if (product && product.listing_type === 'service') { openServiceSetup(product); return; }
       var item = buildCartItem(product, size, qty, preferred_delivery);
       localStorage.setItem('ss_buynow', JSON.stringify([item]));
       window.location.href = 'checkout.html?buynow=1';
