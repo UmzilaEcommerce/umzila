@@ -110,7 +110,7 @@ exports.handler = async function(event) {
 <div style="max-width:580px;margin:30px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">
   <div style="background:#0a2f66;padding:28px 36px;text-align:center">
     <div style="font-size:28px;font-weight:900;color:#fff;margin:0">Umzila</div>
-    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">campus marketplace</div>
+    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">Durban&rsquo;s best local businesses</div>
   </div>
 
   <div style="padding:32px 36px">
@@ -129,7 +129,7 @@ exports.handler = async function(event) {
   </div>
 
   <div style="background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0">
-    <strong><a href="${esc(SITE_BASE_URL)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; campus marketplace
+    <strong><a href="${esc(SITE_BASE_URL)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses
   </div>
 </div>
 </body>

@@ -73,7 +73,7 @@ module.exports.handler = async function (event) {
     </div>
   </div>
   <div class="ft">
-    <a href="${esc(adminLink)}">Umzila Admin</a> &mdash; campus marketplace
+    <a href="${esc(adminLink)}">Umzila Admin</a> &mdash; Durban&rsquo;s best local businesses
   </div>
 </div>
 </body>

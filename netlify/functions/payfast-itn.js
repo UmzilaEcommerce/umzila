@@ -294,7 +294,7 @@ function buildWelcomeEmail(firstName, email, shopName, siteUrl) {
     <p style="font-size:14px;color:#888">Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a></p>
   </div>
   <div class="ft">
-    <strong><a href="${site}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${site}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>

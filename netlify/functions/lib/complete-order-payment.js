@@ -608,7 +608,7 @@ function buildSellerOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl) 
     <p class="note">Your full order details, customer contact info, and fulfilment tools are in your seller dashboard.</p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>
@@ -752,7 +752,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
   </div>
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
-    <p>We've received your payment and your order is now being processed. Your items may come from one or more campus sellers — each seller will prepare their items and hand them to our logistics team, who will bundle and deliver everything together to your selected area.</p>
+    <p>We've received your payment and your order is now being processed. Your items may come from one or more local stores — each seller will prepare their items and hand them to our logistics team, who will bundle and deliver everything together to your selected area.</p>
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
 
@@ -786,7 +786,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
     </p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     <a href="mailto:orders@umzila.store">orders@umzila.store</a>
   </div>
 </div>
@@ -878,7 +878,7 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
     <p style="font-size:13px;color:#888;text-align:center">Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a></p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>

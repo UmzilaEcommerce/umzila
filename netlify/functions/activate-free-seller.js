@@ -287,7 +287,7 @@ function buildFreeWelcomeEmail(firstName, email, shopName, siteUrl, slotNumber) 
     <div class="perks">
       <h3>What you get — free for 1 year</h3>
       <ul>
-        <li>Your store live on Umzila, visible to all campus shoppers</li>
+        <li>Your store live on Umzila, visible to shoppers across Durban</li>
         <li>Create as many stores and products as you need</li>
         <li>Full access to your seller dashboard, orders, and analytics</li>
         <li>No enrollment fee, no monthly fee — completely free for 12 months</li>
@@ -312,7 +312,7 @@ function buildFreeWelcomeEmail(firstName, email, shopName, siteUrl, slotNumber) 
     <p style="font-size:14px;color:#888">Questions? Reply to this email or reach us at <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a></p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     <a href="mailto:sellers@umzila.store">sellers@umzila.store</a>
   </div>
 </div>

@@ -110,7 +110,7 @@ function buildRefereeEmail(code, expiryLabel, siteUrl) {
     <div class="cta"><a href="${siteUrl}/shop.html" class="btn">Start Shopping &rarr;</a></div>
   </div>
   <div class="ft">
-    <strong><a href="${siteUrl}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${siteUrl}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;
@@ -136,7 +136,7 @@ function buildReferrerEmail(code, expiryLabel, firstName, siteUrl) {
     <div class="cta"><a href="${siteUrl}/shop.html" class="btn">Shop Now &rarr;</a></div>
   </div>
   <div class="ft">
-    <strong><a href="${siteUrl}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${siteUrl}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;

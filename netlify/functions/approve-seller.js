@@ -244,7 +244,7 @@ function buildApprovalEmail(name, shopName, enrollmentLink, siteUrl, isFree) {
     <p class="note">If you did not apply to sell on Umzila, you can safely ignore this email.</p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(site)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div>

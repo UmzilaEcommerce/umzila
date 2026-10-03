@@ -162,7 +162,7 @@ function randomSuffix(n) {
 }
 
 // Creates a fresh mystery code and emails it. 10% normally; 12% when the user chose to read
-// the fun facts in the popup (index.html promises "an extra 2% on top" for doing so).
+// the fun facts in the popup (index.html promises an unnamed "bonus" on top for doing so).
 async function issueMysteryCode(admin, email, funFact, SITE_BASE_URL, RESEND_KEY) {
   const code = 'MYSTERY' + randomSuffix(6);
   const expiresAt = new Date();
@@ -370,7 +370,7 @@ function buildMysteryEmail(code, expiryLabel, siteUrl) {
     <p class="hint">The mystery reveals itself at checkout. 🤫</p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;
@@ -378,7 +378,8 @@ function buildMysteryEmail(code, expiryLabel, siteUrl) {
 }
 
 // Sent when the user read the fun facts on-site — their code carries the extra 2%
-// (12% vs 10%), so the copy confirms the bonus without revealing the base amount.
+// (12% vs 10%). The copy confirms a bonus exists without naming either amount — the gift
+// is meant to stay a mystery until checkout, so never put the percentage in user-facing copy.
 function buildMysteryFunFactEmail(code, expiryLabel, siteUrl) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -413,7 +414,7 @@ function buildMysteryFunFactEmail(code, expiryLabel, siteUrl) {
   </div>
   <div class="bd">
     <h2>Thanks for getting to know us.</h2>
-    <div class="fact-wrap"><p>Because you read up on Umzila, we've added an extra 2% off on top of your mystery gift.</p></div>
+    <div class="fact-wrap"><p>Because you read up on Umzila, we've slipped a bonus in on top of your mystery gift. Both reveal themselves at checkout.</p></div>
     <div class="gift-wrap">
       <div class="gift-icon">🎁</div>
       <p class="gift-teaser">Your mystery gift is inside.</p>
@@ -428,7 +429,7 @@ function buildMysteryFunFactEmail(code, expiryLabel, siteUrl) {
     <p class="hint">The mystery reveals itself at checkout. 🤫</p>
   </div>
   <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;
@@ -469,7 +470,7 @@ function buildReinstateEmail(code, amount, expiryLabel, siteUrl) {
     <div class="cta"><a href="${esc(siteUrl)}/shop.html" class="btn">Use It Now &rarr;</a></div>
   </div>
   <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;

@@ -86,7 +86,7 @@ function renderMarketingEmail(slots) {
 
   <div style="background:linear-gradient(135deg,#0a2f66,#1a4f8a);padding:30px 36px;text-align:center">
     <div style="font-size:28px;font-weight:900;color:#fff">Umzila</div>
-    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">campus marketplace</div>
+    <div style="color:rgba(255,255,255,0.7);font-size:13px;margin-top:4px">Durban&rsquo;s best local businesses</div>
     ${shopPill}
   </div>
 
@@ -110,7 +110,7 @@ function renderMarketingEmail(slots) {
   <div style="background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa;
               border-top:1px solid #eaecf0">
     <strong><a href="${esc(siteUrl)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong>
-    &mdash; campus marketplace<br>
+    &mdash; Durban&rsquo;s best local businesses<br>
     <a href="${esc(unsubscribeUrl)}" style="color:#aaa;text-decoration:underline">Unsubscribe</a>
     &nbsp;·&nbsp; You received this because you subscribed at umzila.store
   </div>

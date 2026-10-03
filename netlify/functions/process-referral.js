@@ -227,7 +227,7 @@ function buildRefereeEmail(code, expiryLabel, refereeName, siteUrl) {
 <body><div class="wrap">
   <div class="hdr">
     <h1>Umzila</h1>
-    <p>Welcome to the campus marketplace</p>
+    <p>Welcome to Umzila</p>
   </div>
   <div class="bd">
     <h2>Hey ${esc(refereeName)}, a friend gave you 15% off! 🎉</h2>
@@ -254,7 +254,7 @@ function buildRefereeEmail(code, expiryLabel, refereeName, siteUrl) {
     </div>
   </div>
   <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;
@@ -326,7 +326,7 @@ function buildReferrerEmail(code, expiryLabel, referrerName, refereeName, referr
     </div>
   </div>
   <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; campus marketplace<br>
+    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
     Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
   </div>
 </div></body></html>`;
