@@ -142,6 +142,19 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                     console.error('completeOrderPayment: redemption recording error:', redemptionErr.message);
                 }
             }
+        } else if (codeRow?.type === 'gift_voucher') {
+            // Gift vouchers are a balance, not a one-shot code: spending R350
+            // of a R550 voucher leaves R200 on it. The optimistic amount match
+            // keeps a concurrent second use from double-spending.
+            const spent = Number(existingOrder.discount) || 0;
+            const remaining = Math.max(0, Math.round((Number(codeRow.amount) - spent) * 100) / 100);
+            const { error: gvErr } = await supabase
+                .from('discount_codes')
+                .update({ amount: remaining, used: remaining <= 0, used_at: remaining <= 0 ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+                .eq('id', codeRow.id)
+                .eq('amount', codeRow.amount);
+            if (gvErr) console.error('completeOrderPayment: gift voucher balance update error:', gvErr);
+            else console.log('completeOrderPayment: gift voucher', codeRow.code, 'balance now', remaining);
         } else {
             const { error: dcErr } = await supabase
                 .from('discount_codes')
@@ -210,6 +223,11 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         // ── Create service order records (pending_acceptance) ──
         await createServiceOrderRecords(supabase, existingOrder).catch(
             e => console.error('completeOrderPayment: service order records error', e)
+        );
+
+        // ── Gift vouchers bought in this order → codes + email ──
+        await issueGiftVouchers(supabase, existingOrder, siteUrl).catch(
+            e => console.error('completeOrderPayment: gift voucher issue error', e)
         );
 
         // ── Send per-seller new order notification emails ──
@@ -319,7 +337,7 @@ async function createServiceOrderRecords(supabase, order) {
     // behaviour (instant confirmation) is re-read from products, not trusted.
     const serviceProductIds = [...new Set(serviceItems.map(i => i.product_id || i.id).filter(Boolean))];
     const { data: svcProducts } = serviceProductIds.length
-        ? await supabase.from('products').select('id, instant_confirm, fulfillment_type').in('id', serviceProductIds)
+        ? await supabase.from('products').select('id, instant_confirm, fulfillment_type, metadata').in('id', serviceProductIds)
         : { data: [] };
     const svcProductMap = {};
     (svcProducts || []).forEach(p => { svcProductMap[p.id] = p; });
@@ -329,7 +347,8 @@ async function createServiceOrderRecords(supabase, order) {
         if (item.listing_type !== 'service') continue;
         const productId = item.product_id || item.id || null;
         const productRow = svcProductMap[productId] || {};
-        const instant = productRow.instant_confirm === true;
+        const isVoucher = !!(productRow.metadata && productRow.metadata.voucher === true);
+        const instant = productRow.instant_confirm === true || isVoucher;
         const isDropoff = (productRow.fulfillment_type || item.fulfillment_type) === 'item_dropoff';
         const deadlineHours = item.acceptance_deadline_hours || 24;
         const deadline = new Date(now.getTime() + deadlineHours * 60 * 60 * 1000);
@@ -346,8 +365,10 @@ async function createServiceOrderRecords(supabase, order) {
             listing_type: 'service',
             // Instant-confirm listings (owner opted in, slot already
             // capacity-checked) skip the accept step entirely.
-            service_status: instant ? 'accepted' : 'pending_acceptance',
+            // A gift voucher is fulfilled by the emailed code itself.
+            service_status: isVoucher ? 'completed' : (instant ? 'accepted' : 'pending_acceptance'),
             accepted_at: instant ? now.toISOString() : null,
+            service_completed_at: isVoucher ? now.toISOString() : null,
             acceptance_deadline: instant ? null : deadline.toISOString(),
             status: 'pending', // generic status enum is pending/fulfilled/delivered/disputed/refunded — 'pending_acceptance' is only valid for service_status
             // Snapshot the fulfillment shape at order time so a later seller
@@ -1108,6 +1129,141 @@ async function sendAdminOrderNotification(supabase, order, mPaymentId, siteUrl) 
     } catch (e) {
         console.error('completeOrderPayment admin notify: error', e);
     }
+}
+
+// ── Gift vouchers ────────────────────────────────────────────────────────────
+// A listing with products.metadata.voucher = true is a gift voucher for its
+// store. Each unit bought becomes one discount_codes row of type
+// 'gift_voucher': store credit worth the price paid, usable on anything that
+// store sells (rides, services, merch), spendable over several orders until
+// the balance runs out (see the gift_voucher branch above), valid 3 years
+// (the Consumer Protection Act minimum for prepaid vouchers).
+const VOUCHER_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+function voucherCode(prefix) {
+    const crypto = require('crypto');
+    const bytes = crypto.randomBytes(8);
+    let out = '';
+    for (let i = 0; i < 8; i++) out += VOUCHER_ALPHABET[bytes[i] % VOUCHER_ALPHABET.length];
+    return `${prefix}-${out.slice(0, 4)}-${out.slice(4)}`;
+}
+
+async function issueGiftVouchers(supabase, order, siteUrl) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const ids = [...new Set(items.map(i => i.product_id || i.id).filter(Boolean))];
+    if (!ids.length || !order.customer_email) return;
+    // Voucher-ness and value come from products (DB), never order.items.
+    const { data: prods } = await supabase.from('products')
+        .select('id, name, price, sale, sale_price, seller_id, metadata').in('id', ids);
+    const voucherProducts = {};
+    (prods || []).forEach(p => { if (p.metadata && p.metadata.voucher === true) voucherProducts[p.id] = p; });
+    if (!Object.keys(voucherProducts).length) return;
+
+    const sellerIds = [...new Set(Object.values(voucherProducts).map(p => p.seller_id))];
+    const { data: sellers } = await supabase.from('sellers').select('id, shop_name, slug').in('id', sellerIds);
+    const sellerMap = {};
+    (sellers || []).forEach(sr => { sellerMap[sr.id] = sr; });
+
+    const expires = new Date();
+    expires.setFullYear(expires.getFullYear() + 3);
+    const issued = [];
+    for (const item of items) {
+        const product = voucherProducts[item.product_id || item.id];
+        if (!product) continue;
+        const seller = sellerMap[product.seller_id] || {};
+        const value = Number(product.sale && product.sale_price ? product.sale_price : product.price) || 0;
+        const qty = Math.max(1, parseInt(item.quantity || item.qty || 1, 10));
+        const prefix = (seller.slug || 'GIFT').replace(/[^a-z0-9]/gi, '').slice(0, 6).toUpperCase() || 'GIFT';
+        for (let n = 0; n < qty; n++) {
+            for (let attempt = 0; attempt < 4; attempt++) {
+                const code = voucherCode(prefix);
+                const { error } = await supabase.from('discount_codes').insert([{
+                    code, type: 'gift_voucher', amount: value, used: false, multi_use: false,
+                    seller_id: product.seller_id, scope: 'order', status: 'active',
+                    expires_at: expires.toISOString(),
+                    referral_code: order.order_number || null // which order bought it
+                }]);
+                if (!error) { issued.push({ code, value, product, seller }); break; }
+                if (error.code !== '23505') { console.error('issueGiftVouchers: insert error', error); break; }
+            }
+        }
+    }
+    if (!issued.length) return;
+
+    const RESEND_KEY = process.env.RESEND_API_KEY || '';
+    if (!RESEND_KEY) { console.warn('issueGiftVouchers: RESEND_API_KEY not set — codes issued but not emailed'); return; }
+    const shopNames = [...new Set(issued.map(v => v.seller.shop_name).filter(Boolean))];
+    try {
+        const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                from: 'Umzila <orders@umzila.store>',
+                to: [order.customer_email],
+                subject: `🎁 Your ${shopNames.join(' & ') || 'gift'} voucher${issued.length > 1 ? 's' : ''} — star this email`,
+                html: buildGiftVoucherEmail(order, issued, expires, siteUrl)
+            })
+        });
+        if (!res.ok) console.error('issueGiftVouchers: email failed', res.status, await res.text());
+    } catch (e) {
+        console.error('issueGiftVouchers: email error', e);
+    }
+}
+
+function buildGiftVoucherEmail(order, vouchers, expires, siteUrl) {
+    const site = siteUrl || '';
+    const fmt = n => 'R' + Number(n).toFixed(0);
+    const expiryLabel = expires.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
+    const blocks = vouchers.map(v => {
+        const shop = v.seller.shop_name || 'this store';
+        const storeUrl = `${site}/${v.seller.slug || ''}`;
+        const useUrl = `${storeUrl}?voucher=${encodeURIComponent(v.code)}`;
+        // The share text is plain lines so it pastes cleanly anywhere; on
+        // WhatsApp the store link also unfurls into a preview card.
+        const shareText = [
+            `🎁 Gift voucher for ${shop}`,
+            `Code: ${v.code}`,
+            `Worth ${fmt(v.value)} — use it on anything at ${shop}: bookings, rides, services or merch.`,
+            `Valid until ${expiryLabel}. Can be used over more than one order until the balance runs out.`,
+            `Use it here: ${useUrl}`
+        ].join('\n');
+        const waUrl = 'https://wa.me/?text=' + encodeURIComponent(shareText);
+        return `
+    <div style="border:2px dashed #e0284f;border-radius:14px;padding:22px;margin:18px 0;text-align:center;background:#fff">
+      <div style="font-size:12px;letter-spacing:2px;color:#888;font-weight:700">GIFT VOUCHER · ${esc(shop.toUpperCase())}</div>
+      <div style="font-family:monospace;font-size:28px;font-weight:800;color:#e0284f;letter-spacing:3px;margin:10px 0;user-select:all;-webkit-user-select:all">${esc(v.code)}</div>
+      <div style="font-size:22px;font-weight:800;color:#0a2f66">${fmt(v.value)}</div>
+      <div style="font-size:13px;color:#555;margin-top:6px"><strong>Storewide at ${esc(shop)}</strong> — any booking, ride, service or merch. Valid until ${esc(expiryLabel)}.</div>
+      <div style="margin-top:16px">
+        <a href="${esc(useUrl)}" style="display:inline-block;background:#0a2f66;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">Use it at ${esc(shop)} &rarr;</a>
+        <a href="${esc(waUrl)}" style="display:inline-block;background:#25d366;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">Send on WhatsApp</a>
+      </div>
+      <div style="text-align:left;margin-top:18px">
+        <div style="font-size:12px;color:#888;font-weight:700;margin-bottom:6px">COPY &amp; PASTE TO SHARE (select all of the box)</div>
+        <div style="white-space:pre-wrap;font-family:monospace;font-size:12.5px;line-height:1.6;color:#1a1a2e;background:#f4f6fb;border-radius:10px;padding:12px 14px;user-select:all;-webkit-user-select:all">${esc(shareText)}</div>
+      </div>
+    </div>`;
+    }).join('');
+
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif">
+<div style="max-width:580px;margin:32px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.09)">
+  <div style="background:#0a2f66;padding:28px 32px;text-align:center">
+    <div style="font-size:40px">🎁</div>
+    <h1 style="color:#fff;margin:6px 0 4px;font-size:22px">Your gift voucher${vouchers.length > 1 ? 's are' : ' is'} here</h1>
+    <p style="color:rgba(255,255,255,.75);margin:0;font-size:13px">Order ${esc(order.order_number || '')}</p>
+  </div>
+  <div style="padding:26px 32px">
+    <div style="background:#fff7ed;border:2px solid #fb923c;border-radius:10px;padding:12px 16px;font-size:14px;color:#9a3412;font-weight:700;text-align:center">
+      ⭐ Star this email now so you can find your voucher later.
+    </div>
+    <p style="color:#374151;font-size:15px;line-height:1.6;margin:18px 0 0">Give it to someone special (or keep it for yourself). Whoever has the code can use it — just open the link or enter the code at checkout.</p>
+    ${blocks}
+    <p style="color:#888;font-size:12px;line-height:1.6;margin:0">Treat the code like cash: anyone with it can spend it. Lost it? Reply to this email and we'll help.</p>
+  </div>
+  <div style="background:#f4f6fb;padding:16px 32px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0">
+    <strong><a href="${esc(site)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses
+  </div>
+</div></body></html>`;
 }
 
 module.exports = { completeOrderPayment };

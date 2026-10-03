@@ -103,7 +103,12 @@ async function validateCode(supabase, { code, email, userId }) {
 // `sellerShopName` is optional, used only for display copy.
 function computeDiscount(codeRow, validatedCart, sellerShopName) {
   const cart = validatedCart || [];
-  const productItems = cart.filter(i => (i.listing_type || 'product') !== 'service');
+  // Promo codes only ever discount physical products. A gift voucher is
+  // store credit for its store, so it covers everything that store sells —
+  // bookings/services included (still limited to that store by the wall).
+  const productItems = codeRow.type === 'gift_voucher'
+    ? cart
+    : cart.filter(i => (i.listing_type || 'product') !== 'service');
 
   const eligible = productItems.filter(item => {
     // THE WALL — a seller-owned code can only ever touch that seller's own

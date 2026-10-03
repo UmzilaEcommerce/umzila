@@ -4778,6 +4778,20 @@ async function submitToPayFast(cartItems, orderId, total) {
         return { orderId, total, validatedCart };
     }
 
+    // R0 orders: complete-zero-total-order.js re-prices the saved order with
+    // validate-cart.js and only completes it if the server agrees nothing is
+    // owed — the browser's own R0 is never trusted.
+    async function completeZeroTotalOrder(prepared) {
+        const res = await fetch('/.netlify/functions/complete-zero-total-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ m_payment_id: prepared.orderId })
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) throw new Error(json.error || 'Could not complete your order. Please try again.');
+        window.location.href = `checkout-success.html?m_payment_id=${prepared.orderId}&order_id=${state.orderId || ''}`;
+    }
+
     async function processPayment() {
     try {
         // Validate form
@@ -4792,6 +4806,10 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         const prepared = await preparePendingOrder(elements.payNowBtn, 'Pay Now');
         if (!prepared) return;
+
+        // Fully covered (e.g. a gift voucher worth the whole booking) —
+        // PayFast can't take R0, so the server re-prices and completes it.
+        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); return; }
 
         // Generate PayFast parameters
         await submitToPayFast(prepared.validatedCart, prepared.orderId, prepared.total);
@@ -4819,6 +4837,7 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         const prepared = await preparePendingOrder(btn, 'Pay with saved card');
         if (!prepared) return;
+        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); return; }
 
         const { data: { session } } = await supabaseClient.auth.getSession();
         const res = await fetch('/.netlify/functions/charge-payfast-token', {

@@ -1422,6 +1422,7 @@
           <div class="order-item-info">
             <div class="order-item-name">${esc(name)}<span class="item-badge ${bc}">${bl}</span></div>
             <div class="order-item-sub">Service &middot; Qty ${qty} &middot; ${fmt(price*qty)}</div>
+            ${it.booking_start_at ? `<div style="margin-top:4px;font-size:13px;font-weight:700;color:var(--accent)">📅 ${esc(formatSAST(it.booking_start_at,{weekday:'long',day:'numeric',month:'short'}))} at ${esc(formatSAST(it.booking_start_at,{hour:'2-digit',minute:'2-digit',hour12:false}))}${qty > 1 ? ` &middot; ${qty} booked` : ''}</div>` : ''}
             ${renderServiceTimeline(st)}
           </div>
         </div>`;
