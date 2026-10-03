@@ -2001,8 +2001,8 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [   
-  `workshop.webp`,
-  `thumbnail2.webp`,
+  `hero-velaphi-shisanyama.webp`,
+  `hero-nceks-quad-biking.webp`,
   `bannerLaundry.webp`,
   `thumbnail1.webp`  // 4th slide fallback
 ];
