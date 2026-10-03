@@ -328,6 +328,68 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     }
 }
 
+// ── Service kinds ────────────────────────────────────────────────────────────
+// Every service line is one of these, derived from what validate-cart.js
+// stamped onto the item from the listing. Same rules as serviceKind() in
+// checkout.html / checkout-success.html / profile.html / seller-dashboard.html
+// (no shared JS module in this codebase) — see docs/systems/service-orders.md.
+//   booking        in-person at a booked time   (quad ride, booked haircut)
+//   in_person      in-person, time arranged later (braids by chat)
+//   dropoff_return rep collects item, seller works, rep returns it (shoe cleaning)
+//   dropoff_kept   rep collects item, nothing comes back
+//   digital        buyer sends details/files, seller delivers online (CV, printing)
+//   voucher        gift voucher — code emailed straight away
+function serviceKind(item) {
+    if (!item || item.listing_type !== 'service') return null;
+    if (item.is_voucher) return 'voucher';
+    if (item.fulfillment_type === 'item_dropoff') return item.item_returned === false ? 'dropoff_kept' : 'dropoff_return';
+    if (item.fulfillment_type === 'in_person') return (item.booking_start_at || item.booking_mode === 'scheduled') ? 'booking' : 'in_person';
+    return 'digital';
+}
+function sastWhen(iso) {
+    return new Date(iso).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+}
+// Buyer-facing "what happens next", per kind (HTML-safe: callers pass esc).
+function buyerServiceSteps(item, esc) {
+    const kind = serviceKind(item);
+    const confirmStep = item.instant_confirm
+        ? 'It\'s <strong>confirmed</strong> — no need to wait for the seller.'
+        : 'The seller <strong>confirms within ' + (item.acceptance_deadline_hours || 24) + ' hours</strong>. If they can\'t, Umzila refunds you in full.';
+    switch (kind) {
+        case 'booking': return [
+            item.booking_start_at ? 'You\'re booked for <strong>' + esc(sastWhen(item.booking_start_at)) + '</strong>' + ((item.booking_units || item.quantity) > 1 ? ' (' + esc(String(item.booking_units || item.quantity)) + ' booked)' : '') + '.' : 'Your time is booked.',
+            confirmStep,
+            item.service_location ? 'Go to <strong>' + esc(item.service_location) + '</strong> a few minutes before your time.' : 'Arrive a few minutes before your time.',
+            'Show your order reference if asked. The seller marks it done afterwards.'
+        ];
+        case 'in_person': return [
+            confirmStep,
+            'Once confirmed, you and the seller get each other\'s contact details to agree on a time and place.',
+            'Meet up — the seller marks the service done afterwards.'
+        ];
+        case 'dropoff_return': return [
+            confirmStep,
+            'An Umzila rep <strong>collects your item</strong> at the time you picked and photographs its condition.',
+            'The seller does the work and adds before/after photos.',
+            'A rep <strong>delivers it back</strong> to you at the return time you picked.'
+        ];
+        case 'dropoff_kept': return [
+            confirmStep,
+            'An Umzila rep <strong>collects your item</strong> at the time you picked.',
+            'The seller completes the service — you\'ll see the completion photos in your order.'
+        ];
+        case 'voucher': return [
+            'Your voucher code is in a <strong>separate email</strong> — star it so it\'s easy to find.',
+            'It works on anything from this store and any balance stays on the code.'
+        ];
+        default: return [
+            confirmStep,
+            'The seller works on it using the details/files you sent.',
+            'Your finished work appears in your order when it\'s done.'
+        ];
+    }
+}
+
 // ── Service order records creator ────────────────────────────────────────────
 async function createServiceOrderRecords(supabase, order) {
     const items = Array.isArray(order.items) ? order.items : [];
@@ -417,7 +479,7 @@ async function createServiceOrderRecords(supabase, order) {
                 title: instant ? '📅 New booking confirmed' : '🔧 New service order — action required',
                 body: instant
                     ? `"${item.name || item.title || 'service'}"${unitsText}${whenText ? ` on ${whenText}` : ''} is booked and paid.`
-                    : `New service order for "${item.name || item.title || 'service'}"${unitsText}${whenText ? ` (${whenText})` : ''}. You must accept within ${deadlineHours}h or it will be cancelled.`,
+                    : `New service order for "${item.name || item.title || 'service'}"${unitsText}${whenText ? ` (${whenText})` : ''}. Please accept or decline within ${deadlineHours}h.`,
                 related_order_id: order.id,
                 metadata: { order_number: order.order_number, item_index: idx },
                 is_read: false
@@ -482,7 +544,7 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
     // Fetch active sellers with email
     const { data: sellers, error: sellerErr } = await supabase
         .from('sellers')
-        .select('id, shop_name, email')
+        .select('id, shop_name, email, user_id')
         .in('id', sellerIds)
         .eq('status', 'active');
 
@@ -513,9 +575,12 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
         // Store contact email plus every co-owner (seller_members) — each
         // owner of a store sees its orders in the dashboard, so they all get
         // told about new ones.
+        // Many stores never saved a store email (sellers.email is null), and
+        // those were silently skipped — fall back to the owner's account email.
         const recipients = seller.email ? [seller.email] : [];
         const { data: memberRows } = await supabase.from('seller_members').select('user_id').eq('seller_id', sellerId);
-        for (const m of memberRows || []) {
+        const ownerRows = seller.user_id ? [{ user_id: seller.user_id }] : [];
+        for (const m of ownerRows.concat(memberRows || [])) {
             const { data: u } = await supabase.auth.admin.getUserById(m.user_id);
             const e = u && u.user && u.user.email;
             if (e && !recipients.some(r => r.toLowerCase() === e.toLowerCase())) recipients.push(e);
@@ -524,8 +589,10 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
 
         const hasServices = sellerItems.some(i => i.listing_type === 'service');
         const allInstant = hasServices && sellerItems.filter(i => i.listing_type === 'service').every(i => i._instant);
+        const allVouchers = hasServices && sellerItems.every(i => serviceKind(i) === 'voucher');
         const emailSubject = hasServices
-            ? (allInstant ? `📅 New booking confirmed — ${order.order_number || mPaymentId}` : `🔧 New service order — accept required — ${order.order_number || mPaymentId}`)
+            ? (allVouchers ? `🎁 Gift voucher sold — ${order.order_number || mPaymentId}`
+                : allInstant ? `📅 New booking confirmed — ${order.order_number || mPaymentId}` : `🔧 New service order — accept required — ${order.order_number || mPaymentId}`)
             : `New order for ${seller.shop_name || 'your store'} — ${order.order_number || mPaymentId}`;
         const emailHtml = hasServices
             ? buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl)
@@ -711,7 +778,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
         const img   = getImg(item);
         const name  = esc(getName(item));
         const isService = item.listing_type === 'service';
-        const size  = getSize(item) ? `<span style="color:#888;font-size:12px"> — ${esc(String(getSize(item)))}</span>` : '';
+        const size  = (getSize(item) && !(isService && getSize(item) === 'One Size')) ? `<span style="color:#888;font-size:12px"> — ${esc(String(getSize(item)))}</span>` : '';
         const qty   = getQty(item);
         const price = getPrice(item);
         const line  = fmt(price * qty);
@@ -754,20 +821,27 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
 
     const itemsHtml = items.map(renderItemRow).join('\n');
 
-    // Build service next-steps section if order contains services
-    const hasItemDropoff = serviceItems.some(i => i.fulfillment_type === 'item_dropoff');
+    // What happens next — one block per service line, worded for its kind
+    // (a quad booking, a shoe clean and a gift voucher all differ).
+    const kindIcon = { booking: '📅', in_person: '🤝', dropoff_return: '👟', dropoff_kept: '📦', digital: '💻', voucher: '🎁' };
     const serviceNextStepsHtml = serviceItems.length > 0 ? `
     <hr style="border:none;border-top:1px solid #eaecf0;margin:24px 0">
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:18px 20px;margin:16px 0">
-      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:10px">🔧 Your Service Order — What happens next</div>
-      <ol style="margin:0;padding-left:20px;color:#374151;font-size:13px;line-height:2">
-        <li>The seller will <strong>review and accept your service request within 24 hours</strong>.</li>
-        ${hasItemDropoff ? `<li>Once accepted, <strong>an Umzila rep will collect your item from your address</strong> and hand it to the seller.</li>` : ''}
-        <li>The seller completes the service and marks it done with proof.</li>
-        <li>Your item is delivered back to you.</li>
+    ${serviceItems.map(item => `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px 20px;margin:12px 0">
+      <div style="font-size:15px;font-weight:700;color:#166534;margin-bottom:8px">${kindIcon[serviceKind(item)] || '🔧'} ${esc(item.title || item.name || 'Your service')} — what happens next</div>
+      <ol style="margin:0;padding-left:20px;color:#374151;font-size:13px;line-height:1.9">
+        ${buyerServiceSteps(item, esc).map(st => `<li>${st}</li>`).join('')}
       </ol>
-      <div style="margin-top:12px;font-size:12px;color:#6b7280">Order ref: <strong>${esc(orderRef)}</strong> — check your seller dashboard or contact support if you need updates.</div>
-    </div>` : '';
+    </div>`).join('')}
+    <div style="margin-top:4px;font-size:12px;color:#6b7280">Order ref: <strong>${esc(orderRef)}</strong> — track it under <em>My orders</em> in your Umzila profile.</div>` : '';
+
+    // Opening line: only talk about delivery when something is delivered.
+    const hasPhysical = items.some(i => (i.listing_type || 'product') !== 'service');
+    const onlyVouchers = serviceItems.length > 0 && !hasPhysical && serviceItems.every(i => serviceKind(i) === 'voucher');
+    const introText = hasPhysical
+        ? 'We\'ve received your payment and your order is being prepared. Your items may come from one or more local stores — each seller prepares their items and our logistics team delivers them to you.'
+        : onlyVouchers
+            ? 'Payment received — your gift voucher code is on its way in a separate email.'
+            : 'Payment received — you\'re all set. Here\'s exactly what happens next.';
 
     const discountRow = discount > 0
         ? `<tr><td style="padding:4px 0;color:#555;font-size:14px">Discount${order.coupon_code ? ` (${esc(order.coupon_code)})` : ''}</td><td style="padding:4px 0;text-align:right;color:#28a745;font-weight:600;font-size:14px">-${fmt(discount)}</td></tr>`
@@ -823,7 +897,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
   </div>
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
-    <p>We've received your payment and your order is now being processed. Your items may come from one or more local stores — each seller will prepare their items and hand them to our logistics team, who will bundle and deliver everything together to your selected area.</p>
+    <p>${introText}</p>
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
 
@@ -876,6 +950,7 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
     const getQty   = (i) => parseInt(i.qty || i.quantity || 1, 10);
     const deadlineHours = sellerItems.find(i => i.acceptance_deadline_hours)?.acceptance_deadline_hours || 24;
     const allInstant = sellerItems.filter(i => i.listing_type === 'service').every(i => i._instant);
+    const allVouchers = sellerItems.every(i => serviceKind(i) === 'voucher');
     const bookingWhen = (i) => i.booking_start_at
         ? new Date(i.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
         : '';
@@ -941,15 +1016,17 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
 <body>
 <div class="wrap">
   <div class="hdr">
-    <h1>Umzila — Service Order</h1>
+    <h1>${allVouchers ? 'Umzila — Gift Voucher Sale' : 'Umzila — Service Order'}</h1>
     <p>${shopName}</p>
-    <span class="badge">${allInstant ? '📅 BOOKED &amp; PAID' : '🔧 ACTION REQUIRED'}</span>
+    <span class="badge">${allVouchers ? '🎁 VOUCHER SOLD' : allInstant ? '📅 BOOKED &amp; PAID' : '🔧 ACTION REQUIRED'}</span>
   </div>
   <div class="bd">
-    ${allInstant
+    ${allVouchers
+      ? `<div class="urgency" style="background:#f0fdf4;border-color:#22c55e;color:#166534">🎁 Gift voucher sold &mdash; the code was emailed to the buyer. Nothing to do now; it can be spent on anything in your store.</div>`
+      : allInstant
       ? `<div class="urgency" style="background:#f0fdf4;border-color:#22c55e;color:#166534">✅ Confirmed and paid &mdash; no action needed. Be ready at the booked time.</div>
     <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has booked with you. It's in the <strong>Bookings</strong> tab of your seller dashboard.</p>`
-      : `<div class="urgency">⏰ You must accept this service order within <strong>${deadlineHours} hours</strong> or it will be automatically cancelled.</div>
+      : `<div class="urgency">⏰ Please accept or decline within <strong>${deadlineHours} hours</strong> — the buyer is waiting, and declined orders are refunded.</div>
     <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has placed a service order. Log in to your seller dashboard to <strong>accept or reject</strong> this request.</p>`}
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong> · Customer: ${customerName}</div>
     <table class="items-table"><tbody>${itemsHtml}</tbody></table>

@@ -1229,7 +1229,36 @@
     cancelled: ['ib-disputed', 'Cancelled']
   };
 
-  function serviceStepsForArchetype(st) {
+  // Same six kinds as serviceKind() in lib/complete-order-payment.js
+  // (docs/systems/service-orders.md). The status row (st) and the order
+  // line (it) together say which kind a service line is.
+  function profileServiceKind(st, it) {
+    it = it || {};
+    if (it.is_voucher) return 'voucher';
+    const ft = st.fulfillment_type || it.fulfillment_type;
+    if (ft === 'item_dropoff') return (st.item_returned === false || it.item_returned === false) ? 'dropoff_kept' : 'dropoff_return';
+    if (ft === 'in_person') return (it.booking_start_at || it.booking_mode === 'scheduled') ? 'booking' : 'in_person';
+    return 'digital';
+  }
+  // Kind-specific wording on top of the generic labels.
+  const KIND_STEP_LABELS = {
+    booking:   { pending_acceptance: 'Waiting for the seller to confirm', accepted: 'Booked ✓', in_progress: 'In session', completed: 'Done — hope you enjoyed it' },
+    in_person: { pending_acceptance: 'Waiting for the seller to confirm', accepted: 'Confirmed — contact details shared', in_progress: 'In progress', completed: 'Done' },
+    digital:   { pending_acceptance: 'Waiting for the seller to accept', accepted: 'Accepted', in_progress: 'Being worked on', completed: 'Delivered — see below' },
+    voucher:   { completed: 'Voucher code emailed to you' }
+  };
+  const KIND_BADGES = {
+    booking:   { accepted: ['ib-delivered', 'Booked'], in_progress: ['ib-delivered', 'Booked'], completed: ['ib-delivered', '✓ Done'] },
+    in_person: { accepted: ['ib-pending', 'Confirmed'], completed: ['ib-delivered', '✓ Done'] },
+    digital:   { completed: ['ib-delivered', '✓ Delivered'] },
+    dropoff_return: { completed: ['ib-pending', 'Done — coming back to you'] },
+    dropoff_kept:   { completed: ['ib-delivered', '✓ Done'] },
+    voucher:   { completed: ['ib-delivered', '🎁 Code emailed'] }
+  };
+
+  function serviceStepsForArchetype(st, kind) {
+    if (kind === 'voucher') return ['completed'];
+    if (kind === 'booking' || kind === 'in_person') return ['pending_acceptance', 'accepted', 'completed'];
     if (st.fulfillment_type === 'item_dropoff') {
       // Nothing physical comes from the buyer when they sent a file or
       // nothing at all — no item_received/handed_to_seller steps exist.
@@ -1243,19 +1272,22 @@
     return ['pending_acceptance', 'accepted', 'in_progress', 'completed'];
   }
 
-  function renderServiceTimeline(st) {
+  function renderServiceTimeline(st, it) {
     if (!st) return '';
-    const status = st.service_status || 'pending_acceptance';
+    const kind = profileServiceKind(st, it);
+    const rawStatus = st.service_status || 'pending_acceptance';
+    // A session marked "in progress" still sits on the Booked/Confirmed step.
+    const status = ((kind === 'booking' || kind === 'in_person') && rawStatus === 'in_progress') ? 'accepted' : rawStatus;
     if (status === 'rejected' || status === 'cancelled') {
       return `<div style="margin-top:8px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px;font-size:12px;color:#991b1b">This service was ${status === 'rejected' ? 'declined by the seller' : 'cancelled'}. A refund will be processed.</div>`;
     }
-    const steps = serviceStepsForArchetype(st);
+    const steps = serviceStepsForArchetype(st, kind);
     const currentIdx = steps.indexOf(status);
     const stepsHtml = steps.map((s, i) => {
       const done = currentIdx >= 0 && i <= currentIdx;
       return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
         <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;background:${done ? '#0a2f66' : '#e5e7eb'}"></div>
-        <div style="font-size:12px;color:${done ? '#111' : '#9ca3af'};font-weight:${i===currentIdx?'700':'500'}">${SERVICE_STEP_LABELS[s] || s}</div>
+        <div style="font-size:12px;color:${done ? '#111' : '#9ca3af'};font-weight:${i===currentIdx?'700':'500'}">${(KIND_STEP_LABELS[kind] && KIND_STEP_LABELS[kind][s]) || SERVICE_STEP_LABELS[s] || s}</div>
       </div>`;
     }).join('');
 
@@ -1272,7 +1304,8 @@
     const photoStrip = (list, label) => list.length ? `<div style="margin-top:8px"><div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:4px">${label}</div><div style="display:flex;gap:6px">${list.map(p => `<a href="${esc(p.url)}" target="_blank" rel="noopener"><img src="${esc(p.url)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb"></a>`).join('')}</div></div>` : '';
     const deliverableLink = deliverable.length ? `<div style="margin-top:8px"><a href="${esc(deliverable[0].url)}" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:var(--accent)">⬇ View your deliverable</a></div>` : '';
 
-    const dropoffAction = (status === 'accepted' && st.fulfillment_type === 'item_dropoff')
+    // Only for the old self-drop-off method — reps collect everything now.
+    const dropoffAction = (status === 'accepted' && st.fulfillment_type === 'item_dropoff' && st.collection_method === 'dropoff')
       ? `<button class="dropoff-confirm-btn" data-status-id="${esc(st.id)}" style="margin-top:8px;padding:6px 12px;border-radius:999px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer">I've dropped my item off ✓</button>` : '';
 
     const slotLeg = (label, field, changeableStatuses) => {
@@ -1416,14 +1449,15 @@
 
       if (isService && st) {
         const svcStatus = st.service_status || 'pending_acceptance';
-        const [bc, bl] = SERVICE_BADGE_LABELS[svcStatus] || ['ib-pending', 'Pending'];
+        const svcKind = profileServiceKind(st, it);
+        const [bc, bl] = (KIND_BADGES[svcKind] && KIND_BADGES[svcKind][svcStatus]) || SERVICE_BADGE_LABELS[svcStatus] || ['ib-pending', 'Pending'];
         return `<div class="order-item-line">
           <img class="order-item-img" src="${esc(img?.url||'https://placehold.co/52?text=•')}" onerror="this.src='https://placehold.co/52?text=•'" alt="${esc(name)}">
           <div class="order-item-info">
             <div class="order-item-name">${esc(name)}<span class="item-badge ${bc}">${bl}</span></div>
-            <div class="order-item-sub">Service &middot; Qty ${qty} &middot; ${fmt(price*qty)}</div>
+            <div class="order-item-sub">${({ booking: 'Booking', in_person: 'In-person service', dropoff_return: 'Drop-off service', dropoff_kept: 'Drop-off service', digital: 'Online service', voucher: 'Gift voucher' })[svcKind] || 'Service'} &middot; Qty ${qty} &middot; ${fmt(price*qty)}${it.service_location && svcKind === 'booking' ? ' &middot; ' + esc(it.service_location) : ''}</div>
             ${it.booking_start_at ? `<div style="margin-top:4px;font-size:13px;font-weight:700;color:var(--accent)">📅 ${esc(formatSAST(it.booking_start_at,{weekday:'long',day:'numeric',month:'short'}))} at ${esc(formatSAST(it.booking_start_at,{hour:'2-digit',minute:'2-digit',hour12:false}))}${qty > 1 ? ` &middot; ${qty} booked` : ''}</div>` : ''}
-            ${renderServiceTimeline(st)}
+            ${renderServiceTimeline(st, it)}
           </div>
         </div>`;
       }

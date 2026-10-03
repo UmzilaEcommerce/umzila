@@ -141,7 +141,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, metadata')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, service_location, slot_duration_minutes, metadata')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -319,6 +319,10 @@ variants.forEach(v => {
     booking_end_at: booking ? booking.end_at : null,
     booking_units: booking ? booking.units : null,
     instant_confirm: isService ? !!product.instant_confirm : false,
+    // What kind of service this is, from the listing (never the browser) —
+    // every later screen/email picks its wording and steps from these.
+    is_voucher: isService && !!(product.metadata && product.metadata.voucher === true),
+    service_location: isService ? (product.service_location || null) : null,
     item_returned: itemReturned,
     intake_kind: isService ? (product.intake_kind || 'item') : null,
     intake_fields: isService ? (Array.isArray(product.intake_fields) ? product.intake_fields : []) : null,

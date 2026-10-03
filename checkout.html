@@ -1481,7 +1481,7 @@
                 <span id="shippingAmount">—</span>
               </div>
               <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
-              <div style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
+              <div id="noMinimumNote" style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
                 No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
               </div>
               <div class="summary-row shipping hidden" id="serviceCollectionRow">
@@ -1505,7 +1505,7 @@
                    number the buyer is looking at, right where they're
                    looking. Static; the time-saved figure lives in
                    #timeSavedBlock above the address instead. -->
-              <div style="font-size:11px;color:#6b7280;font-style:italic;text-align:center;margin-top:6px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
+              <div id="deliveryAnchorNote" style="font-size:11px;color:#6b7280;font-style:italic;text-align:center;margin-top:6px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
             </div>
 
             <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
@@ -1516,7 +1516,7 @@
           <!-- Driver tip — optional, never pre-selected, set before the
                buyer commits to a payment method so it's already folded into
                whatever total gets charged either way. -->
-          <div class="tip-section">
+          <div class="tip-section" id="tipSection">
             <div class="tip-section-label">Add a tip for your delivery rep (optional)</div>
             <div class="tip-pills" id="tipPills">
               <button type="button" class="tip-pill" data-tip="10">R10</button>
@@ -1768,13 +1768,10 @@
       const horizonDays = 14;
       const rangeEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
       const durationMin = 60;
-      const [availRes, bookingsRes] = await Promise.all([
-        supabaseClient.from('rep_availability').select('day_of_week,start_time,end_time'),
-        supabaseClient.from('service_bookings').select('start_at,end_at,status')
-          .in('status', ['held', 'confirmed']).gte('start_at', now.toISOString()).lte('start_at', rangeEnd.toISOString())
-      ]);
+      // Rep windows only — appointment bookings are unrelated (see script.js).
+      const availRes = await supabaseClient.from('rep_availability').select('day_of_week,start_time,end_time');
       const availability = availRes.data || [];
-      const bookings = bookingsRes.data || [];
+      const bookings = [];
       if (!availability.length) { mountEl.innerHTML = 'No collection/delivery hours are set up yet.'; return; }
       const dayButtons = computeSlotDayButtons(availability, bookings, durationMin, horizonDays);
       if (!dayButtons.length) { mountEl.innerHTML = 'No upcoming availability in the next 2 weeks.'; return; }
@@ -3429,7 +3426,7 @@ async function refreshCartItemsFromProducts(items) {
     const productIds = items.map(item => item.id);
     const { data: products, error } = await supabaseClient
         .from('products')
-        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, listing_type, free_delivery, units_per_trip, metadata')
+        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, listing_type, free_delivery, units_per_trip, metadata, fulfillment_type, booking_mode, item_returned, instant_confirm, service_location')
         .in('id', productIds);
     // A failed re-fetch must not silently fall back to whatever the client
     // cart item already had — a shop.html-sourced item may never have
@@ -3457,7 +3454,15 @@ async function refreshCartItemsFromProducts(items) {
             listing_type: product.listing_type || 'product',
             free_delivery: product.free_delivery === true,
             units_per_trip: product.units_per_trip || null,
-            delivery_price: deliveryPrice
+            delivery_price: deliveryPrice,
+            // Service shape, from the listing — drives the per-kind summary
+            // line, and whether delivery/tip apply at all.
+            fulfillment_type: product.listing_type === 'service' ? (product.fulfillment_type || item.fulfillment_type || null) : null,
+            booking_mode: product.listing_type === 'service' ? (product.booking_mode || null) : null,
+            item_returned: product.listing_type === 'service' ? product.item_returned !== false : item.item_returned,
+            instant_confirm: product.listing_type === 'service' ? product.instant_confirm === true : false,
+            is_voucher: !!(product.metadata && product.metadata.voucher === true),
+            service_location: product.service_location || null
         };
     }).filter(item => productMap[item.id]); // Remove items that no longer exist
 }
@@ -3756,6 +3761,23 @@ async function validateCheckout() {
 
       // Cart items store name/image/quantity as title/img/qty (see addToCart
       // in script.js) — fall back to those so this never renders "undefined".
+      // Same six kinds as serviceKind() in lib/complete-order-payment.js
+      // (docs/systems/service-orders.md). Products keep Size/Qty.
+      function lineDetail(item, qty) {
+        const kind = checkoutServiceKind(item);
+        if (!kind) return `Size: ${escapeHtmlLite(item.size || 'One Size')} • Qty: ${qty}`;
+        if (kind === 'booking') {
+          return item.booking_start_at
+            ? `📅 ${escapeHtmlLite(formatSAST(item.booking_start_at, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}${qty > 1 ? ' • ' + qty + ' booked' : ''}${item.service_location ? ' • ' + escapeHtmlLite(item.service_location) : ''}`
+            : '<span style="color:#b45309;font-weight:600">📅 Pick a time for this booking</span>';
+        }
+        if (kind === 'voucher') return `🎁 Gift voucher • Qty: ${qty} • code emailed after payment`;
+        if (kind === 'dropoff_return') return `👟 An Umzila rep collects it and brings it back • Qty: ${qty}`;
+        if (kind === 'dropoff_kept') return `📦 An Umzila rep collects it • Qty: ${qty}`;
+        if (kind === 'in_person') return `🤝 In person — you'll arrange the time with the seller • Qty: ${qty}`;
+        return `💻 Delivered online • Qty: ${qty}`;
+      }
+
       function renderLine(item) {
         const qty = item.quantity || item.qty || 1;
         const name = item.name || item.title || 'Item';
@@ -3769,7 +3791,7 @@ async function validateCheckout() {
             </div>
             <div class="item-details">
               <div class="item-title">${escapeHtmlLite(name)}</div>
-              <div class="item-variant">Size: ${escapeHtmlLite(item.size || 'One Size')} • Qty: ${qty}</div>
+              <div class="item-variant">${lineDetail(item, qty)}</div>
               <div class="item-price">${formatCurrency(itemTotal)}</div>
             </div>
           </div>
@@ -3854,6 +3876,20 @@ async function validateCheckout() {
       if (returnAmt) returnAmt.textContent = formatCurrency(svcFees.returnDelivery);
 
       elements.subtotalAmount.textContent = formatCurrency(subtotal);
+
+      // Nothing physical travels for a booking / online service / voucher —
+      // don't show delivery maths or ask for a delivery-rep tip.
+      {
+        const cartNow = state.validatedCart || state.cart;
+        const noProducts = !cartHasProducts(cartNow);
+        const repInvolved = cartInvolvesRep(cartNow);
+        const shipRow = elements.shippingAmount ? elements.shippingAmount.closest('.summary-row') : null;
+        if (shipRow) shipRow.style.display = noProducts ? 'none' : '';
+        ['noMinimumNote', 'deliveryAnchorNote'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = noProducts ? 'none' : ''; });
+        const tipSection = document.getElementById('tipSection');
+        if (tipSection) tipSection.style.display = repInvolved ? '' : 'none';
+        if (!repInvolved && state.tip) { state.tip = 0; document.querySelectorAll('.tip-pill').forEach(b => b.classList.remove('active')); }
+      }
 
       // Shipping display
       const shippingEl = elements.shippingAmount;
@@ -4323,6 +4359,19 @@ function validateShippingForm() {
 // always rep-collect/deliver now (no free campus option left), so a missing
 // slot always blocks payment — not just when a paid method was chosen.
 // Returns [] when nothing is missing.
+function checkoutServiceKind(item) {
+    if (!item || item.listing_type !== 'service') return null;
+    if (item.is_voucher) return 'voucher';
+    if (item.fulfillment_type === 'item_dropoff') return item.item_returned === false ? 'dropoff_kept' : 'dropoff_return';
+    if (item.fulfillment_type === 'in_person') return (item.booking_start_at || item.booking_mode === 'scheduled') ? 'booking' : 'in_person';
+    return 'digital';
+}
+// A rep only travels for physical products or drop-off services — a quad
+// booking, an in-person or online service, or a voucher involve no delivery.
+function cartInvolvesRep(cart) {
+    return (cart || []).some(i => (i.listing_type || 'product') !== 'service' || i.fulfillment_type === 'item_dropoff');
+}
+
 function getCheckoutBlockers() {
     const cart = state.validatedCart || state.cart;
     const blockers = [];

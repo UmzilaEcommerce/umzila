@@ -3742,7 +3742,7 @@
 
       var { data: statuses, error } = await SD.sb
         .from('order_item_statuses')
-        .select('id, order_id, item_index, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, proof_urls, completion_note, listing_type, intake_kind, product_id, status, created_at')
+        .select('id, order_id, item_index, service_status, accepted_at, acceptance_deadline, item_received_at, handed_to_seller_at, service_completed_at, proof_urls, completion_note, listing_type, intake_kind, fulfillment_type, item_returned, collection_slot_start, return_slot_start, product_id, status, created_at')
         .eq('seller_id', SD.seller.id)
         .eq('listing_type', 'service')
         .order('created_at', { ascending: false });
@@ -3764,6 +3764,17 @@
       SD.serviceOrders = orderMap;
       serviceOrdersLoaded = true;
       renderServiceOrders(statuses, orderMap);
+    }
+
+    // Same six kinds as serviceKind() in lib/complete-order-payment.js
+    // (docs/systems/service-orders.md) — each needs different seller actions.
+    function sdServiceKind(item, s) {
+      item = item || {};
+      if (item.is_voucher) return 'voucher';
+      var ft = s.fulfillment_type || item.fulfillment_type;
+      if (ft === 'item_dropoff') return (s.item_returned === false || item.item_returned === false) ? 'dropoff_kept' : 'dropoff_return';
+      if (ft === 'in_person') return (item.booking_start_at || item.booking_mode === 'scheduled') ? 'booking' : 'in_person';
+      return 'digital';
     }
 
     function renderServiceOrders(statuses, orderMap) {
@@ -3802,13 +3813,32 @@
           in_progress: '🔧 In progress', completed: '✅ Completed',
           rejected: '✗ Rejected', cancelled: '✗ Cancelled', returned: '📦 Returned'
         };
+        var kind = sdServiceKind(item, s);
         var badgeColor = statusColors[status] || '#6b7280';
         var badgeLabel = statusLabels[status] || status;
+        if (kind === 'voucher') { badgeColor = '#16a34a'; badgeLabel = '🎁 Voucher sold — code emailed'; }
+        else if (kind === 'booking' && (status === 'accepted' || status === 'in_progress')) badgeLabel = '📅 Booked';
+        else if ((kind === 'booking' || kind === 'in_person') && status === 'completed') badgeLabel = '✅ Done';
 
         // Action buttons
         var actions = '';
         var noCollection = s.intake_kind && s.intake_kind !== 'item';
-        if (status === 'pending_acceptance') {
+        // Drop-off steps that wait on an Umzila rep, not the seller.
+        var sast = function(iso) { return new Date(iso).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+        var waitingNote = '';
+        if ((kind === 'dropoff_return' || kind === 'dropoff_kept') && status === 'accepted') {
+          waitingNote = '<div style="font-size:12px;color:#6b7280;margin-top:4px">⏳ An Umzila rep collects it' + (s.collection_slot_start ? ' on ' + escapeHtmlLite(sast(s.collection_slot_start)) : '') + ' and brings it to you.</div>';
+        } else if ((kind === 'dropoff_return' || kind === 'dropoff_kept') && status === 'item_received') {
+          waitingNote = '<div style="font-size:12px;color:#6b7280;margin-top:4px">⏳ With an Umzila rep — on its way to you.</div>';
+        } else if (kind === 'dropoff_return' && status === 'completed') {
+          waitingNote = '<div style="font-size:12px;color:#6b7280;margin-top:4px">⏳ A rep collects it from you to return it' + (s.return_slot_start ? ' (' + escapeHtmlLite(sast(s.return_slot_start)) + ')' : '') + '.</div>';
+        }
+        if (kind === 'voucher') {
+          actions = ''; // fulfilled by the emailed code — nothing to do
+        } else if ((kind === 'booking' || kind === 'in_person') && (status === 'accepted' || status === 'in_progress')) {
+          // A session has no "work in progress" stage — just confirm it happened.
+          actions = '<button class="btn success sm" onclick="completeServiceOrder(\'' + s.id + '\')">✓ Mark as done</button>';
+        } else if (status === 'pending_acceptance') {
           actions = '<button class="btn success sm" onclick="acceptServiceOrder(\'' + s.id + '\')">Accept</button>' +
                     '<button class="btn danger sm" onclick="rejectServiceOrder(\'' + s.id + '\')">Reject</button>';
         } else if (status === 'accepted' && noCollection) {
@@ -3832,7 +3862,8 @@
           '</div>' +
           // order.items / customer_* are written by the buyer's browser —
           // always escape them (they were injected raw before).
-          '<div class="order-items-list"><div class="order-item-line"><span>🔧 ' + escapeHtmlLite(itemName) + '</span></div></div>' +
+          '<div class="order-items-list"><div class="order-item-line"><span>' + ({ booking: '📅', in_person: '🤝', dropoff_return: '👟', dropoff_kept: '📦', digital: '💻', voucher: '🎁' }[kind] || '🔧') + ' ' + escapeHtmlLite(itemName) + '</span></div></div>' +
+          waitingNote +
           (item.booking_start_at ? '<div style="font-size:13px;font-weight:700;color:#0a2f66;margin-top:4px">📅 ' +
             escapeHtmlLite(new Date(item.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) +
             ((item.booking_units || item.quantity) > 1 ? ' · ' + escapeHtmlLite(String(item.booking_units || item.quantity)) + ' booked' : '') + '</div>' : '') +

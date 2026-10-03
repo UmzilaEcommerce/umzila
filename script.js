@@ -3302,7 +3302,7 @@ async function openProductModal(id) {
             <span style="font-size:13px;color:#6b7280">Sold by</span>
             <a href="${currentModalProduct.seller.slug ? '/' + currentModalProduct.seller.slug : 'shop.html?shop=' + encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${esc(currentModalProduct.seller.shop_name)} ↗</a>
           </div>
-          ${currentModalProduct.seller.turnaround_time ? `
+          ${currentModalProduct.seller.turnaround_time && currentModalProduct.listing_type !== 'service' ? `
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px;flex-wrap:wrap">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
             <span>Usually ready for drop-off within: <strong>${esc(currentModalProduct.seller.turnaround_time)}</strong></span>
@@ -3310,7 +3310,8 @@ async function openProductModal(id) {
         </div>` : ''}
         ${currentModalProduct.listing_type === 'service' ? (() => {
           const ft = currentModalProduct.fulfillment_type;
-          const ta = currentModalProduct.service_turnaround || 'TBD';
+          const ta = currentModalProduct.service_turnaround || '';
+          const isVoucher = !!(currentModalProduct.metadata && currentModalProduct.metadata.voucher === true);
           const ICONS = {
             item_dropoff: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/>',
             in_person: '<path d="M12 21s7-6.5 7-11.5A7 7 0 0 0 5 9.5C5 14.5 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/>',
@@ -3319,8 +3320,9 @@ async function openProductModal(id) {
           };
           let ftIconPath = '', ftLabel = '';
           if (ft === 'item_dropoff') { ftIconPath = ICONS.item_dropoff; ftLabel = 'A rep collects your item from your address'; }
-          else if (ft === 'in_person') { ftIconPath = ICONS.in_person; ftLabel = 'Meet in-person on campus'; }
-          else if (ft === 'digital') { ftIconPath = ICONS.digital; ftLabel = 'Digital delivery'; }
+          else if (ft === 'in_person') { ftIconPath = ICONS.in_person; ftLabel = currentModalProduct.booking_mode === 'scheduled' ? 'Book a time — you go to the seller' : 'In person — you arrange the time with the seller'; }
+          else if (isVoucher) { ftIconPath = ICONS.digital; ftLabel = 'Gift voucher — the code is emailed straight after payment'; }
+          else if (ft === 'digital') { ftIconPath = ICONS.digital; ftLabel = 'Delivered online'; }
           else { ftIconPath = ICONS.service; ftLabel = 'Service'; }
           const svgIcon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0;vertical-align:-2px">${path}</svg>`;
           const locationLine = currentModalProduct.service_location
@@ -3330,7 +3332,7 @@ async function openProductModal(id) {
             <div style="display:flex;align-items:center;gap:6px">${svgIcon(ftIconPath)} <span>${ftLabel}</span></div>
             ${ft === 'item_dropoff' ? `<div style="margin-top:4px;color:#6b7280">${currentModalProduct.item_returned === false ? 'This item is not returned — it becomes part of your order.' : "You'll get your item back when it's done."}</div>` : ''}
             ${locationLine}
-            <div style="margin-top:4px;color:#6b7280">Turnaround: <strong>${esc(ta)}</strong></div>
+            ${ta && !isVoucher && currentModalProduct.booking_mode !== 'scheduled' ? `<div style="margin-top:4px;color:#6b7280">Turnaround: <strong>${esc(ta)}</strong></div>` : ''}
           </div>`;
         })() : ''}
         ${renderServicePurchaseInputs(currentModalProduct)}
@@ -3374,7 +3376,7 @@ async function openProductModal(id) {
         
         ${bundleSuggestionHTML}
         
-        <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}">${currentModalProduct.listing_type === 'service' ? (currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? 'Book This Time' : 'Send Request') : 'Add to Cart'}</button>
+        <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}">${currentModalProduct.listing_type === 'service' ? (currentModalProduct.metadata && currentModalProduct.metadata.voucher === true ? 'Add Gift Voucher to Cart' : currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? 'Book This Time' : 'Send Request') : 'Add to Cart'}</button>
         <button id="modal-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>
 
         <div class="product-modal-description">
@@ -3702,12 +3704,7 @@ function computeSlotDayButtons(availability, bookings, durationMin, horizonDays,
 // just a pickup window.
 async function loadRepSlotPicker(mountEl, onPick, existingSlot) {
   if (!mountEl) return;
-  if (!currentUser) {
-    mountEl.innerHTML = '<a href="#" class="rep-slot-login-link" style="color:var(--accent);font-weight:600">Sign in</a> to pick a collection/delivery time.';
-    const link = mountEl.querySelector('.rep-slot-login-link');
-    if (link) link.addEventListener('click', (e) => { e.preventDefault(); closeProductModal(); showModal(loginModal); });
-    return;
-  }
+  // Guests can order drop-off services too (rep_availability is public).
   if (!supabaseClient) return;
   mountEl.innerHTML = 'Loading available times…';
 
@@ -3716,15 +3713,13 @@ async function loadRepSlotPicker(mountEl, onPick, existingSlot) {
   const rangeEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
   const durationMin = 60;
 
-  const [availRes, bookingsRes] = await Promise.all([
-    supabaseClient.from('rep_availability').select('day_of_week,start_time,end_time'),
-    supabaseClient.from('service_bookings').select('start_at,end_at,status')
-      .in('status', ['held', 'confirmed'])
-      .gte('start_at', now.toISOString()).lte('start_at', rangeEnd.toISOString())
-  ]);
-
+  // Rep windows aren't capacity-limited, and appointment bookings (e.g. quad
+  // rides) have nothing to do with rep collection times — the old
+  // service_bookings query here blocked the wrong slots (or, under RLS,
+  // nothing at all).
+  const availRes = await supabaseClient.from('rep_availability').select('day_of_week,start_time,end_time');
   const availability = availRes.data || [];
-  const bookings = bookingsRes.data || [];
+  const bookings = [];
   if (!availability.length) { mountEl.innerHTML = "No collection/delivery hours are set up yet — pick a free option instead, or check back soon."; return; }
 
   const dayButtons = computeSlotDayButtons(availability, bookings, durationMin, horizonDays);

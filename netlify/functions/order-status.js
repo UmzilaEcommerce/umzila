@@ -35,8 +35,15 @@ exports.handler = async function (event) {
         service_options: i.fulfillment_type === 'item_dropoff' ? (i.service_options || null) : null,
         item_returned: i.item_returned,
         intake_kind: i.intake_kind || null,
-        service_turnaround: i.service_turnaround || null
+        service_turnaround: i.service_turnaround || null,
+        booking_mode: i.booking_mode || null,
+        booking_units: i.booking_units || null,
+        instant_confirm: !!i.instant_confirm,
+        is_voucher: !!i.is_voucher,
+        service_location: i.service_location || null,
+        acceptance_deadline_hours: i.acceptance_deadline_hours || null
       }))
     : [];
-  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', services }) };
+  const hasPhysical = items.some(i => (i.listing_type || 'product') !== 'service');
+  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services }) };
 };
