@@ -141,7 +141,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, metadata')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, metadata')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -248,7 +248,34 @@ variants.forEach(v => {
     };
   }
 
-  const qty = Math.min(item.quantity || 1, itemStock || Infinity);
+  // Scheduled in-person bookings: the hold placed by hold-service-booking.js
+  // is the source of truth for time and quantity (e.g. 3 quads). Re-checked
+  // here because a hold can expire, be reused, or belong to another listing.
+  // Refreshing hold_expires_at keeps it alive through PayFast; on an already
+  // expired hold the capacity trigger re-checks, so a released slot that
+  // someone else took is refused rather than double-booked.
+  let booking = null;
+  if (isService && product.fulfillment_type === 'in_person' && product.booking_mode === 'scheduled') {
+    const label = item.name || product.name;
+    if (!rawItem.booking_id) {
+      return { statusCode: 400, body: JSON.stringify({ error: `Pick a time for "${label}" before paying.`, code: 'BOOKING_REQUIRED', productId: product.id }) };
+    }
+    const { data: b } = await supabase.from('service_bookings')
+      .select('id, product_id, status, order_id, start_at, end_at, units')
+      .eq('id', rawItem.booking_id).maybeSingle();
+    if (!b || b.product_id !== product.id || b.status !== 'held' || b.order_id) {
+      return { statusCode: 409, body: JSON.stringify({ error: `Your time for "${label}" is no longer held. Please pick a time again.`, code: 'BOOKING_EXPIRED', productId: product.id }) };
+    }
+    const { error: extendErr } = await supabase.from('service_bookings')
+      .update({ hold_expires_at: new Date(Date.now() + 30 * 60000).toISOString() })
+      .eq('id', b.id).eq('status', 'held');
+    if (extendErr) {
+      return { statusCode: 409, body: JSON.stringify({ error: `Your time for "${label}" was released and has since been booked. Please pick another time.`, code: 'BOOKING_EXPIRED', productId: product.id }) };
+    }
+    booking = b;
+  }
+
+  const qty = booking ? booking.units : Math.min(item.quantity || 1, itemStock || Infinity);
   if (qty <= 0) {
     hasChanges = true;
     continue;
@@ -287,8 +314,11 @@ variants.forEach(v => {
     // which silently discarded intake answers and left paid scheduled-service
     // bookings unconfirmed (never flipped from 'held' to 'confirmed').
     intake: rawItem.intake || null,
-    booking_id: rawItem.booking_id || null,
-    booking_start_at: rawItem.booking_start_at || null,
+    booking_id: booking ? booking.id : null,
+    booking_start_at: booking ? booking.start_at : null,
+    booking_end_at: booking ? booking.end_at : null,
+    booking_units: booking ? booking.units : null,
+    instant_confirm: isService ? !!product.instant_confirm : false,
     item_returned: itemReturned,
     intake_kind: isService ? (product.intake_kind || 'item') : null,
     intake_fields: isService ? (Array.isArray(product.intake_fields) ? product.intake_fields : []) : null,
@@ -360,7 +390,17 @@ variants.forEach(v => {
                     size: item.size,
                     image: item.image,
                     variant_id: item.variant_id,
-                    max_quantity: item.max_quantity
+                    max_quantity: item.max_quantity,
+                    // Service setup lives on the cart item — dropping it here
+                    // made a signed-in buyer's booking/intake vanish from their
+                    // saved cart, leaving checkout stuck on "pick a time".
+                    seller_id: item.seller_id,
+                    listing_type: item.listing_type,
+                    fulfillment_type: item.fulfillment_type,
+                    intake: item.intake || null,
+                    booking_id: item.booking_id || null,
+                    booking_start_at: item.booking_start_at || null,
+                    service_options: item.service_options || null
                 })),
                 updated_at: new Date().toISOString()
             };

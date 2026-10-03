@@ -315,11 +315,28 @@ async function createServiceOrderRecords(supabase, order) {
     if (!serviceItems.length) return;
 
     const now = new Date();
+    // order.items is written by the browser at checkout, so per-listing
+    // behaviour (instant confirmation) is re-read from products, not trusted.
+    const serviceProductIds = [...new Set(serviceItems.map(i => i.product_id || i.id).filter(Boolean))];
+    const { data: svcProducts } = serviceProductIds.length
+        ? await supabase.from('products').select('id, instant_confirm, fulfillment_type').in('id', serviceProductIds)
+        : { data: [] };
+    const svcProductMap = {};
+    (svcProducts || []).forEach(p => { svcProductMap[p.id] = p; });
+
     for (let idx = 0; idx < items.length; idx++) {
         const item = items[idx];
         if (item.listing_type !== 'service') continue;
+        const productId = item.product_id || item.id || null;
+        const productRow = svcProductMap[productId] || {};
+        const instant = productRow.instant_confirm === true;
+        const isDropoff = (productRow.fulfillment_type || item.fulfillment_type) === 'item_dropoff';
         const deadlineHours = item.acceptance_deadline_hours || 24;
         const deadline = new Date(now.getTime() + deadlineHours * 60 * 60 * 1000);
+        const whenText = item.booking_start_at
+            ? new Date(item.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+            : null;
+        const unitsText = item.booking_units && item.booking_units > 1 ? ` × ${item.booking_units}` : '';
 
         const { data: statusRow, error: insErr } = await supabase.from('order_item_statuses').insert([{
             order_id: order.id,
@@ -327,23 +344,29 @@ async function createServiceOrderRecords(supabase, order) {
             product_id: item.product_id || item.id || null,
             seller_id: item.seller_id || null,
             listing_type: 'service',
-            service_status: 'pending_acceptance',
-            acceptance_deadline: deadline.toISOString(),
+            // Instant-confirm listings (owner opted in, slot already
+            // capacity-checked) skip the accept step entirely.
+            service_status: instant ? 'accepted' : 'pending_acceptance',
+            accepted_at: instant ? now.toISOString() : null,
+            acceptance_deadline: instant ? null : deadline.toISOString(),
             status: 'pending', // generic status enum is pending/fulfilled/delivered/disputed/refunded — 'pending_acceptance' is only valid for service_status
             // Snapshot the fulfillment shape at order time so a later seller
             // edit to the listing can't mutate an order already in flight.
             fulfillment_type: item.fulfillment_type || null,
             item_returned: item.item_returned !== false,
-            intake_kind: item.intake_kind || 'item',
+            // Only drop-off services involve a physical item handed over —
+            // in-person/digital ones used to be saved as 'item' + rep
+            // collect/deliver, which showed buyers collection steps for a haircut.
+            intake_kind: isDropoff ? (item.intake_kind || 'item') : ((item.intake_kind && item.intake_kind !== 'item') ? item.intake_kind : 'none'),
             intake_response: item.intake || null,
             // Handoff/return choices, already clamped+priced server-side by
             // validate-cart.js (order.items is the checked-out snapshot) —
             // this stays a dumb copy, no re-validation logic added here.
-            collection_method: (item.service_options && item.service_options.collection_method) || 'rep_collect',
+            collection_method: !isDropoff ? 'none' : ((item.service_options && item.service_options.collection_method) || 'rep_collect'),
             collection_address: (item.service_options && item.service_options.collection_address) || null,
             collection_slot_start: (item.service_options && item.service_options.collection_slot_start) || null,
             collection_slot_end: (item.service_options && item.service_options.collection_slot_end) || null,
-            return_method: item.item_returned === false ? 'none' : ((item.service_options && item.service_options.return_method) || 'deliver'),
+            return_method: (!isDropoff || item.item_returned === false) ? 'none' : ((item.service_options && item.service_options.return_method) || 'deliver'),
             return_address: item.item_returned === false ? null : ((item.service_options && item.service_options.return_address) || null),
             return_slot_start: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_start) || null),
             return_slot_end: item.item_returned === false ? null : ((item.service_options && item.service_options.return_slot_end) || null)
@@ -358,6 +381,7 @@ async function createServiceOrderRecords(supabase, order) {
             const { error: bookingErr } = await supabase.from('service_bookings')
                 .update({ status: 'confirmed', order_id: order.id, order_item_status_id: statusRow ? statusRow.id : null, hold_expires_at: null })
                 .eq('id', item.booking_id)
+                .eq('product_id', productId)
                 .eq('status', 'held');
             if (bookingErr) console.error('completeOrderPayment: booking confirm error', bookingErr);
         }
@@ -367,8 +391,10 @@ async function createServiceOrderRecords(supabase, order) {
             const { error: notifErr } = await supabase.from('seller_notifications').insert([{
                 seller_id: item.seller_id,
                 type: 'service_order',
-                title: '🔧 New service order — action required',
-                body: `New service order for "${item.name || item.title || 'service'}". You must accept within ${deadlineHours}h or it will be cancelled.`,
+                title: instant ? '📅 New booking confirmed' : '🔧 New service order — action required',
+                body: instant
+                    ? `"${item.name || item.title || 'service'}"${unitsText}${whenText ? ` on ${whenText}` : ''} is booked and paid.`
+                    : `New service order for "${item.name || item.title || 'service'}"${unitsText}${whenText ? ` (${whenText})` : ''}. You must accept within ${deadlineHours}h or it will be cancelled.`,
                 related_order_id: order.id,
                 metadata: { order_number: order.order_number, item_index: idx },
                 is_read: false
@@ -413,7 +439,7 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
     // Fetch products → get seller_id per product
     const { data: products, error: prodErr } = await supabase
         .from('products')
-        .select('id, seller_id')
+        .select('id, seller_id, instant_confirm')
         .in('id', productIds);
 
     if (prodErr || !products || !products.length) {
@@ -423,7 +449,8 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
 
     // Map product_id → seller_id
     const productToSeller = {};
-    products.forEach(p => { if (p.seller_id) productToSeller[p.id] = p.seller_id; });
+    const instantProduct = {};
+    products.forEach(p => { if (p.seller_id) productToSeller[p.id] = p.seller_id; instantProduct[p.id] = p.instant_confirm === true; });
 
     // Get unique seller IDs that appear in this order
     const sellerIds = [...new Set(Object.values(productToSeller))];
@@ -452,17 +479,30 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
         const sellerId = productToSeller[pid];
         if (!sellerId || !sellerMap[sellerId]) return;
         if (!grouped[sellerId]) grouped[sellerId] = [];
-        grouped[sellerId].push(item);
+        // _instant comes from products (DB), never from the browser-written order.items.
+        grouped[sellerId].push(Object.assign({}, item, { _instant: !!instantProduct[pid] }));
     });
 
     // Send one email per seller
     for (const [sellerId, sellerItems] of Object.entries(grouped)) {
         const seller = sellerMap[sellerId];
-        if (!seller.email || !sellerItems.length) continue;
+        if (!sellerItems.length) continue;
+        // Store contact email plus every co-owner (seller_members) — each
+        // owner of a store sees its orders in the dashboard, so they all get
+        // told about new ones.
+        const recipients = seller.email ? [seller.email] : [];
+        const { data: memberRows } = await supabase.from('seller_members').select('user_id').eq('seller_id', sellerId);
+        for (const m of memberRows || []) {
+            const { data: u } = await supabase.auth.admin.getUserById(m.user_id);
+            const e = u && u.user && u.user.email;
+            if (e && !recipients.some(r => r.toLowerCase() === e.toLowerCase())) recipients.push(e);
+        }
+        if (!recipients.length) continue;
 
         const hasServices = sellerItems.some(i => i.listing_type === 'service');
+        const allInstant = hasServices && sellerItems.filter(i => i.listing_type === 'service').every(i => i._instant);
         const emailSubject = hasServices
-            ? `🔧 New service order — accept required — ${order.order_number || mPaymentId}`
+            ? (allInstant ? `📅 New booking confirmed — ${order.order_number || mPaymentId}` : `🔧 New service order — accept required — ${order.order_number || mPaymentId}`)
             : `New order for ${seller.shop_name || 'your store'} — ${order.order_number || mPaymentId}`;
         const emailHtml = hasServices
             ? buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl)
@@ -474,7 +514,7 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
                 headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     from:    'Umzila Sellers <sellers@umzila.store>',
-                    to:      [seller.email],
+                    to:      recipients,
                     subject: emailSubject,
                     html:    emailHtml
                 })
@@ -671,6 +711,10 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
                 : `delivered to ${esc(opts.return_address || 'your address')}`;
             handoffLine = `<div style="font-size:12px;color:#166534;margin-top:3px">Handoff: ${collectPart}.${returnPart ? ` Return: ${returnPart}.` : ''}</div>`;
         }
+        if (item.booking_start_at) {
+            const when = new Date(item.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+            handoffLine += `<div style="font-size:13px;color:#0a2f66;margin-top:3px;font-weight:700">📅 Booked for ${esc(when)}</div>`;
+        }
 
         return `<tr>
           ${imgHtml}
@@ -808,6 +852,10 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
     const getPrice = (i) => parseFloat(i.price || i.unit_price || 0);
     const getQty   = (i) => parseInt(i.qty || i.quantity || 1, 10);
     const deadlineHours = sellerItems.find(i => i.acceptance_deadline_hours)?.acceptance_deadline_hours || 24;
+    const allInstant = sellerItems.filter(i => i.listing_type === 'service').every(i => i._instant);
+    const bookingWhen = (i) => i.booking_start_at
+        ? new Date(i.booking_start_at).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+        : '';
 
     const serviceTotal = sellerItems.reduce((s, i) => s + getPrice(i) * getQty(i), 0);
 
@@ -824,6 +872,7 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
           <td style="padding:10px 0;vertical-align:top">
             <div style="font-size:14px;font-weight:700;color:#1a1a2e">${name}</div>
             <div style="font-size:12px;color:#16a34a;margin-top:3px;font-weight:600">${ftLabel}${turnaround}</div>
+            ${bookingWhen(item) ? `<div style="font-size:13px;color:#0a2f66;margin-top:3px;font-weight:700">📅 ${esc(bookingWhen(item))}</div>` : ''}
             <div style="font-size:13px;color:#666;margin-top:3px">Qty: ${getQty(item)} · ${fmt(getPrice(item))} each</div>
           </td>
           <td style="padding:10px 0 10px 12px;vertical-align:top;text-align:right;font-size:14px;font-weight:700;color:#0a2f66;white-space:nowrap">${fmt(getPrice(item) * getQty(item))}</td>
@@ -839,6 +888,9 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
         ? `<li>The customer will be notified. Umzila collects the item from the customer and drops it off with you &mdash; or, for services where you collect items yourself, you pick it up from the customer.</li>
         <li>Complete the service and mark it done in your dashboard (with a completion note).</li>
         <li>The item goes back the same way: Umzila collects it from you and returns it to the customer, or you return it yourself if you collected it.</li>`
+        : allInstant
+        ? `<li>The customer has their confirmation and booked time.</li>
+        <li>Welcome them at the booked time, then mark it done in your dashboard.</li>`
         : `<li>The customer will be notified.</li>
         <li>Complete the service and mark it done in your dashboard (with a completion note).</li>`;
 
@@ -868,20 +920,23 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
   <div class="hdr">
     <h1>Umzila — Service Order</h1>
     <p>${shopName}</p>
-    <span class="badge">🔧 ACTION REQUIRED</span>
+    <span class="badge">${allInstant ? '📅 BOOKED &amp; PAID' : '🔧 ACTION REQUIRED'}</span>
   </div>
   <div class="bd">
-    <div class="urgency">⏰ You must accept this service order within <strong>${deadlineHours} hours</strong> or it will be automatically cancelled.</div>
-    <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has placed a service order. Log in to your seller dashboard to <strong>accept or reject</strong> this request.</p>
+    ${allInstant
+      ? `<div class="urgency" style="background:#f0fdf4;border-color:#22c55e;color:#166534">✅ Confirmed and paid &mdash; no action needed. Be ready at the booked time.</div>
+    <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has booked with you. It's in the <strong>Bookings</strong> tab of your seller dashboard.</p>`
+      : `<div class="urgency">⏰ You must accept this service order within <strong>${deadlineHours} hours</strong> or it will be automatically cancelled.</div>
+    <p style="color:#374151;font-size:14px;margin:0 0 14px">A customer has placed a service order. Log in to your seller dashboard to <strong>accept or reject</strong> this request.</p>`}
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong> · Customer: ${customerName}</div>
     <table class="items-table"><tbody>${itemsHtml}</tbody></table>
     <div style="text-align:right;font-size:15px;font-weight:700;color:#0a2f66;margin-bottom:16px">Service total: ${fmt(serviceTotal)}</div>
     <div class="action-box">
-      <div style="font-size:14px;font-weight:600;color:#0a2f66;margin-bottom:12px">Log in to accept or reject this service order</div>
+      <div style="font-size:14px;font-weight:600;color:#0a2f66;margin-bottom:12px">${allInstant ? 'See all your upcoming bookings' : 'Log in to accept or reject this service order'}</div>
       <a href="${esc(site)}/seller-dashboard.html" class="btn">Go to Seller Dashboard &rarr;</a>
     </div>
     <div class="steps">
-      <strong>Once accepted:</strong>
+      <strong>${allInstant ? 'Next:' : 'Once accepted:'}</strong>
       <ol style="margin:8px 0 0;padding-left:18px">
         ${stepsHtml}
       </ol>

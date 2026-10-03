@@ -921,7 +921,7 @@ const CATEGORIES = [
   },
   {
     label: 'Services',
-    sub: ['Tutoring', 'Photography', 'Graphic Design', 'Hair & Nails', 'Delivery', 'Other Services']
+    sub: ['Tutoring', 'Photography', 'Graphic Design', 'Hair & Nails', 'Experiences & Tours', 'Delivery', 'Other Services']
   },
   {
     label: 'Home & Gifts',

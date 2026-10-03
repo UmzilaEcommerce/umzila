@@ -3646,7 +3646,20 @@ async function validateCheckout() {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to validate cart');
+            // validate-cart.js explains every rejection (missing collection
+            // time, expired booking hold…) — surface that instead of a
+            // generic failure. An expired/invalid booking hold is cleared from
+            // the cart so the completeness gate asks for a new time.
+            const body = await response.json().catch(() => ({}));
+            if ((body.code === 'BOOKING_EXPIRED' || body.code === 'BOOKING_REQUIRED') && body.productId) {
+                state.cart.forEach(i => {
+                    if ((i.id || i.product_id) === body.productId) { i.booking_id = null; i.booking_start_at = null; }
+                });
+                try { localStorage.setItem('ss_cart', JSON.stringify(state.cart)); } catch (e) { /* storage blocked */ }
+                state.validatedCart = null;
+                if (typeof renderCheckoutBlockers === 'function') renderCheckoutBlockers();
+            }
+            throw new Error(body.error || 'Failed to validate cart');
         }
 
         const result = await response.json();
