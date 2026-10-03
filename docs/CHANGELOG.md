@@ -4,6 +4,28 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — Tracking page: animated stage scenes, interactive timeline, PIN show-to-rider
+
+**What changed (owner request — make `track.html` "interactive and fun", building on the looping route-dot animation from the homepage "How delivery works" popup):**
+- Hero card per stage with a small looping SVG scene (delivery-network-spec.md §52/§93): preparing (items dropping into a bag beside the store, ticking clock), collecting (car drives up to the store, pin bobs), on the way (dot travels store → your pin, LIVE badge), arriving (car pulls up at your home, PIN bubble), delivered (bag at the door, check pops, confetti), plus a static problem scene. Shared artwork lives once in a hidden `<svg><defs>` (store/home/car/bag/pin symbols) and scenes reference it with `<use>`.
+- Tapping the scene shows a short playful bubble ("Beep beep! 🚗") — never covers the PIN or blocks anything (§95).
+- Horizontal step timeline with icons and an animated fill rail; tapping any step explains it in past/present/future tense.
+- PIN shown as digit tiles (pulsing border while arriving), with a "Show rider" full-screen high-contrast view. PIN card hides once delivered/cancelled.
+- "Live · updated Xs ago" ticker; "About X km away" chip from straight-line rider→destination distance (labelled "about"; no ETA claimed — `get_delivery_tracking` returns none). Hidden once the rider is at the door.
+- ARRIVING vs PIN_REQUIRED now worded separately ("Rider arriving" / "Your rider is here!") — the pill used to say "Rider has arrived" for both.
+- Scenes only re-render when the stage changes, so the 20s poll doesn't restart animations.
+- Reduced motion (§54): CSS animations off via media query; SMIL scenes are frozen on a representative frame (`data-freeze` + `pauseAnimations()`). All state is also in text.
+
+**Unchanged:** auth/redirect, `get_delivery_tracking` RPC, polling, Leaflet map + staleness logic, feedback prompt, support card.
+
+**Verified:** temporary mocked copy of the page on `netlify dev` (deleted afterwards) — walked PENDING → ASSIGNED → IN_ROUTE → PIN_REQUIRED → DELIVERED → CANCELLED in one session; pill/title/scene/timeline/PIN/ticker all updated; show-rider overlay opens/closes; no horizontal overflow at phone width; freeze-frame path works. Not yet seen against a real live delivery.
+
+**Also:** service-order seller email (`lib/complete-order-payment.js`, text only) no longer mentions a "campus collection point" — drop-off services now say Umzila collects the item from the customer and drops it off (or the seller collects it themselves where relevant); in-person/digital services get the short version.
+
+**Files:** `track.html`, `netlify/functions/lib/complete-order-payment.js`.
+
+---
+
 ## 2026-10-03 — Rebrand off "campus marketplace" + Mystery Gift fun facts now earn a real 2% bonus
 
 **What was reported:** Google showed Umzila as a "campus marketplace"; homepage copy (footer, section titles, Sell modal, fun facts, "How delivery works") still described a UKZN-student, bike-delivery, order-number-handover operation. Separately, the Mystery Gift popup's fun-fact step offered "a little extra value" but gave nothing extra — every claim got the same 10% code, only the email copy differed — and only one random fact was shown, for 2.5s.

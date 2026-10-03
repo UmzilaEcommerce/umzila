@@ -11,6 +11,7 @@
     --bg: #f2f3f7;
     --accent: #0a2f66;
     --accent-light: #e8edf8;
+    --pink: #e0284f;
     --muted: #6b7280;
     --border: #e9eaf0;
     --success: #22c55e;
@@ -31,21 +32,120 @@
   .t-status-problem { background: #fef2f2; color: var(--danger); }
   #trackMap { width: 100%; height: 280px; border-radius: 12px; margin-top: 12px; background: #e5e7eb; }
   .t-map-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .t-steps { list-style: none; margin: 14px 0 0; padding: 0; }
-  .t-steps li { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; color: var(--muted); }
-  .t-steps li.done { color: #111; font-weight: 600; }
-  .t-steps li.current { color: var(--accent); font-weight: 700; }
-  .t-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
-  .t-steps li.done .t-dot, .t-steps li.current .t-dot { background: var(--accent); }
-  .t-pin-box { display: flex; align-items: center; justify-content: space-between; background: var(--accent-light); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
-  .t-pin-box .t-pin-label { font-size: 12px; color: var(--muted); }
-  .t-pin-box .t-pin-value { font-size: 20px; font-weight: 800; letter-spacing: 3px; color: var(--accent); }
   .t-empty { text-align: center; padding: 40px 20px; color: var(--muted); }
   .t-empty .icon { font-size: 40px; margin-bottom: 10px; }
   .t-back-link { display: inline-block; margin-top: 14px; color: var(--accent); font-weight: 600; text-decoration: none; font-size: 14px; }
+
+  /* ── hero: stage scene + headline ── */
+  .t-hero { padding: 0; overflow: hidden; }
+  .t-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px 0; }
+  .t-live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .t-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: tPulse 1.6s ease-in-out infinite; }
+  .t-live.final .t-live-dot { background: #cbd5e1; animation: none; }
+  .t-scene { position: relative; overflow: hidden; margin: 10px 12px 0; border-radius: 12px; background: linear-gradient(180deg, #f5f8ff 0%, #eaf0fb 100%); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .t-scene svg { display: block; width: 100%; height: auto; }
+  .t-scene.swap { animation: tSceneIn .45s ease both; }
+  .t-bubble { position: absolute; left: 50%; top: 10px; transform: translate(-50%, 6px); background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; white-space: nowrap; }
+  .t-bubble.show { opacity: 1; transform: translate(-50%, 0); }
+  .t-scene-hint { position: absolute; right: 10px; bottom: 8px; font-size: 10px; color: #94a3b8; font-weight: 600; }
+  .t-headline { padding: 14px 16px 16px; }
+  .t-headline h1 { margin: 0; font-size: 20px; color: var(--accent); letter-spacing: -.2px; }
+  .t-headline p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+  .t-distance { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; background: var(--accent-light); color: var(--accent); font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
+  .t-distance[hidden] { display: none; }
+
+  /* ── interactive step timeline ── */
+  .t-track { position: relative; display: flex; justify-content: space-between; margin: 4px 0 0; }
+  .t-rail, .t-rail-fill { position: absolute; top: 17px; left: 18px; height: 3px; border-radius: 3px; }
+  .t-rail { right: 18px; background: var(--border); }
+  .t-rail-fill { background: linear-gradient(90deg, var(--accent), #3b6fc4, var(--accent)); background-size: 200% 100%; animation: tFlow 2.4s linear infinite; transition: width .6s ease; }
+  .t-step { position: relative; z-index: 1; flex: 0 0 auto; width: 56px; display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; font: inherit; color: var(--muted); -webkit-tap-highlight-color: transparent; }
+  .t-step-ico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 2px solid var(--border); transition: background .3s, border-color .3s, transform .2s; }
+  .t-step-ico svg { width: 17px; height: 17px; }
+  .t-step-lbl { font-size: 10.5px; font-weight: 600; text-align: center; line-height: 1.25; }
+  .t-step.done .t-step-ico { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .t-step.done { color: #111; }
+  .t-step.current .t-step-ico { background: #fff; border-color: var(--accent); color: var(--accent); animation: tRing 1.8s ease-out infinite; }
+  .t-step.current { color: var(--accent); }
+  .t-step.selected .t-step-ico { transform: scale(1.12); }
+  .t-step.selected .t-step-lbl { text-decoration: underline; text-underline-offset: 3px; }
+  .t-step-info { margin-top: 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; font-size: 13px; color: #374151; line-height: 1.5; }
+  .t-step-info strong { color: var(--accent); }
+  .t-step-info.swap { animation: tSceneIn .3s ease both; }
+
+  /* ── PIN tiles + show-to-rider mode ── */
+  .t-pin { margin-top: 0; }
+  .t-pin-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .t-pin-label { font-size: 13px; color: var(--muted); }
+  .t-pin-tiles { display: flex; gap: 8px; margin-top: 10px; }
+  .t-pin-tiles span { flex: 1; max-width: 58px; aspect-ratio: 4/5; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: var(--accent); background: var(--accent-light); border-radius: 10px; border: 2px solid transparent; }
+  .t-pin.hot .t-pin-tiles span { border-color: var(--pink); animation: tTile 1.6s ease-in-out infinite; }
+  .t-pin.hot .t-pin-tiles span:nth-child(2) { animation-delay: .12s; }
+  .t-pin.hot .t-pin-tiles span:nth-child(3) { animation-delay: .24s; }
+  .t-pin.hot .t-pin-tiles span:nth-child(4) { animation-delay: .36s; }
+  .t-pin-show { border: 0; background: var(--accent); color: #fff; font-weight: 700; font-size: 12px; padding: 8px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .t-pin-full { position: fixed; inset: 0; z-index: 50; background: var(--accent); color: #fff; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 24px; cursor: pointer; }
+  .t-pin-full.open { display: flex; animation: tSceneIn .25s ease both; }
+  .t-pin-full .big { display: flex; gap: 12px; }
+  .t-pin-full .big span { width: 64px; height: 84px; display: grid; place-items: center; font-size: 48px; font-weight: 800; background: rgba(255,255,255,.12); border-radius: 14px; }
+  .t-pin-full small { opacity: .7; font-size: 13px; }
+
+  @keyframes tPulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  @keyframes tRing { 0% { box-shadow: 0 0 0 0 rgba(10,47,102,.35); } 100% { box-shadow: 0 0 0 10px rgba(10,47,102,0); } }
+  @keyframes tFlow { from { background-position: 200% 0; } to { background-position: 0 0; } }
+  @keyframes tSceneIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes tTile { 0%,100% { transform: none; } 50% { transform: translateY(-3px); } }
+
+  /* Motion is decoration only — every state is also spelled out in text. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 </style>
 </head>
 <body>
+
+<!-- Shared artwork for the stage scenes (referenced with <use>) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="sym-store" viewBox="0 0 60 56">
+      <rect x="5" y="18" width="50" height="36" rx="3" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
+      <path d="M2 18L8 4h44l6 14z" fill="#e0284f" stroke="#0a2f66" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M19 4l-2 14M30 4v14M41 4l2 14" stroke="#fff" stroke-width="2"/>
+      <rect x="24" y="32" width="12" height="22" fill="#0a2f66"/>
+      <rect x="10" y="26" width="10" height="9" rx="1" fill="#e8edf8" stroke="#0a2f66" stroke-width="1.5"/>
+      <rect x="40" y="26" width="10" height="9" rx="1" fill="#e8edf8" stroke="#0a2f66" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="sym-home" viewBox="0 0 60 56">
+      <rect x="10" y="24" width="40" height="30" rx="2" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
+      <path d="M4 27L30 5l26 22" fill="none" stroke="#0a2f66" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="25" y="36" width="10" height="18" rx="1" fill="#e0284f"/>
+      <rect x="14" y="30" width="8" height="8" rx="1" fill="#e8edf8" stroke="#0a2f66" stroke-width="1.5"/>
+      <rect x="38" y="30" width="8" height="8" rx="1" fill="#e8edf8" stroke="#0a2f66" stroke-width="1.5"/>
+    </symbol>
+    <symbol id="sym-wheel" viewBox="-7 -7 14 14">
+      <circle r="6" fill="#1f2937" stroke="#fff" stroke-width="1.6"/>
+      <path d="M-3.5 0h7M0 -3.5v7" stroke="#9ca3af" stroke-width="1.4">
+        <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur=".6s" repeatCount="indefinite"/>
+      </path>
+    </symbol>
+    <symbol id="sym-car" viewBox="0 0 64 36">
+      <path d="M4 23v-6q0-4 4-4h10l8-8h18q4 0 6 4l4 4h4q4 0 4 4v6q0 4-4 4H8q-4 0-4-4z" fill="#0a2f66"/>
+      <path d="M28 8h14l4 5H23z" fill="#cfe0ff"/>
+      <rect x="9" y="17" width="12" height="3" rx="1.5" fill="#e0284f"/>
+      <use href="#sym-wheel" x="10" y="21" width="12" height="12"/>
+      <use href="#sym-wheel" x="44" y="21" width="12" height="12"/>
+    </symbol>
+    <symbol id="sym-bag" viewBox="0 0 40 44">
+      <path d="M4 13h32l-3 29H7z" fill="#fff" stroke="#0a2f66" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M13 13V9a7 7 0 0 1 14 0v4" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M20 33c-4-3-6.5-5-6.5-7.5a3 3 0 0 1 6.5-1 3 3 0 0 1 6.5 1c0 2.5-2.5 4.5-6.5 7.5z" fill="#e0284f"/>
+    </symbol>
+    <symbol id="sym-pin" viewBox="0 0 24 30">
+      <path d="M12 29C5 20 1 15 1 10.5a11 11 0 0 1 22 0C23 15 19 20 12 29z" fill="#e0284f"/>
+      <circle cx="12" cy="10.5" r="4.2" fill="#fff"/>
+    </symbol>
+  </defs>
+</svg>
 
 <header class="t-header">
   <a href="profile.html" aria-label="Back">&#8592;</a>
@@ -56,6 +156,12 @@
   <div id="trackContent">
     <div class="t-card"><div class="t-empty"><div class="icon">⏳</div><p>Loading your delivery…</p></div></div>
   </div>
+</div>
+
+<div class="t-pin-full" id="pinFull" role="dialog" aria-label="Your delivery PIN">
+  <small>Show this to your rider</small>
+  <div class="big" id="pinFullDigits"></div>
+  <small>Tap anywhere to close</small>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -121,20 +227,231 @@
   function statusMeta(status) {
     if (STAGE_PROBLEM.includes(status)) return { cls: 't-status-problem', label: status === 'CANCELLED' ? 'Cancelled' : status === 'RETURNED' ? 'Returned' : 'Delivery issue', stepIdx: -1 };
     if (STAGE_DONE.includes(status)) return { cls: 't-status-delivered', label: 'Delivered ✓', stepIdx: 4 };
-    if (STAGE_ARRIVING.includes(status)) return { cls: 't-status-arriving', label: 'Rider has arrived', stepIdx: 3 };
+    if (STAGE_ARRIVING.includes(status)) return { cls: 't-status-arriving', label: status === 'PIN_REQUIRED' ? 'Rider has arrived' : 'Rider arriving', stepIdx: 3 };
     if (STAGE_ONWAY.includes(status)) return { cls: 't-status-onway', label: 'On the way to you', stepIdx: 2 };
     if (STAGE_PICKUP.includes(status)) return { cls: 't-status-preparing', label: 'Rider collecting your order', stepIdx: 1 };
     return { cls: 't-status-preparing', label: 'Preparing your order', stepIdx: 0 };
   }
 
-  const STEP_LABELS = ['Order received', 'Rider assigned & collecting', 'On the way', 'Arriving', 'Delivered'];
+  // ── per-stage copy + looping scene (delivery-network-spec.md §52/§93:
+  // small, gentle, state-driven SVG animation; text always carries the
+  // meaning so reduced-motion users lose nothing — §54) ──────────────────
+  const STEPS = [
+    { label: 'Order received', title: 'Preparing your order', sub: 'The store is packing everything up for you.',
+      info: '<strong>The store has your order.</strong> They\'re getting it packed and ready for a rider to collect.',
+      done: 'The store received and packed your order.', soon: '',
+      taps: ['Packing with care 📦', 'Almost ready…', 'Double-checking everything ✔️'],
+      icon: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>' },
+    { label: 'Collecting', title: 'Rider collecting your order', sub: 'Your rider is heading to the store.',
+      info: '<strong>A rider has your delivery.</strong> They\'re on their way to the store to pick up your order.',
+      done: 'Your rider collected your order from the store.', soon: 'A rider will collect your order from the store.',
+      taps: ['Beep beep! 🚗', 'Vroom vroom 💨', 'On it!'],
+      icon: '<path d="M3 10l2-6h14l2 6"/><path d="M4 10v10h16V10"/><path d="M10 20v-5h4v5"/>' },
+    { label: 'On the way', title: 'On the way to you', sub: 'Your order has left the store.',
+      info: '<strong>Your order is out of the store</strong> and heading your way. Follow your rider live on the map below.',
+      done: 'Your rider made the trip over to you.', soon: 'Your rider heads your way, and you can follow along live on the map.',
+      taps: ['Zooming over 💨', 'Coming in hot 🔥', 'Not long now!'],
+      icon: '<path d="M3 17h2a2 2 0 1 0 4 0h6a2 2 0 1 0 4 0h2v-5l-3-5h-5v10"/><path d="M14 7H3v10"/>' },
+    { label: 'Arriving', title: 'Your rider is arriving', sub: 'Have your 4-digit PIN ready.',
+      info: '<strong>Your rider is at your address.</strong> Show them your 4-digit PIN to receive your order.',
+      done: 'Your rider arrived and checked your PIN.', soon: 'Your rider pulls up and you show them your 4-digit PIN.',
+      taps: ['Knock knock 🚪', 'PIN ready? 🔢', 'Here!'],
+      icon: '<path d="M12 21c-5-6-8-9.5-8-12.5a8 8 0 0 1 16 0c0 3-3 6.5-8 12.5z"/><circle cx="12" cy="8.5" r="2.5"/>' },
+    { label: 'Delivered', title: 'Delivered!', sub: 'Enjoy — thanks for shopping local.',
+      info: '<strong>Handed over.</strong> Enjoy your order, and let us know how the delivery went below.',
+      done: '', soon: 'Your order is in your hands. 🎉',
+      taps: ['Enjoy! 🎉', 'Thanks for shopping local 💛', 'Woohoo!'],
+      icon: '<path d="M5 12.5l4.5 4.5L19 7.5"/>' }
+  ];
 
-  function renderSteps(stepIdx) {
-    if (stepIdx < 0) return ''; // problem state — steps aren't meaningful
-    return '<ul class="t-steps">' + STEP_LABELS.map((label, i) => {
-      const cls = i < stepIdx ? 'done' : (i === stepIdx ? 'current' : '');
-      return `<li class="${cls}"><span class="t-dot"></span>${esc(label)}</li>`;
-    }).join('') + '</ul>';
+  // Each scene is a 320x140 SVG. data-freeze = the moment shown as a still
+  // when the user prefers reduced motion (SMIL ignores CSS media queries).
+  const ROUTE = 'M58 104C112 104 104 60 160 60S226 34 262 46';
+  const SCENES = [
+    // 0 — preparing: items drop into a bag beside the store, clock ticking
+    `<svg viewBox="0 0 320 140" data-freeze="1.1" role="img" aria-label="The store packing your order">
+      <path d="M24 118h272" stroke="#dbe4f5" stroke-width="4" stroke-linecap="round"/>
+      <use href="#sym-store" x="104" y="40" width="84" height="78"/>
+      <g transform="translate(66 74)">
+        <circle r="15" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
+        <path d="M0 0v-9" stroke="#0a2f66" stroke-width="2.5" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="4s" repeatCount="indefinite"/></path>
+        <path d="M0 0h6" stroke="#e0284f" stroke-width="2.5" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="24s" repeatCount="indefinite"/></path>
+      </g>
+      <rect x="226" y="30" width="12" height="12" rx="2" fill="#e0284f">
+        <animate attributeName="y" values="24;84;84" keyTimes="0;.55;1" dur="2.4s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.5;.6" dur="2.4s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="230" y="30" width="10" height="10" rx="5" fill="#f5b301">
+        <animate attributeName="y" values="24;86;86" keyTimes="0;.55;1" dur="2.4s" begin=".8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.5;.6" dur="2.4s" begin=".8s" repeatCount="indefinite"/>
+      </rect>
+      <rect x="224" y="30" width="11" height="11" rx="2" fill="#0a2f66">
+        <animate attributeName="y" values="24;85;85" keyTimes="0;.55;1" dur="2.4s" begin="1.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.5;.6" dur="2.4s" begin="1.6s" repeatCount="indefinite"/>
+      </rect>
+      <use href="#sym-bag" x="212" y="72" width="42" height="46"/>
+      <path d="M200 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#f5b301"><animate attributeName="opacity" values="0;1;0" dur="1.8s" repeatCount="indefinite"/></path>
+    </svg>`,
+    // 1 — collecting: car drives up to the store, store pin bobs
+    `<svg viewBox="0 0 320 140" data-freeze="2.4" role="img" aria-label="Your rider driving to the store">
+      <rect x="0" y="106" width="320" height="22" fill="#dbe4f5"/>
+      <path d="M0 117h320" stroke="#fff" stroke-width="2.5" stroke-dasharray="12 10"><animate attributeName="stroke-dashoffset" from="0" to="-44" dur="1s" repeatCount="indefinite"/></path>
+      <use href="#sym-store" x="226" y="32" width="80" height="75"/>
+      <g><use href="#sym-pin" x="254" y="0" width="22" height="28"/><animateTransform attributeName="transform" type="translate" values="0 2;0 -3;0 2" dur="1.4s" repeatCount="indefinite"/></g>
+      <g>
+        <use href="#sym-car" x="0" y="80" width="66" height="37"/>
+        <animateTransform attributeName="transform" type="translate" values="-80 0;150 0;150 0" keyTimes="0;.72;1" calcMode="spline" keySplines=".35 0 .25 1;0 0 1 1" dur="3.6s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.1;.88;1" dur="3.6s" repeatCount="indefinite"/>
+      </g>
+    </svg>`,
+    // 2 — on the way: dot travels the route from store to your pin
+    `<svg viewBox="0 0 320 140" data-freeze="2.6" role="img" aria-label="Your order travelling from the store to you">
+      <path d="M0 36h320M0 100h320M96 0v140M226 0v140" stroke="#dde6f6" stroke-width="10"/>
+      <path d="${ROUTE}" fill="none" stroke="#0a2f66" stroke-width="3" stroke-dasharray="6 6" stroke-linecap="round"/>
+      <use href="#sym-store" x="16" y="78" width="44" height="41"/>
+      <circle cx="262" cy="46" r="6" fill="#e0284f" opacity=".35"><animate attributeName="r" values="6;20" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values=".35;0" dur="1.6s" repeatCount="indefinite"/></circle>
+      <use href="#sym-pin" x="250" y="12" width="24" height="30"/>
+      <g>
+        <circle r="12" fill="#0a2f66" opacity=".15"/>
+        <circle r="7" fill="#0a2f66" stroke="#fff" stroke-width="2.5"/>
+        <animateMotion dur="5s" repeatCount="indefinite" path="${ROUTE}" calcMode="spline" keyTimes="0;1" keySplines=".45 0 .55 1"/>
+      </g>
+      <rect x="12" y="12" width="46" height="18" rx="9" fill="#fff"/>
+      <circle cx="23" cy="21" r="3.2" fill="#e0284f"><animate attributeName="opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/></circle>
+      <text x="30" y="24.5" font-size="10" font-weight="800" fill="#0a2f66" font-family="system-ui,sans-serif">LIVE</text>
+    </svg>`,
+    // 3 — arriving: car pulls up outside your home, PIN bubble pulses
+    `<svg viewBox="0 0 320 140" data-freeze="3" role="img" aria-label="Your rider pulling up at your home">
+      <rect x="0" y="108" width="320" height="20" fill="#dbe4f5"/>
+      <use href="#sym-home" x="168" y="26" width="92" height="86"/>
+      <g>
+        <rect x="236" y="10" width="72" height="26" rx="13" fill="#e0284f"/>
+        <path d="M250 35l-4 8 10-8z" fill="#e0284f"/>
+        <text x="272" y="27.5" font-size="11.5" font-weight="800" fill="#fff" text-anchor="middle" font-family="system-ui,sans-serif" letter-spacing="1">PIN ••••</text>
+        <animateTransform attributeName="transform" type="translate" values="0 0;0 -3;0 0" dur="1.2s" repeatCount="indefinite"/>
+      </g>
+      <g>
+        <use href="#sym-car" x="0" y="82" width="66" height="37"/>
+        <animateTransform attributeName="transform" type="translate" values="-80 0;96 0;96 0" keyTimes="0;.6;1" calcMode="spline" keySplines=".2 0 .2 1;0 0 1 1" dur="4.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.08;.9;1" dur="4.5s" repeatCount="indefinite"/>
+      </g>
+    </svg>`,
+    // 4 — delivered: bag at the door, check pops, gentle confetti
+    `<svg viewBox="0 0 320 140" data-freeze="1.2" role="img" aria-label="Your order delivered to your door">
+      <path d="M40 118h240" stroke="#dbe4f5" stroke-width="4" stroke-linecap="round"/>
+      <use href="#sym-home" x="104" y="30" width="92" height="86"/>
+      <use href="#sym-bag" x="182" y="84" width="30" height="34"/>
+      <g transform="translate(222 42)">
+        <g><circle r="17" fill="#22c55e"/><path d="M-7 0l5 5 9-10" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <animateTransform attributeName="transform" type="scale" values="1;1.1;1" dur="1.8s" repeatCount="indefinite"/></g>
+      </g>
+      ${[[70,'#e0284f',0],[96,'#f5b301',.5],[130,'#22c55e',1.1],[250,'#0a2f66',.3],[270,'#e0284f',.9],[292,'#f5b301',1.4],[56,'#0a2f66',1.7],[238,'#22c55e',2]].map(([x,c,b]) =>
+        `<rect x="${x}" y="-10" width="6" height="9" rx="1.5" fill="${c}">
+          <animate attributeName="y" values="-10;120" dur="3s" begin="${b}s" repeatCount="indefinite"/>
+          <animateTransform attributeName="transform" type="rotate" values="0 ${x} 60;200 ${x} 60" dur="3s" begin="${b}s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values="1;1;0" keyTimes="0;.8;1" dur="3s" begin="${b}s" repeatCount="indefinite"/>
+        </rect>`).join('')}
+    </svg>`
+  ];
+  const PROBLEM_SCENE = `<svg viewBox="0 0 320 140" role="img" aria-label="There is a problem with this delivery">
+      <circle cx="160" cy="70" r="34" fill="#fde8e8"/><circle cx="160" cy="70" r="22" fill="#dc2626"/>
+      <path d="M160 58v14" stroke="#fff" stroke-width="4" stroke-linecap="round"/><circle cx="160" cy="80" r="2.6" fill="#fff"/>
+    </svg>`;
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function renderScene(stepIdx) {
+    const wrap = document.getElementById('scene');
+    if (!wrap) return;
+    wrap.innerHTML = (stepIdx < 0 ? PROBLEM_SCENE : SCENES[stepIdx]) + '<div class="t-bubble" id="sceneBubble"></div>' + (stepIdx < 0 ? '' : '<div class="t-scene-hint">tap me</div>');
+    wrap.classList.remove('swap'); void wrap.offsetWidth; wrap.classList.add('swap');
+    const svg = wrap.querySelector('svg');
+    if (reduceMotion && svg && svg.pauseAnimations) {
+      try { svg.setCurrentTime(parseFloat(svg.dataset.freeze || '0')); svg.pauseAnimations(); } catch (e) { /* static is fine */ }
+    }
+  }
+
+  function renderTimeline(stepIdx) {
+    if (stepIdx < 0) return '';
+    const pct = (stepIdx / (STEPS.length - 1)) * 100;
+    return `<div class="t-track">
+        <div class="t-rail"></div>
+        <div class="t-rail-fill" style="width:calc((100% - 36px) * ${pct / 100})"></div>
+        ${STEPS.map((s, i) => `<button type="button" class="t-step ${i < stepIdx ? 'done' : (i === stepIdx ? 'current' : '')}" data-step="${i}" aria-label="${esc(s.label)}">
+          <span class="t-step-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg></span>
+          <span class="t-step-lbl">${esc(s.label)}</span>
+        </button>`).join('')}
+      </div>
+      <div class="t-step-info" id="stepInfo" aria-live="polite"></div>`;
+  }
+
+  let selectedStep = null;
+  function selectStep(i, stepIdx) {
+    selectedStep = i;
+    document.querySelectorAll('.t-step').forEach(b => b.classList.toggle('selected', Number(b.dataset.step) === i));
+    const info = document.getElementById('stepInfo');
+    if (!info) return;
+    const st = STEPS[i];
+    info.innerHTML = i < stepIdx ? `<strong>✓ Done.</strong> ${esc(st.done)}` : i > stepIdx ? `<strong>Coming up:</strong> ${esc(st.soon)}` : st.info;
+    info.classList.remove('swap'); void info.offsetWidth; info.classList.add('swap');
+  }
+
+  function wireTimeline(stepIdx) {
+    document.querySelectorAll('.t-step').forEach(b => b.addEventListener('click', () => selectStep(Number(b.dataset.step), stepIdx)));
+    selectStep(selectedStep === null ? stepIdx : selectedStep, stepIdx);
+  }
+
+  // Tap the scene for a little reaction — pure delight, never blocks anything.
+  let bubbleTimer = null, tapCount = 0;
+  function sceneTap(stepIdx) {
+    if (stepIdx < 0) return;
+    const bubble = document.getElementById('sceneBubble');
+    if (!bubble) return;
+    const taps = STEPS[stepIdx].taps;
+    bubble.textContent = taps[tapCount++ % taps.length];
+    const hint = document.querySelector('.t-scene-hint');
+    if (hint) hint.remove();
+    bubble.classList.add('show');
+    clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(() => bubble.classList.remove('show'), 1600);
+  }
+
+  // ── PIN tiles + full-screen "show to rider" ─────────────────────────────
+  function pinCard(pin) {
+    const digits = String(pin).split('');
+    return `<div class="t-card t-pin" id="pinCard">
+      <div class="t-pin-head">
+        <span class="t-pin-label">Give this PIN to your rider on arrival</span>
+        <button type="button" class="t-pin-show" id="pinShowBtn">Show rider ⤢</button>
+      </div>
+      <div class="t-pin-tiles">${digits.map(d => `<span>${esc(d)}</span>`).join('')}</div>
+    </div>`;
+  }
+  const pinFull = document.getElementById('pinFull');
+  pinFull.addEventListener('click', () => pinFull.classList.remove('open'));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') pinFull.classList.remove('open'); });
+  function openPinFull(pin) {
+    document.getElementById('pinFullDigits').innerHTML = String(pin).split('').map(d => `<span>${esc(d)}</span>`).join('');
+    pinFull.classList.add('open');
+  }
+
+  // ── live ticker + straight-line rider distance ──────────────────────────
+  let lastUpdated = 0, tickTimer = null;
+  function tick() {
+    const el = document.getElementById('liveText');
+    if (!el || !lastUpdated) return;
+    const s = Math.round((Date.now() - lastUpdated) / 1000);
+    el.textContent = s < 5 ? 'Live · updated just now' : `Live · updated ${s < 60 ? s + 's' : Math.floor(s / 60) + 'm'} ago`;
+  }
+  function haversineKm(aLat, aLon, bLat, bLon) {
+    const R = 6371, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function formatDistance(km) {
+    if (km < 1) return `${Math.max(50, Math.round(km * 1000 / 50) * 50)} m`;
+    return `${km.toFixed(1)} km`;
   }
 
   // ── map (Leaflet + OSM tiles — free, keyless, no Google browser key;
@@ -182,6 +499,7 @@
 
   let pollTimer = null;
   let firstDriverFit = true;
+  let shownStep = null;
 
   async function loadTracking() {
     const { data, error } = await sb.rpc('get_delivery_tracking', { p_order_id: orderId });
@@ -196,17 +514,30 @@
     const meta = statusMeta(row.status);
     const isProblem = meta.stepIdx < 0;
     const isDone = row.status === 'DELIVERED';
+    const stage = isProblem ? null : STEPS[meta.stepIdx];
+    const atDoor = row.status === 'PIN_REQUIRED';
+    const title = isProblem ? meta.label : atDoor ? 'Your rider is here!' : stage.title;
+    const sub = isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.' : stage.sub;
 
     // First render sets up the static shell once; subsequent polls only
-    // patch the live bits (status pill, steps, map marker) rather than
-    // rebuilding the whole card and losing map pan/zoom state.
+    // patch the live bits (status pill, scene, steps, map marker) rather
+    // than rebuilding the whole card and losing map pan/zoom state.
     if (!document.getElementById('statusPill')) {
       content.innerHTML = `
-        <div class="t-card">
-          <span id="statusPill" class="t-status-pill ${meta.cls}">${esc(meta.label)}</span>
-          <div id="stepsWrap">${renderSteps(meta.stepIdx)}</div>
-          ${row.delivery_pin ? `<div class="t-pin-box"><span class="t-pin-label">Give this PIN to your rider on arrival</span><span class="t-pin-value">${esc(row.delivery_pin)}</span></div>` : ''}
+        <div class="t-card t-hero">
+          <div class="t-hero-top">
+            <span id="statusPill" class="t-status-pill ${meta.cls}">${esc(meta.label)}</span>
+            <span class="t-live" id="liveWrap"><span class="t-live-dot"></span><span id="liveText">Live</span></span>
+          </div>
+          <div class="t-scene" id="scene" title="Tap me"></div>
+          <div class="t-headline">
+            <h1 id="heroTitle">${esc(title)}</h1>
+            <p id="heroSub">${esc(sub)}</p>
+            <span class="t-distance" id="distanceChip" hidden></span>
+          </div>
         </div>
+        ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
+        <div class="t-card" id="stepsCard"${isProblem ? ' hidden' : ''}><div id="stepsWrap"></div></div>
         <div class="t-card">
           <div id="mapMount"></div>
           <div id="mapNote" class="t-map-note"></div>
@@ -215,18 +546,44 @@
         ${supportCard()}
         ${backLink()}
       `;
+      document.getElementById('scene').addEventListener('click', () => sceneTap(shownStep));
+      if (row.delivery_pin) document.getElementById('pinShowBtn').addEventListener('click', () => openPinFull(row.delivery_pin));
+      tickTimer = setInterval(tick, 1000);
     } else {
       const pill = document.getElementById('statusPill');
       pill.className = `t-status-pill ${meta.cls}`;
       pill.textContent = meta.label;
-      document.getElementById('stepsWrap').innerHTML = renderSteps(meta.stepIdx);
+      document.getElementById('heroTitle').textContent = title;
+      document.getElementById('heroSub').textContent = sub;
+      document.getElementById('stepsCard').hidden = isProblem;
     }
+
+    // Only swap the scene/timeline when the stage actually changes, so the
+    // looping animation isn't restarted on every 20s poll.
+    if (shownStep !== meta.stepIdx) {
+      if (shownStep !== null) selectedStep = null; // follow the new stage
+      shownStep = meta.stepIdx;
+      renderScene(meta.stepIdx);
+      document.getElementById('stepsWrap').innerHTML = renderTimeline(meta.stepIdx);
+      if (!isProblem) wireTimeline(meta.stepIdx);
+    }
+
+    const pinCardEl = document.getElementById('pinCard');
+    if (pinCardEl) {
+      pinCardEl.classList.toggle('hot', STAGE_ARRIVING.includes(row.status));
+      pinCardEl.hidden = isDone || isProblem; // nothing left to hand over
+    }
+
+    lastUpdated = Date.now();
+    tick();
 
     if (Number.isFinite(row.destination_lat) && Number.isFinite(row.destination_lon)) {
       ensureMap(row.destination_lat, row.destination_lon);
     }
 
     const mapNote = document.getElementById('mapNote');
+    const chip = document.getElementById('distanceChip');
+    chip.hidden = true;
     if (Number.isFinite(row.driver_lat) && Number.isFinite(row.driver_lon)) {
       const ageSec = row.driver_location_at ? (Date.now() - new Date(row.driver_location_at).getTime()) / 1000 : Infinity;
       const isStale = ageSec > STALENESS_SECONDS;
@@ -236,6 +593,13 @@
       if (firstDriverFit && map) {
         map.fitBounds(L.latLngBounds([[row.driver_lat, row.driver_lon], [row.destination_lat, row.destination_lon]]), { padding: [30, 30] });
         firstDriverFit = false;
+      }
+      // Straight-line distance, labelled "about" — no ETA is claimed since
+      // the tracking RPC doesn't provide one.
+      if (!isDone && !isProblem && !atDoor && Number.isFinite(row.destination_lat) && Number.isFinite(row.destination_lon)) {
+        const km = haversineKm(row.driver_lat, row.driver_lon, row.destination_lat, row.destination_lon);
+        chip.textContent = `📍 About ${formatDistance(km)} away${isStale ? ' (last seen ' + staleLabel + ')' : ''}`;
+        chip.hidden = false;
       }
     } else if (mapNote) {
       // No live coordinates doesn't mean no rider yet -- Fix D (delivery-network-spec.md)
@@ -252,6 +616,12 @@
     if ((isDone || isProblem) && pollTimer) {
       clearInterval(pollTimer);
       pollTimer = null;
+    }
+    if (isDone || isProblem) {
+      if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+      const live = document.getElementById('liveWrap');
+      live.classList.add('final');
+      document.getElementById('liveText').textContent = isDone ? 'Complete' : 'Stopped';
     }
 
     if (isDone) await renderFeedbackPrompt(row.delivery_id);
