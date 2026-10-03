@@ -384,7 +384,7 @@ function buildMysteryEmail(code, expiryLabel, siteUrl) {
 function buildMysteryFunFactEmail(code, expiryLabel, siteUrl, fact) {
   const factLine = fact
     ? esc(fact)
-    : "sellers here walk most deliveries across campus themselves — barely any of it is driven.";
+    : "not every store gets onto Umzila. Businesses are vetted first, so only the best get in.";
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
