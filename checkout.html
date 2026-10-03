@@ -2106,9 +2106,37 @@
     function showError(element, message) {
       element.textContent = message;
       element.classList.remove('hidden');
-      setTimeout(() => {
+      // On mobile the Pay button is a sticky bar, so an error further up the
+      // page used to appear (and vanish) off-screen — bring it into view.
+      const r = element.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight - 90) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      clearTimeout(element._hideTimer);
+      element._hideTimer = setTimeout(() => {
         element.classList.add('hidden');
-      }, 5000);
+      }, 8000);
+    }
+
+    // Unticked terms: scroll to the checkbox itself and say so right there.
+    function promptForTerms() {
+      const group = document.getElementById('termsAgreementGroup');
+      let note = document.getElementById('termsRequiredNote');
+      if (group && !note) {
+        note = document.createElement('div');
+        note.id = 'termsRequiredNote';
+        note.setAttribute('role', 'alert');
+        note.style.cssText = 'margin:6px 0 0 26px;font-size:13px;font-weight:600;color:#c0392b';
+        group.appendChild(note);
+      }
+      if (note) note.textContent = 'Please tick this box to agree to the Terms & Conditions before paying.';
+      if (group) {
+        group.style.transition = 'background-color .3s';
+        group.style.background = '#fff4e5';
+        group.style.borderRadius = '10px';
+        group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      elements.termsAgreement.focus({ preventScroll: true });
     }
     
     // Validate email
@@ -2742,6 +2770,10 @@ function cartExtras(item) {
 
 async function syncCartOnLogin(user) {
     if (!supabaseClient || !user) return;
+    // Started in parallel with loadCart() — merge only once it has finished,
+    // and never for a Buy Now (which loadCart() may only now have detected).
+    if (state.cartReady) { try { await state.cartReady; } catch (e) { /* loadCart handles its own errors */ } }
+    if (state.isBuyNow) return;
     
     try {
         // Get localStorage cart
@@ -4847,7 +4879,7 @@ async function submitToPayFast(cartItems, orderId, total) {
     try {
         // Validate form
         if (!elements.termsAgreement.checked) {
-            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            promptForTerms();
             return;
         }
 
@@ -4882,7 +4914,7 @@ async function submitToPayFast(cartItems, orderId, total) {
     const btn = document.getElementById('payWithSavedCardBtn');
     try {
         if (!elements.termsAgreement.checked) {
-            showError(elements.paymentError, 'You must agree to the Terms & Conditions.');
+            promptForTerms();
             return;
         }
 
@@ -4934,11 +4966,13 @@ async function submitToPayFast(cartItems, orderId, total) {
     
     async function continueInitialization() {
       try {
-        await loadCart();
-
-        // Check authentication — no auto-popup either way. Signed-in users
-        // see their details prefilled; guests just start filling the form.
-        await checkAuth();
+        // Cart and sign-in load side by side (they used to run one after the
+        // other — ~1s of extra waiting for a signed-in buyer). loadCart()
+        // reads state.user synchronously before its first await, so it still
+        // takes the local path; syncCartOnLogin() waits for state.cartReady
+        // before merging the saved cart, so neither overwrites the other.
+        state.cartReady = loadCart();
+        await Promise.all([state.cartReady, checkAuth()]);
 
         // The saved-coupon re-check inside loadCart() (above) ran before
         // state.user was known — checkAuth() hasn't resolved at that point
@@ -5077,6 +5111,18 @@ async function submitToPayFast(cartItems, orderId, total) {
         const expanded = card.classList.toggle('expanded');
         document.getElementById('summaryToggle').setAttribute('aria-expanded', expanded ? 'true' : 'false');
       });
+
+      document.getElementById('termsAgreement')?.addEventListener('change', (e) => {
+
+        if (!e.target.checked) return;
+
+        document.getElementById('termsRequiredNote')?.remove();
+
+        const g = document.getElementById('termsAgreementGroup'); if (g) g.style.background = '';
+
+      });
+
+      
 
       // "More options" ships open (so desktop needs no JS at all) — close it
       // by default only on mobile, where it should start collapsed. The

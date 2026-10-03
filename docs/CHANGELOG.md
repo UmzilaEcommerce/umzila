@@ -4,6 +4,17 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — Checkout terms prompt, faster checkout start, mobile category tiles, Velaphi hero link
+
+- **Terms prompt hidden on mobile:** the "agree to terms" error rendered in `#paymentError` above the fold while buyers pressed the sticky Pay bar, then vanished after 5 s — it only became visible if "More options" happened to shift the page. Now `promptForTerms()` scrolls to the checkbox, highlights it and shows the message beside it; `showError()` scrolls any off-screen error into view (8 s).
+- **Checkout start-up:** signed-in load was a ~4.5 s chain of sequential requests. `loadCart()` and `checkAuth()` now run in parallel (`state.cartReady` gates `syncCartOnLogin()` so the saved-cart merge still runs after the local cart, and never for Buy Now). `get-client-config` (public values only) now sends `Cache-Control: public, max-age=600`, removing a ~0.9 s function call on repeat page loads site-wide. Realtime tables were considered and not used — they help live updates, not first load.
+- **Mobile category tiles:** a late mobile rule set 70 px tiles (7 × 70 px didn't fit a ~330 px row). Phones now get 46 px tiles (40 px ≤360 px), labels that wrap instead of clipping (`Acces&shy;sories`), and the hero gains 16 px width. Measured at 360/390/430 px: no clipped labels or page overflow; tile row 126 → 89 px; hero 331×187 → 347×196 at 390 px.
+- Hero slide 1 now links to `/velaphishisanyama` (store renamed from Isqalo; old `/isqalo-shisanyama` links no longer resolve).
+
+**Files:** `checkout.html`, `netlify/functions/get-client-config.js`, `style.css`, `index.html`.
+
+---
+
 ## 2026-10-03 — Nceks Quad Biking launch: co-owners, booking engine, gift vouchers, guest checkout, services per kind
 
 Full write-ups: [`docs/systems/service-orders.md`](systems/service-orders.md), [`docs/systems/bespoke-storefronts.md`](systems/bespoke-storefronts.md).

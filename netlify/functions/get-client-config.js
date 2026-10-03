@@ -14,7 +14,10 @@ module.exports.handler = async function () {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
+        "Access-Control-Allow-Origin": "*",
+        // Only public values (URL + anon key + flags) — let browsers reuse
+        // them for 10 minutes instead of a function round trip on every page.
+        "Cache-Control": "public, max-age=600"
       },
       body: JSON.stringify(payload)
     };

@@ -2381,3 +2381,21 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .active-delivery-widget .adw-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .active-delivery-widget .adw-status { font-weight: 700; font-size: 14px; }
 .active-delivery-widget .adw-cta { font-size: 12px; opacity: 0.85; font-weight: 600; }
+
+/* ── Phones: smaller category tiles, bigger hero (owner ask 2026-10-03) ──
+   70px tiles × 7 didn't fit a ~330px row and pushed the eye away from the
+   16:9 banners, which are text-heavy and hard to read at phone width. The
+   tiles now all fit across the row, and the hero gains its side margin back. */
+@media (max-width: 768px) {
+  .hero { margin-left: -8px; margin-right: -8px; border-radius: 14px; }
+  .cat-bubbles-row { padding: 10px 0 4px; gap: 0; justify-content: space-between; }
+  .cat-bubble { flex: 1 1 0; min-width: 0; gap: 5px; }
+  .cat-bubble-icon { width: 46px; height: 46px; border-radius: 15px; }
+  .cat-bubble-icon svg { width: 21px; height: 21px; }
+  .cat-bubble-label { font-size: 10.5px; letter-spacing: -0.2px; max-width: 100%; white-space: normal; line-height: 1.15; hyphens: manual; }
+}
+@media (max-width: 360px) {
+  .cat-bubble-icon { width: 40px; height: 40px; border-radius: 13px; }
+  .cat-bubble-icon svg { width: 19px; height: 19px; }
+  .cat-bubble-label { font-size: 9.5px; }
+}
