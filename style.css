@@ -2428,18 +2428,14 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
 
 /* ── Phones: smaller category tiles, bigger hero (owner ask 2026-10-03) ──
    70px tiles × 7 didn't fit a ~330px row and pushed the eye away from the
-   16:9 banners, which are text-heavy and hard to read at phone width. The
-   tiles now all fit across the row, and the hero gains its side margin back. */
+   16:9 banners, which are text-heavy and hard to read at phone width. Small
+   tiles with breathing room in a sideways-scrolling row (squeezing all seven
+   into the width looked cramped); the hero gains its side margin back. */
 @media (max-width: 768px) {
   .hero { margin-left: -8px; margin-right: -8px; border-radius: 14px; }
-  .cat-bubbles-row { padding: 10px 0 4px; gap: 0; justify-content: space-between; }
-  .cat-bubble { flex: 1 1 0; min-width: 0; gap: 5px; }
-  .cat-bubble-icon { width: 46px; height: 46px; border-radius: 15px; }
-  .cat-bubble-icon svg { width: 21px; height: 21px; }
-  .cat-bubble-label { font-size: 10.5px; letter-spacing: -0.2px; max-width: 100%; white-space: normal; line-height: 1.15; hyphens: manual; }
-}
-@media (max-width: 360px) {
-  .cat-bubble-icon { width: 40px; height: 40px; border-radius: 13px; }
-  .cat-bubble-icon svg { width: 19px; height: 19px; }
-  .cat-bubble-label { font-size: 9.5px; }
+  .cat-bubbles-row { padding: 10px 16px 4px; margin: 0 -16px; gap: 14px; scroll-padding: 0 16px; }
+  .cat-bubble { flex: 0 0 auto; min-width: 52px; gap: 6px; }
+  .cat-bubble-icon { width: 48px; height: 48px; border-radius: 15px; }
+  .cat-bubble-icon svg { width: 22px; height: 22px; }
+  .cat-bubble-label { font-size: 11px; white-space: nowrap; }
 }
