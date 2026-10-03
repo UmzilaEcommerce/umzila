@@ -907,7 +907,7 @@
       savedAddressGeo = null;
       renderAddrPreview(prof);
     } else {
-      await sb.from('profiles').insert([{ user_id: user.id, email: user.email, first_name: '', last_name: '', phone: '' }]).catch(() => {});
+      await sb.from('profiles').insert([{ user_id: user.id, email: user.email, first_name: '', last_name: '', phone: '' }]); // query builders have no .catch(); errors come back as { error }
     }
   }
 
@@ -1584,7 +1584,7 @@
             (prods||[]).forEach(p => { if (p.seller_id) sellerIds.add(p.seller_id); });
           }
           for (const sid of sellerIds) {
-            await sb.from('seller_notifications').insert([{ seller_id: sid, type:'order', title:`Buyer disputed: ${itemName}`, body: msg||'Item not received.', is_read: false, created_at: new Date().toISOString() }]).catch(() => {});
+            await sb.from('seller_notifications').insert([{ seller_id: sid, type:'order', title:`Buyer disputed: ${itemName}`, body: msg||'Item not received.', is_read: false, created_at: new Date().toISOString() }]);
           }
         }
       } catch(e) { console.warn('notify error', e); }

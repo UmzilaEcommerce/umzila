@@ -352,17 +352,19 @@ async function createServiceOrderRecords(supabase, order) {
 
         // Confirm any appointment slot hold taken at add-to-cart time — turns
         // the 30-minute hold into a real booking now that payment succeeded.
+        // (Supabase query builders are thenables with no .catch() — read
+        // { error } instead; a .catch() here threw and aborted this loop.)
         if (item.booking_id) {
-            await supabase.from('service_bookings')
+            const { error: bookingErr } = await supabase.from('service_bookings')
                 .update({ status: 'confirmed', order_id: order.id, order_item_status_id: statusRow ? statusRow.id : null, hold_expires_at: null })
                 .eq('id', item.booking_id)
-                .eq('status', 'held')
-                .catch(e => console.error('completeOrderPayment: booking confirm error', e));
+                .eq('status', 'held');
+            if (bookingErr) console.error('completeOrderPayment: booking confirm error', bookingErr);
         }
 
         // In-app notification for seller
         if (item.seller_id) {
-            await supabase.from('seller_notifications').insert([{
+            const { error: notifErr } = await supabase.from('seller_notifications').insert([{
                 seller_id: item.seller_id,
                 type: 'service_order',
                 title: '🔧 New service order — action required',
@@ -370,14 +372,15 @@ async function createServiceOrderRecords(supabase, order) {
                 related_order_id: order.id,
                 metadata: { order_number: order.order_number, item_index: idx },
                 is_read: false
-            }]).catch(e => console.error('completeOrderPayment: service notification insert error', e));
+            }]);
+            if (notifErr) console.error('completeOrderPayment: service notification insert error', notifErr);
         }
 
         // Rep-pool broadcast for item_dropoff services only — nothing physical
         // to collect for in_person/digital, so no rep task is created for those.
         if (item.fulfillment_type === 'item_dropoff') {
             const dropoffBody = `"${item.name || item.title || 'service'}" — rep collection from buyer's address. Available once the seller accepts.`;
-            await supabase.from('seller_notifications').insert([{
+            const { error: repNotifErr } = await supabase.from('seller_notifications').insert([{
                 seller_id: null,
                 recipient_role: 'rep',
                 recipient_user_id: null,
@@ -387,7 +390,8 @@ async function createServiceOrderRecords(supabase, order) {
                 related_order_id: order.id,
                 metadata: { order_number: order.order_number, item_index: idx },
                 is_read: false
-            }]).catch(e => console.error('completeOrderPayment: rep notification insert error', e));
+            }]);
+            if (repNotifErr) console.error('completeOrderPayment: rep notification insert error', repNotifErr);
         }
     }
     console.log('completeOrderPayment: created service order records for order', order.id);
