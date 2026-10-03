@@ -138,7 +138,7 @@ exports.handler = async function (event) {
       referral_code: referralCode,
       status:        'signed_up'
     }])
-    .catch(e => console.warn('process-referral: referral_tracking insert error', e));
+    .then(({ error }) => { if (error) console.warn('process-referral: referral_tracking insert error', error); }); // builders have no .catch()
 
   // 7. Send walkthrough emails via Resend (non-fatal)
   if (RESEND_KEY) {

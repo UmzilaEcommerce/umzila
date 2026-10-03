@@ -170,13 +170,15 @@
             const MAX_ATTEMPTS = 8;
             const POLL_DELAY   = 4000;
             for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-              const { data: order } = await sb
-                .from('orders')
-                .select('payment_status')
-                .eq('m_payment_id', mPaymentId)
-                .maybeSingle();
+              // Via order-status.js — guests have no SELECT on orders, so a
+              // direct read never saw "paid" for them.
+              let order = null;
+              try {
+                const sr = await fetch('/.netlify/functions/order-status?m=' + encodeURIComponent(mPaymentId), { cache: 'no-store' });
+                if (sr.ok) order = await sr.json();
+              } catch (_) {}
 
-              if (order && order.payment_status === 'paid') {
+              if (order && order.paymentStatus === 'paid') {
                 localStorage.removeItem('ss_cart');
                 localStorage.removeItem('ss_coupon');
                 console.log('checkout-success: payment confirmed, cart cleared');
@@ -197,9 +199,7 @@
                 }
                 // Check for service items and show next steps panel
                 try {
-                  const { data: fullOrder } = await sb.from('orders').select('items').eq('m_payment_id', mPaymentId).maybeSingle();
-                  const items = Array.isArray(fullOrder && fullOrder.items) ? fullOrder.items : [];
-                  const services = items.filter(i => i.listing_type === 'service');
+                  const services = Array.isArray(order.services) ? order.services : [];
                   if (services.length) renderServiceNextSteps(services);
                 } catch (_) {}
                 break;

@@ -1,0 +1,1333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Guided quad bike rides near Inanda Dam, Durban. 30 minutes to 2 hours, from R350. Book online and pay securely with Umzila.">
+<meta property="og:title" content="Nceks Quad Biking · Freedom on wheels">
+<meta property="og:description" content="Guided quad rides near Inanda Dam, Durban. Book online from R350.">
+<meta property="og:image" content="https://ojwnjtcxbitwmtlsbjnx.supabase.co/storage/v1/object/public/product-images/stores/ncekeniquads/ride-120.webp">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#192522">
+<link rel="icon" type="image/png" href="/ncekeniquads/img/logo.png">
+<title>Nceks Quad Biking</title>
+<!--
+  NCEKS QUAD BIKING — bespoke Umzila storefront at umzila.store/ncekeniquads
+  (sellers.slug = 'ncekeniquads'; this folder shadows the /:slug → shop.html rewrite).
+  Design: Shazi Media. Data, availability, holds, cart, checkout and payment are
+  all Umzila's — see docs/systems/bespoke-storefronts.md before editing.
+  Prices/hours/capacity are edited in the seller dashboard, not here.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: animated hero with the booking card in the first screen → proof (trust, rides, steps, real photos + reviews) → gift vouchers → FAQ → closing CTA. Sticky "Book now" bar on phones. Colours follow the Nceks logo (amber on black) and their site's forest green. */
+:root{
+  --bone:#ECE8DF;
+  --paper:#F8F5EF;
+  --canvas:#DFDCCD;
+  --line:#D2CCBC;
+  --ink:#161A17;
+  --ink-2:#525750;
+  --brand-green:#267164;
+  --olive:#26352F;
+  --forest:#192522;
+  --khaki:#B5A47F;
+  --signal:#F29A1F;
+  --signal-dk:#DB8410;
+  --signal-ink:#94500A;
+  --font-display:"Archivo","Arial Black",sans-serif;
+  --font-body:"Hanken Grotesk","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Consolas",monospace;
+  --gutter:clamp(16px,4vw,40px);
+  --scene-h:clamp(260px,26vw,380px);
+  --radius:16px;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--bone);color:var(--ink);font:400 1.0625rem/1.6 var(--font-body);-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--signal-dk);outline-offset:3px}
+section[id],footer[id]{scroll-margin-top:72px}
+.wrap{width:100%;max-width:1240px;margin-inline:auto;padding-inline:var(--gutter)}
+
+/* type */
+.display{font-family:var(--font-display);font-weight:800;font-stretch:118%;letter-spacing:-.015em;line-height:1}
+.mono{font-family:var(--font-mono);font-weight:500;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase}
+.tag{display:inline-flex;align-items:center;gap:.5em;padding:.42rem .65rem;border-radius:4px;background:var(--olive);color:var(--paper);outline:1px dashed rgb(248 245 239 / .4);outline-offset:-4px}
+.h2{margin:0;font-size:clamp(2rem,4.4vw,3.4rem);text-wrap:balance}
+.lead{max-width:56ch;margin:.9rem 0 0;color:var(--ink-2);text-wrap:pretty}
+.sec{position:relative;padding-block:clamp(72px,9vw,128px)}
+.sec-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:20px 40px;margin-bottom:clamp(28px,4vw,48px)}
+.sec-head > div{min-width:0}
+
+/* buttons */
+.btn{position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:.5em;padding:.95rem 1.4rem;border:0;border-radius:999px;cursor:pointer;
+  font:600 1rem/1 var(--font-body);text-decoration:none;transition:transform .2s cubic-bezier(.2,.8,.3,1),background-color .2s,color .2s,box-shadow .2s}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--signal);color:var(--ink);box-shadow:0 12px 26px -14px var(--signal-dk)}
+.btn-primary:hover{background:var(--signal-dk)}
+.btn-primary::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 35%,rgb(255 255 255 / .38) 50%,transparent 65%);transform:translateX(-120%);transition:transform .8s}
+.btn-primary:hover::after{transform:translateX(120%)}
+.btn-dark{background:var(--ink);color:var(--paper)}
+.btn-dark:hover{background:var(--olive)}
+.btn-line{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn-line:hover{background:var(--ink);color:var(--paper)}
+.btn-sm{padding:.68rem 1.05rem;font-size:.92rem}
+.btn-block{width:100%}
+.btn:disabled,.btn[aria-disabled="true"]{opacity:.45;cursor:not-allowed;transform:none;pointer-events:none}
+.arr{display:inline-block;transition:transform .25s}
+.btn:hover .arr{transform:translateX(4px)}
+.ic{width:18px;height:18px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:color-mix(in srgb,var(--bone) 86%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);transition:box-shadow .3s}
+.top.scrolled{box-shadow:0 1px 0 var(--line)}
+.top-row{display:flex;align-items:center;gap:clamp(10px,2vw,20px);height:68px}
+.logo{display:flex;align-items:center;gap:10px;margin-right:auto;color:var(--ink);text-decoration:none;min-width:0}
+.logo img{width:44px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 4px rgb(0 0 0 / .18))}
+.logo b{font-family:var(--font-display);font-weight:800;font-stretch:122%;font-size:.98rem;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+.nav{display:flex;gap:2px}
+.nav a{padding:.5rem .8rem;border-radius:999px;color:var(--ink-2);text-decoration:none;font-weight:500;font-size:.95rem}
+.nav a:hover{color:var(--ink);background:var(--canvas)}
+.bag{position:relative;display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:transparent;border:1.5px solid var(--line);cursor:pointer}
+.bag:hover{border-color:var(--ink)}
+.bag .ic{width:20px;height:20px}
+.bag-n{position:absolute;top:-4px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--ink);color:var(--paper);font:600 .66rem/19px var(--font-mono);text-align:center}
+.bag-n.bump{animation:bump .5s cubic-bezier(.2,2,.4,1)}
+@keyframes bump{from{transform:scale(.4)}}
+@media (max-width:960px){.nav{display:none}}
+@media (max-width:440px){.logo b{font-size:.8rem}.logo img{width:38px}.top-row .btn{padding:.6rem .85rem}}
+
+/* hero */
+.hero{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(180deg,#E7E5DB 0%,#EAE3D3 38%,#EED6B7 74%,#EAC7A0 100%)}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,440px);gap:clamp(28px,5vw,72px);align-items:start;padding-block:clamp(36px,5vw,64px) clamp(44px,10vw,150px)}
+.hero-copy{position:relative;z-index:1;padding-top:clamp(4px,2vw,28px)}
+.h1{margin:20px 0 0;font-size:clamp(2.7rem,6.3vw,5.5rem);text-wrap:balance}
+.h1 .ln{display:block;animation:rise 1s cubic-bezier(.2,.8,.2,1) backwards}
+.h1 .ln + .ln{color:var(--brand-green);animation-delay:.1s}
+.hero-sub{max-width:44ch;margin:20px 0 0;font-size:clamp(1.05rem,1.5vw,1.2rem);color:var(--ink-2);text-wrap:pretty}
+.ticks{display:flex;flex-wrap:wrap;gap:10px 22px;margin:24px 0 0;padding:0;list-style:none;font-weight:500;font-size:.96rem}
+.ticks li{display:flex;align-items:center;gap:8px}
+.ticks .ic{color:var(--brand-green)}
+.rating{display:inline-flex;align-items:center;gap:10px;margin-top:22px;padding:.5rem .8rem .5rem .55rem;border-radius:999px;background:rgb(248 245 239 / .7);font-size:.9rem;font-weight:500;text-decoration:none;color:var(--ink)}
+.stars{display:inline-flex;gap:1px;color:var(--signal)}
+.stars svg{width:15px;height:15px;fill:currentColor}
+.hero-scene{position:absolute;left:0;right:0;bottom:0;z-index:0;height:var(--scene-h);pointer-events:none}
+.hero-scene svg{display:block;width:100%;height:100%}
+@keyframes rise{from{transform:translateY(30px)}}
+
+/* booking card */
+.book{position:relative;z-index:2;scroll-margin-top:84px;padding:22px;border-radius:20px;background:var(--paper);
+  box-shadow:0 40px 80px -40px rgb(22 26 23 / .55),0 2px 6px rgb(22 26 23 / .06);outline:1px dashed rgb(38 53 47 / .26);outline-offset:-9px;
+  animation:rise 1s .18s cubic-bezier(.2,.8,.2,1) backwards}
+.book.pulse{animation:pulse 1.1s ease-out}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgb(242 154 31 / .55),0 40px 80px -40px rgb(22 26 23 / .55)}100%{box-shadow:0 0 0 22px rgb(242 154 31 / 0),0 40px 80px -40px rgb(22 26 23 / .55)}}
+.book-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.book-head h2{margin:0;font-size:1.45rem}
+.from{margin:4px 0 0;color:var(--ink-2);font-size:.95rem}
+.from b{color:var(--ink)}
+.next{display:inline-flex;align-items:center;gap:7px;padding:.42rem .65rem;border-radius:999px;background:var(--canvas);font-size:.78rem;font-weight:600;white-space:nowrap}
+.next::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--brand-green);box-shadow:0 0 0 0 rgb(38 113 100 / .6);animation:live 1.8s infinite}
+@keyframes live{70%{box-shadow:0 0 0 7px rgb(38 113 100 / 0)}100%{box-shadow:0 0 0 0 rgb(38 113 100 / 0)}}
+.fs{min-width:0;margin:0 0 15px;padding:0;border:0}
+.fs legend{margin-bottom:8px;padding:0;color:var(--ink-2)}
+.opt input,.chip input,.time input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.ride-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{position:relative;display:grid;gap:1px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line);background:var(--bone);cursor:pointer;transition:border-color .15s,background-color .15s}
+.opt:hover{border-color:var(--khaki)}
+.opt:has(input:checked){border-color:var(--olive);background:#fff;box-shadow:inset 0 0 0 1px var(--olive)}
+.opt:has(input:checked)::after{content:"";position:absolute;top:10px;right:10px;width:16px;height:16px;border-radius:50%;background:var(--olive) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.3l2.2 2.2 4.8-5' fill='none' stroke='%23F8F5EF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat;animation:bump .35s cubic-bezier(.2,2,.4,1)}
+.opt:has(input:focus-visible),.chip:has(input:focus-visible),.time:has(input:focus-visible){outline:3px solid var(--signal-dk);outline-offset:2px}
+.opt-name{padding-right:18px;font-weight:700;font-size:.95rem;line-height:1.25}
+.opt-meta{font-size:.82rem;color:var(--ink-2)}
+.opt .best{color:var(--signal-ink);font-weight:700}
+.dates{display:flex;gap:6px;overflow-x:auto;padding:2px;margin:-2px;scrollbar-width:none}
+.dates::-webkit-scrollbar{display:none}
+.chip{position:relative;flex:0 0 auto;display:grid;justify-items:center;gap:2px;min-width:54px;padding:8px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--bone);cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.chip:hover{border-color:var(--khaki)}
+.chip .mono{font-size:.6rem;letter-spacing:.08em}
+.chip b{font:800 1.15rem/1 var(--font-display);font-stretch:110%}
+.chip:has(input:checked){background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip:has(input:disabled),.time:has(input:disabled){opacity:.4;cursor:not-allowed}
+.times{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px}
+.time{position:relative;display:grid;justify-items:center;gap:1px;padding:10px 6px;border-radius:12px;border:1.5px solid var(--line);background:var(--bone);cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.time:hover{border-color:var(--khaki)}
+.time b{font-weight:700;font-variant-numeric:tabular-nums}
+.time span{font-size:.7rem;color:var(--ink-2)}
+.time span.low{color:var(--signal-ink);font-weight:700}
+.time:has(input:checked){background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.time:has(input:checked) span{color:inherit;opacity:.8}
+.time:has(input:disabled) b{text-decoration:line-through}
+.riders{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:2px 0 16px;padding-top:14px;border-top:1px solid var(--line)}
+.riders b{display:block}
+.riders small{display:block;color:var(--ink-2);font-size:.82rem}
+.stepper{display:inline-flex;align-items:center;gap:4px;padding:4px;border-radius:999px;background:var(--bone);border:1.5px solid var(--line)}
+.stepper button{width:34px;height:34px;border:0;border-radius:50%;background:var(--paper);box-shadow:0 1px 2px rgb(22 26 23 / .14);cursor:pointer;font-size:1.15rem;line-height:1}
+.stepper button:hover:not(:disabled){background:#fff}
+.stepper button:disabled{opacity:.35;cursor:not-allowed}
+.stepper output{min-width:2.4ch;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.btn-book{padding-block:1.1rem;font-size:1.05rem}
+.btn-book.tick{animation:tick .35s ease}
+@keyframes tick{50%{transform:scale(1.025)}}
+.assure{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;margin:12px 0 0;padding:0;list-style:none;font-size:.8rem;color:var(--ink-2)}
+.assure li{display:flex;align-items:center;gap:5px}
+.assure .ic{width:14px;height:14px;color:var(--brand-green)}
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:1fr;gap:0;padding-bottom:40px}
+  .hero-scene{position:relative;height:250px;margin:18px calc(-1 * var(--gutter)) -70px}
+  .book{max-width:560px;width:100%;justify-self:center}
+}
+
+/* scene animation */
+.tile{animation:tile linear infinite}
+@keyframes tile{to{transform:translateX(-1600px)}}
+.t-far{animation-duration:180s}.t-mid{animation-duration:90s}.t-near{animation-duration:42s}.t-ground{animation-duration:7s}.t-fore{animation-duration:4.2s}
+.sun-glow{transform-box:fill-box;transform-origin:center;animation:glow 6s ease-in-out infinite alternate}
+@keyframes glow{to{transform:scale(1.12);opacity:.75}}
+.fog{animation:fog 26s ease-in-out infinite alternate}
+.fog.f2{animation-duration:34s;animation-direction:alternate-reverse}
+@keyframes fog{from{transform:translateX(-90px)}to{transform:translateX(90px)}}
+.birds{animation:birds 55s linear infinite}
+@keyframes birds{from{transform:translateX(-300px)}to{transform:translateX(1900px)}}
+.bird{transform-box:fill-box;transform-origin:center;animation:flap .5s ease-in-out infinite alternate}
+@keyframes flap{to{transform:scaleY(-.5)}}
+.spin{transform-box:fill-box;transform-origin:center;animation:spin .65s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.bob{animation:bob 2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(0)}18%{transform:translateY(-3px) rotate(-1deg)}36%{transform:translateY(1px) rotate(.6deg)}52%{transform:translateY(-8px) rotate(-3.5deg)}62%{transform:translateY(2px) rotate(1.4deg)}78%{transform:translateY(-2px) rotate(-.4deg)}}
+.susp{animation:susp 2s ease-in-out infinite}
+@keyframes susp{0%,100%{transform:translateY(0)}52%{transform:translateY(-4px)}62%{transform:translateY(1px)}}
+.q2 .bob,.q2 .susp{animation-delay:-.9s}
+.dust circle{opacity:0;transform-box:fill-box;transform-origin:center;animation:dust 1.5s linear infinite}
+@keyframes dust{0%{transform:translate(0,0) scale(.35);opacity:0}12%{opacity:.55}100%{transform:translate(var(--dx),var(--dy)) scale(var(--s));opacity:0}}
+
+/* trust strip */
+.trust{border-block:1px solid var(--line)}
+.trust ul{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:0;padding:0;list-style:none}
+.trust li{display:flex;align-items:flex-start;gap:14px;padding:24px 22px;border-left:1px solid var(--line)}
+.trust li:first-child{border-left:0;padding-left:0}
+.trust .ic{width:26px;height:26px;stroke-width:1.6;color:var(--brand-green)}
+.trust b{display:block;font-weight:700;line-height:1.3}
+.trust span{display:block;margin-top:2px;font-size:.9rem;color:var(--ink-2);line-height:1.45}
+@media (max-width:900px){
+  .trust ul{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .trust li{padding:20px 16px 20px 0;border-left:0}
+  .trust li:nth-child(even){padding-left:16px;border-left:1px solid var(--line)}
+  .trust li:nth-child(n+3){border-top:1px solid var(--line)}
+}
+
+/* photos */
+.ph{position:relative;overflow:hidden;max-width:100%;border-radius:var(--radius);background:var(--canvas)}
+.ph > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+
+/* rides */
+.rides{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px}
+.ride{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ride .ph{aspect-ratio:4/5}
+.ride:hover .ph > img{transform:scale(1.05)}
+.best-tag{position:absolute;top:10px;left:10px;z-index:2;background:var(--signal);color:var(--ink);outline-color:rgb(22 26 23 / .3)}
+.next-tag{position:absolute;left:10px;bottom:10px;z-index:2;padding:.38rem .65rem;border-radius:999px;background:rgb(248 245 239 / .92);font-size:.8rem;font-weight:600}
+.gauge{position:absolute;top:10px;right:10px;z-index:2;width:46px;height:46px;border-radius:50%;background:rgb(22 26 23 / .55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.gauge svg{width:100%;height:100%;transform:rotate(-90deg)}
+.gauge circle{fill:none;stroke-width:4}
+.gauge .g-bg{stroke:rgb(248 245 239 / .25)}
+.gauge .g-val{stroke:var(--signal);stroke-linecap:round;stroke-dasharray:var(--v) 100}
+.ride.in .gauge .g-val{animation:gauge 1.2s .3s cubic-bezier(.2,.8,.2,1) backwards}
+@keyframes gauge{from{stroke-dasharray:0 100}}
+.ride h3{margin:6px 0 0;font-size:1.45rem}
+.ride .meta{color:var(--ink-2)}
+.ride p{margin:0;color:var(--ink-2);font-size:.96rem;line-height:1.5}
+.ride-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:auto;padding-top:8px}
+.price{font:800 1.35rem/1 var(--font-display);font-stretch:110%;font-variant-numeric:tabular-nums;white-space:nowrap}
+.price small{font:500 .82rem var(--font-body);color:var(--ink-2)}
+@media (max-width:1040px){.rides{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:600px){
+  .rides{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:78%;overflow-x:auto;scroll-snap-type:x mandatory;margin-inline:calc(-1 * var(--gutter));padding:0 var(--gutter) 10px;scroll-padding-inline:var(--gutter);scrollbar-width:none}
+  .rides::-webkit-scrollbar{display:none}
+  .ride{scroll-snap-align:start}
+}
+
+/* how it works */
+.how{overflow:hidden;background:var(--forest);color:var(--paper)}
+.how::before{content:"";position:absolute;inset:-25%;pointer-events:none;opacity:.08;animation:topo 80s linear infinite alternate;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600' fill='none' stroke='%23F8F5EF' stroke-width='1.3'%3E%3Cpath d='M300 120c90 0 170 50 175 140s-60 170-170 175-185-55-180-160 85-155 175-155z'/%3E%3Cpath d='M300 160c70 0 130 40 134 105s-48 128-130 132-140-42-136-120 62-117 132-117z'/%3E%3Cpath d='M302 200c50 0 92 28 95 74s-34 90-92 92-98-30-96-84 43-82 93-82z'/%3E%3Cpath d='M304 240c30 0 55 17 57 44s-20 54-55 55-58-18-57-50 25-49 55-49z'/%3E%3Cpath d='M-50 520c120-40 220 30 330 10s200-90 370-40'/%3E%3Cpath d='M-50 560c120-40 220 30 330 10s200-90 370-40'/%3E%3Cpath d='M-50 40c140 30 230-30 340-10s210 70 360 20'/%3E%3Cpath d='M-50 80c140 30 230-30 340-10s210 70 360 20'/%3E%3C/svg%3E") 0 0/600px 600px}
+@keyframes topo{to{transform:translate(-6%,-5%)}}
+.how .wrap{position:relative}
+.how .lead{color:rgb(248 245 239 / .72)}
+.how .tag{background:var(--paper);color:var(--olive);outline-color:rgb(38 53 47 / .35)}
+.steps{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;margin-top:clamp(84px,9vw,108px)}
+.step{position:relative;z-index:1;display:grid;align-content:start;gap:10px}
+.num{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:2px solid rgb(248 245 239 / .35);background:var(--forest);font:600 .85rem/1 var(--font-mono);transition:background-color .3s,border-color .3s,color .3s,transform .4s cubic-bezier(.2,2,.4,1)}
+.step.reached .num{background:var(--signal);border-color:var(--signal);color:var(--ink);transform:scale(1.1)}
+.step .mono{margin-top:8px;color:var(--khaki)}
+.step h3{margin:0;font-size:1.55rem}
+.step p{max-width:34ch;margin:0;color:rgb(248 245 239 / .72)}
+.road{position:absolute;left:0;top:0;z-index:2;pointer-events:none}
+.road::before{content:"";position:absolute;left:0;top:-1px;width:var(--len,0px);border-top:2px dashed rgb(248 245 239 / .28)}
+.road-fill{position:absolute;left:0;top:-2px;width:calc(var(--len,0px) * var(--p,0));height:4px;border-radius:2px;background:var(--signal)}
+.road-quad{position:absolute;left:0;top:0;width:84px;transform:translate(calc(var(--len,0px) * var(--p,0) - 42px),-66px)}
+.road-quad svg{display:block;width:100%;height:auto}
+.road.v::before{top:0;left:-1px;width:0;height:var(--len,0px);border-top:0;border-left:2px dashed rgb(248 245 239 / .28)}
+.road.v .road-fill{left:-2px;top:0;width:4px;height:calc(var(--len,0px) * var(--p,0))}
+.road.v .road-quad{width:62px;transform:translate(-31px,calc(var(--len,0px) * var(--p,0) - 22px)) rotate(90deg)}
+.road .spin,.road .bob,.road .susp{animation-play-state:paused}
+.road.moving .spin,.road.moving .bob,.road.moving .susp{animation-play-state:running}
+@media (max-width:760px){
+  .steps{grid-template-columns:1fr;gap:40px;margin-top:44px}
+  .step{grid-template-columns:40px minmax(0,1fr);column-gap:22px;row-gap:6px}
+  .step > :not(.num){grid-column:2}
+  .num{grid-row:1 / span 3}
+  .step .mono{margin-top:10px}
+}
+
+/* experiences (masonry of real photos + reviews) */
+.masonry{columns:3 270px;column-gap:16px}
+.masonry > *{break-inside:avoid;margin:0 0 18px}
+.masonry figure{margin:0 0 18px}
+.masonry .ph{aspect-ratio:var(--r)}
+.masonry figure:hover .ph > img{transform:scale(1.04)}
+.masonry figcaption{padding:12px 2px 0}
+.masonry figcaption b{display:block;font:800 1.15rem/1.15 var(--font-display);font-stretch:112%}
+.masonry figcaption span{display:block;margin-top:4px;color:var(--ink-2);font-size:.94rem;line-height:1.5}
+.review{display:grid;gap:14px;padding:22px;border-radius:var(--radius);background:var(--paper);box-shadow:inset 0 0 0 1px var(--line)}
+.review blockquote{margin:0;font-size:1.12rem;line-height:1.5;font-weight:500;text-wrap:pretty}
+.who{display:flex;align-items:center;gap:10px}
+.who img{width:38px;height:38px;border-radius:50%}
+.who b{display:block;font-size:.95rem}
+.who span{display:block;color:var(--ink-2);font-size:.82rem}
+
+/* gift */
+.gift-sec{background:var(--paper)}
+.voucher{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);align-items:center;gap:28px;padding:clamp(24px,4vw,44px);border-radius:22px;background:var(--olive);color:var(--paper)}
+.voucher h3{margin:12px 0 0;font-size:clamp(1.7rem,3.4vw,2.6rem)}
+.voucher p{max-width:42ch;margin:12px 0 18px;color:rgb(248 245 239 / .75)}
+.voucher .tag{background:var(--paper);color:var(--olive);outline-color:rgb(38 53 47 / .35)}
+.v-opts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;padding:0;border:0}
+.v-opts legend{margin-bottom:8px;padding:0;color:rgb(248 245 239 / .7)}
+.v-opt{position:relative;display:grid;gap:1px;padding:9px 14px;border-radius:12px;border:1.5px solid rgb(248 245 239 / .25);cursor:pointer;transition:background-color .15s,border-color .15s,color .15s}
+.v-opt input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.v-opt b{font-size:.95rem}
+.v-opt span{font-size:.8rem;opacity:.75}
+.v-opt:hover{border-color:rgb(248 245 239 / .6)}
+.v-opt:has(input:checked){background:var(--paper);border-color:var(--paper);color:var(--ink)}
+.v-opt:has(input:focus-visible){outline:3px solid var(--signal);outline-offset:2px}
+.v-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.v-row .price{font-size:1.6rem}
+.v-row .stepper{background:rgb(248 245 239 / .1);border-color:rgb(248 245 239 / .25)}
+.v-row .stepper output{color:var(--paper)}
+.ticket{justify-self:center;width:min(100%,360px);transform:rotate(-6deg);animation:hover 5s ease-in-out infinite}
+@keyframes hover{50%{transform:rotate(-4deg) translateY(-8px)}}
+.umz{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:.84rem;color:rgb(248 245 239 / .7)}
+.umz img{width:64px;height:auto;padding:4px 8px;border-radius:6px;background:var(--paper)}
+.shop-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:24px}
+.prod{display:flex;flex-direction:column;gap:10px;min-width:0}
+.prod .ph{aspect-ratio:1}
+.prod-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:4px}
+.prod h3{margin:0;font-size:1.05rem;font-weight:700;line-height:1.3}
+.prod p{margin:0;color:var(--ink-2);font-size:.93rem;line-height:1.5}
+.prod .btn{margin-top:auto}
+@media (max-width:1040px){.shop-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:760px){.voucher{grid-template-columns:1fr}.ticket{width:min(84%,320px)}}
+
+/* faq */
+.faq{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:clamp(28px,5vw,72px)}
+.faq-list{border-top:1px solid var(--line)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;cursor:pointer;list-style:none;font-weight:600;font-size:1.08rem}
+.faq summary::-webkit-details-marker{display:none}
+.pl{position:relative;flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);transition:transform .35s cubic-bezier(.2,1.4,.4,1),background-color .2s}
+.pl::before,.pl::after{content:"";position:absolute;left:50%;top:50%;width:12px;height:1.5px;background:var(--ink);transform:translate(-50%,-50%)}
+.pl::after{transform:translate(-50%,-50%) rotate(90deg)}
+.faq details[open] .pl{transform:rotate(45deg);background:var(--canvas)}
+.faq details p{max-width:60ch;margin:0 0 22px;color:var(--ink-2);animation:rise .45s cubic-bezier(.2,.8,.2,1)}
+@media (max-width:860px){.faq{grid-template-columns:1fr}}
+
+/* footer */
+.foot{background:var(--forest);color:var(--paper)}
+.foot-cta{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:24px 40px;padding-block:clamp(64px,8vw,108px) 48px;border-bottom:1px solid rgb(248 245 239 / .14)}
+.foot-cta .display{margin:0;font-size:clamp(2.4rem,6vw,4.8rem);text-wrap:balance}
+.foot-cta p{margin:14px 0 0;color:rgb(248 245 239 / .65)}
+.foot-brand{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+.foot-brand img{width:64px;height:auto}
+.foot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px 40px;padding-block:40px}
+.foot-grid h3{margin:0 0 12px;color:var(--khaki)}
+.foot-grid p{margin:0 0 8px;color:rgb(248 245 239 / .78);font-size:.96rem}
+.foot-grid a{color:var(--paper);text-underline-offset:3px}
+.contact-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:0 0 10px}
+.contact-line .mono{color:rgb(248 245 239 / .55)}
+.copy{padding:.35rem .7rem;border-radius:999px;border:0;background:transparent;color:var(--paper);box-shadow:inset 0 0 0 1.5px rgb(248 245 239 / .35);cursor:pointer;font-size:.8rem;font-weight:600}
+.copy:hover{background:var(--paper);color:var(--ink)}
+.socials{display:flex;gap:10px;margin-top:14px}
+.socials a{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgb(248 245 239 / .3);color:var(--paper)}
+.socials a:hover{background:var(--paper);color:var(--ink)}
+.socials svg{width:18px;height:18px;fill:currentColor}
+.fine{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 20px;margin:0;padding-block:20px 32px;border-top:1px solid rgb(248 245 239 / .14);color:rgb(248 245 239 / .55);font-size:.82rem}
+.fine a{color:inherit}
+@media (max-width:760px){.foot-cta,.foot-grid{grid-template-columns:1fr}}
+
+/* sticky mobile bar */
+.mbar{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;align-items:center;justify-content:space-between;gap:12px;padding:12px var(--gutter) calc(12px + env(safe-area-inset-bottom,0px));background:color-mix(in srgb,var(--paper) 92%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);transition:transform .4s cubic-bezier(.2,.8,.3,1)}
+.mbar.off{transform:translateY(110%)}
+.mbar b{display:block;font-size:1rem}
+.mbar span{display:block;font-size:.8rem;color:var(--ink-2)}
+@media (max-width:960px){.mbar{display:flex}.foot{padding-bottom:84px}}
+
+/* dialogs */
+.sheet{width:min(480px,calc(100% - 32px));max-height:calc(100% - 32px);padding:0;overflow:auto;border:0;border-radius:22px;background:var(--paper);color:var(--ink);box-shadow:0 40px 90px -30px rgb(0 0 0 / .5)}
+.sheet::backdrop{background:rgb(22 26 23 / .45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.sheet[open]{animation:sheetIn .45s cubic-bezier(.2,.9,.3,1)}
+@keyframes sheetIn{from{transform:translateY(24px) scale(.97);opacity:0}}
+.drawer{position:fixed;inset:0 0 0 auto;width:min(420px,100%);height:100%;max-width:100%;max-height:100%;margin:0;border-radius:22px 0 0 22px}
+.drawer[open]{animation:drawerIn .45s cubic-bezier(.2,.9,.3,1)}
+@keyframes drawerIn{from{transform:translateX(100%)}}
+@media (max-width:600px){
+  .sheet:not(.drawer){width:100%;max-width:100%;max-height:92%;margin:auto 0 0;border-radius:22px 22px 0 0}
+  .sheet:not(.drawer)[open]{animation:upIn .45s cubic-bezier(.2,.9,.3,1)}
+}
+@keyframes upIn{from{transform:translateY(100%)}}
+.sheet-body{display:grid;gap:16px;padding:22px 22px calc(22px + env(safe-area-inset-bottom,0px))}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheet-head h2{margin:0;font-size:1.5rem}
+.x{flex:0 0 auto;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:1.5px solid var(--line);background:transparent;cursor:pointer;font-size:1.25rem;line-height:1}
+.x:hover{border-color:var(--ink)}
+.summary{display:flex;align-items:center;gap:14px;padding:12px;border-radius:14px;background:var(--bone)}
+.sum-ph{flex:0 0 auto;width:64px;height:64px;border-radius:10px}
+.summary b{display:block;font-size:1.05rem}
+.summary span{display:block;font-size:.9rem;color:var(--ink-2)}
+.summary button{margin-left:auto;padding:.4rem .2rem;border:0;background:none;color:var(--signal-ink);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.breakdown{display:grid;gap:6px;padding:14px;border-radius:14px;border:1.5px dashed var(--line);font-variant-numeric:tabular-nums}
+.breakdown div{display:flex;justify-content:space-between;gap:12px;color:var(--ink-2);font-size:.95rem}
+.breakdown .sum{margin-top:4px;padding-top:8px;border-top:1px solid var(--line);color:var(--ink);font-weight:700;font-size:1.1rem}
+.secure{display:flex;align-items:center;justify-content:center;gap:10px;color:var(--ink-2);font-size:.84rem}
+.secure img{width:62px;height:auto}
+.or{display:flex;align-items:center;gap:12px;color:var(--ink-2);font-size:.82rem}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.note{margin:0;text-align:center;color:var(--ink-2);font-size:.85rem}
+.drawer-body{display:flex;flex-direction:column;gap:16px;min-height:100%;padding:22px 22px calc(22px + env(safe-area-inset-bottom,0px))}
+.cart-list{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.cart-row{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px;border-radius:14px;background:var(--bone)}
+.cart-row .mini-well{display:grid;place-items:center;width:52px;height:52px;border-radius:10px;background:var(--canvas)}
+.cart-row .mini-well svg{width:30px;height:30px;color:var(--olive);fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cart-row b{display:block;font-size:.95rem}
+.cart-row span{font-size:.85rem;color:var(--ink-2)}
+.cart-row .stepper{padding:2px}
+.cart-row .stepper button{width:28px;height:28px;font-size:1rem}
+.empty{margin:0;padding:28px 16px;border-radius:14px;border:1.5px dashed var(--line);text-align:center;color:var(--ink-2)}
+.drawer-foot{display:grid;gap:12px;margin-top:auto}
+
+/* toast + fx */
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:80;display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100% - 32px);padding:12px 18px 12px 12px;border-radius:16px;background:var(--ink);color:var(--paper);box-shadow:0 20px 40px -12px rgb(0 0 0 / .45);transform:translateX(-50%)}
+.toast.show{animation:toastIn .5s cubic-bezier(.2,1.3,.4,1)}
+@keyframes toastIn{from{transform:translate(-50%,140%)}}
+.toast .tk{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--signal)}
+.toast .tk svg{width:18px;height:18px;fill:none;stroke:var(--ink);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.toast b{display:block;font-weight:700}
+.toast span.t-sub{display:block;font-size:.88rem;color:rgb(248 245 239 / .7)}
+.flyer{position:fixed;left:0;top:0;z-index:90;width:16px;height:16px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 4px rgb(242 154 31 / .25);pointer-events:none}
+
+/* reveal: elements drift up as they arrive (always visible, motion only) */
+.rise.in{animation:rise .9s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0) * 80ms)}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.001ms!important}
+}
+</style>
+</head>
+<body>
+
+
+<header class="top" id="topBar">
+  <div class="wrap top-row">
+    <a class="logo" href="#home" aria-label="Nceks Quad Biking home">
+      <img src="/ncekeniquads/img/logo.webp" width="238" height="256" alt="">
+      <b>Nceks Quad Biking</b>
+    </a>
+    <nav class="nav" aria-label="Main">
+      <a href="#rides">Rides</a><a href="#how">How it works</a><a href="#experiences">Experiences</a><a href="#gift">Gift a ride</a><a href="#faq">FAQ</a>
+    </nav>
+    <button class="bag" id="bagBtn" type="button" aria-label="Open bag, 0 items">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>
+      <span class="bag-n" id="bagN">0</span>
+    </button>
+    <a class="btn btn-primary btn-sm" href="#booking" data-goto-book>Book now</a>
+  </div>
+</header>
+
+<main>
+<!-- ================= HERO + BOOKING ================= -->
+<section class="hero" id="home">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="tag mono">Inanda Dam · Open daily 8am–5pm</span>
+      <h1 class="display h1"><span class="ln">Freedom on wheels.</span><span class="ln">Your journey starts here.</span></h1>
+      <p class="hero-sub">Guided quad rides through the valleys and cliffs around Inanda Dam, from 30 minutes to 2 hours. Bring the family or the whole crew. From R350.</p>
+      <ul class="ticks">
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Kids and families welcome</li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Friendly local guides</li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Riding since 2018</li>
+      </ul>
+      <a class="rating" href="#experiences"><span class="stars" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg></span>Five-star Google reviews</a>
+    </div>
+
+    <div class="hero-scene" aria-hidden="true">
+      <svg viewBox="0 0 1600 360" preserveAspectRatio="xMidYMax slice" focusable="false">
+        <defs>
+          <radialGradient id="sunG"><stop offset="0" stop-color="#FFF8EA"/><stop offset=".7" stop-color="#FFE6C2"/><stop offset="1" stop-color="#F9CF9F"/></radialGradient>
+          <radialGradient id="glowG"><stop offset="0" stop-color="#FFE3BC" stop-opacity=".9"/><stop offset="1" stop-color="#F7C08E" stop-opacity="0"/></radialGradient>
+          <radialGradient id="fogG"><stop offset="0" stop-color="#F6F1E8" stop-opacity=".8"/><stop offset="1" stop-color="#F6F1E8" stop-opacity="0"/></radialGradient>
+          <linearGradient id="farG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CFC7B0"/><stop offset="1" stop-color="#BDB9A4"/></linearGradient>
+          <linearGradient id="midG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A6AA8F"/><stop offset="1" stop-color="#909680"/></linearGradient>
+          <linearGradient id="dirtG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A08463"/><stop offset=".35" stop-color="#7E6548"/><stop offset="1" stop-color="#4A3F30"/></linearGradient>
+          <g id="tree"><path d="M0 2V-14" fill="none" stroke-width="2.4"/><path d="M-24 -14 Q-10 -30 6 -27 Q24 -25 26 -15 Q0 -10 -24 -14 Z" stroke="none"/></g>
+          <g id="tFar"><path d="M0 200 L110 150 L200 175 L300 110 L390 160 L480 95 L580 165 L660 135 L760 80 L860 150 L950 120 L1050 70 L1150 145 L1240 115 L1330 160 L1430 105 L1520 165 L1600 200 V360 H0 Z" fill="url(#farG)"/></g>
+          <g id="tMid">
+            <path d="M0 235 C120 205 220 196 330 218 C440 240 540 192 660 188 C780 184 860 226 980 222 C1100 218 1180 182 1300 185 C1420 188 1510 228 1600 235 V360 H0 Z" fill="url(#midG)"/>
+            <g fill="#9BA088" stroke="#9BA088"><use href="#tree" transform="translate(620 194) scale(.45)"/><use href="#tree" transform="translate(1270 189) scale(.5)"/></g>
+          </g>
+          <g id="tNear" fill="#6B7A5E" stroke="#6B7A5E">
+            <path d="M0 270 C140 248 260 254 380 263 C520 274 600 248 760 251 C900 254 1000 272 1140 267 C1280 262 1380 248 1600 270 V360 H0 Z" stroke="none"/>
+            <use href="#tree" transform="translate(96 264)"/><use href="#tree" transform="translate(150 261) scale(.8)"/>
+            <use href="#tree" transform="translate(660 254) scale(1.3)"/><use href="#tree" transform="translate(712 253) scale(.9)"/>
+            <use href="#tree" transform="translate(1300 262) scale(1.15)"/><use href="#tree" transform="translate(1500 262) scale(1.3)"/>
+          </g>
+          <g id="tGround">
+            <path d="M0 300 C60 298 100 296 160 299 C220 302 260 304 330 301 C400 298 440 296 520 298 C600 300 640 303 720 300 C800 297 860 296 940 299 C1020 302 1060 304 1140 300 C1220 297 1280 296 1360 299 C1440 302 1500 302 1600 300 V360 H0 Z" fill="url(#dirtG)"/>
+            <path d="M0 322 C200 318 400 326 600 322 S1000 318 1200 324 S1500 320 1600 322" fill="none" stroke="#C4AD86" stroke-opacity=".35" stroke-width="3" stroke-dasharray="26 18"/>
+            <path d="M0 338 C220 334 420 342 640 338 S1040 334 1240 340 S1520 336 1600 338" fill="none" stroke="#C4AD86" stroke-opacity=".22" stroke-width="3" stroke-dasharray="20 22"/>
+            <g fill="#C4AD86" fill-opacity=".5"><circle cx="90" cy="312" r="2.4"/><circle cx="240" cy="330" r="2"/><circle cx="410" cy="309" r="2.8"/><circle cx="560" cy="334" r="2"/><circle cx="700" cy="314" r="2.4"/><circle cx="880" cy="328" r="2.8"/><circle cx="1010" cy="311" r="2"/><circle cx="1170" cy="332" r="2.4"/><circle cx="1320" cy="316" r="2.8"/><circle cx="1490" cy="328" r="2"/></g>
+            <g fill="#4A3F30"><path d="M300 316 q10 -12 22 -3 q7 6 -3 9 z"/><path d="M820 311 q8 -9 18 -2 q5 5 -3 7 z"/><path d="M1380 318 q12 -13 25 -3 q7 6 -4 9 z"/></g>
+          </g>
+          <g id="tFore" fill="#22302A">
+            <path d="M0 360 V344 C80 338 160 348 240 342 C320 336 400 346 480 342 C560 338 640 346 720 340 C800 336 880 348 960 342 C1040 336 1120 346 1200 342 C1280 338 1360 346 1440 342 C1520 338 1560 344 1600 344 V360 Z"/>
+            <path d="M120 344 l4 -16 l3 14 l5 -21 l2 21 l6 -13 l-2 15 z"/><path d="M430 342 l3 -12 l3 11 l4 -17 l3 17 l5 -10 l-2 11 z"/><path d="M780 340 l4 -15 l3 13 l5 -19 l2 19 l6 -12 l-2 14 z"/><path d="M1130 343 l3 -13 l3 12 l4 -18 l3 18 l5 -11 l-2 12 z"/><path d="M1470 342 l4 -16 l3 14 l5 -20 l2 20 l6 -12 l-2 14 z"/>
+          </g>
+        </defs>
+        <g class="px" data-d=".3"><circle class="sun-glow" cx="860" cy="120" r="170" fill="url(#glowG)"/><circle cx="860" cy="120" r="44" fill="url(#sunG)"/></g>
+        <g class="birds" stroke="#7A7464" stroke-width="2" fill="none" stroke-linecap="round">
+          <g transform="translate(200 60)"><path class="bird" d="M0 0 q6 -6 12 0 q6 -6 12 0"/></g>
+          <g transform="translate(236 48) scale(.8)"><path class="bird" d="M0 0 q6 -6 12 0 q6 -6 12 0" style="animation-delay:-.2s"/></g>
+          <g transform="translate(268 68) scale(.65)"><path class="bird" d="M0 0 q6 -6 12 0 q6 -6 12 0" style="animation-delay:-.35s"/></g>
+        </g>
+        <g class="px" data-d=".24"><g class="tile t-far"><use href="#tFar"/><use href="#tFar" x="1600"/></g></g>
+        <g class="fog"><ellipse cx="420" cy="205" rx="460" ry="26" fill="url(#fogG)"/><ellipse cx="1260" cy="200" rx="420" ry="22" fill="url(#fogG)"/></g>
+        <g class="px" data-d=".16"><g class="tile t-mid"><use href="#tMid"/><use href="#tMid" x="1600"/></g></g>
+        <g class="fog f2"><ellipse cx="900" cy="252" rx="520" ry="22" fill="url(#fogG)"/><ellipse cx="160" cy="258" rx="360" ry="18" fill="url(#fogG)"/></g>
+        <g class="px" data-d=".08"><g class="tile t-near"><use href="#tNear"/><use href="#tNear" x="1600"/></g></g>
+        <g class="tile t-ground"><use href="#tGround"/><use href="#tGround" x="1600"/></g>
+        <g class="q2" transform="translate(430 302) scale(.46)" data-quad="green"></g>
+        <g class="dust" transform="translate(396 300) scale(.46)" data-n="8" data-spread="110"></g>
+        <g class="dust" transform="translate(609 330) scale(.7)" data-n="14" data-spread="170"></g>
+        <g transform="translate(660 332) scale(.68)" data-quad="red"></g>
+        <g class="tile t-fore"><use href="#tFore"/><use href="#tFore" x="1600"/></g>
+      </svg>
+    </div>
+
+    <form class="book" id="booking" novalidate aria-labelledby="bookH">
+      <div class="book-head">
+        <div>
+          <h2 class="display" id="bookH">Book a ride</h2>
+          <p class="from">From <b data-from-price>R350</b> per quad</p>
+        </div>
+        <span class="next" id="nextRide">Next ride</span>
+      </div>
+      <p class="note" id="bookLoading" style="text-align:left;margin:0 0 12px">Loading live times…</p>
+      <fieldset class="fs">
+        <legend class="mono">Ride length</legend>
+        <div class="ride-opts" id="rideOpts"></div>
+      </fieldset>
+      <fieldset class="fs">
+        <legend class="mono">Day</legend>
+        <div class="dates" id="dates"></div>
+      </fieldset>
+      <fieldset class="fs">
+        <legend class="mono">Start time</legend>
+        <div class="times" id="times"></div>
+      </fieldset>
+      <div class="riders">
+        <div><b>Quads</b><small id="qtyHint">Price is per quad</small></div>
+        <div class="stepper" role="group" aria-label="Number of quads">
+          <button type="button" id="qMinus" aria-label="Fewer quads">−</button>
+          <output id="qty" aria-live="polite">2</output>
+          <button type="button" id="qPlus" aria-label="More quads">+</button>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block btn-book" id="bookBtn" type="submit">Book now · <span id="bookAmt">R1,100</span></button>
+      <ul class="assure">
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Secure checkout by Umzila</li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Open 7 days</li>
+        <li><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Kids welcome</li>
+      </ul>
+    </form>
+  </div>
+</section>
+
+<!-- ================= TRUST STRIP ================= -->
+<section class="trust" aria-label="Why ride with Nceks">
+  <div class="wrap">
+    <ul>
+      <li class="rise" style="--i:0"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h11l-2 3.5 2 3.5H5"/></svg><div><b>Riding since 2018</b><span>Local quad trails near Inanda Dam.</span></div></li>
+      <li class="rise" style="--i:1"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>Open every day</b><span>8am to 5pm, Monday to Sunday.</span></div></li>
+      <li class="rise" style="--i:2"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2.5 20a5.5 5.5 0 0 1 11 0"/><path d="M14 20a4 4 0 0 1 7.5-1.8"/></svg><div><b>Families welcome</b><span>No age limit on our private trails.</span></div></li>
+      <li class="rise" style="--i:3"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg><div><b>Friendly local guides</b><span>They know every trail and the best views.</span></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= RIDES ================= -->
+<section class="sec" id="rides">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="tag mono">Ride lengths</span>
+        <h2 class="display h2" style="margin-top:16px">Pick your ride</h2>
+        <p class="lead">Every ride is guided. Prices are per quad, and longer rides cost less per hour.</p>
+      </div>
+    </div>
+    <div class="rides" id="rideCards"></div>
+  </div>
+</section>
+
+<!-- ================= HOW IT WORKS ================= -->
+<section class="sec how" id="how">
+  <div class="wrap">
+    <span class="tag mono">How it works</span>
+    <h2 class="display h2" style="margin-top:16px">From booking to the trail</h2>
+    <p class="lead">Book in about a minute, pay securely online, then just turn up and ride.</p>
+    <div class="steps" id="steps">
+      <div class="road" id="road">
+        <div class="road-fill"></div>
+        <div class="road-quad" aria-hidden="true"><svg viewBox="-130 -190 270 196"><g data-quad="light"></g></svg></div>
+      </div>
+      <div class="step"><span class="num">01</span><span class="mono">About 1 minute</span><h3 class="display">Book and pay</h3><p>Pick a ride length, day and start time. Pay securely online through Umzila.</p></div>
+      <div class="step"><span class="num">02</span><span class="mono">Before your start time</span><h3 class="display">Meet us at Wushwini</h3><p>Come to Wushwini Art Centre in Ngcolosi, near Inanda Dam. Your guide gets you set up.</p></div>
+      <div class="step"><span class="num">03</span><span class="mono">30 minutes to 2 hours</span><h3 class="display">Ride</h3><p>Follow your guide along the valley trails and stop for the views over the dam.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EXPERIENCES ================= -->
+<section class="sec" id="experiences">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="tag mono">Experiences</span>
+        <h2 class="display h2" style="margin-top:16px">Made for every crew</h2>
+        <p class="lead">Families, friends and first-timers. This is what a day at Nceks looks like.</p>
+      </div>
+      <a class="btn btn-dark" href="#booking" data-goto-book>Book a ride <span class="arr">→</span></a>
+    </div>
+    <div class="masonry">
+      <figure class="rise" style="--i:0"><div class="ph" style="--r:4/3"><img src="/ncekeniquads/img/exp-family.webp" width="1400" height="1050" loading="lazy" decoding="async" alt="A family group cheering on the rocks by the river after their ride"></div><figcaption><b>Family Fun</b><span>Gather your loved ones for a day on the trails. Kids ride too, and everyone goes home with a story.</span></figcaption></figure>
+      <div class="review rise" style="--i:1">
+        <span class="stars" aria-label="5 out of 5 stars"><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg></span>
+        <blockquote>“It was nice doing the quad riding 👌, my kids were very happy. Not forgetting our very friendly tour guider. Will surely come back 😘”</blockquote>
+        <div class="who"><img src="/ncekeniquads/img/rev-puleng.webp" width="60" height="60" alt=""><div><b>Puleng Motaung</b><span>Google review</span></div></div>
+      </div>
+      <figure class="rise" style="--i:2"><div class="ph" style="--r:3/4"><img src="/ncekeniquads/img/exp-retreat.webp" width="722" height="960" loading="lazy" decoding="async" alt="A row of quad bikes parked below sandstone cliffs under a blue sky"></div><figcaption><b>Retreat</b><span>An escape from the city. Ride the valley at your own pace and take in the cliffs and open sky.</span></figcaption></figure>
+      <figure class="rise" style="--i:3"><div class="ph" style="--r:1080/764"><img src="/ncekeniquads/img/exp-crew.webp" width="1080" height="764" loading="lazy" decoding="async" alt="A group of riders lined up on their quads ready to set off"></div><figcaption><b>Off-Road Adventure</b><span>Rugged quads, remote trails and hidden spots in the hills that you can only reach on four wheels.</span></figcaption></figure>
+      <figure class="rise" style="--i:4"><div class="ph" style="--r:3/4"><img src="/ncekeniquads/img/exp-dam.webp" width="825" height="1100" loading="lazy" decoding="async" alt="A rider standing beside his quad with Inanda Dam behind him"></div><figcaption><b>Unforgettable Experience</b><span>The freedom of the open trail, with everything you need ready when you arrive.</span></figcaption></figure>
+      <div class="review rise" style="--i:5">
+        <span class="stars" aria-label="5 out of 5 stars"><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg><svg viewBox="0 0 20 20"><path d="M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z"/></svg></span>
+        <blockquote>“A place to visit if you are a person who loves Adventure!”</blockquote>
+        <div class="who"><img src="/ncekeniquads/img/rev-bonginkosi.webp" width="60" height="60" alt=""><div><b>Bonginkosi Zikhali</b><span>Google review</span></div></div>
+      </div>
+      <figure class="rise" style="--i:6"><div class="ph" style="--r:3/4"><img src="/ncekeniquads/img/base-wushwini.webp" width="825" height="1100" loading="lazy" decoding="async" alt="The view over Inanda Dam from the Wushwini Art Centre base"></div><figcaption><b>Our base at Wushwini</b><span>Meet us at Wushwini Art Centre in Ngcolosi, with views over Inanda Dam.</span></figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= GIFT A RIDE ================= -->
+<section class="sec gift-sec" id="gift">
+  <div class="wrap">
+    <div class="voucher rise">
+      <div>
+        <span class="tag mono">Gift a ride</span>
+        <h3 class="display">Give someone a ride</h3>
+        <p>A Nceks voucher for any ride length. Great for birthdays and anyone who loves adventure.</p>
+        <fieldset class="v-opts" id="vOpts"><legend class="mono">Ride length</legend></fieldset>
+        <div class="v-row">
+          <span class="price" id="vPrice">R550</span>
+          <div class="stepper" role="group" aria-label="Number of vouchers"><button type="button" id="vMinus" aria-label="Fewer vouchers">−</button><output id="vQty">1</output><button type="button" id="vPlus" aria-label="More vouchers">+</button></div>
+          <button class="btn btn-primary" type="button" id="vAdd">Add to bag <span class="arr">→</span></button>
+        </div>
+        <div class="umz"><img src="/ncekeniquads/img/umzila.webp" width="360" height="132" alt="Umzila">Paid securely on Umzila</div>
+      </div>
+      <svg class="ticket" viewBox="0 0 340 180" aria-hidden="true">
+        <path d="M14 10 H326 a6 6 0 0 1 6 6 V66 a24 24 0 0 0 0 48 V164 a6 6 0 0 1 -6 6 H14 a6 6 0 0 1 -6 -6 V114 a24 24 0 0 0 0 -48 V16 a6 6 0 0 1 6 -6 Z" fill="#F8F5EF"/>
+        <path d="M22 22 H318 V60 a30 30 0 0 0 0 60 V158 H22 V120 a30 30 0 0 0 0 -60 Z" fill="none" stroke="#26352F" stroke-opacity=".35" stroke-dasharray="4 4"/>
+        <path d="M244 18 V162" stroke="#26352F" stroke-opacity=".4" stroke-dasharray="3 5"/>
+        <text x="42" y="62" font-family="JetBrains Mono, monospace" font-size="11" letter-spacing="2" fill="#525750">GIFT VOUCHER</text>
+        <text x="42" y="98" font-family="Archivo, sans-serif" font-weight="800" font-size="24" fill="#161A17" id="tkTitle">1 hour ride</text>
+        <text x="42" y="124" font-family="JetBrains Mono, monospace" font-size="11" letter-spacing="1.5" fill="#525750">NCEKS QUAD BIKING</text>
+        <image href="/ncekeniquads/img/logo.webp" x="258" y="56" width="66" height="71"/>
+      </svg>
+    </div>
+    <!-- Optional merch: add items to PRODUCTS in the script and they appear here. -->
+    <div class="shop-grid" id="shopGrid" hidden></div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="sec" id="faq">
+  <div class="wrap faq">
+    <div>
+      <span class="tag mono">FAQ</span>
+      <h2 class="display h2" style="margin-top:16px">Good to know</h2>
+      <p class="lead">Anything else? Message us on WhatsApp and we'll help.</p>
+    </div>
+    <div class="faq-list">
+      <details><summary>What are your hours?<span class="pl" aria-hidden="true"></span></summary><p>We're open every day, Monday to Sunday, from 8am to 5pm.</p></details>
+      <details><summary>Is there an age limit?<span class="pl" aria-hidden="true"></span></summary><p>There's no legal age limit, because the rides take place on private property. Kids and families are welcome.</p></details>
+      <details><summary>Where do we meet?<span class="pl" aria-hidden="true"></span></summary><p>At Wushwini Art Centre in Ngcolosi, near Inanda Dam, Durban, KwaZulu-Natal.</p></details>
+      <details><summary>How do I pay?<span class="pl" aria-hidden="true"></span></summary><p>Online when you book. Checkout runs through Umzila, Durban's marketplace for the best local businesses, with secure card payments through PayFast. You get an email confirmation straight away.</p></details>
+      <details><summary>Can I book on WhatsApp instead?<span class="pl" aria-hidden="true"></span></summary><p>Yes. Send your ride length, day and start time to Umzila's booking line on <a href="https://wa.me/27797662768" target="_blank" rel="noopener">WhatsApp</a> and we'll sort it out.</p></details>
+      <details><summary>Can I use a gift voucher?<span class="pl" aria-hidden="true"></span></summary><p>Yes. Vouchers work storewide at Nceks — any ride length or merch — and any balance left stays on the code. Open the link in your voucher email, or enter the code at checkout.</p></details>
+      <details><summary>What should I wear?<span class="pl" aria-hidden="true"></span></summary><p>Closed shoes and clothes you don't mind getting dusty.</p></details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="foot" id="contact">
+  <div class="wrap">
+    <div class="foot-cta">
+      <div>
+        <div class="foot-brand"><img src="/ncekeniquads/img/logo.webp" width="238" height="256" alt="Nceks Quad Biking logo"></div>
+        <h2 class="display">Your journey starts here.</h2>
+        <p id="footNext">Next ride today.</p>
+      </div>
+      <a class="btn btn-primary" href="#booking" data-goto-book>Book a ride <span class="arr">→</span></a>
+    </div>
+    <div class="foot-grid">
+      <section>
+        <h3 class="mono">Hours</h3>
+        <p>Open every day, 8am to 5pm.</p>
+        <h3 class="mono" style="margin-top:22px">Find us</h3>
+        <p>Wushwini Art Centre, Ngcolosi<br>Inanda Dam, Durban, KwaZulu-Natal</p>
+      </section>
+      <section>
+        <h3 class="mono">Contact</h3>
+        <p class="contact-line"><span class="mono">Phone</span><a href="tel:+27317641583">031 764 1583</a></p>
+        <p class="contact-line"><span class="mono">WhatsApp</span><a href="https://wa.me/27718797998" target="_blank" rel="noopener">071 879 7998</a></p>
+        <p class="contact-line"><span class="mono">Email</span><span id="mail">info@ncekeni.co.za</span><button class="copy" id="copyMail" type="button">Copy</button></p>
+      </section>
+      <section>
+        <h3 class="mono">Follow</h3>
+        <p>See the latest rides and photos.</p>
+        <div class="socials">
+          <a href="https://www.facebook.com/p/Nceks-Quad-Biking-100071687726224/" target="_blank" rel="noopener" aria-label="Nceks Quad Biking on Facebook"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 22v-8h2.7l.4-3.2h-3.1V8.8c0-.9.3-1.5 1.6-1.5h1.7V4.4c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.2H7.3V14h2.8v8z"/></svg></a>
+          <a href="https://www.instagram.com/nceksquadbiking_/" target="_blank" rel="noopener" aria-label="Nceks Quad Biking on Instagram"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.3A4.7 4.7 0 1 0 12 16.7 4.7 4.7 0 0 0 12 7.3zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm6-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21.9 8.2c-.1-1.6-.4-3-1.6-4.2S17.6 2.5 16 2.4C14.4 2.3 9.6 2.3 8 2.4 6.4 2.5 5 2.8 3.8 4S2.3 6.6 2.2 8.2C2.1 9.8 2.1 14.6 2.2 16.2c.1 1.6.4 3 1.6 4.2s2.6 1.5 4.2 1.6c1.6.1 6.4.1 8 0 1.6-.1 3-.4 4.2-1.6s1.5-2.6 1.6-4.2c.1-1.6.1-6.4 0-8zm-2 9.8a3.3 3.3 0 0 1-1.8 1.8c-1.3.5-4.3.4-5.7.4s-4.4.1-5.7-.4A3.3 3.3 0 0 1 4.9 18c-.5-1.3-.4-4.3-.4-5.7s-.1-4.4.4-5.7A3.3 3.3 0 0 1 6.7 4.8c1.3-.5 4.3-.4 5.7-.4s4.4-.1 5.7.4a3.3 3.3 0 0 1 1.8 1.8c.5 1.3.4 4.3.4 5.7s.1 4.4-.4 5.7z"/></svg></a>
+        </div>
+      </section>
+    </div>
+    <p class="fine"><span>© 2026 Nceks Quad Biking</span><span>Found on <a href="/">Umzila</a> · Checkout by Umzila · Site by Shazi Media</span></p>
+  </div>
+</footer>
+
+<div class="mbar" id="mbar">
+  <div><b>From <span data-from-price>R350</span> per quad</b><span id="mbarNext">Next ride today</span></div>
+  <a class="btn btn-primary" href="#booking" data-goto-book>Book now</a>
+</div>
+
+<!-- booking confirm sheet -->
+<dialog class="sheet" id="bookDlg" aria-labelledby="bdTitle">
+  <div class="sheet-body">
+    <div class="sheet-head"><h2 class="display" id="bdTitle">Confirm your ride</h2><button class="x" type="button" data-close aria-label="Close">×</button></div>
+    <div class="summary">
+      <div class="ph sum-ph"><img id="sumImg" src="/ncekeniquads/img/ride-60.webp" alt=""></div>
+      <div><b id="sumRide"></b><span id="sumWhen"></span><span id="sumQty"></span></div>
+      <button type="button" data-close>Change</button>
+    </div>
+    <div class="breakdown" id="breakdown"></div>
+    <a class="btn btn-primary btn-block btn-book" id="payLink" href="#">Pay on Umzila <span class="arr">→</span></a>
+    <p class="note" id="bookErr" role="alert" style="color:#B8322A;font-weight:600" hidden></p>
+    <div class="secure"><img src="/ncekeniquads/img/umzila.webp" width="360" height="132" alt="Umzila">Your quads are held for 30 minutes while you check out. No account needed.</div>
+    <div class="or">or</div>
+    <a class="btn btn-line btn-block" id="waLink" href="https://wa.me/27797662768" target="_blank" rel="noopener">Book on WhatsApp instead</a>
+  </div>
+</dialog>
+
+<!-- bag drawer -->
+<dialog class="sheet drawer" id="bagDlg" aria-labelledby="bagTitle">
+  <div class="drawer-body">
+    <div class="sheet-head"><h2 class="display" id="bagTitle">Your bag</h2><button class="x" type="button" data-close aria-label="Close bag">×</button></div>
+    <ul class="cart-list" id="cartList"></ul>
+    <div class="drawer-foot">
+      <div class="breakdown" id="cartTotal"></div>
+      <a class="btn btn-primary btn-block" id="checkout" href="/checkout.html">Check out on Umzila <span class="arr">→</span></a>
+      <div class="secure"><img src="/ncekeniquads/img/umzila.webp" width="360" height="132" alt="Umzila">Secure checkout by Umzila</div>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span class="tk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><div><b class="t-title"></b><span class="t-sub"></span></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const money = n => 'R' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const pad = n => String(n).padStart(2, '0');
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ================= CONFIG =================
+   Bespoke Umzila storefront for the store whose sellers.slug is STORE_SLUG.
+   Everything that matters (prices, hours, capacity, live availability,
+   booking holds, cart, checkout, payment) comes from Umzila — this page is
+   the skin. Holds: /.netlify/functions/hold-service-booking. Load:
+   get_booking_load(). Cart: the shared Umzila cart (localStorage ss_cart),
+   checkout: /checkout.html. */
+const STORE_SLUG = 'ncekeniquads';
+const UMZILA_WA = '27797662768';         // booking-flow fallback goes to Umzila
+const HORIZON_DAYS = 14;
+const LEAD_MIN = 30;                      // matches hold-service-booking.js
+const SAST_OFFSET_MS = 2 * 3600 * 1000;   // Africa/Johannesburg, no DST
+
+/* Display copy + photos per ride length; price, duration and id come from
+   the live listings (products.metadata.ride_minutes). */
+const RIDE_ART = {
+  30:  {photo:'/ncekeniquads/img/ride-30.webp',  pos:'50% 55%', alt:'Quad bikes parked and ready below the hills', blurb:'A quick first ride. Good for kids, first-timers and a taste of the trails.'},
+  60:  {photo:'/ncekeniquads/img/ride-60.webp',  pos:'50% 60%', alt:'Riders on quads riding through tall green grass', blurb:'Time to settle in and ride further along the valley with your guide.'},
+  90:  {photo:'/ncekeniquads/img/ride-90.webp',  pos:'50% 60%', alt:'Two quads on a dusty bush trail', blurb:'Longer trails through the bush, with time to stop for photos.'},
+  120: {photo:'/ncekeniquads/img/ride-120.webp', pos:'72% 50%', alt:'Two riders on a ridge overlooking the green valley', blurb:'The full off-road adventure: remote trails, cliffs and the best views of the dam.'}
+};
+const labelFor = mins => mins < 60 ? `${mins} minutes` : (mins % 60 ? `${mins / 60} hours` : (mins === 60 ? '1 hour' : `${mins / 60} hours`));
+
+/* ================= QUAD ART (unchanged from the design) ================= */
+const PAL = {
+  red:   {body:'#B8322A', body2:'#8E241E', frame:'#1C1F1A', helmet:'#2A2E28', helmet2:'#1C1F1A', jersey:'#2A2E28', stripe:'#F29A1F', pants:'#1E211D', tire:'#141611', tread:'#2A2D22', rim:'#6A6D60', spoke:'#34372C', lamp:'#FFE9C2'},
+  green: {body:'#3D5E46', body2:'#2D4735', frame:'#1C1F1A', helmet:'#E9E3D6', helmet2:'#1C1F1A', jersey:'#2F3A33', stripe:'#E9E3D6', pants:'#1E211D', tire:'#141611', tread:'#2A2D22', rim:'#6A6D60', spoke:'#34372C', lamp:'#FFE9C2'},
+  light: {body:'#E9E3D6', body2:'#CFC6B3', frame:'#1C1F1A', helmet:'#F29A1F', helmet2:'#E9E3D6', jersey:'#B9AF98', stripe:'#F29A1F', pants:'#9E957F', tire:'#141611', tread:'#2A2D22', rim:'#8A8573', spoke:'#4A4639', lamp:'#FFE9C2'}
+};
+const wheel = (x, c) => `<g transform="translate(${x} -30)"><g class="spin"><circle r="30" fill="${c.tire}"/><circle r="26" fill="none" stroke="${c.tread}" stroke-width="7" stroke-dasharray="5 4.2"/><circle r="15" fill="${c.rim}"/><path d="M0 -15V15M-15 0H15M-10.6 -10.6L10.6 10.6M-10.6 10.6L10.6 -10.6" stroke="${c.spoke}" stroke-width="2.5"/><circle r="4.5" fill="${c.frame}"/></g></g>`;
+function quadMarkup(c){
+  return `<ellipse cx="0" cy="3" rx="118" ry="9" fill="#161A17" opacity=".28"/>
+<g class="bob">
+<path d="M-30 -36Q-70 -38 -104 -54" stroke="${c.frame}" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M-52 -42H56L46 -22H-42Z" fill="${c.frame}"/>
+<rect x="-22" y="-50" width="42" height="24" rx="4" fill="${c.frame}"/>
+<path d="M-44 -82H46L40 -54H-40Z" fill="${c.body2}"/>
+<path d="M-122 -60Q-120 -82 -96 -82H-44Q-33 -80 -29 -64V-58Q-50 -71 -75 -71Q-103 -71 -113 -55Z" fill="${c.body}"/>
+<path d="M122 -60Q120 -82 96 -82H44Q33 -80 29 -64V-58Q50 -71 75 -71Q103 -71 113 -55Z" fill="${c.body}"/>
+<path d="M-110 -76H-50M50 -76H108" stroke="${c.stripe}" stroke-width="3"/>
+<path d="M-118 -88H-62M-112 -88v6M-92 -88v6M-72 -88v6M76 -88H118M82 -88v6M100 -88v6M116 -88v6" stroke="${c.frame}" stroke-width="3.5" stroke-linecap="round"/>
+<ellipse cx="160" cy="-64" rx="34" ry="9" fill="${c.lamp}" opacity=".22"/>
+<path d="M118 -70L130 -68L128 -59L118 -61Z" fill="${c.lamp}"/>
+<path d="M-64 -84Q-62 -95 -42 -95L16 -93Q28 -92 30 -84Z" fill="${c.frame}"/>
+<path d="M24 -82H60L66 -94L36 -98Z" fill="${c.body}"/>
+<path d="M44 -94L56 -126" stroke="${c.frame}" stroke-width="6" stroke-linecap="round"/>
+<path d="M48 -126L68 -128" stroke="${c.frame}" stroke-width="7" stroke-linecap="round"/>
+<path d="M-18 -54H22" stroke="${c.frame}" stroke-width="5" stroke-linecap="round"/>
+<path d="M-24 -96L20 -102L8 -62" fill="none" stroke="${c.pants}" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M0 -65L23 -63L24 -52H-2Z" fill="${c.frame}"/>
+<path d="M-22 -100L16 -140" stroke="${c.jersey}" stroke-width="24" stroke-linecap="round"/>
+<path d="M18 -136L40 -116L56 -126" fill="none" stroke="${c.jersey}" stroke-width="10" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="56" cy="-126" r="6" fill="${c.frame}"/>
+<circle cx="28" cy="-162" r="20" fill="${c.helmet}"/>
+<path d="M10 -164Q24 -172 42 -170" stroke="${c.stripe}" stroke-width="3" fill="none"/>
+<path d="M30 -170Q50 -170 50 -156L34 -152Q28 -162 30 -170Z" fill="#14150F"/>
+<path d="M36 -166Q44 -166 46 -160" stroke="#fff" stroke-opacity=".5" stroke-width="2" fill="none"/>
+<path d="M44 -152Q54 -146 50 -138L34 -142Z" fill="${c.helmet}"/>
+<path d="M8 -178L42 -183L56 -174L20 -170Z" fill="${c.helmet2}"/>
+</g>
+<g class="susp">${wheel(-75, c)}${wheel(75, c)}</g>`;
+}
+$$('[data-quad]').forEach(g => { g.innerHTML = quadMarkup(PAL[g.dataset.quad]); });
+const DUST = ['#D6C3A0','#C4AD86','#B39B74','#E2D3B5'];
+$$('.dust').forEach(g => {
+  const n = +g.dataset.n || 12, spread = +g.dataset.spread || 150;
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    s += `<circle r="${(5 + Math.random() * 7).toFixed(1)}" cx="${(Math.random() * 16 - 8).toFixed(1)}" cy="${(-Math.random() * 8).toFixed(1)}" fill="${DUST[i % 4]}" style="--dx:${(-(90 + Math.random() * spread)).toFixed(0)}px;--dy:${(-(16 + Math.random() * 50)).toFixed(0)}px;--s:${(1.6 + Math.random() * 1.8).toFixed(2)};animation-delay:${(-Math.random() * 1.5).toFixed(2)}s"/>`;
+  }
+  g.innerHTML = s;
+});
+
+/* ================= SA TIME =================
+   Days, hours and slot starts are South African wall-clock times whatever
+   the visitor's device timezone is (hold-service-booking validates in SAST). */
+function sastParts(d){ const s = new Date(d.getTime() + SAST_OFFSET_MS); return {y: s.getUTCFullYear(), m: s.getUTCMonth() + 1, d: s.getUTCDate(), dow: s.getUTCDay()}; }
+function sastDate(y, m, d, h, mi){ return new Date(Date.UTC(y, m - 1, d, h || 0, mi || 0) - SAST_OFFSET_MS); }
+const toMin = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
+const toHM = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
+const today = sastParts(new Date());
+const days = Array.from({length: HORIZON_DAYS}, (_, i) => {
+  const base = new Date(Date.UTC(today.y, today.m - 1, today.d + i));
+  return {y: base.getUTCFullYear(), m: base.getUTCMonth() + 1, d: base.getUTCDate(), dow: base.getUTCDay()};
+});
+const iso = i => `${days[i].y}-${pad(days[i].m)}-${pad(days[i].d)}`;
+const dayWord = i => i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${WD[days[i].dow]} ${days[i].d} ${MO[days[i].m - 1]}`;
+const dayFull = i => `${i === 0 ? 'Today, ' : i === 1 ? 'Tomorrow, ' : ''}${WD[days[i].dow]} ${days[i].d} ${MO[days[i].m - 1]}`;
+
+/* ================= LIVE STORE DATA ================= */
+const store = {ready: false, seller: null, capacity: 1, step: 60, windows: [], load: [], rides: [], vouchers: []};
+let RIDES = [], RD = {}, BEST = null;
+const perHour = r => Math.round(r.price / (r.mins / 60));
+let sb = null;
+
+async function loadStore(){
+  const cfgRes = await fetch('/.netlify/functions/get-client-config');
+  const cfg = await cfgRes.json();
+  const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey;
+  sb = supabase.createClient(url, key);
+  const {data: seller} = await sb.from('sellers').select('id, shop_name, slug, status, booking_capacity, booking_start_interval_minutes').eq('slug', STORE_SLUG).maybeSingle();
+  if (!seller || seller.status !== 'active') throw new Error('Store unavailable');
+  store.seller = seller;
+  store.capacity = seller.booking_capacity || 1;
+  const [prodRes, availRes] = await Promise.all([
+    sb.from('products').select('id, name, price, sale, sale_price, image, slot_duration_minutes, metadata, visible, listing_type, fulfillment_type, booking_mode').eq('seller_id', seller.id).eq('visible', true),
+    sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', seller.id)
+  ]);
+  store.windows = availRes.data || [];
+  const prods = prodRes.data || [];
+  const priceOf = p => Number(p.sale && p.sale_price ? p.sale_price : p.price);
+  RIDES = prods.filter(p => p.metadata && p.metadata.storefront_role === 'ride' && p.booking_mode === 'scheduled')
+    .map(p => {
+      const mins = p.slot_duration_minutes || p.metadata.ride_minutes;
+      const art = RIDE_ART[mins] || {photo: p.image, pos: '50% 50%', alt: p.name, blurb: ''};
+      return Object.assign({id: p.id, mins, label: labelFor(mins), price: priceOf(p), image: p.image, name: p.name}, art);
+    }).sort((a, b) => a.mins - b.mins);
+  RD = Object.fromEntries(RIDES.map(r => [r.id, r]));
+  BEST = RIDES.length ? RIDES.reduce((a, b) => perHour(b) < perHour(a) ? b : a).id : null;
+  store.vouchers = prods.filter(p => p.metadata && p.metadata.voucher === true)
+    .map(p => ({id: p.id, mins: p.metadata.ride_minutes, label: labelFor(p.metadata.ride_minutes), price: priceOf(p), name: p.name, image: p.image}))
+    .sort((a, b) => a.mins - b.mins);
+  store.step = seller.booking_start_interval_minutes || 60;
+  await refreshLoad();
+  store.ready = true;
+}
+async function refreshLoad(){
+  const from = new Date(), to = new Date(Date.now() + (HORIZON_DAYS + 1) * 86400000);
+  const {data} = await sb.rpc('get_booking_load', {p_seller_id: store.seller.id, p_from: from.toISOString(), p_to: to.toISOString()});
+  store.load = (data || []).map(b => ({s: new Date(b.start_at).getTime(), e: new Date(b.end_at).getTime(), u: b.units || 1}));
+}
+function peakUnits(s, e){
+  const over = store.load.filter(b => b.s < e && b.e > s);
+  const pts = [s].concat(over.map(b => b.s).filter(t => t > s));
+  return pts.reduce((mx, t) => Math.max(mx, over.filter(b => b.s <= t && b.e > t).reduce((a, b) => a + b.u, 0)), 0);
+}
+
+/* ================= SLOTS ================= */
+function startsFor(r, di){
+  const out = [];
+  store.windows.filter(w => w.day_of_week === days[di].dow).forEach(w => {
+    const ws = toMin(w.start_time), we = toMin(w.end_time);
+    for (let m = ws; m + r.mins <= we; m += store.step) out.push(toHM(m));
+  });
+  return out;
+}
+function slotInfo(r, di, time){
+  const [h, m] = time.split(':').map(Number);
+  const start = sastDate(days[di].y, days[di].m, days[di].d, h, m);
+  const end = new Date(start.getTime() + r.mins * 60000);
+  const gone = start.getTime() < Date.now() + LEAD_MIN * 60000;
+  const left = Math.max(0, store.capacity - peakUnits(start.getTime(), end.getTime()));
+  return {time, start, end, gone, left, open: !gone && left > 0};
+}
+const openSlots = (r, di) => startsFor(r, di).map(t => slotInfo(r, di, t)).filter(s => s.open);
+function nextFor(r){
+  for (let di = 0; di < HORIZON_DAYS; di++) { const os = openSlots(r, di); if (os.length) return {di, s: os[0]}; }
+  return null;
+}
+const endHM = s => { const p = new Date(s.end.getTime() + SAST_OFFSET_MS); return `${pad(p.getUTCHours())}:${pad(p.getUTCMinutes())}`; };
+
+/* ================= UMZILA CART =================
+   Same item shape as script.js addToCart() so checkout treats these exactly
+   like anything added on the main site. */
+const getCart = () => { try { return JSON.parse(localStorage.getItem('ss_cart') || '[]'); } catch (e) { return []; } };
+const setCart = c => { try { localStorage.setItem('ss_cart', JSON.stringify(c)); } catch (e) { /* storage blocked */ } };
+function cartItem(p, qty, extra){
+  return Object.assign({
+    id: p.id, title: p.name, name: p.name, price: p.price, qty, quantity: qty, size: 'One Size',
+    img: p.image, image: p.image, variantId: null, stock: null, maxQuantity: null, preferred_delivery: '',
+    seller_id: store.seller.id, listing_type: 'service', fulfillment_type: null, service_turnaround: null,
+    item_returned: false, delivery_class: null, free_delivery: false, units_per_trip: null,
+    intake: null, booking_id: null, booking_start_at: null, service_options: null
+  }, extra || {});
+}
+// Before the store has loaded there is no seller id to match yet.
+const storeCart = () => store.seller ? getCart().filter(i => i.seller_id === store.seller.id) : [];
+function checkoutUrl(){
+  let v = null; try { v = sessionStorage.getItem('nceks_voucher'); } catch (e) {}
+  return '/checkout.html' + (v ? '?coupon=' + encodeURIComponent(v) : '');
+}
+const waUrl = text => `https://wa.me/${UMZILA_WA}?text=${encodeURIComponent(text)}`;
+
+/* ================= REVEAL ================= */
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+}), {threshold: .12, rootMargin: '0px 0px -6% 0px'}) : null;
+const watch = () => { if (!reduce && io) $$('.rise:not(.in)').forEach(el => io.observe(el)); };
+
+/* ================= BOOKING CARD ================= */
+const form = $('#booking');
+const st = {ride: null, day: 0, time: null, qty: 2};
+function ensureSel(){
+  const r = RD[st.ride]; if (!r) return;
+  if (!openSlots(r, st.day).length) { for (let i = 0; i < HORIZON_DAYS; i++) if (openSlots(r, i).length) { st.day = i; break; } }
+  const os = openSlots(r, st.day);
+  if (!os.some(s => s.time === st.time)) st.time = os.length ? os[0].time : null;
+}
+const curSlot = () => (st.time && RD[st.ride]) ? slotInfo(RD[st.ride], st.day, st.time) : null;
+function renderRideOpts(){
+  $('#rideOpts').innerHTML = RIDES.map(r => `<label class="opt"><input type="radio" name="ride" value="${r.id}"${r.id === st.ride ? ' checked' : ''}><span class="opt-name">${esc(r.label)}</span><span class="opt-meta">${money(r.price)}${r.id === BEST ? ' · <span class="best">Best value</span>' : ''}</span></label>`).join('');
+}
+function renderDates(){
+  const r = RD[st.ride];
+  $('#dates').innerHTML = days.map((d, i) => {
+    const has = r && openSlots(r, i).length > 0;
+    return `<label class="chip"><input type="radio" name="day" value="${i}"${i === st.day ? ' checked' : ''}${has ? '' : ' disabled'} aria-label="${dayFull(i)}${has ? '' : ', no times left'}"><span class="mono">${i === 0 ? 'Today' : WD[d.dow]}</span><b>${d.d}</b></label>`;
+  }).join('');
+}
+function renderTimes(){
+  const r = RD[st.ride];
+  const starts = r ? startsFor(r, st.day) : [];
+  $('#times').innerHTML = starts.length ? starts.map(time => {
+    const s = slotInfo(r, st.day, time);
+    const label = s.gone ? 'Passed' : s.left === 0 ? 'Full' : s.left <= 4 ? `${s.left} left` : '';
+    return `<label class="time"><input type="radio" name="time" value="${time}"${time === st.time ? ' checked' : ''}${s.open ? '' : ' disabled'}><b>${time}</b>${label ? `<span class="${s.open && s.left <= 3 ? 'low' : ''}">${label}</span>` : ''}</label>`;
+  }).join('') : '<p class="note" style="grid-column:1/-1;text-align:left">Closed this day — pick another.</p>';
+}
+let shown = 0, amtRaf;
+function setAmount(v){
+  const el = $('#bookAmt'), from = shown, btn = $('#bookBtn');
+  shown = v;
+  btn.classList.remove('tick'); void btn.offsetWidth; btn.classList.add('tick');
+  if (reduce || !from) { el.textContent = money(v); return; }
+  cancelAnimationFrame(amtRaf);
+  const t0 = performance.now();
+  const step = n => { const k = Math.min(1, (n - t0) / 420), e = 1 - Math.pow(1 - k, 3); el.textContent = money(Math.round(from + (v - from) * e)); if (k < 1) amtRaf = requestAnimationFrame(step); };
+  amtRaf = requestAnimationFrame(step);
+}
+function renderQty(){
+  const s = curSlot(), max = s ? Math.min(s.left, store.capacity) : 1;
+  st.qty = Math.max(1, Math.min(st.qty, max));
+  $('#qty').textContent = st.qty;
+  $('#qMinus').disabled = st.qty <= 1;
+  $('#qPlus').disabled = st.qty >= max;
+  $('#qtyHint').textContent = s && s.left < store.capacity ? `${s.left} quad${s.left === 1 ? '' : 's'} free at ${s.time}` : 'Price is per quad';
+  $('#bookBtn').disabled = !s;
+  if (RD[st.ride]) setAmount(st.qty * RD[st.ride].price);
+}
+function renderNext(){
+  const first = RIDES[0], n = first ? nextFor(first) : null;
+  const txt = n ? `${n.di === 0 ? 'today' : n.di === 1 ? 'tomorrow' : 'on ' + dayWord(n.di)} at ${n.s.time}` : 'soon';
+  $('#nextRide').textContent = n ? `Next ride ${txt}` : 'Fully booked';
+  $('#mbarNext').textContent = n ? `Next ride ${txt}` : 'Fully booked — message us';
+  $('#footNext').textContent = n ? `The next ride leaves ${txt}.` : 'We are fully booked for the next two weeks. Message us on WhatsApp.';
+  RIDES.forEach(r => {
+    const el = document.getElementById('nx-' + r.id);
+    if (!el) return;
+    const x = nextFor(r);
+    el.textContent = x ? `Next: ${dayWord(x.di)} ${x.s.time}` : 'Fully booked';
+  });
+  if (RIDES.length) {
+    const from = Math.min(...RIDES.map(r => r.price));
+    $$('[data-from-price]').forEach(el => { el.textContent = money(from); });
+  }
+}
+form.addEventListener('change', e => {
+  const {name, value} = e.target;
+  if (name === 'ride') { st.ride = value; ensureSel(); renderDates(); renderTimes(); renderQty(); }
+  if (name === 'day') { st.day = +value; st.time = null; ensureSel(); renderTimes(); renderQty(); }
+  if (name === 'time') { st.time = value; renderQty(); }
+});
+$('#qMinus').addEventListener('click', () => { st.qty--; renderQty(); });
+$('#qPlus').addEventListener('click', () => { st.qty++; renderQty(); });
+function pickRide(id){
+  if (!RD[id]) return;
+  st.ride = id; ensureSel();
+  const r = form.querySelector(`input[name="ride"][value="${id}"]`); if (r) r.checked = true;
+  renderDates(); renderTimes(); renderQty();
+  gotoBook();
+}
+function gotoBook(){
+  form.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'start'});
+  form.classList.remove('pulse'); void form.offsetWidth;
+  setTimeout(() => form.classList.add('pulse'), reduce ? 0 : 450);
+}
+document.addEventListener('click', e => {
+  const pick = e.target.closest('[data-pick]');
+  if (pick) { e.preventDefault(); pickRide(pick.dataset.pick); return; }
+  const go = e.target.closest('[data-goto-book]');
+  if (go) { e.preventDefault(); gotoBook(); }
+});
+
+/* confirm sheet → hold the quads → Umzila cart → checkout */
+const dlg = $('#bookDlg');
+let pending = null;
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const s = curSlot();
+  if (!s || !store.ready) return;
+  const r = RD[st.ride], total = st.qty * r.price, end = endHM(s);
+  pending = {r, s, qty: st.qty, total};
+  $('#sumImg').src = r.photo;
+  $('#sumRide').textContent = `${r.label} quad ride`;
+  $('#sumWhen').textContent = `${dayFull(st.day)} · ${s.time} to ${end}`;
+  $('#sumQty').textContent = `${st.qty} quad${st.qty > 1 ? 's' : ''}`;
+  $('#breakdown').innerHTML = `<div><span>${st.qty} quad${st.qty > 1 ? 's' : ''} × ${money(r.price)}</span><span>${money(total)}</span></div><div class="sum"><span>Total</span><span>${money(total)}</span></div>`;
+  const pay = $('#payLink');
+  pay.innerHTML = `Pay ${money(total)} on Umzila <span class="arr">→</span>`;
+  pay.removeAttribute('aria-disabled');
+  $('#bookErr').hidden = true;
+  $('#waLink').href = waUrl(`Hi Umzila! I'd like to book a ${r.label} quad ride at Nceks Quad Biking on ${dayFull(st.day)} at ${s.time} for ${st.qty} quad${st.qty > 1 ? 's' : ''} (${money(total)}).`);
+  dlg.showModal();
+});
+$('#payLink').addEventListener('click', async e => {
+  e.preventDefault();
+  if (!pending) return;
+  const pay = e.currentTarget, err = $('#bookErr');
+  if (pay.getAttribute('aria-disabled') === 'true') return;
+  pay.setAttribute('aria-disabled', 'true');
+  pay.innerHTML = 'Holding your quads…';
+  err.hidden = true;
+  try {
+    // Replacing a ride already in the bag releases its earlier hold.
+    const cart = getCart();
+    const prev = cart.find(i => i.id === pending.r.id && i.booking_id);
+    const headers = {'Content-Type': 'application/json'};
+    const sess = sb ? (await sb.auth.getSession()).data.session : null;
+    if (sess && sess.access_token) headers.Authorization = 'Bearer ' + sess.access_token;
+    const res = await fetch('/.netlify/functions/hold-service-booking', {
+      method: 'POST', headers,
+      body: JSON.stringify({productId: pending.r.id, startAt: pending.s.start.toISOString(), units: pending.qty, replaceBookingId: prev ? prev.booking_id : undefined})
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      await refreshLoad(); ensureSel(); renderDates(); renderTimes(); renderQty(); renderNext();
+      throw new Error(json.error || 'That time was just taken — pick another.');
+    }
+    const next = cart.filter(i => !(i.id === pending.r.id));
+    next.push(cartItem({id: pending.r.id, name: `${pending.r.label} quad ride`, price: pending.r.price, image: pending.r.image}, json.units,
+      {fulfillment_type: 'in_person', booking_id: json.bookingId, booking_start_at: json.startAt}));
+    setCart(next);
+    pay.innerHTML = 'Going to checkout…';
+    window.location.href = checkoutUrl();
+  } catch (ex) {
+    err.textContent = ex.message || 'Could not hold that time. Please try again.';
+    err.hidden = false;
+    pay.removeAttribute('aria-disabled');
+    pay.innerHTML = `Pay ${money(pending.total)} on Umzila <span class="arr">→</span>`;
+  }
+});
+
+/* ================= RIDE CARDS ================= */
+function renderRideCards(){
+  $('#rideCards').innerHTML = RIDES.map((r, i) => `<article class="ride rise" style="--i:${i}">
+  <div class="ph"><img src="${r.photo}" alt="${esc(r.alt)}" loading="lazy" decoding="async" style="object-position:${r.pos}">${r.id === BEST ? '<span class="tag mono best-tag">Best value</span>' : ''}
+    <span class="gauge" aria-hidden="true"><svg viewBox="0 0 40 40"><circle class="g-bg" cx="20" cy="20" r="15.9"/><circle class="g-val" cx="20" cy="20" r="15.9" pathLength="100" style="--v:${Math.round(Math.min(r.mins, 120) / 120 * 100)}"/></svg></span>
+    <span class="next-tag" id="nx-${r.id}"></span></div>
+  <h3 class="display">${esc(r.label)}</h3>
+  <span class="mono meta">Works out to ${money(perHour(r))} an hour</span>
+  <p>${esc(r.blurb)}</p>
+  <div class="ride-foot"><span class="price">${money(r.price)}<small> per quad</small></span><button class="btn btn-line btn-sm" type="button" data-pick="${r.id}">Book <span class="arr">→</span></button></div>
+</article>`).join('');
+}
+
+/* ================= GIFT VOUCHERS + BAG (the real Umzila cart) ================= */
+const vs = {id: null, qty: 1};
+function renderVoucherOpts(){
+  $('#vOpts').querySelectorAll('.v-opt').forEach(n => n.remove());
+  $('#vOpts').insertAdjacentHTML('beforeend', store.vouchers.map(v => `<label class="v-opt"><input type="radio" name="vride" value="${v.id}"${v.id === vs.id ? ' checked' : ''}><b>${esc(v.label)}</b><span>${money(v.price)}</span></label>`).join(''));
+}
+function renderVoucher(){
+  const v = store.vouchers.find(x => x.id === vs.id);
+  if (!v) { $('#gift').hidden = true; return; }
+  $('#vQty').textContent = vs.qty;
+  $('#vMinus').disabled = vs.qty <= 1;
+  $('#vPrice').textContent = money(v.price * vs.qty);
+  $('#tkTitle').textContent = `${v.label} ride`;
+}
+$('#vOpts').addEventListener('change', e => { if (e.target.name === 'vride') { vs.id = e.target.value; renderVoucher(); } });
+$('#vMinus').addEventListener('click', () => { vs.qty = Math.max(1, vs.qty - 1); renderVoucher(); });
+$('#vPlus').addEventListener('click', () => { vs.qty = Math.min(20, vs.qty + 1); renderVoucher(); });
+const bagBtn = $('#bagBtn'), bagN = $('#bagN');
+const TICKET = '<path d="M6 14h36v6a4 4 0 0 0 0 8v6H6v-6a4 4 0 0 0 0-8z"/><path d="M31 14v20" stroke-dasharray="2.5 3"/><path d="M13 21h11M13 27h7"/>';
+function syncBag(bump){
+  const n = storeCart().reduce((a, i) => a + (i.qty || i.quantity || 1), 0);
+  bagN.textContent = n;
+  bagBtn.setAttribute('aria-label', `Open bag, ${n} item${n === 1 ? '' : 's'}`);
+  if (bump) { bagN.classList.remove('bump'); void bagN.offsetWidth; bagN.classList.add('bump'); }
+}
+function fly(from){
+  if (reduce || !Element.prototype.animate) return Promise.resolve();
+  const a = from.getBoundingClientRect(), b = bagBtn.getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className = 'flyer';
+  document.body.appendChild(f);
+  const x0 = a.left + a.width / 2 - 8, y0 = a.top + a.height / 2 - 8, x1 = b.left + b.width / 2 - 8, y1 = b.top + b.height / 2 - 8;
+  return f.animate([
+    {transform: `translate(${x0}px,${y0}px) scale(1)`},
+    {transform: `translate(${x0 + (x1 - x0) * .35}px,${y1 + (y0 - y1) * .25}px) scale(1.3)`, offset: .5},
+    {transform: `translate(${x1}px,${y1}px) scale(.4)`}
+  ], {duration: 700, easing: 'cubic-bezier(.3,.7,.4,1)'}).finished.then(() => f.remove(), () => f.remove());
+}
+$('#vAdd').addEventListener('click', e => {
+  const v = store.vouchers.find(x => x.id === vs.id); if (!v) return;
+  const btn = e.currentTarget, cart = getCart(), existing = cart.find(i => i.id === v.id);
+  if (existing) { existing.qty = (existing.qty || 1) + vs.qty; existing.quantity = existing.qty; }
+  else cart.push(cartItem(v, vs.qty, {fulfillment_type: 'digital'}));
+  setCart(cart);
+  const label = btn.innerHTML;
+  btn.textContent = 'Added ✓';
+  setTimeout(() => { btn.innerHTML = label; }, 1200);
+  fly(btn).then(() => syncBag(true));
+  toast(`${vs.qty} × ${v.name} added`, 'Open your bag to check out on Umzila');
+});
+const bagDlg = $('#bagDlg');
+function renderCart(){
+  const items = storeCart();
+  $('#cartList').innerHTML = items.length ? items.map(i => {
+    const when = i.booking_start_at ? new Date(i.booking_start_at).toLocaleString('en-ZA', {timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'}) : '';
+    const qty = i.qty || i.quantity || 1;
+    const control = i.booking_id
+      ? `<button type="button" class="copy" style="color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)" data-remove="${i.id}">Remove</button>`
+      : `<div class="stepper" role="group" aria-label="${esc(i.title)} quantity"><button type="button" data-dec="${i.id}" aria-label="Remove one">−</button><output>${qty}</output><button type="button" data-inc="${i.id}" aria-label="Add one">+</button></div>`;
+    return `<li class="cart-row">
+    <span class="mini-well">${i.booking_id && i.img ? `<img src="${esc(i.img)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:10px">` : `<svg viewBox="0 0 48 48" aria-hidden="true">${TICKET}</svg>`}</span>
+    <div><b>${esc(i.title)}</b><span>${when ? esc(when) + ' · ' + qty + ' quad' + (qty > 1 ? 's' : '') + ' · ' : money(i.price) + ' each · '}${money(i.price * qty)}</span></div>
+    ${control}
+  </li>`;
+  }).join('') : '<li class="empty">Your bag is empty. Book a ride or add a gift voucher.</li>';
+  const n = items.reduce((a, i) => a + (i.qty || i.quantity || 1), 0), total = items.reduce((a, i) => a + i.price * (i.qty || i.quantity || 1), 0);
+  $('#cartTotal').innerHTML = `<div><span>${n} item${n === 1 ? '' : 's'}</span><span>${money(total)}</span></div><div class="sum"><span>Total</span><span>${money(total)}</span></div>`;
+  $('#cartTotal').hidden = !n;
+  const co = $('#checkout');
+  co.setAttribute('aria-disabled', String(!n));
+  if (n) { co.removeAttribute('tabindex'); co.href = checkoutUrl(); co.innerHTML = `Check out ${money(total)} on Umzila <span class="arr">→</span>`; }
+  else { co.setAttribute('tabindex', '-1'); co.removeAttribute('href'); }
+}
+bagBtn.addEventListener('click', () => { renderCart(); bagDlg.showModal(); });
+$('#cartList').addEventListener('click', e => {
+  const inc = e.target.closest('[data-inc]'), dec = e.target.closest('[data-dec]'), rm = e.target.closest('[data-remove]');
+  if (!inc && !dec && !rm) return;
+  const id = (inc || dec || rm).dataset.inc || (inc || dec || rm).dataset.dec || (inc || dec || rm).dataset.remove;
+  let cart = getCart();
+  const it = cart.find(i => i.id === id); if (!it) return;
+  if (inc) { it.qty = (it.qty || 1) + 1; it.quantity = it.qty; }
+  if (dec) { it.qty = (it.qty || 1) - 1; it.quantity = it.qty; if (it.qty <= 0) cart = cart.filter(i => i !== it); }
+  if (rm) cart = cart.filter(i => i !== it);   // the hold just expires
+  setCart(cart); renderCart(); syncBag(false);
+});
+
+/* ================= DIALOGS, TOAST, COPY ================= */
+$$('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) d.close(); }));
+let toastT;
+function toast(title, sub){
+  const t = $('#toast');
+  $('.t-title', t).textContent = title; $('.t-sub', t).textContent = sub;
+  t.hidden = false; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 4200);
+}
+$('#copyMail').addEventListener('click', e => {
+  const btn = e.currentTarget, txt = $('#mail').textContent;
+  const done = l => { btn.textContent = l; setTimeout(() => { btn.textContent = 'Copy'; }, 2000); };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents($('#mail')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); done('Selected'); };
+  try { navigator.clipboard.writeText(txt).then(() => done('Copied'), fallback); } catch (_) { fallback(); }
+});
+
+/* ================= SCROLL: header, hero parallax, steps road, mobile bar ================= */
+const topBar = $('#topBar'), hero = $('#home'), steps = $('#steps'), road = $('#road');
+const nums = $$('.num', steps);
+const layers = $$('.hero-scene .px').map(el => ({el, d: +el.dataset.d}));
+let mx = 0, my = 0, heroH = hero.offsetHeight, roadLen = 0, centers = [], ticking = false, lastP = -1, moveT;
+function layoutRoad(){
+  const b = steps.getBoundingClientRect();
+  centers = nums.map(n => { const r = n.getBoundingClientRect(); return {x: r.left + r.width / 2 - b.left, y: r.top + r.height / 2 - b.top}; });
+  const vertical = Math.abs(centers[2].x - centers[0].x) < 4;
+  road.classList.toggle('v', vertical);
+  road.style.left = centers[0].x + 'px'; road.style.top = centers[0].y + 'px';
+  roadLen = vertical ? centers[2].y - centers[0].y : centers[2].x - centers[0].x;
+  road.style.setProperty('--len', roadLen + 'px');
+  road.dataset.v = vertical ? '1' : '';
+}
+function update(){
+  ticking = false;
+  const y = window.scrollY;
+  topBar.classList.toggle('scrolled', y > 8);
+  if (!reduce && y < heroH + 100) layers.forEach(l => { l.el.style.transform = `translate(${(-mx * l.d * 70).toFixed(1)}px,${(y * l.d * .6 - my * l.d * 24).toFixed(1)}px)`; });
+  const r = steps.getBoundingClientRect(), vh = innerHeight;
+  const p = reduce ? 1 : Math.min(1, Math.max(0, (vh * .78 - r.top) / (r.height + vh * .2)));
+  if (p !== lastP) {
+    road.style.setProperty('--p', p.toFixed(4));
+    const v = road.dataset.v === '1';
+    nums.forEach((n, i) => n.parentElement.classList.toggle('reached', p * roadLen >= (v ? centers[i].y - centers[0].y : centers[i].x - centers[0].x) - 2));
+    if (lastP >= 0) { road.classList.add('moving'); clearTimeout(moveT); moveT = setTimeout(() => road.classList.remove('moving'), 160); }
+    lastP = p;
+  }
+}
+const schedule = () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } };
+window.addEventListener('scroll', schedule, {passive: true});
+window.addEventListener('resize', () => { heroH = hero.offsetHeight; layoutRoad(); lastP = -1; schedule(); });
+hero.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse') return;
+  const r = hero.getBoundingClientRect();
+  mx = (e.clientX - r.left) / r.width - .5; my = (e.clientY - r.top) / r.height - .5;
+  schedule();
+});
+const mbar = $('#mbar');
+if ('IntersectionObserver' in window) {
+  const seen = new Map();
+  const mio = new IntersectionObserver(es => {
+    es.forEach(e => seen.set(e.target, e.isIntersecting));
+    mbar.classList.toggle('off', [...seen.values()].some(Boolean));
+  }, {threshold: .15});
+  mio.observe(form); mio.observe($('.foot-cta'));
+}
+
+/* ================= BOOT ================= */
+watch();
+layoutRoad(); update();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { heroH = hero.offsetHeight; layoutRoad(); lastP = -1; update(); });
+window.addEventListener('load', () => { layoutRoad(); lastP = -1; update(); });
+syncBag(false);
+
+// ?voucher=CODE (from the gift voucher email) → applied at checkout.
+const params = new URLSearchParams(location.search);
+const vCode = (params.get('voucher') || '').trim().toUpperCase();
+if (/^[A-Z0-9-]{6,32}$/.test(vCode)) {
+  try { sessionStorage.setItem('nceks_voucher', vCode); } catch (e) {}
+  setTimeout(() => toast(`Voucher ${vCode} saved`, 'It will be applied when you check out'), 600);
+}
+
+// Don't leave the booking card on "Loading…" forever on a bad connection.
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('Timed out loading store')), ms))]);
+withTimeout(loadStore(), 20000).then(() => {
+  syncBag(false);
+  st.ride = (RIDES.find(r => r.mins === 60) || RIDES[0] || {}).id || null;
+  vs.id = (store.vouchers.find(v => v.mins === 60) || store.vouchers[0] || {}).id || null;
+  if (!RIDES.length) throw new Error('No rides listed');
+  $('#bookLoading').hidden = true;
+  ensureSel(); renderRideOpts(); renderDates(); renderTimes(); renderQty(); renderNext();
+  renderRideCards(); renderVoucherOpts(); renderVoucher();
+  watch();
+  // ?product=<id> (e.g. from checkout's "pick a time again") opens that ride.
+  const pid = params.get('product');
+  if (pid && RD[pid]) pickRide(pid);
+  else if (pid && store.vouchers.some(v => v.id === pid)) { vs.id = pid; renderVoucherOpts(); renderVoucher(); $('#gift').scrollIntoView({behavior: reduce ? 'auto' : 'smooth'}); }
+  // Keep availability fresh while the page is open.
+  setInterval(async () => { await refreshLoad(); renderDates(); renderTimes(); renderQty(); renderNext(); }, 60000);
+}).catch(err => {
+  console.error('Nceks store load failed', err);
+  $('#bookLoading').innerHTML = `Online booking is unavailable right now. <a href="${waUrl('Hi Umzila! I would like to book a quad ride at Nceks Quad Biking.')}" target="_blank" rel="noopener">Book on WhatsApp</a>.`;
+  $('#bookBtn').disabled = true;
+});
+})();
+</script>
+
+</body>
+</html>

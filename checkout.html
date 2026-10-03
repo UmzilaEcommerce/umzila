@@ -4697,7 +4697,11 @@ async function submitToPayFast(cartItems, orderId, total) {
         // Coupon is NOT marked used here — that happens in payfast-itn.js after confirmed payment.
         // Cart is NOT cleared here — cleared in payfast-itn.js (Supabase) and checkout-success.html (localStorage).
         if (supabaseClient) {
+            // The row id is generated here so the insert needs no read-back:
+            // a guest (anon) may create a pending order but can't SELECT it.
+            const newOrderId = crypto.randomUUID();
             const orderData = {
+                id: newOrderId,
                 user_id: state.user?.id || null,
                 profile_id: state.profile?.id || null,
                 customer_email: state.shippingInfo.email,
@@ -4753,18 +4757,16 @@ async function submitToPayFast(cartItems, orderId, total) {
                 priority_fee: 0
             };
 
-            const { data: order, error } = await supabaseClient
+            const { error } = await supabaseClient
                 .from('orders')
-                .insert([orderData])
-                .select()
-                .single();
+                .insert([orderData]);
 
             if (error) {
                 console.error('Error saving order:', error);
                 throw new Error('Failed to create order. Please try again.');
             }
 
-            state.orderId = order.id;
+            state.orderId = newOrderId;
         }
 
         // Marketing opt-in survives the redirect to PayFast and back via

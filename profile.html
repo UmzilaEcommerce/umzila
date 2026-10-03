@@ -1342,7 +1342,7 @@
       type: 'service_dropoff_confirmed', title: '📦 Buyer says item was dropped off',
       body: 'A buyer has confirmed dropping off their item — check the collection point.',
       metadata: { status_id: statusId }, is_read: false
-    }]).catch(() => {});
+    }]); // builders have no .catch(); a failed notification must not block the buyer
   }
 
   function statusBadge(s) {

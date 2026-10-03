@@ -253,13 +253,15 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
             const qty = Number(item.quantity || item.qty || 1);
             if (!pid || qty <= 0) continue;
 
-            // Update order_count ranking signal (fire-and-forget — never blocks completion)
+            // Update order_count ranking signal (fire-and-forget — never blocks completion).
+            // Query builders have no .catch(): calling it threw here and aborted
+            // this whole loop, so paid orders never decremented stock.
             supabase.rpc('increment_product_engagement', {
                 p_product_id:  pid,
                 p_counter_col: 'order_count',
                 p_increment:   qty,
                 p_engaged_at:  new Date().toISOString()
-            }).catch(e => console.warn('completeOrderPayment: ranking update failed for', pid, e.message));
+            }).then(({ error }) => { if (error) console.warn('completeOrderPayment: ranking update failed for', pid, error.message); });
 
             if (item.listing_type !== 'service') {
                 // Decrement product-level stock
