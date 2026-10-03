@@ -828,6 +828,16 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
 
     const customerName = esc(order.customer_name || 'Customer');
 
+    // Drop-off services move a physical item customer -> seller -> customer;
+    // in-person/digital ones don't, so they get the short version.
+    const hasDropoff = sellerItems.some(i => (i.fulfillment_type || 'item_dropoff') === 'item_dropoff');
+    const stepsHtml = hasDropoff
+        ? `<li>The customer will be notified. Umzila collects the item from the customer and drops it off with you &mdash; or, for services where you collect items yourself, you pick it up from the customer.</li>
+        <li>Complete the service and mark it done in your dashboard (with a completion note).</li>
+        <li>The item goes back the same way: Umzila collects it from you and returns it to the customer, or you return it yourself if you collected it.</li>`
+        : `<li>The customer will be notified.</li>
+        <li>Complete the service and mark it done in your dashboard (with a completion note).</li>`;
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -869,10 +879,7 @@ function buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, si
     <div class="steps">
       <strong>Once accepted:</strong>
       <ol style="margin:8px 0 0;padding-left:18px">
-        <li>The customer will be notified and will drop off their item at the Umzila campus collection point.</li>
-        <li>Umzila will hand the item to you.</li>
-        <li>Complete the service and mark it done in your dashboard (with a completion note).</li>
-        <li>Hand the item back to Umzila for return to the customer.</li>
+        ${stepsHtml}
       </ol>
     </div>
     <p style="font-size:13px;color:#888;text-align:center">Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a></p>
