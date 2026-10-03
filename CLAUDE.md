@@ -147,3 +147,11 @@ Reuse existing functions and logic before creating anything new
 If creating something new, verify thoroughly that no existing solution already exists
 🔗 STORE URLS (added 2026-10-03)
 Every store's public link is umzila.store/<slug> using sellers.slug — never build store links from shop_name. sellers.slug is NOT NULL, unique, auto-generated for every new seller by the sellers_assign_slug trigger (whichever function inserts the row), unchanged when a shop is renamed, and only changeable by admins/service role (admin.html → Manage Shops → Store link). Reserved page names are listed in public.seller_slug_reserved() — add any new top-level page name there. Routing: netlify.toml rewrites /:slug → shop.html; legacy shop.html?shop=<name> links still work and are swapped for the clean URL. When adding a query that renders a store link, include slug in the select.
+
+👥 STORE OWNERS (added 2026-10-03)
+A store can have several equal owners: sellers.user_id (primary) + public.seller_members (co-owners). Any "stores I own" check must use public.my_seller_ids() (all ownership RLS already does). Only admins add/remove owners (admin_add/remove/list_seller_members). Sellers cannot change sellers.status/free_enrollment/application_id/self_arranged_radius_km/user_id, and nobody can self-assign profiles.role or is_admin (guard triggers).
+
+📅 SERVICES, BOOKINGS, VOUCHERS (added 2026-10-03) — read docs/systems/service-orders.md first
+Six service kinds (booking, in_person, dropoff_return, dropoff_kept, digital, voucher), one serviceKind() rule mirrored in 5 files — change them together. Booking capacity = sellers.booking_capacity × service_bookings.units, enforced by trigger; holds only via hold-service-booking.js; pickers read get_booking_load(). Gift vouchers are discount_codes type 'gift_voucher' (store credit, balance, 3 years). R0 orders complete via complete-zero-total-order.js (server re-pricing). Guests can check out (pending-only anon insert; verified guest path in generate-payfast-signature). Supabase query builders have NO .catch() — use { error }.
+
+🎨 BESPOKE STOREFRONTS — see docs/systems/bespoke-storefronts.md. A folder named after a store's slug (e.g. /ncekeniquads/) overrides the generic shop page; it is a skin over Umzila data/cart/checkout, never its own payment flow.

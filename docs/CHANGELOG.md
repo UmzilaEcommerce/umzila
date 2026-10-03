@@ -4,6 +4,31 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — Nceks Quad Biking launch: co-owners, booking engine, gift vouchers, guest checkout, services per kind
+
+Full write-ups: [`docs/systems/service-orders.md`](systems/service-orders.md), [`docs/systems/bespoke-storefronts.md`](systems/bespoke-storefronts.md).
+
+**Asked for:** a new store (Nceks Quad Biking, `/ncekeniquads`, owned by ntandob38@gmail.com) built from a supplied bespoke HTML design; multiple owners per store; fix the untested service system; gift vouchers; each service kind handled properly.
+
+**Real bugs found and fixed (root causes):**
+- `.catch()` on Supabase query builders (they have none) threw mid post-payment: paid service orders never confirmed their booking hold or notified the seller (and skipped later service lines); **product stock was never decremented after any paid order** (`rpc().catch` aborted the stock/order_items loop); referral emails and the profile drop-off notification also aborted.
+- **Guest checkout never worked**: orders insert RLS `auth.uid() = user_id` is NULL = NULL for guests; and `generate-payfast-signature` required a session. Fixed with a pending-only anon insert policy and a verified guest signing path (amount must equal the server's own re-pricing).
+- Slot pickers queried `service_bookings` under buyer RLS → every slot looked free; no DB guard against double-booking beyond one-per-seller; expired holds blocked slots forever; checkout accepted expired holds; signed-in buyers' saved carts (`script.js`, `checkout.html`, `validate-cart.js`) dropped booking/intake fields.
+- Self-service privilege escalation: users could set their own `profiles.role`/`is_admin`; sellers could change their store's `status`; any signed-in user could claim any owner-less store.
+- Seller dashboard injected buyer-supplied names/items unescaped (stored XSS); never showed booked times.
+- 5 active stores had no `sellers.email` and silently never received order emails.
+- In-person/digital services saved as `intake_kind='item'` (buyers saw collection steps); emails/success page/checkout treated every service as "accept → deliver back" with "ships"/delivery/tip wording.
+
+**What changed:** `seller_members` + `my_seller_ids()` (all ownership RLS), admin owner management; capacity booking engine (`booking_capacity`, `units`, trigger, `get_booking_load`, `hold-service-booking`), instant confirm, Bookings tab; gift vouchers (balance, 3 years, star-this-email + WhatsApp/copy block); `complete-zero-total-order` (R0 via server re-pricing, shared `lib/reprice-order.js`); `order-status` for guests' success page; six service kinds with per-kind checkout lines, emails, success page, profile timeline and seller actions; booking↔service-line sync trigger; rep pickers guest-friendly; Nceks bespoke storefront (`/ncekeniquads`), listings, images, hours.
+
+**Verified (local `netlify dev`, live DB, PayFast intercepted, ITN simulated with emails captured not sent):** guest quad booking (3 quads) → hold → checkout → signed PayFast params → paid → booking confirmed, instant `accepted`, seller "booked & paid" email with time; voucher purchase → code issued + voucher email; voucher-covered booking → R0 completion path; tampered R0 order refused; guest signature refuses wrong amount/email/paid/tokenization; guest shoe cleaning with collection/return slots → paid → correct service record; capacity/expiry/re-activation/rejection rules in rolled-back DB transactions; every kind × status rendered from the real seller-dashboard/profile code. All test orders/codes/bookings deleted afterwards; Nceks listings left hidden (`visible=false`) until launch.
+
+**Not verified in the browser (needs a real login):** admin Owners panel, seller Bookings tab / booking settings / card buttons, buyer profile timeline — logic tested via harness only.
+
+**Files:** `ncekeniquads/`, `netlify/functions/{hold-service-booking,complete-zero-total-order,order-status,validate-cart,generate-payfast-signature,manage-discount-codes,submit-marketing-campaign,process-referral}.js`, `netlify/functions/lib/{complete-order-payment,discounts,reprice-order}.js`, `checkout.html`, `checkout-success.html`, `profile.html`, `seller-dashboard.html`, `admin.html`, `shop.html`, `script.js`; migrations `store_co_owners_and_ownership_guards`, `service_bookings_capacity_engine`, `orders_allow_guest_pending_insert`, `sync_booking_with_service_status`.
+
+---
+
 ## 2026-10-03 — Clean store URLs: umzila.store/<store-name>
 
 **What was reported:** store links looked like `umzila.store/shop.html?shop=Sweet%20Corner` — ugly to share, and keyed on the display name, so renaming a shop broke every shared link (sellers can rename their own shop). The name lookup also used `ilike`, where `%`/`_` act as wildcards.
