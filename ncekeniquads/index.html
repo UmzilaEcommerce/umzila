@@ -103,7 +103,8 @@ section[id],footer[id]{scroll-margin-top:72px}
 .bag-n.bump{animation:bump .5s cubic-bezier(.2,2,.4,1)}
 @keyframes bump{from{transform:scale(.4)}}
 @media (max-width:960px){.nav{display:none}}
-@media (max-width:440px){.logo b{font-size:.8rem}.logo img{width:38px}.top-row .btn{padding:.6rem .85rem}}
+@media (max-width:440px){.logo b{font-size:.8rem}.logo img{width:38px}.top-row .btn{padding:.6rem .85rem}.book-head{flex-wrap:wrap}.book{padding:18px}}
+@media (max-width:400px){.logo b{display:none}}
 
 /* hero */
 .hero{position:relative;isolation:isolate;overflow:hidden;background:linear-gradient(180deg,#E7E5DB 0%,#EAE3D3 38%,#EED6B7 74%,#EAC7A0 100%)}
@@ -180,7 +181,7 @@ section[id],footer[id]{scroll-margin-top:72px}
 .assure li{display:flex;align-items:center;gap:5px}
 .assure .ic{width:14px;height:14px;color:var(--brand-green)}
 @media (max-width:960px){
-  .hero-grid{grid-template-columns:1fr;gap:0;padding-bottom:40px}
+  .hero-grid{grid-template-columns:minmax(0,1fr);gap:0;padding-bottom:40px} /* minmax(0,…): a plain 1fr track grew to the card's 560px max on phones */
   .hero-scene{position:relative;height:250px;margin:18px calc(-1 * var(--gutter)) -70px}
   .book{max-width:560px;width:100%;justify-self:center}
 }
