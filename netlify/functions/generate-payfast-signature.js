@@ -35,15 +35,36 @@ if (event.httpMethod !== 'POST') {
     const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
     const userToken  = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (!userToken) {
-      return {
+      // Guest checkout (no account). Only signed when this is a real unpaid,
+      // account-less order AND the amount equals what the server itself
+      // re-prices that order to (lib/reprice-order.js → validate-cart.js).
+      // Nothing below this check — fields, order, encoding, signature — changes.
+      const guestReject = (msg) => ({
         statusCode: 401,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*' },
-        body: JSON.stringify({ error: 'Authentication required' })
-      };
+        body: JSON.stringify({ error: msg || 'Authentication required' })
+      });
+      let gp;
+      try { gp = (JSON.parse(event.body || '{}').payload) || {}; } catch (e) { return guestReject(); }
+      const gm = String(gp.m_payment_id || '');
+      const gAmount = Number(gp.amount);
+      if (!/^UMZILA-\d{10,}-[a-z0-9]{6,}$/i.test(gm) || !(gAmount > 0) || gp.subscription_type) return guestReject();
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return guestReject();
+      const { repriceOrder } = require('./lib/reprice-order');
+      const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+      const priced = await repriceOrder(admin, gm);
+      const o = priced.order;
+      const emailOk = !gp.email_address || (o && String(o.customer_email || '').toLowerCase() === String(gp.email_address).toLowerCase());
+      if (!priced.ok || !o || o.user_id || o.order_status !== 'pending_payment' || o.payment_status === 'paid'
+          || !emailOk || Math.abs(priced.due - gAmount) > 0.004) {
+        console.warn('generate-payfast-signature: guest payment refused', gm, priced.ok ? { due: priced.due, asked: gAmount } : priced.error);
+        const amountOnly = priced.ok && o && !o.user_id && o.order_status === 'pending_payment' && o.payment_status !== 'paid' && emailOk;
+        return guestReject(amountOnly ? 'Order total changed — please refresh checkout.' : 'Authentication required');
+      }
     }
     const SUPABASE_URL      = process.env.SUPABASE_URL || '';
     const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    if (userToken && SUPABASE_URL && SUPABASE_ANON_KEY) { // guests were verified above
       const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
       const { data: { user }, error: authErr } = await sb.auth.getUser(userToken);
       if (authErr || !user) {
