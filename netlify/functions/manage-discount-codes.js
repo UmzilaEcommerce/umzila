@@ -43,7 +43,12 @@ exports.handler = async function (event) {
 
   let ownedSellerIds = [];
   if (!isAdmin) {
-    const { data: shops } = await admin.from('sellers').select('id, shop_name').eq('user_id', user.id);
+    // Primary-owned stores plus any the user co-owns (seller_members).
+    const { data: memberRows } = await admin.from('seller_members').select('seller_id').eq('user_id', user.id);
+    const memberIds = (memberRows || []).map(m => m.seller_id);
+    let shopsQ = admin.from('sellers').select('id, shop_name');
+    shopsQ = memberIds.length ? shopsQ.or(`user_id.eq.${user.id},id.in.(${memberIds.join(',')})`) : shopsQ.eq('user_id', user.id);
+    const { data: shops } = await shopsQ;
     ownedSellerIds = (shops || []).map(s => s.id);
     if (!ownedSellerIds.length) {
       return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden' }) };

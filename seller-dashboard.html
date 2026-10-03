@@ -1911,12 +1911,22 @@
       return !linkErr;
     }
 
+    // Every store this user owns — primary (sellers.user_id) or co-owner
+    // (seller_members) — via the same my_seller_ids() the RLS policies use.
+    async function fetchMyShops() {
+      var idsRes = await SD.sb.rpc('my_seller_ids');
+      if (idsRes.error) return { data: null, error: idsRes.error };
+      var ids = (idsRes.data || []).map(function (r) { return typeof r === 'string' ? r : (r && r.my_seller_ids); }).filter(Boolean);
+      if (!ids.length) return { data: [], error: null };
+      return SD.sb.from('sellers').select('*').in('id', ids).order('created_at', { ascending: true });
+    }
+
     async function loadSellerRow() {
-      var { data, error } = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).order('created_at', { ascending: true });
+      var { data, error } = await fetchMyShops();
       if (error || !data || !data.length) {
         var linked = await linkSellerIfNeeded(SD.user);
         if (linked) {
-          var reRes = await SD.sb.from('sellers').select('*').eq('user_id', SD.user.id).order('created_at', { ascending: true });
+          var reRes = await fetchMyShops();
           if (reRes.data && reRes.data.length) {
             SD.shops = reRes.data;
             if (SD.shops.length === 1) { SD.seller = SD.shops[0]; showDashboard(); }

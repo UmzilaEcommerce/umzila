@@ -3420,6 +3420,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           ${slugRow}
           ${radiusRow}
+          <div style="margin-top:8px">
+            <button onclick="toggleShopOwners('${escapeHtml(s.id)}')" style="padding:4px 10px;border-radius:6px;border:1px solid #dde1ea;background:#fff;color:#0a2f66;font-size:12px;font-weight:600;cursor:pointer">👥 Owners</button>
+            <div id="owners-${escapeHtml(s.id)}" style="display:none;margin-top:8px"></div>
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
           <span style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600">${escapeHtml(s.status || 'unknown')}</span>
@@ -3480,6 +3484,52 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       showToast('Store link set to /' + raw);
       await loadManageShops();
     } catch (e) { showToast('Save failed'); }
+  };
+  // Co-owners (seller_members): every owner gets the full seller dashboard
+  // for this store. Admin-only — admin_*_seller_member() check admins
+  // server-side. The person must already have an Umzila account.
+  window.toggleShopOwners = async function(sellerId) {
+    const box = document.getElementById('owners-' + sellerId);
+    if (!box) return;
+    if (box.style.display !== 'none' && box.dataset.loaded) { box.style.display = 'none'; return; }
+    box.style.display = '';
+    await renderShopOwners(sellerId);
+  };
+
+  async function renderShopOwners(sellerId) {
+    const box = document.getElementById('owners-' + sellerId);
+    if (!box || !supabaseClient) return;
+    box.innerHTML = '<div style="font-size:12px;color:var(--muted)">Loading owners…</div>';
+    const { data, error } = await supabaseClient.rpc('admin_list_seller_members', { p_seller_id: sellerId });
+    if (error) { box.innerHTML = `<div style="font-size:12px;color:#b91c1c">${escapeHtml(error.message)}</div>`; return; }
+    box.dataset.loaded = '1';
+    const rows = (data || []).map(m => `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0">
+        <span>${escapeHtml(m.email || m.user_id)}</span>
+        ${m.is_primary ? '<span style="background:#e8edf8;color:#0a2f66;border-radius:999px;padding:1px 8px;font-weight:700">primary</span>'
+          : `<button onclick="removeShopOwner('${escapeHtml(sellerId)}','${escapeHtml(m.user_id)}','${escapeHtml(m.email || '')}')" style="border:none;background:none;color:#dc2626;font-size:12px;font-weight:600;cursor:pointer">Remove</button>`}
+      </div>`).join('') || '<div style="font-size:12px;color:var(--muted)">No owner linked yet.</div>';
+    box.innerHTML = rows + `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <input type="email" id="ownerEmail-${escapeHtml(sellerId)}" placeholder="their Umzila account email" style="width:220px;padding:4px 6px;border:1px solid #dde1ea;border-radius:6px;font-size:12px">
+        <button onclick="addShopOwner('${escapeHtml(sellerId)}')" style="padding:4px 10px;border-radius:6px;border:none;background:#0a2f66;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Add owner</button>
+      </div>`;
+  }
+
+  window.addShopOwner = async function(sellerId) {
+    const input = document.getElementById('ownerEmail-' + sellerId);
+    const email = input ? input.value.trim() : '';
+    if (!/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) { showToast('Enter a valid email'); return; }
+    const { error } = await supabaseClient.rpc('admin_add_seller_member', { p_seller_id: sellerId, p_email: email });
+    if (error) { showToast(error.message); return; }
+    showToast(email + ' can now manage this store');
+    await renderShopOwners(sellerId);
+  };
+
+  window.removeShopOwner = async function(sellerId, userId, email) {
+    if (!confirm('Remove ' + (email || 'this person') + ' as an owner of this store?')) return;
+    const { error } = await supabaseClient.rpc('admin_remove_seller_member', { p_seller_id: sellerId, p_user_id: userId });
+    if (error) { showToast(error.message); return; }
+    showToast('Owner removed');
+    await renderShopOwners(sellerId);
   };
   /* ============================================================ end Manage Shops */
 

@@ -45,7 +45,12 @@ exports.handler = async function (event) {
 
   let sellerRow = null;
   if (!isAdmin) {
-    const { data: shops } = await admin.from('sellers').select('id, shop_name, slug').eq('user_id', user.id);
+    // Primary-owned stores plus any the user co-owns (seller_members).
+    const { data: memberRows } = await admin.from('seller_members').select('seller_id').eq('user_id', user.id);
+    const memberIds = (memberRows || []).map(m => m.seller_id);
+    let shopsQ = admin.from('sellers').select('id, shop_name, slug');
+    shopsQ = memberIds.length ? shopsQ.or(`user_id.eq.${user.id},id.in.(${memberIds.join(',')})`) : shopsQ.eq('user_id', user.id);
+    const { data: shops } = await shopsQ;
     if (!shops || !shops.length) return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden' }) };
     // A seller campaign is scoped to whichever shop the request names, or
     // their first shop if unspecified — verified against their own list,
