@@ -4080,7 +4080,7 @@ function openSectionView(key){
 // popstate handler, and initial deep-link resolution, so they can't drift.
 const SECTION_KEY_MAP = {
   hot:        { type:'hot',        title:'Hot Deals' },
-  trending:   { type:'trending',   title:'Trending on Campus' },
+  trending:   { type:'trending',   title:'Trending on Umzila' },
   newDrops:   { type:'newDrops',   title:'New Drops' },
   student:    { type:'student',    title:'Back to School' },
   underR100:  { type:'underR100',  title:'Under R100' },
