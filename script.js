@@ -650,7 +650,7 @@ function initMobileFilters() {
     mobileFiltersToggle.addEventListener('click', () => {
       const isActive = mobileFiltersContent.classList.contains('active');
       mobileFiltersContent.classList.toggle('active');
-      mobileFiltersToggle.textContent = isActive ? 'Show Filters' : 'Hide Filters';
+      mobileFiltersToggle.setAttribute('aria-expanded', String(!isActive));
     });
     
     // Apply mobile filters
@@ -695,7 +695,7 @@ function initMobileFilters() {
         
         // Close mobile filters
         mobileFiltersContent.classList.remove('active');
-        mobileFiltersToggle.textContent = 'Show Filters';
+        mobileFiltersToggle.setAttribute('aria-expanded', 'false');
         
         // Apply filters
         applyFilters();

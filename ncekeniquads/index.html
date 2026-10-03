@@ -182,7 +182,7 @@ section[id],footer[id]{scroll-margin-top:72px}
 .assure .ic{width:14px;height:14px;color:var(--brand-green)}
 @media (max-width:960px){
   .hero-grid{grid-template-columns:minmax(0,1fr);gap:0;padding-bottom:40px} /* minmax(0,…): a plain 1fr track grew to the card's 560px max on phones */
-  .hero-scene{position:relative;height:250px;margin:18px calc(-1 * var(--gutter)) -70px}
+  .hero-scene{position:relative;height:250px;margin:18px calc(-1 * var(--gutter)) 6px} /* was -70px: card overlapped the bikers */
   .book{max-width:560px;width:100%;justify-self:center}
 }
 

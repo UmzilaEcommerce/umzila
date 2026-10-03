@@ -7,7 +7,7 @@
   <meta name="description" content="Shop Durban's best local businesses in one place. Food, products and services from vetted local stores, delivered to your door. Found on Umzila.">
   <meta property="og:title" content="Umzila | Durban's Best Local Businesses, Delivered">
   <meta property="og:description" content="Food, products and services from Durban's best local businesses, in one place and delivered. Only the best get in.">
-  <link rel="icon" href="umzila.webp" type="image/webp">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 </head>
@@ -252,8 +252,11 @@
       <!-- MOBILE FILTERS SECTION -->
       <div class="mobile-filters-container">
         <div class="mobile-filters-header">
-          <h3>Filters</h3>
-          <button class="mobile-filters-toggle" id="mobileFiltersToggle">Show Filters</button>
+          <button class="mobile-filters-toggle" id="mobileFiltersToggle" type="button" aria-expanded="false" aria-controls="mobileFiltersContent">
+            <span class="mft-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
+            <span class="mft-text"><b>Filters</b><small>Price, size &amp; sort</small></span>
+            <svg class="mft-chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
         </div>
         <div class="mobile-filters-content" id="mobileFiltersContent">
           <div class="mobile-filter-group">
@@ -1167,12 +1170,14 @@
           var logoInner = s.logo_url
             ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
             : '<span>' + initials + '</span>';
-          var featBadge = featuredIds.has(s.id) ? '<div style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:999px;padding:1px 7px;font-weight:700;margin-top:2px">Featured</div>' : '';
+          var featBadge = featuredIds.has(s.id) ? '<span class="shop-card-feat">Featured</span>' : '';
           return '<a class="shop-card" href="' + (s.slug ? '/' + s.slug : 'shop.html?shop=' + encodeURIComponent(s.shop_name)) + '">' +
             '<div class="shop-card-logo">' + logoInner + '</div>' +
-            '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
-            '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
-            featBadge +
+            '<div class="shop-card-body">' +
+              '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
+              '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + featBadge + '</div>' +
+            '</div>' +
+            '<svg class="shop-card-go" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>' +
           '</a>';
         }).join('');
         document.getElementById('featuredShopsSection').style.display = '';

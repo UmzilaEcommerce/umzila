@@ -4,6 +4,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — New favicon, compact featured shops, slim mobile filters, Nceks booking card below the bikers
+
+- **Favicon:** the old `umzila.webp` icon was a thin blue logo that disappeared at tab size. New `favicon.svg`: a white "u" on a navy rounded tile, drawn as a route that ends in an arrow under the red destination dot (the same dot as the wordmark), with a faint white edge so it reads on light and dark tabs. All 16 pages link it, with `umzila.webp` kept as the fallback icon.
+- **Featured shops (homepage):** three tall centred cards (60 px logos, ~230 px of the phone screen) became slim horizontal cards: a 44 px ringed logo, name, item count, inline "Featured" pill and a chevron. That's three across on desktop, and on phones (≤640 px) a swipe strip where the next shop peeks in. The section is now ~116 px tall. Markup is in `index.html`'s top-3 render; styles are the `.shops-top3`/`.shop-card*` rules in `style.css`. The old mobile top-border override was removed.
+- **Mobile filters:** the white card with a "Filters" heading and a big navy "Show Filters" button is now a single 44 px row (sliders icon, "Filters · Price, size & sort", chevron). The panel only becomes a card while open (`:has([aria-expanded="true"])`), and its controls were tightened (small-caps labels, pill size chips). `script.js` now toggles `aria-expanded` instead of rewriting the button text, which would wipe the icon. Filter logic is unchanged; verified that Apply still closes it.
+- **Nceks (`/ncekeniquads`) on phones:** the booking card overlapped the biker animation by 70 px, so people missed the bikes. It now sits 6 px below the scene (`.hero-scene` bottom margin in `ncekeniquads/index.html`).
+
 ## 2026-10-03 — Checkout terms prompt, faster checkout start, mobile category tiles, Velaphi hero link
 
 - **Terms prompt hidden on mobile:** the "agree to terms" error rendered in `#paymentError` above the fold while buyers pressed the sticky Pay bar, then vanished after 5 s — it only became visible if "More options" happened to shift the page. Now `promptForTerms()` scrolls to the checkbox, highlights it and shows the message beside it; `showError()` scrolls any off-screen error into view (8 s).
