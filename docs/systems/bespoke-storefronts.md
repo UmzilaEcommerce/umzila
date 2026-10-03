@@ -19,7 +19,7 @@ A paid option for stores that want a site that looks like their own while still 
 1. Create/approve the store; set its slug (admin → Manage Shops → Store link).
 2. Create listings with `metadata.storefront_role` (and anything the design needs, e.g. `ride_minutes`). Upload images to `product-images/stores/<slug>/`.
 3. Put the design in `/<slug>/`, wire it the same way (copy the Nceks script's CONFIG/SA time/cart/hold sections). Never hardcode prices or the site URL; never take payment anywhere but Umzila checkout.
-4. For link previews (WhatsApp etc.) `og:image` must be absolute — use the image's Supabase storage URL, not the site domain.
+4. Never paste the Supabase project URL into a page — Netlify secret scanning fails the build. `og:image` uses the page's own `/<slug>/img/...` path (site-relative, since the site URL must not be hardcoded either; most previewers resolve it, some may not).
 
 ## Gotchas
 
