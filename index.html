@@ -765,20 +765,22 @@
       <!-- S4: fun fact prompt -->
       <div class="mystery-pane" id="myP4" style="text-align:center">
         <div style="font-size:32px;margin-bottom:8px">🤔</div>
-        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px">Want a fun fact about us for a little extra value?</h2>
+        <h2 style="color:var(--color-accent);margin:0 0 8px;font-size:19px">Want an extra 2% off on top?</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 16px">Read 4 quick facts about Umzila and we'll add an extra 2% off on top of your mystery gift.</p>
         <div style="display:flex;gap:10px">
           <button class="btn ghost" id="myBtnFunNo" style="flex:1;padding:12px">No, just the gift</button>
-          <button class="btn" id="myBtnFunYes" style="flex:1;padding:12px">Yes, tell me</button>
+          <button class="btn" id="myBtnFunYes" style="flex:1;padding:12px">Yes, add 2%</button>
         </div>
       </div>
 
-      <!-- S4 reveal: fun fact shown briefly -->
+      <!-- S4 reveal: all fun facts, user continues when done reading -->
       <div class="mystery-pane" id="myP4r" style="text-align:center">
         <div style="font-size:32px;margin-bottom:8px">✨</div>
-        <div style="background:var(--color-accent-tint);border-radius:var(--radius-lg);padding:18px 20px">
-          <p style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;font-weight:700">Little-known Umzila fact</p>
-          <p id="myFunFactText" style="color:var(--color-accent);font-size:15px;line-height:1.6;margin:0;font-weight:600"></p>
+        <div style="background:var(--color-accent-tint);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px;text-align:left">
+          <p style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px;font-weight:700;text-align:center">4 things to know about Umzila</p>
+          <ol id="myFunFactList" style="color:var(--color-accent);font-size:14px;line-height:1.6;margin:0;padding-left:20px;font-weight:600"></ol>
         </div>
+        <button class="btn" id="myBtnFunDone" style="width:100%;padding:14px">Claim my gift + 2%</button>
       </div>
 
       <!-- S6: plain claim success -->
@@ -1516,7 +1518,8 @@
 
     var myBtnFunYes       = document.getElementById('myBtnFunYes');
     var myBtnFunNo        = document.getElementById('myBtnFunNo');
-    var myFunFactText     = document.getElementById('myFunFactText');
+    var myFunFactList     = document.getElementById('myFunFactList');
+    var myBtnFunDone      = document.getElementById('myBtnFunDone');
 
     var myBtnClaimedContinue = document.getElementById('myBtnClaimedContinue');
     var myBtnActiveContinue  = document.getElementById('myBtnActiveContinue');
@@ -1573,6 +1576,7 @@
     modal.addEventListener('click', function(e){
       if (e.target !== modal) return;
       if (currentPane === 'myP4') { advanceAfterFunFact(false); return; } // backdrop-click on fun-fact pane == "No"
+      if (currentPane === 'myP4r') { if (!myBtnFunDone.disabled) myBtnFunDone.click(); return; } // facts already shown == claim with the bonus
       closeMystery();
     });
 
@@ -1710,16 +1714,24 @@
 
     // ---- S4: fun fact prompt ----
     myBtnFunYes.addEventListener('click', function() {
-      var fact = FUN_FACTS[Math.floor(Math.random() * FUN_FACTS.length)];
-      myFunFactText.textContent = fact;
+      myFunFactList.innerHTML = '';
+      FUN_FACTS.forEach(function(fact) {
+        var li = document.createElement('li');
+        li.style.marginBottom = '8px';
+        li.textContent = fact;
+        myFunFactList.appendChild(li);
+      });
       showPane('myP4r');
-      setTimeout(function(){ advanceAfterFunFact(true, fact); }, 2500);
     });
     myBtnFunNo.addEventListener('click', function() { advanceAfterFunFact(false); });
+    myBtnFunDone.addEventListener('click', function() {
+      myBtnFunDone.disabled = true; myBtnFunDone.textContent = 'Claiming...';
+      advanceAfterFunFact(true);
+    });
 
-    function advanceAfterFunFact(funFact, factText) {
-      if (viaProfileSignin) { doPostLogin(funFact, factText); }
-      else { doClaim(funFact, factText); }
+    function advanceAfterFunFact(funFact) {
+      if (viaProfileSignin) { doPostLogin(funFact); }
+      else { doClaim(funFact); }
     }
 
     // ---- server calls ----
@@ -1736,16 +1748,14 @@
       }
     }
 
-    async function doClaim(funFact, factText) {
+    async function doClaim(funFact) {
       var body = { action: 'claim', email: currentEmail, fun_fact: !!funFact };
-      if (funFact && factText) body.fact_text = factText;
       var data = await apiCall(body);
       handleOutcome(data);
     }
 
-    async function doPostLogin(funFact, factText) {
+    async function doPostLogin(funFact) {
       var body = { action: 'post_login', email: currentEmail, fun_fact: !!funFact };
-      if (funFact && factText) body.fact_text = factText;
       var data = await apiCall(body, authToken);
       handleOutcome(data);
     }

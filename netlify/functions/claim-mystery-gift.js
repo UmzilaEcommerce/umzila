@@ -1,10 +1,10 @@
 // netlify/functions/claim-mystery-gift.js
 // Action-routed mystery-gift endpoint:
 //   check      {email}                         -> {has_profile, code_state}
-//   claim      {email, fun_fact, fact_text}     -> creates/looks up a 10% mystery code (or, if the
+//   claim      {email, fun_fact}                -> creates/looks up a 10% mystery code (12% with fun_fact) (or, if the
 //                                                  email's existing code is already used/expired,
 //                                                  issues the small free-item consolation gift)
-//   post_login {email, fun_fact, fact_text}     -> same as above but requires a Bearer JWT whose
+//   post_login {email, fun_fact}                -> same as above but requires a Bearer JWT whose
 //                                                  own email matches the body email; the only path
 //                                                  that can reinstate an expired code or confirm
 //                                                  free-gift issuance for an account that exists.
@@ -58,11 +58,10 @@ exports.handler = async function (event) {
 
     if (action === 'claim') {
       const funFact = !!body.fun_fact;
-      const factText = typeof body.fact_text === 'string' ? body.fact_text.slice(0, 300) : '';
       const { state, row } = await classifyCode(admin, rawEmail);
 
       if (state === 'none') {
-        const created = await issueMysteryCode(admin, rawEmail, funFact, factText, SITE_BASE_URL, RESEND_KEY);
+        const created = await issueMysteryCode(admin, rawEmail, funFact, SITE_BASE_URL, RESEND_KEY);
         if (!created) return serverError();
         return ok({ state: 'claimed' });
       }
@@ -91,11 +90,10 @@ exports.handler = async function (event) {
         return unauthorized('Email does not match authenticated user');
 
       const funFact = !!body.fun_fact;
-      const factText = typeof body.fact_text === 'string' ? body.fact_text.slice(0, 300) : '';
       const { state, row } = await classifyCode(admin, rawEmail);
 
       if (state === 'none') {
-        const created = await issueMysteryCode(admin, rawEmail, funFact, factText, SITE_BASE_URL, RESEND_KEY);
+        const created = await issueMysteryCode(admin, rawEmail, funFact, SITE_BASE_URL, RESEND_KEY);
         if (!created) return serverError();
         return ok({ state: 'claimed' });
       }
@@ -163,9 +161,9 @@ function randomSuffix(n) {
   return out;
 }
 
-// Creates a fresh 10% mystery code and emails it. The discount value/shape is identical
-// regardless of fun_fact — only the email copy differs.
-async function issueMysteryCode(admin, email, funFact, factText, SITE_BASE_URL, RESEND_KEY) {
+// Creates a fresh mystery code and emails it. 10% normally; 12% when the user chose to read
+// the fun facts in the popup (index.html promises "an extra 2% on top" for doing so).
+async function issueMysteryCode(admin, email, funFact, SITE_BASE_URL, RESEND_KEY) {
   const code = 'MYSTERY' + randomSuffix(6);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
@@ -174,7 +172,7 @@ async function issueMysteryCode(admin, email, funFact, factText, SITE_BASE_URL, 
     .from('discount_codes')
     .insert([{
       code,
-      amount: 10,
+      amount: funFact ? 12 : 10,
       used: false,
       expires_at: expiresAt.toISOString(),
       email,
@@ -192,7 +190,7 @@ async function issueMysteryCode(admin, email, funFact, factText, SITE_BASE_URL, 
     const expiryLabel = expiresAt.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg' });
     try {
       const html = funFact
-        ? buildMysteryFunFactEmail(newCode.code, expiryLabel, SITE_BASE_URL, factText)
+        ? buildMysteryFunFactEmail(newCode.code, expiryLabel, SITE_BASE_URL)
         : buildMysteryEmail(newCode.code, expiryLabel, SITE_BASE_URL);
       const subject = funFact
         ? 'Your mystery gift — with a little something extra 🎁'
@@ -246,7 +244,7 @@ async function reinstateCode(admin, row, SITE_BASE_URL, RESEND_KEY) {
           from: 'Umzila <noreply@umzila.store>',
           to: [updated.email],
           subject: 'Your mystery code is back from the dead 🧟🎁',
-          html: buildReinstateEmail(updated.code, expiryLabel, SITE_BASE_URL)
+          html: buildReinstateEmail(updated.code, updated.amount, expiryLabel, SITE_BASE_URL)
         })
       });
       if (!res.ok) console.error('claim-mystery-gift: Resend error', res.status, await res.text());
@@ -379,12 +377,9 @@ function buildMysteryEmail(code, expiryLabel, siteUrl) {
 //foto
 }
 
-// Same underlying gift as buildMysteryEmail (identical code/amount/expiry) — only the copy
-// changes, referencing the fun fact the user chose to see on-site.
-function buildMysteryFunFactEmail(code, expiryLabel, siteUrl, fact) {
-  const factLine = fact
-    ? esc(fact)
-    : "not every store gets onto Umzila. Businesses are vetted first, so only the best get in.";
+// Sent when the user read the fun facts on-site — their code carries the extra 2%
+// (12% vs 10%), so the copy confirms the bonus without revealing the base amount.
+function buildMysteryFunFactEmail(code, expiryLabel, siteUrl) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -417,12 +412,12 @@ function buildMysteryFunFactEmail(code, expiryLabel, siteUrl, fact) {
     <p>Your mystery gift has arrived — plus a little extra</p>
   </div>
   <div class="bd">
-    <h2>Since you wanted the extra, here's a secret.</h2>
-    <div class="fact-wrap"><p>${factLine}</p></div>
+    <h2>Thanks for getting to know us.</h2>
+    <div class="fact-wrap"><p>Because you read up on Umzila, we've added an extra 2% off on top of your mystery gift.</p></div>
     <div class="gift-wrap">
       <div class="gift-icon">🎁</div>
       <p class="gift-teaser">Your mystery gift is inside.</p>
-      <p class="gift-sub">The gift below is the same great mystery either way.</p>
+      <p class="gift-sub">Your bonus is already built into the code below.</p>
     </div>
     <p>We don't want to spoil the surprise — just enter the code below when you checkout and watch what happens. Trust us, you'll like it.</p>
     <div class="code-box">
@@ -439,7 +434,7 @@ function buildMysteryFunFactEmail(code, expiryLabel, siteUrl, fact) {
 </div></body></html>`;
 }
 
-function buildReinstateEmail(code, expiryLabel, siteUrl) {
+function buildReinstateEmail(code, amount, expiryLabel, siteUrl) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -466,7 +461,7 @@ function buildReinstateEmail(code, expiryLabel, siteUrl) {
   </div>
   <div class="bd">
     <h2>It expired unused — so we brought it back.</h2>
-    <p>Your mystery discount quietly expired without ever being used. Since that's a shame, we've revived it — same code, same 10% off, fresh expiry date below.</p>
+    <p>Your mystery discount quietly expired without ever being used. Since that's a shame, we've revived it — same code, same ${esc(String(amount || 10))}% off, fresh expiry date below.</p>
     <div class="code-box">
       <div class="code">${esc(code)}</div>
       <div class="note">Enter at checkout &bull; Valid until ${esc(expiryLabel)}</div>

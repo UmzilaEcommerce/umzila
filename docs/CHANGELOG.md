@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — Rebrand off "campus marketplace" + Mystery Gift fun facts now earn a real 2% bonus
+
+**What was reported:** Google showed Umzila as a "campus marketplace"; homepage copy (footer, section titles, Sell modal, fun facts, "How delivery works") still described a UKZN-student, bike-delivery, order-number-handover operation. Separately, the Mystery Gift popup's fun-fact step offered "a little extra value" but gave nothing extra — every claim got the same 10% code, only the email copy differed — and only one random fact was shown, for 2.5s.
+
+**What changed:**
+- SEO: `index.html` title/meta description/og tags → "Umzila | Durban's Best Local Businesses, Delivered". `og:url` deliberately omitted (CLAUDE.md: never hardcode the site URL in the frontend; crawlers default to the fetched URL). `about.html` title fixed (was "About-Streetsale") + meta description + long About paragraph.
+- Copy: footer tagline (index/shop/about), "Trending on Campus" → "Trending on Umzila" (index.html + script.js `SECTION_KEY_MAP`), Sell modal intro, seller location field ("Your location", no campus), fun facts rewritten for the Durban-businesses positioning, "How delivery works" (myP7) → address at checkout / track live / show 4-digit code.
+- Mystery Gift bonus: prompt now reads "Want an extra 2% off on top?"; "Yes" shows all 4 facts in a list with a "Claim my gift + 2%" button (no auto-advance timer). Backdrop-click on the facts pane claims with the bonus (it used to auto-claim after 2.5s, so a close-without-claim would otherwise be a regression). `claim-mystery-gift.js` issues `amount: 12` when `fun_fact` is true (10 otherwise); checkout already applies `mystery_gift` codes as a percentage of `amount` (`lib/discounts.js`), so no checkout change. The client no longer sends `fact_text` and the server no longer echoes client text into the email — the fun-fact email now confirms the extra 2% instead. Reinstate email reads the code's real `amount` instead of hardcoded "10%". The fun-fact step is only offered when `code_state === 'none'`, so the bonus only ever lands on a freshly minted code.
+
+**Verified:** popup walked end-to-end on local `netlify dev` with the claim call stubbed in-page (no real code/email); handler run against a mocked Supabase/Resend: `fun_fact:true` → amount 12 + bonus email, `false` → amount 10 + plain email.
+
+**Still pending:** 22 "campus marketplace" email footers across 10 Netlify functions (incl. PayFast-adjacent `payfast-itn.js`, `lib/complete-order-payment.js`) — awaiting owner go-ahead.
+
+**Files:** `index.html`, `about.html`, `shop.html`, `script.js`, `netlify/functions/claim-mystery-gift.js`.
+
+---
+
 ## 2026-09-26 — Checkout: split the value-anchor line from the time estimate, scale wait time per store
 
 **What changed (founder follow-up to the time-saved anchor below):**
