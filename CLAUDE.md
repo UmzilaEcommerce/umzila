@@ -145,3 +145,5 @@ Do not modify any PayFast-related Netlify functions — they are correct and mus
 Do not expose any Supabase or PayFast keys in frontend code
 Reuse existing functions and logic before creating anything new
 If creating something new, verify thoroughly that no existing solution already exists
+🔗 STORE URLS (added 2026-10-03)
+Every store's public link is umzila.store/<slug> using sellers.slug — never build store links from shop_name. sellers.slug is NOT NULL, unique, auto-generated for every new seller by the sellers_assign_slug trigger (whichever function inserts the row), unchanged when a shop is renamed, and only changeable by admins/service role (admin.html → Manage Shops → Store link). Reserved page names are listed in public.seller_slug_reserved() — add any new top-level page name there. Routing: netlify.toml rewrites /:slug → shop.html; legacy shop.html?shop=<name> links still work and are swapped for the clean URL. When adding a query that renders a store link, include slug in the select.

@@ -1111,7 +1111,7 @@ async function loadProducts() {
       .select(`
         *,
         product_images!fk_product_images_product(*),
-        sellers(id, shop_name, logo_url, whatsapp_number, delivery_method, turnaround_time, status)
+        sellers(id, shop_name, slug, logo_url, whatsapp_number, delivery_method, turnaround_time, status)
       `)
       .eq('visible', true)
       .order('created_at', { ascending: false });
@@ -3269,7 +3269,7 @@ async function openProductModal(id) {
         <div class="product-modal-seller" style="display:flex;flex-direction:column;gap:6px;margin:6px 0 10px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="font-size:13px;color:#6b7280">Sold by</span>
-            <a href="shop.html?shop=${encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${esc(currentModalProduct.seller.shop_name)} ↗</a>
+            <a href="${currentModalProduct.seller.slug ? '/' + currentModalProduct.seller.slug : 'shop.html?shop=' + encodeURIComponent(currentModalProduct.seller.shop_name)}" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none" target="_blank">${esc(currentModalProduct.seller.shop_name)} ↗</a>
           </div>
           ${currentModalProduct.seller.turnaround_time ? `
           <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px;flex-wrap:wrap">
@@ -3959,7 +3959,9 @@ function setupProductModalEvents(bundleProduct) {
   if (shareBtn && currentModalProduct) {
     shareBtn.addEventListener('click', function() {
       var url = currentModalProduct.seller && currentModalProduct.seller.shop_name
-        ? window.location.origin + '/shop.html?shop=' + encodeURIComponent(currentModalProduct.seller.shop_name) + '&product=' + currentModalProduct.id
+        ? window.location.origin + (currentModalProduct.seller.slug
+            ? '/' + currentModalProduct.seller.slug + '?product='
+            : '/shop.html?shop=' + encodeURIComponent(currentModalProduct.seller.shop_name) + '&product=') + currentModalProduct.id
         : window.location.origin + '/?product=' + currentModalProduct.id;
       navigator.clipboard.writeText(url).then(function() {
         var originalHTML = shareBtn.innerHTML;

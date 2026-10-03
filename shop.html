@@ -3,6 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script>
+    // Clean store URLs (umzila.store/<slug>) are rewritten to this page by
+    // netlify.toml. A trailing slash would break every relative asset path
+    // below (style.css, umzila.webp…), so drop it before anything loads.
+    (function () {
+      var p = location.pathname;
+      if (p.length > 1 && p.charAt(p.length - 1) === '/') location.replace(p.replace(/\/+$/, '') + location.search + location.hash);
+    })();
+  </script>
   <title>Shop — Umzila</title>
   <link rel="icon" href="umzila.webp" type="image/webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -468,6 +477,12 @@
       return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
+    // Clean store link (umzila.store/<slug>); legacy name link as a fallback.
+    function storeUrl(seller) {
+      if (!seller) return '/';
+      return seller.slug ? '/' + seller.slug : '/shop.html?shop=' + encodeURIComponent(seller.shop_name || '');
+    }
+
     function timeOnUmzila(createdAt) {
       if (!createdAt) return '';
       var ms = Date.now() - new Date(createdAt).getTime();
@@ -693,7 +708,7 @@
         sellerHtml = '<div class="product-modal-seller" style="display:flex;flex-direction:column;gap:6px;margin:6px 0 10px">' +
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
             '<span style="font-size:13px;color:#6b7280">Sold by</span>' +
-            '<a href="shop.html?shop=' + encodeURIComponent(full.seller.shop_name) + '" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none">' + escHtml(full.seller.shop_name) + ' ↗</a>' +
+            '<a href="' + escHtml(storeUrl(full.seller)) + '" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none">' + escHtml(full.seller.shop_name) + ' ↗</a>' +
           '</div>' + delivInfo +
         '</div>';
       }
@@ -823,10 +838,8 @@
       var shareBtn = document.getElementById('sh-share-btn');
       if (shareBtn) {
         shareBtn.addEventListener('click', function() {
-          var shopParam = full.seller && full.seller.shop_name
-            ? 'shop.html?shop=' + encodeURIComponent(full.seller.shop_name) + '&product=' + full.id
-            : '?product=' + full.id;
-          var url = window.location.origin + '/' + shopParam;
+          var base = full.seller && (full.seller.slug || full.seller.shop_name) ? storeUrl(full.seller) : '/';
+          var url = window.location.origin + base + (base.indexOf('?') === -1 ? '?' : '&') + 'product=' + full.id;
           navigator.clipboard.writeText(url).then(function() {
             var originalHTML = shareBtn.innerHTML;
             shareBtn.textContent = '✓ Copied!';
@@ -1091,23 +1104,57 @@
     /* ─────────────────────────────────────────
        9. Main data fetch (runs after supabase-ready)
     ───────────────────────────────────────── */
+    // Site pages someone might type without ".html" — never store slugs
+    // (the sellers_assign_slug trigger reserves these names).
+    var KNOWN_PAGES = ['index', 'cart', 'checkout', 'about', 'profile', 'track', 'seller-dashboard',
+      'seller-terms', 'enroll-seller', 'enroll-seller-free', 'reset-password', 'logistics', 'admin', 'login-admin'];
+
     async function loadShop(sb) {
-      var param = new URLSearchParams(window.location.search).get('shop');
-      if (!param) {
+      function showNotFound() {
         document.getElementById('shLoading').style.display = 'none';
         document.getElementById('shNotFound').style.display = '';
+      }
+
+      // Two ways in: the clean URL umzila.store/<slug> (rewritten here by
+      // netlify.toml, so the slug is the path), or the legacy
+      // shop.html?shop=<shop name> link, which still works and is swapped
+      // for the clean URL once the store is found.
+      var pathSlug = window.location.pathname.replace(/^\/+|\/+$/g, '');
+      if (pathSlug === 'shop.html' || pathSlug === 'shop') pathSlug = '';
+      var nameParam = new URLSearchParams(window.location.search).get('shop');
+
+      var sellerRes = null;
+      if (pathSlug) {
+        // An unknown single-segment path also lands here (the rewrite catches
+        // everything a real file doesn't). Anything that can't be a slug, or
+        // a page name typed without ".html", goes where it was meant to.
+        if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(pathSlug)) { location.replace('/'); return; }
+        sellerRes = await sb.from('sellers').select('*').eq('slug', pathSlug.toLowerCase()).limit(1);
+        if (!sellerRes.error && (!sellerRes.data || !sellerRes.data.length)) {
+          if (KNOWN_PAGES.indexOf(pathSlug.toLowerCase()) !== -1) { location.replace('/' + pathSlug.toLowerCase() + '.html' + location.search); return; }
+          showNotFound();
+          return;
+        }
+      } else if (nameParam) {
+        sellerRes = await sb.from('sellers').select('*').ilike('shop_name', nameParam).limit(1);
+      } else {
+        showNotFound();
         return;
       }
-      var shopParam = decodeURIComponent(param);
-
-      /* Fetch seller */
-      var sellerRes = await sb.from('sellers').select('*').ilike('shop_name', shopParam).limit(1);
       if (sellerRes.error || !sellerRes.data || !sellerRes.data.length) {
-        document.getElementById('shLoading').style.display = 'none';
-        document.getElementById('shNotFound').style.display = '';
+        showNotFound();
         return;
       }
       var seller = sellerRes.data[0];
+
+      // Legacy link (or /Sweet-Corner) → canonical clean URL, keeping any
+      // other params (?product=, ?q=).
+      if (seller.slug && pathSlug !== seller.slug && window.history && history.replaceState) {
+        var keep = new URLSearchParams(window.location.search);
+        keep.delete('shop');
+        var qs = keep.toString();
+        history.replaceState(null, '', '/' + seller.slug + (qs ? '?' + qs : '') + location.hash);
+      }
 
       // Block disabled shops
       if (seller.status !== 'active') {

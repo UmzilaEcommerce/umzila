@@ -45,7 +45,7 @@ exports.handler = async function (event) {
 
   let sellerRow = null;
   if (!isAdmin) {
-    const { data: shops } = await admin.from('sellers').select('id, shop_name').eq('user_id', user.id);
+    const { data: shops } = await admin.from('sellers').select('id, shop_name, slug').eq('user_id', user.id);
     if (!shops || !shops.length) return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden' }) };
     // A seller campaign is scoped to whichever shop the request names, or
     // their first shop if unspecified — verified against their own list,
@@ -82,17 +82,20 @@ exports.handler = async function (event) {
   let shopName = null;
   const dest = body.cta_destination;
   if (dest === 'my_shop' && sellerRow) {
-    cta_path = `/shop.html?shop=${encodeURIComponent(sellerRow.shop_name)}`;
+    cta_path = sellerRow.slug ? `/${sellerRow.slug}` : `/shop.html?shop=${encodeURIComponent(sellerRow.shop_name)}`;
     shopName = sellerRow.shop_name;
   } else if (dest === 'product' && body.cta_product_id) {
-    const { data: product } = await admin.from('products').select('id, seller_id').eq('id', body.cta_product_id).maybeSingle();
+    const { data: product } = await admin.from('products').select('id, seller_id, sellers(slug, shop_name)').eq('id', body.cta_product_id).maybeSingle();
     if (!product) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Product not found.' }) };
     if (!isAdmin && product.seller_id !== sellerRow.id) {
       return { statusCode: 403, headers, body: JSON.stringify({ error: 'You can only link to your own products.' }) };
     }
-    let shopParam = '';
-    if (!isAdmin) { shopName = sellerRow.shop_name; shopParam = `shop=${encodeURIComponent(sellerRow.shop_name)}&`; }
-    cta_path = `/shop.html?${shopParam}product=${encodeURIComponent(body.cta_product_id)}`;
+    if (!isAdmin) shopName = sellerRow.shop_name;
+    // The product's own store page, with the product modal opened on arrival.
+    const productShop = product.sellers || null;
+    cta_path = productShop && productShop.slug
+      ? `/${productShop.slug}?product=${encodeURIComponent(body.cta_product_id)}`
+      : `/shop.html?${productShop && productShop.shop_name ? `shop=${encodeURIComponent(productShop.shop_name)}&` : ''}product=${encodeURIComponent(body.cta_product_id)}`;
   } else if (dest === 'checkout_with_code' && body.discount_code_id) {
     // resolved below once the code is verified
   } else {

@@ -4,6 +4,25 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-03 — Clean store URLs: umzila.store/<store-name>
+
+**What was reported:** store links looked like `umzila.store/shop.html?shop=Sweet%20Corner` — ugly to share, and keyed on the display name, so renaming a shop broke every shared link (sellers can rename their own shop). The name lookup also used `ilike`, where `%`/`_` act as wildcards.
+
+**What changed:**
+- **DB (applied live):** `sellers.slug` (NOT NULL, unique, format-checked). `sellers_assign_slug` BEFORE INSERT/UPDATE-OF-slug trigger generates it from `shop_name` for every new seller, whichever function creates the row (approve-seller, activate-free-seller, complete-seller-enrollment, admin…): lowercased, accents folded, non-alphanumerics → hyphens, ≤40 chars; reserved page names get `-store`; collisions get `-2`, `-3`. Sellers editing their own row can't change it (silently kept); admins/service role can, with a readable error if the link is reserved or taken. Helpers `seller_slug_base()` / `seller_slug_reserved()`. Backfilled all 18 existing stores (e.g. Sweet Corner → `sweet-corner`, Lemé → `leme`, LondyM's store → `londyms-store`). No existing table/column changed; existing `select('*')` callers just get one more field.
+- **Routing:** `netlify.toml` rewrites `/:slug` → `/shop.html` (200, URL stays clean). Real files are served first, so `/cart`, `/style.css`, `/about.html` etc. are unaffected; the SPA fallback is unchanged for multi-segment paths.
+- **`shop.html`:** resolves the store from the path (`.eq('slug', …)`), or from a legacy `?shop=<name>` link, then `history.replaceState`s to the canonical lowercase `/slug` keeping `?product=`/`?q=`. Trailing slash stripped before assets load (relative paths would otherwise break). Unknown slug → "Shop not found"; a page name typed without `.html` (e.g. `/cart` if ever routed here) → that page.
+- **Links switched to `/slug`:** homepage featured shops + all-shops list + Isqalo hero slide, homepage product modal "Sold by" + share link (`script.js` product select now includes `slug`), shop page "Sold by" + share, profile favourites "Sold by", seller dashboard "View shop", marketing campaign CTA (shop and product destinations — product links now resolve the product's own store, which also fixes admin-created product CTAs that used to land on "shop not found").
+- **Admin:** Manage Shops shows each store's link with an editor + "Open ↗" (confirm before changing an existing link, since old shared links stop working).
+
+**Verified:** trigger rules in rolled-back transactions (duplicate name → `sweet-corner-2`, reserved "Cart" → `cart-store`, explicit admin handle normalised, non-admin seller rename keeps slug, taken handle rejected). On `netlify dev`: `/sweet-corner`, `/sweet-corner/`, `/Sweet-Corner?product=…` (modal opens, URL canonicalised), legacy `shop.html?shop=Sweet%20Corner&q=cake` → `/sweet-corner?q=cake`, unknown store → not found, `/cart` still the cart; homepage store/slide/modal links all clean.
+
+**Known:** changing a slug in admin breaks old copies of the previous link (no redirect history kept). Homepage "clothing" hero slide still points at `shop.html?shop=FreshFold`, a store that doesn't exist (pre-existing dead link).
+
+**Files:** `netlify.toml`, `shop.html`, `index.html`, `script.js`, `profile.html`, `seller-dashboard.html`, `admin.html`, `netlify/functions/submit-marketing-campaign.js`, `CLAUDE.md`; DB migrations `sellers_slug_clean_store_urls`, `sellers_slug_backfill_and_constraints`.
+
+---
+
 ## 2026-10-03 — Tracking page: animated stage scenes, interactive timeline, PIN show-to-rider
 
 **What changed (owner request — make `track.html` "interactive and fun", building on the looping route-dot animation from the homepage "How delivery works" popup):**

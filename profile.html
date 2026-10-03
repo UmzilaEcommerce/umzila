@@ -1614,7 +1614,7 @@
 
       const productIds = [...new Set(favs.map(f => f.product_id).filter(Boolean))];
       const [{ data: products, error: prodErr }, { data: imgs }] = await Promise.all([
-        sb.from('products').select('id,name,price,sale_price,sale,category,badge,sellers(shop_name)').in('id', productIds),
+        sb.from('products').select('id,name,price,sale_price,sale,category,badge,sellers(shop_name,slug)').in('id', productIds),
         sb.from('product_images').select('product_id,url,image_order').in('product_id', productIds).order('image_order', { ascending: true })
       ]);
       if (prodErr) { container.innerHTML = `<div class="p-empty"><p style="color:#dc3545">Error loading products.</p></div>`; return; }
@@ -1671,7 +1671,7 @@
         sb.from('product_variants').select('id,size,stock,price_override').eq('product_id', productId)
       ]);
       if (!p) { content.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Product not found.</div>'; return; }
-      const { data: seller } = p.seller_id ? await sb.from('sellers').select('shop_name,delivery_method,turnaround_time').eq('id',p.seller_id).maybeSingle() : { data:null };
+      const { data: seller } = p.seller_id ? await sb.from('sellers').select('shop_name,slug,delivery_method,turnaround_time').eq('id',p.seller_id).maybeSingle() : { data:null };
 
       const allImgs = (imgs||[]).sort((a,b) => (a.image_order||0)-(b.image_order||0));
       const isOnSale = p.sale && p.sale_price;
@@ -1687,7 +1687,7 @@
         </div>
         <div class="fav-modal-body">
           <div class="fav-modal-title">${esc(p.name)}</div>
-          ${seller?`<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Sold by <a href="shop.html?shop=${encodeURIComponent(seller.shop_name||'')}" style="color:var(--accent);font-weight:700">${esc(seller.shop_name||'')} ↗</a></div>`:''}
+          ${seller?`<div style="font-size:13px;color:var(--muted);margin-bottom:8px">Sold by <a href="${seller.slug ? '/' + esc(seller.slug) : 'shop.html?shop=' + encodeURIComponent(seller.shop_name||'')}" style="color:var(--accent);font-weight:700">${esc(seller.shop_name||'')} ↗</a></div>`:''}
           <div class="fav-modal-price">
             ${isOnSale?`<span class="fav-modal-old">${fmt(p.price)}</span>`:''}${fmt(displayPrice)}
           </div>

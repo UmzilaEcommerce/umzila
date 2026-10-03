@@ -179,7 +179,7 @@
       <!-- HERO — clean clickable images, no text overlay -->
       <div class="hero fade-up" id="hero">
         <div class="slides" id="slides">
-          <div class="slide" data-slide="hotDeals" data-href="shop.html?shop=Isqalo%20Shisanyama" data-filter=""></div>
+          <div class="slide" data-slide="hotDeals" data-href="/isqalo-shisanyama" data-filter=""></div>
           <div class="slide" data-slide="newDrops" data-href="" data-filter="new-drops"></div>
           <div class="slide" data-slide="clothing" data-href="shop.html?shop=FreshFold"></div>
           <div class="slide" data-slide="food" data-href="" data-filter-cat="Food"></div>
@@ -1132,7 +1132,7 @@
       var sb = ev.detail && ev.detail.supabase;
       if (!sb) return;
       try {
-        var sellersRes = await sb.from('sellers').select('id,shop_name,banner_url,logo_url,description').eq('status', 'active');
+        var sellersRes = await sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active');
         var sellers = sellersRes.data || [];
         if (!sellers.length) return;
 
@@ -1168,7 +1168,7 @@
             ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
             : '<span>' + initials + '</span>';
           var featBadge = featuredIds.has(s.id) ? '<div style="font-size:10px;background:#fef3c7;color:#92400e;border-radius:999px;padding:1px 7px;font-weight:700;margin-top:2px">Featured</div>' : '';
-          return '<a class="shop-card" href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '">' +
+          return '<a class="shop-card" href="' + (s.slug ? '/' + s.slug : 'shop.html?shop=' + encodeURIComponent(s.shop_name)) + '">' +
             '<div class="shop-card-logo">' + logoInner + '</div>' +
             '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
             '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + '</div>' +
@@ -1209,7 +1209,7 @@
       var logoInner = s.logo_url
         ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
         : '<span style="font-weight:800;font-size:16px;color:#fff">' + initials + '</span>';
-      return '<a href="shop.html?shop=' + encodeURIComponent(s.shop_name) + '" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f5;text-decoration:none;color:inherit;transition:background 0.12s" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">' +
+      return '<a href="' + (s.slug ? '/' + s.slug : 'shop.html?shop=' + encodeURIComponent(s.shop_name)) + '" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid #f0f0f5;text-decoration:none;color:inherit;transition:background 0.12s" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">' +
         '<div style="width:46px;height:46px;border-radius:50%;background:var(--accent);flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid #eaecf0">' + logoInner + '</div>' +
         '<div style="flex:1;min-width:0">' +
           '<div style="font-weight:700;font-size:14px">' + (s.shop_name || '') + '</div>' +

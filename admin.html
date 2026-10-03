@@ -3361,7 +3361,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('sellers')
-        .select('id, shop_name, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo')
+        .select('id, shop_name, slug, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo')
         .order('created_at', { ascending: false });
       if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
       shopsCache = data || [];
@@ -3403,12 +3403,22 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
             <button onclick="setSellerSelfArrangedRadius('${escapeHtml(s.id)}')" style="padding:4px 10px;border-radius:6px;border:none;background:#0a2f66;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
           </div>`
         : `<div style="font-size:12px;color:var(--muted);margin-top:8px">Self-arranged radius: needs a pickup address set first</div>`;
+      // Clean store link (umzila.store/<slug>). Generated automatically for
+      // every store by the sellers_assign_slug trigger; only admins can change
+      // it (sellers can't), and it never changes when a shop is renamed.
+      const slugRow = `<div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <label style="font-size:12px;color:var(--muted)">Store link: /</label>
+            <input type="text" id="slug-${escapeHtml(s.id)}" value="${escapeHtml(s.slug || '')}" maxlength="40" style="width:170px;padding:4px 6px;border:1px solid #dde1ea;border-radius:6px;font-size:12px">
+            <button onclick="setSellerSlug('${escapeHtml(s.id)}')" style="padding:4px 10px;border-radius:6px;border:none;background:#0a2f66;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Save</button>
+            ${s.slug ? `<a href="/${escapeHtml(s.slug)}" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;color:#0a2f66">Open ↗</a>` : ''}
+          </div>`;
       return `
       <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:10px;box-shadow:0 2px 8px rgba(2,6,23,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
           <div style="font-weight:700;font-size:15px">${escapeHtml(s.shop_name || '—')}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(s.email || '—')}</div>
           <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+          ${slugRow}
           ${radiusRow}
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
@@ -3449,6 +3459,25 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const { error } = await supabaseClient.from('sellers').update({ self_arranged_radius_km: km }).eq('id', sellerId);
       if (error) { showToast('Failed: ' + error.message); return; }
       showToast(km === null ? 'Self-arranged radius cleared' : `Self-arranged radius set to ${km}km`);
+      await loadManageShops();
+    } catch (e) { showToast('Save failed'); }
+  };
+  // The trigger normalises the value (lowercase, hyphens) and rejects a
+  // reserved or already-taken link with a readable error. Changing a link
+  // breaks any copy of the old one people have shared, hence the confirm.
+  window.setSellerSlug = async function(sellerId) {
+    if (!supabaseClient) return;
+    const input = document.getElementById('slug-' + sellerId);
+    if (!input) return;
+    const raw = input.value.trim().toLowerCase();
+    const current = (shopsCache.find(x => x.id === sellerId) || {}).slug || '';
+    if (raw === current) { showToast('No change'); return; }
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(raw)) { showToast('Use lowercase letters, numbers and single hyphens only'); return; }
+    if (current && !confirm('Change this store link from /' + current + ' to /' + raw + '? Links already shared with the old address will stop working.')) return;
+    try {
+      const { error } = await supabaseClient.from('sellers').update({ slug: raw }).eq('id', sellerId);
+      if (error) { showToast('Failed: ' + error.message); return; }
+      showToast('Store link set to /' + raw);
       await loadManageShops();
     } catch (e) { showToast('Save failed'); }
   };

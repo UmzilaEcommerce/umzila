@@ -1974,7 +1974,7 @@
       var el = document.getElementById('topbarShopName');
       if (el) el.textContent = SD.seller.shop_name || '';
       var link = document.getElementById('viewShopLink');
-      if (link) link.href = 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name || '');
+      if (link) link.href = SD.seller.slug ? '/' + SD.seller.slug : 'shop.html?shop=' + encodeURIComponent(SD.seller.shop_name || '');
       var switchBtn = document.getElementById('switchShopBtn');
       if (switchBtn) switchBtn.style.display = (SD.shops && SD.shops.length > 1) ? '' : 'none';
       populateShopForm();
@@ -2374,7 +2374,7 @@
       if (error) { setMsg('shopSaveMsg', error.message); return; }
       SD.seller = data;
       document.getElementById('topbarShopName').textContent = data.shop_name || '';
-      document.getElementById('viewShopLink').href = 'shop.html?shop=' + encodeURIComponent(data.shop_name || '');
+      document.getElementById('viewShopLink').href = data.slug ? '/' + data.slug : 'shop.html?shop=' + encodeURIComponent(data.shop_name || '');
       setMsg('shopSaveMsg', 'Shop updated!', 'success');
       toast('Shop saved ✓');
       loadProgressBar();

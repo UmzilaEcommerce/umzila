@@ -5,7 +5,16 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "ADMIN_EMAILS"
 
-# SPA fallback (keep this only)
+# Clean store URLs: umzila.store/<slug> -> shop.html (URL stays clean).
+# Real files (cart.html, style.css, …) are always served first, so this only
+# catches single-segment paths that aren't files; shop.html resolves the
+# slug against sellers.slug and handles anything that isn't a store.
+[[redirects]]
+  from = "/:slug"
+  to = "/shop.html"
+  status = 200
+
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
