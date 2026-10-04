@@ -33,7 +33,9 @@ async function planBatchAddition(admin, offer) {
   if (!input || !input.route) return { ok: false, reason: 'route_not_found' };
   if (input.route.driver_id !== offer.driver_id) return { ok: false, reason: 'route_driver_mismatch' };
   if (!['assigned', 'started', 'active'].includes(input.route.status)) return { ok: false, reason: 'route_no_longer_active' };
-  const plan = await planTrip(admin, input, { deliveryId: offer.delivery_id, sellerId: point.seller_id, pickup: point.pickup, drop: point.drop, customer: point.customer, priority: !!point.priority });
+  // An offer made because no free rider existed is re-planned the same way.
+  const relaxed = !!(offer.insertion && offer.insertion.relaxed);
+  const plan = await planTrip(admin, input, { deliveryId: offer.delivery_id, sellerId: point.seller_id, pickup: point.pickup, drop: point.drop, customer: point.customer, priority: !!point.priority }, { relaxed });
   return plan.ok ? { ok: true, plan } : { ok: false, reason: plan.reason };
 }
 
@@ -185,7 +187,7 @@ exports.handler = async function (event) {
 
   const { data: offer, error: offerError } = await admin
     .from('driver_offers')
-    .select('id, delivery_id, driver_id, status, expires_at, offer_type, route_id')
+    .select('id, delivery_id, driver_id, status, expires_at, offer_type, route_id, insertion')
     .eq('id', offerId)
     .maybeSingle();
   if (offerError) {

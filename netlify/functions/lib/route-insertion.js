@@ -46,10 +46,23 @@ function haversineKm(a, b) {
  * @returns { ok:true, order:[{id}|{new:'pickup'}|{new:'drop'}], addedMin, addedKm, afterName, newArrivalMin }
  *        | { ok:false, reason }
  */
-async function planTrip(supabase, input, add) {
+// opts.relaxed (founder 2026-10-05 — "while it's still us delivering, accept
+// any order"): used only when NO free rider can take the order. No 5-order
+// cap and no 60-min cap for the new customer; existing customers still keep
+// their 8-min protection. Once the trip already has MAX_DELIVERIES_PER_TRIP
+// orders the new stops simply go at the END (never delays anyone, and keeps
+// planning instant however long the trip gets).
+async function planTrip(supabase, input, add, opts = {}) {
+  const relaxed = !!opts.relaxed;
   const open = (input.stops || []).filter(s => s.status !== 'completed');
   const openDeliveries = new Set(open.map(s => s.delivery_id));
-  if (add && openDeliveries.size + 1 > MAX_DELIVERIES_PER_TRIP) return { ok: false, reason: 'trip_full' };
+  if (add && openDeliveries.size + 1 > MAX_DELIVERIES_PER_TRIP) {
+    if (!relaxed) return { ok: false, reason: 'trip_full' };
+    const last = open.filter(s => s.type === 'drop').pop();
+    return { ok: true, relaxed: true, appended: true,
+             order: open.map(s => ({ id: s.id })).concat([{ new: 'pickup' }, { new: 'drop' }]),
+             addedMin: null, addedKm: null, afterName: last ? (last.customer || null) : null, newArrivalMin: null, totalMin: null };
+  }
   if (open.some(s => !Number.isFinite(s.lat) || !Number.isFinite(s.lon))) return { ok: false, reason: 'stop_without_location' };
 
   const locked = open.filter(s => s.status === 'active' || s.status === 'arriving');
@@ -136,7 +149,7 @@ async function planTrip(supabase, input, add) {
   const protectedDrops = Object.keys(base.arrival).filter(dl => !(add && add.priority) || priorityByDelivery[dl]);
   let feasible = results.filter(r =>
     protectedDrops.every(dl => r.arrival[dl] <= base.arrival[dl] + MAX_DELAY_MIN + 1e-9) &&
-    (!add || r.arrival[add.deliveryId] <= MAX_NEW_ORDER_WAIT_MIN));
+    (!add || relaxed || r.arrival[add.deliveryId] <= MAX_NEW_ORDER_WAIT_MIN));
   if (!feasible.length) return { ok: false, reason: 'too_much_delay' };
 
   // Priority orders: no later than MAX_DELAY_MIN after their earliest possible arrival.
@@ -160,6 +173,7 @@ async function planTrip(supabase, input, add) {
   }
   return {
     ok: true,
+    relaxed,
     order,
     addedMin: Math.max(0, Math.round((best.t - base.t) * 10) / 10),
     addedKm: Math.max(0, Math.round((best.d - base.d) * 10) / 10),

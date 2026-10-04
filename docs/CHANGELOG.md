@@ -4,6 +4,42 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Multi-drop edge cases tested; orders offered to an on-trip rider when nobody else is free
+
+**Asked for (founder):** test edge cases:
+- new / returning-not-signed-in / signed-in buyers;
+- orders arriving minutes apart (while the rider heads to the store, while at the store, ~10 min after collecting);
+- "while it's still us delivering, we should be able to accept an order as it comes in, no matter where we are or how many orders".
+
+**Change:** `lib/batch-dispatch.js#offerDelivery()` is the one rule for offering a ready order, used by Mark Ready (`advance-delivery-on-fulfillment.js`) and every heartbeat sweep:
+1. add it to a trip under the normal rules;
+2. else a free rider;
+3. else — no free rider — offer it to an on-trip rider anyway (**relaxed**: no 5-order or 60-min cap; existing customers keep the 8-min protection; with 5+ orders the new stops go at the end).
+
+`respond-to-driver-offer.js` re-plans relaxed offers in the same mode. Rider screen: an order added while the rider is already at the store joins the visit (no second "I'm at the store").
+
+**Verified — one simulated shift, real database + real function code** (real payment-completion path `completeOrderPayment`, real `driver-heartbeat` for rider movement + sweeps, rider token mocked in-process; test rows removed; rider, product stock and the test buyer's saved cart restored). **32/32:**
+- **Buyers:**
+  - new guest: delivery created, no account, private-link tracking, checkout note visible;
+  - returning buyer not signed in: order + delivery linked to their verified account;
+  - signed-in buyer: delivery on their account.
+- **Timing:**
+  - order 2 added while the rider is still heading to the store;
+  - order 3 added while the rider is at the store, joining the same visit;
+  - partial collection;
+  - order 4 ~10 min after collecting while driving → offered (relaxed) and accepted, the drop in progress kept first, back to the store before its drop.
+- **Rider choices and safety:**
+  - a declined order is not pushed back onto that rider;
+  - two simultaneous sweeps → exactly one offer;
+  - a stale screen gets 409;
+  - a wrong PIN is refused.
+- **Customers:** each saw the live map only on their own turn, "order/s ahead" while waiting; all 4 delivered with their own PINs; trip completed; rider paid for 4 deliveries (R139.28).
+- **Regression:** founder scenario 29/29 and planner units 8/8 still pass.
+
+**Files:** `netlify/functions/lib/{batch-dispatch,route-insertion}.js`, `netlify/functions/{advance-delivery-on-fulfillment,respond-to-driver-offer}.js`, `logistics.html`, `docs/systems/ops-panels.md`.
+
+---
+
 ## 2026-10-05 — Multi-drop trips: riders carry up to 5 orders; priority delivery at checkout
 
 **Asked for (founder):** riders take several orders per trip (win on volume), following the delivery spec (§31–35: optional additions, insertion points, underway riders). Rules confirmed:

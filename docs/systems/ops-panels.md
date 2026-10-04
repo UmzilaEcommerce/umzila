@@ -97,6 +97,13 @@ Other orders on the trip stay PICKED_UP until their turn.
 - The rider gets a `batch_addition` offer showing "Add to your trip · +km · +min · drop-off after <name>". The plan is stored in `driver_offers.insertion`.
 - On accept, `respond-to-driver-offer.js` **re-plans** (the trip may have moved on) and applies the order with `apply_route_sequence()`. That function locks the route, inserts the new stops, renumbers the rest, refuses to move a started stop, and returns `plan_stale` if the trip changed (it re-plans once). If the order no longer fits, the rider gets 409 "no longer fits your trip" and the order goes back to waiting.
 - Free riders are still the only ones offered a **new** trip (`find_nearest_eligible_drivers` skips busy riders); busy riders only ever get additions.
+- **No free rider → still offered (2026-10-05, "while it's us delivering, accept any order").** `offerDelivery()` runs on Mark Ready and on each heartbeat sweep. It tries, in order:
+  1. adding the order to a trip under the normal rules;
+  2. a free rider;
+  3. `evaluateBatchCandidates(…, { relaxed: true })`.
+
+  Relaxed mode has no 5-order cap and no 60-min cap for the new customer, but existing customers keep their 8-min protection. Once a trip already has 5 orders the new stops go at the **end** (instant to plan, delays nobody). The offer stores `insertion.relaxed`, and accept re-plans in the same mode. It stays optional for the rider.
+- A declined addition is never pushed back onto the same rider's trip. When that rider is free again, it can come back to them as a new trip from the normal free-rider dispatch.
 
 **Pay.** Every delivery on the trip pays its full band (R34–R45), summed by `compute_driver_payout_on_route_completion`. The R15 priority fee is Umzila's.
 

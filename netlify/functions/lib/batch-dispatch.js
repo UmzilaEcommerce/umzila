@@ -34,7 +34,7 @@ const MAX_CANDIDATE_TRIPS = 3;       // nearest trips evaluated per delivery
  *   { batched: true, offerId, routeId, driverId, plan }
  *   { batched: false, reason, detail? }
  */
-async function evaluateBatchCandidates(supabase, deliveryId) {
+async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
   if (!BATCHING_ENABLED) return { batched: false, reason: 'disabled' };
   if (!supabase || !deliveryId) return { batched: false, reason: 'not_ready', detail: 'Missing supabase/deliveryId' };
 
@@ -53,7 +53,7 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
     p_seller_geo: point.seller_geo,
     p_max_age_seconds: DRIVER_STALENESS_SECONDS,
     p_delivery_id: deliveryId,
-    p_max_deliveries: MAX_DELIVERIES_PER_TRIP
+    p_max_deliveries: opts.relaxed ? 1000 : MAX_DELIVERIES_PER_TRIP
   });
   if (candidatesError) return { batched: false, reason: 'no_batchable_routes', detail: candidatesError.message };
   if (!Array.isArray(candidates) || !candidates.length) return { batched: false, reason: 'no_batchable_routes' };
@@ -63,10 +63,12 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
   for (const c of candidates.slice(0, MAX_CANDIDATE_TRIPS)) {
     const { data: input } = await supabase.rpc('get_route_plan_input', { p_route_id: c.route_id });
     if (!input) continue;
-    const plan = await planTrip(supabase, input, add);
-    if (plan.ok && (!best || plan.addedMin < best.plan.addedMin)) best = { candidate: c, plan };
+    const plan = await planTrip(supabase, input, add, { relaxed: !!opts.relaxed });
+    const cost = p => (p.addedMin == null ? 1e9 : p.addedMin);
+    if (plan.ok && (!best || cost(plan) < cost(best.plan))) best = { candidate: c, plan };
   }
   if (!best) return { batched: false, reason: 'no_fit' };
+  // Prefer the least extra time; an "add to the end" plan has no estimate — rank it last.
 
   // Full delivery price for the added order (founder 2026-10-05).
   const payoutAmount = estimatePayout({ distanceKm: point.road_km != null ? Number(point.road_km) : NaN });
@@ -80,7 +82,7 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
     distance_impact_km: best.plan.addedKm,
     duration_impact_min: best.plan.addedMin,
     insertion: { order: best.plan.order, after: best.plan.afterName, added_km: best.plan.addedKm, added_min: best.plan.addedMin,
-                 new_arrival_min: best.plan.newArrivalMin, planned_at: new Date().toISOString() },
+                 new_arrival_min: best.plan.newArrivalMin, relaxed: !!best.plan.relaxed, appended: !!best.plan.appended, planned_at: new Date().toISOString() },
     status: 'pending',
     expires_at: expiresAt
   }).select('id').single();
@@ -99,6 +101,24 @@ async function evaluateBatchCandidates(supabase, deliveryId) {
 }
 
 /**
+ * Offer one waiting delivery, in this order:
+ *  1. onto a rider's trip where it fits the normal rules;
+ *  2. to the nearest FREE rider (a fresh trip);
+ *  3. no free rider → onto an on-trip rider anyway (relaxed: added at the
+ *     end once the trip is long; existing customers still protected) — the
+ *     founder's "while it's us delivering, accept any order". Always optional
+ *     for the rider.
+ */
+async function offerDelivery(supabase, deliveryId) {
+  let r = await evaluateBatchCandidates(supabase, deliveryId).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
+  if (r.batched) return r;
+  const d = await dispatchDelivery(supabase, deliveryId).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
+  if (d.dispatched || d.reason !== 'no_drivers_online') return d;
+  r = await evaluateBatchCandidates(supabase, deliveryId, { relaxed: true }).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
+  return r.batched ? r : d;
+}
+
+/**
  * Offer every waiting delivery (oldest first): onto a rider's trip if it
  * fits, otherwise to the nearest free rider. Used by the rider heartbeat and
  * right after a rider accepts (so two orders from one store reach the same
@@ -110,9 +130,7 @@ async function sweepWaitingDeliveries(supabase, { limit = 5 } = {}) {
     const { data: waiting } = await supabase.from('deliveries').select('id')
       .eq('status', 'READY_FOR_DISPATCH').order('created_at', { ascending: true }).limit(limit);
     for (const w of waiting || []) {
-      let r = await evaluateBatchCandidates(supabase, w.id).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
-      if (!r.batched) r = await dispatchDelivery(supabase, w.id).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
-      out.push({ id: w.id, result: r });
+      out.push({ id: w.id, result: await offerDelivery(supabase, w.id) });
     }
   } catch (e) {
     console.warn('sweepWaitingDeliveries failed', e && e.message);
@@ -120,4 +138,4 @@ async function sweepWaitingDeliveries(supabase, { limit = 5 } = {}) {
   return out;
 }
 
-module.exports = { evaluateBatchCandidates, sweepWaitingDeliveries, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };
+module.exports = { evaluateBatchCandidates, offerDelivery, sweepWaitingDeliveries, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };

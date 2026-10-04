@@ -2797,7 +2797,8 @@ document.addEventListener('sb-ready', function(e){
       const s = cur.store || {};
       const storeCard = personCard('store', s.name || 'Store', group.length > 1 ? `${group.length} orders to collect here` : `For <strong>${esc(cur.for_customer || 'customer')}</strong>`,
         [s.address ? `<div class="rd-addr">${esc(s.address)}</div>` : ''], s.phone, navLink(cur, s.address));
-      const active = group.every(g=>g.status==='active');
+      // Already at the store (an order added mid-visit joins it — no second "I'm at the store").
+      const active = group.some(g=>g.status==='active');
       const bags = group.map(g=>`<div class="rd-card rd-bag">
           <div class="rd-bag-h">Bag for <strong>${esc(g.for_customer || 'customer')}</strong>${g.priority?' <span class="rd-prio">⚡ priority</span>':''}<span class="rd-muted"> · #…${esc(String(g.order_ref||'').toUpperCase())}</span></div>
           ${itemsList(g.items, active, g.id)}

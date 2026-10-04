@@ -16,8 +16,7 @@
 // seller-dashboard.html and stays there unchanged.
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
-const { dispatchDelivery } = require('./lib/dispatch');
-const { evaluateBatchCandidates } = require('./lib/batch-dispatch');
+const { offerDelivery } = require('./lib/batch-dispatch');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -134,32 +133,21 @@ exports.handler = async function (event) {
     // through to Stage 8's idle-driver dispatch if no batchable route is
     // close enough. Same non-blocking guarantee as dispatch: this must never
     // turn a successful fulfillment update into an error response.
+    // Multi-drop (2026-10-05): one shared rule for offering a ready order —
+    // onto a trip it fits, else a free rider, else (no free rider) onto an
+    // on-trip rider anyway (lib/batch-dispatch.js offerDelivery).
     try {
-      const batchResult = await evaluateBatchCandidates(supabase, delivery.id);
-      if (batchResult.batched) {
-        return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: result.delivery, batched: true, offerId: batchResult.offerId }) };
+      const offered = await offerDelivery(supabase, delivery.id);
+      if (offered.batched || offered.dispatched) {
+        return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: result.delivery, batched: !!offered.batched, offerId: offered.offerId || null }) };
       }
-      console.warn('advance-delivery-on-fulfillment: batch evaluation did not offer', batchResult.reason, batchResult.detail || '');
-    } catch (batchError) {
-      console.warn('advance-delivery-on-fulfillment: evaluateBatchCandidates threw', batchError && batchError.message);
+      console.warn('advance-delivery-on-fulfillment: not offered yet', offered.reason, offered.detail || '');
+    } catch (offerError) {
+      console.warn('advance-delivery-on-fulfillment: offerDelivery threw', offerError && offerError.message);
     }
 
-    // Delivery network Stage 8 -- immediately try to offer this delivery to
-    // the nearest eligible online driver, same request, no separate
-    // cron/polling dispatcher needed for the 2-rider pilot. This must never
-    // turn a successful fulfillment update into an error response: if no
-    // driver is online (or anything else about dispatch goes wrong), the
-    // delivery correctly just stays at READY_FOR_DISPATCH for a later
-    // heartbeat or manual admin redispatch (dispatch-delivery.js) to pick up.
-    try {
-      const dispatchResult = await dispatchDelivery(supabase, delivery.id);
-      if (!dispatchResult.dispatched) {
-        console.warn('advance-delivery-on-fulfillment: dispatch not completed', dispatchResult.reason, dispatchResult.detail || '');
-      }
-    } catch (dispatchError) {
-      console.warn('advance-delivery-on-fulfillment: dispatchDelivery threw', dispatchError && dispatchError.message);
-    }
-
+    // Not offered yet (no rider online / nothing fits): stays READY_FOR_DISPATCH;
+    // the next rider heartbeat (sweepWaitingDeliveries) offers it again.
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: result.delivery }) };
   } catch (error) {
     console.error('advance-delivery-on-fulfillment error', error);
