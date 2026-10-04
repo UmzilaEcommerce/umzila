@@ -4,6 +4,25 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Admin revamp: grouped menu, "Live now" strip, phone layout
+
+**Asked for (founder):** admin needs the same revamp as logistics (faster, more accurate, better on mobile).
+
+**What was wrong:** the dashboard's "Pending Orders" counted every order still at `order_status = 'paid'` — including ones already delivered by the network and seller enrollment fees — and fetched the rows to count them. On phones, 16 flat menu items lived in a hidden drawer, the header showed a product search on every section, and many sections use inline multi-column grids and wide tables that overflowed the screen.
+
+**What changed:**
+- Dashboard **Live now** strip (same `get_ops_board()` as logistics, every 30 s while on the dashboard): open deliveries, needing attention (with reason), delivered today, riders online, and the top items needing attention — with a jump to Delivery Ops. The "Pending Orders" card became **Open Deliveries** from the same data; `updatePendingCount()` no longer queries.
+- Sidebar grouped: Overview · Delivery · Sellers · Catalogue · Orders · Growth · System.
+- Phone: bottom bar Home / Delivery / Shops / Products / Menu (drawer); header shows the current section's name (product search only on Manage Products); inline grids stack, KPI cards 2-across, wide tables scroll inside themselves, detail modals become bottom sheets, toasts sit above the bar. No sideways page scroll (checked at 390 px).
+
+**Verified:** headless Chrome with stubbed data at 390 px and 1366 px — Live now renders with the attention reason, menu groups, bottom bar switches sections, Service Areas has 0 px horizontal overflow; no page errors.
+
+**System doc:** [docs/systems/ops-panels.md](systems/ops-panels.md) — rider board, ops board, attention rules, gotchas.
+
+**Files:** `admin.html`, `docs/systems/ops-panels.md`.
+
+---
+
 ## 2026-10-04 — Logistics panel revamp: live "Today" board, real order status, safer edits, mobile layout
 
 **Asked for (founder):** logistics needs a revamp — faster, more accurate, better looking and interactive on mobile.

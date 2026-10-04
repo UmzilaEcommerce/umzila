@@ -281,6 +281,56 @@
   .section-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
   .section-top h2, .section-top h3 { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
 
+/* ── Revamp 2026-10-04: grouped menu, live strip, mobile ── */
+  .menu li.menu-group { cursor: default; padding: 14px 13px 4px; margin: 0; font-size: 10.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: rgba(255,255,255,.32); }
+  .menu li.menu-group:hover { background: none; color: rgba(255,255,255,.32); }
+  .app.collapsed .menu li.menu-group { visibility: hidden; height: 10px; padding: 0; }
+  .section-title-m { display: none; font-weight: 800; font-size: 16px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live-ops { background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); border: 1px solid var(--border); }
+  .live-ops-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .live-ops-h > span { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .live-ops-h i { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 0 rgba(34,197,94,.5); animation: livePulse 1.8s infinite; }
+  @keyframes livePulse { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.5) } 70% { box-shadow: 0 0 0 10px rgba(34,197,94,0) } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0) } }
+  .live-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
+  .live-kpis > div { background: #f8fafc; border-radius: 10px; padding: 10px 12px; }
+  .live-kpis b { display: block; font-size: 22px; font-weight: 900; line-height: 1.1; }
+  .live-kpis span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .live-kpis .bad b { color: #dc2626; } .live-kpis .good b { color: #16a34a; }
+  .live-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 2px; border-top: 1px solid var(--border); font-size: 13px; }
+  .live-row span { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .live-row.bad span { color: #dc2626; }
+  .admin-bnav { display: none; }
+
+  @media (max-width: 900px) {
+    .section-title-m { display: block; }
+    .search-box { display: none; }
+    body[data-section="manage"] .search-box { display: flex; }
+    body[data-section="manage"] .section-title-m { display: none; }
+    main { padding-bottom: 96px !important; }
+    .admin-bnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 62px; padding-bottom: env(safe-area-inset-bottom); background: #fff; border-top: 1px solid var(--border); z-index: 140; }
+    .admin-bnav button { flex: 1; border: none; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; font-weight: 700; color: var(--muted); font-family: inherit; cursor: pointer; }
+    .admin-bnav button span { font-size: 19px; line-height: 1; filter: grayscale(1); opacity: .7; }
+    .admin-bnav button.active { color: var(--primary); }
+    .admin-bnav button.active span { filter: none; opacity: 1; }
+    /* Wide tables scroll sideways instead of breaking the page */
+    main table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+    .detail-modal-backdrop { padding: 0; align-items: flex-end; }
+    .detail-modal { border-radius: 18px 18px 0 0; max-height: 94vh; }
+    .detail-modal-body { max-height: calc(94vh - 130px); padding: 16px; }
+    .fg-row { flex-direction: column; gap: 0; }
+    .toasts { top: auto; bottom: 76px; right: 12px; left: 12px; }
+    .toast { max-width: none; }
+  }
+  @media (max-width: 600px) {
+    .live-kpis { grid-template-columns: 1fr 1fr; }
+    /* Inline multi-column layouts stack on phones */
+    main [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+    main .grid, main .grid[style*="grid-template-columns"] { grid-template-columns: 1fr 1fr !important; }
+    main [style*="display:flex"][style*="gap"] { flex-wrap: wrap; }
+    .section-top h2, .section-top h3 { font-size: 17px; }
+    .sub-tab { padding: 10px 12px; }
+  }
+
   /* ── Responsive ── */
   @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
 
@@ -311,7 +361,6 @@
   }
 
   @media (max-width: 420px) {
-    .grid { grid-template-columns: 1fr; }
     #logoutBtn { display: none; }
   }
 </style>
@@ -380,6 +429,7 @@ const supabaseClient = supabase.createClient(
   <header>
     <button id="toggleSidebar" aria-label="Toggle sidebar">☰</button>
     <div class="header-brand">Admin</div>
+    <div class="section-title-m" id="sectionTitle">Dashboard</div>
 
     <div class="search-box">
       <input id="searchProducts" placeholder="Search products…" aria-label="Search products" />
@@ -391,6 +441,14 @@ const supabaseClient = supabase.createClient(
     </div>
   </header>
 
+  <nav class="admin-bnav" aria-label="Quick sections">
+    <button data-go="dashboard" class="active"><span>📊</span>Home</button>
+    <button data-go="delivery-ops"><span>🛵</span>Delivery</button>
+    <button data-go="manage-shops"><span>🏬</span>Shops</button>
+    <button data-go="manage"><span>📦</span>Products</button>
+    <button id="bnavMenu"><span>☰</span>Menu</button>
+  </nav>
+
   <div id="app" class="app" role="application">
     <aside>
       <div class="sidebar-panel" role="navigation" aria-label="Sidebar">
@@ -399,21 +457,28 @@ const supabaseClient = supabase.createClient(
           <div class="brand-sub">Shop Control Panel</div>
         </div>
         <ul class="menu" aria-hidden="false">
+          <li class="menu-group" role="presentation">Overview</li>
           <li data-section="dashboard"><span class="menu-icon">📊</span><span class="menu-label">Dashboard</span></li>
           <li data-section="intelligence"><span class="menu-icon">🧠</span><span class="menu-label">Intelligence</span></li>
-          <li data-section="manage"><span class="menu-icon">📦</span><span class="menu-label">Manage Products</span></li>
-          <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
-          <li data-section="manage-shops"><span class="menu-icon">🏬</span><span class="menu-label">Manage Shops</span></li>
-          <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
-          <li data-section="disputes"><span class="menu-icon">⚠️</span><span class="menu-label">Disputes</span></li>
-          <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
-          <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
-          <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
-          <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
+          <li class="menu-group" role="presentation">Delivery</li>
           <li data-section="delivery-ops"><span class="menu-icon">🛵</span><span class="menu-label">Delivery Ops</span></li>
           <li data-section="deliveries"><span class="menu-icon">📮</span><span class="menu-label">Deliveries</span></li>
+          <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
           <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
           <li data-section="delivery-analytics"><span class="menu-icon">📈</span><span class="menu-label">Delivery Analytics</span></li>
+          <li class="menu-group" role="presentation">Sellers</li>
+          <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
+          <li data-section="manage-shops"><span class="menu-icon">🏬</span><span class="menu-label">Manage Shops</span></li>
+          <li class="menu-group" role="presentation">Catalogue</li>
+          <li data-section="manage"><span class="menu-icon">📦</span><span class="menu-label">Manage Products</span></li>
+          <li data-section="product-reviews"><span class="menu-icon">🔍</span><span class="menu-label">Product Reviews</span></li>
+          <li class="menu-group" role="presentation">Orders</li>
+          <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
+          <li data-section="disputes"><span class="menu-icon">⚠️</span><span class="menu-label">Disputes</span></li>
+          <li class="menu-group" role="presentation">Growth</li>
+          <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
+          <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
+          <li class="menu-group" role="presentation">System</li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
         </ul>
@@ -423,12 +488,17 @@ const supabaseClient = supabase.createClient(
     <main>
       <!-- Dashboard -->
       <section id="section-dashboard">
+        <!-- Live now — same get_ops_board() the logistics Today board uses -->
+        <div class="live-ops" id="liveOps">
+          <div class="live-ops-h"><span><i></i>Live now</span><button class="btn" id="liveOpsOpen">Delivery Ops →</button></div>
+          <div id="liveOpsBody" class="muted" style="font-size:13px">Loading…</div>
+        </div>
         <!-- KPI Row 1 -->
         <div class="grid">
           <div class="card" style="border-top:3px solid #2563eb"><h3>Total Products</h3><p id="statTotal">0</p></div>
           <div class="card" style="border-top:3px solid #f97316"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
           <div class="card" style="border-top:3px solid #ef4444"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
-          <div class="card" style="border-top:3px solid #8b5cf6"><h3>Pending Orders</h3><p id="statPending">0</p></div>
+          <div class="card" style="border-top:3px solid #8b5cf6"><h3>Open Deliveries</h3><p id="statOpenDeliveries">—</p></div>
         </div>
         <!-- KPI Row 2 -->
         <div class="grid" style="grid-template-columns:repeat(5,1fr)">
@@ -1375,6 +1445,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // Update pending orders count from supabase (Pending or Packaging)
   async function updatePendingCount(){
     const el = document.getElementById('statPending');
+    if(!el) return; // card replaced by live "Open Deliveries" (get_ops_board) — it counted delivered orders + seller fees
     if(!supabaseClient){ 
       // fallback to localStorage as before
       const pendingOrders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').filter(o => o.status === 'Pending').length;
@@ -2142,7 +2213,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }, true);
   });
   document.querySelector('.menu li[data-section="dashboard"]')?.classList.add('active');
-  const menuItems = document.querySelectorAll('.menu li');
+  const menuItems = document.querySelectorAll('.menu li:not(.menu-group)');
   const sections = {
     dashboard: document.getElementById('section-dashboard'),
     manage: document.getElementById('section-manage'),
@@ -2172,8 +2243,70 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       }
       Object.values(sections).forEach(sec => sec.style.display = 'none');
       if(sections[s]) sections[s].style.display = 'block';
+      document.body.dataset.section = s;
+      const t = document.getElementById('sectionTitle');
+      if (t) t.textContent = it.querySelector('.menu-label')?.textContent || 'Admin';
+      document.querySelectorAll('.admin-bnav [data-go]').forEach(x => x.classList.toggle('active', x.dataset.go === s));
+      document.querySelector('main')?.scrollTo(0, 0);
+      if (s === 'dashboard') window.loadLiveOps?.(); else window.stopLiveOps?.();
     });
   });
+  // ── Live now (dashboard) — get_ops_board(), refreshed every 30 s ──
+  let liveOpsTimer = null;
+  const LIVE_LABEL = { PENDING:'Waiting for store', READY_FOR_DISPATCH:'Finding a rider', OFFERED:'Offered to a rider', REASSIGNING:'Finding a new rider',
+    ASSIGNED:'Rider heading to store', DRIVER_AT_PICKUP:'Rider at store', PARTIALLY_PICKED_UP:'Rider at store', PICKED_UP:'Collected',
+    IN_ROUTE:'On the way', NEXT_STOP:'On the way', ARRIVING:'Arriving', PIN_REQUIRED:'At the door' };
+  function liveMins(iso){ return iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/60000)) : 0; }
+  function liveWhy(d){
+    const m = liveMins(d.since);
+    if (d.pin_locked) return 'PIN locked';
+    if (['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return 'No rider for ' + m + ' min';
+    if (d.status === 'OFFERED' && m >= 3) return 'Offer unanswered ' + m + ' min';
+    if (d.status === 'PENDING' && m >= 45) return 'Store not ready after ' + m + ' min';
+    if (['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return 'Pickup taking ' + m + ' min';
+    if (['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return 'On the road ' + m + ' min';
+    return null;
+  }
+  async function loadLiveOps(){
+    const body = document.getElementById('liveOpsBody');
+    if (!body || !supabaseClient) return;
+    try {
+      const { data, error } = await supabaseClient.rpc('get_ops_board');
+      if (error) throw error;
+      const ds = data.deliveries || [];
+      const open = ds.filter(d => !['DELIVERED','CANCELLED','FAILED','RETURNED'].includes(d.status));
+      const t0 = new Date(); t0.setHours(0,0,0,0);
+      const deliveredToday = ds.filter(d => d.status === 'DELIVERED' && d.delivered_at && new Date(d.delivered_at) >= t0).length;
+      const attention = open.filter(liveWhy);
+      const online = (data.riders || []).filter(r => r.online).length;
+      const so = document.getElementById('statOpenDeliveries'); if (so) so.textContent = open.length;
+      const esc2 = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      body.className = '';
+      body.innerHTML = `
+        <div class="live-kpis">
+          <div><b>${open.length}</b><span>open deliveries</span></div>
+          <div class="${attention.length ? 'bad' : ''}"><b>${attention.length}</b><span>need attention</span></div>
+          <div class="good"><b>${deliveredToday}</b><span>delivered today</span></div>
+          <div class="${online ? 'good' : 'bad'}"><b>${online}</b><span>riders online</span></div>
+        </div>
+        ${attention.length ? attention.slice(0, 4).map(d => `<div class="live-row bad"><b>${esc2(d.customer || 'Customer')}</b> · ${esc2(d.area || '')}<span>⚠ ${esc2(liveWhy(d))}</span></div>`).join('')
+          : open.length ? open.slice(0, 4).map(d => `<div class="live-row"><b>${esc2(d.customer || 'Customer')}</b> · ${esc2(d.area || '')}<span>${esc2(LIVE_LABEL[d.status] || d.status)}${d.rider ? ' · ' + esc2(d.rider) : ''}</span></div>`).join('')
+          : '<div class="live-row">✓ No deliveries in progress right now.</div>'}`;
+    } catch (e) {
+      body.textContent = 'Live operations unavailable right now.';
+    }
+    clearInterval(liveOpsTimer);
+    liveOpsTimer = setInterval(() => { if (document.body.dataset.section === 'dashboard' || !document.body.dataset.section) loadLiveOps(); }, 30000);
+  }
+  window.loadLiveOps = loadLiveOps;
+  window.stopLiveOps = () => { clearInterval(liveOpsTimer); liveOpsTimer = null; };
+  document.getElementById('liveOpsOpen')?.addEventListener('click', () => document.querySelector('.menu li[data-section="delivery-ops"]')?.click());
+  document.querySelectorAll('.admin-bnav [data-go]').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelector('.menu li[data-section="' + btn.dataset.go + '"]')?.click();
+  }));
+  document.getElementById('bnavMenu')?.addEventListener('click', () => document.body.classList.add('sidebar-open'));
+  loadLiveOps();
+
   // ── Ad Campaigns ───────────────────────────────────────────────────────────
   let adCampaignsLoaded = false;
   async function loadAdCampaigns(statusFilter) {
