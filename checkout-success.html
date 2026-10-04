@@ -77,6 +77,14 @@
     
     <p id="shipNote">We're processing your order and will notify you when it ships.</p>
 
+    <!-- Live delivery tracking — the private link works without an account
+         (guests) and is also in the delivery emails. Shown once paid. -->
+    <div id="trackBox" style="display:none;margin:18px 0;padding:16px;border-radius:12px;background:#f0f6ff;text-align:left">
+      <div style="font-weight:700;color:#0a2f66;margin-bottom:4px">📍 Track your delivery</div>
+      <div style="font-size:14px;color:#4b5563;margin-bottom:12px">Follow your order live — from the store to your door — and see the 4-digit PIN to give your rider. Bookmark this link; it's also in your delivery emails.</div>
+      <a id="trackBtn" class="btn" href="#" style="display:inline-block;margin:0">Track my delivery</a>
+    </div>
+
     <!-- Service next steps (shown if order has service items). Content is
          built per-item by archetype in the script below, since the steps
          genuinely differ between drop-off / appointment / digital services. -->
@@ -217,6 +225,11 @@
               if (order && order.paymentStatus === 'paid') {
                 const ps = document.getElementById('payStatus');
                 if (ps) { ps.textContent = 'Paid'; ps.style.color = '#28a745'; }
+                if (order.trackPath) {
+                  document.getElementById('trackBtn').href = order.trackPath;
+                  document.getElementById('trackBox').style.display = '';
+                  document.getElementById('shipNote').textContent = 'The store is preparing your order — track it live below.';
+                }
                 // Nothing ships in a service-only order (a booking, a voucher…)
                 if (!order.hasPhysical) {
                   const onlyVouchers = (order.services || []).length && order.services.every(sv => sv.is_voucher);

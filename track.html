@@ -182,8 +182,14 @@
   const sb = supabase.createClient(url, key);
 
   const { data: { session } } = await sb.auth.getSession();
-  if (!session || !session.user) {
-    window.location.href = 'index.html';
+  // The private tracking link (?order=…&t=<token>, from the payment-success
+  // page and delivery emails) works without an account — guests, or buyers
+  // who signed up after ordering. Signed-in buyers can also track their own
+  // orders from their profile without a token.
+  const trackToken = new URLSearchParams(window.location.search).get('t') || null;
+  if ((!session || !session.user) && !trackToken) {
+    content.innerHTML = emptyCard('🔗', 'Open the “Track my delivery” link from your order confirmation email (or the page you saw after paying) to follow your order — no account needed. If you have an Umzila account, sign in and open your orders.')
+      + '<a class="t-back-link" href="index.html">&larr; Back to Umzila</a>';
     return;
   }
 
@@ -502,11 +508,13 @@
   let shownStep = null;
 
   async function loadTracking() {
-    const { data, error } = await sb.rpc('get_delivery_tracking', { p_order_id: orderId });
+    const { data, error } = await sb.rpc('get_delivery_tracking', { p_order_id: orderId, p_token: trackToken });
     const row = Array.isArray(data) ? data[0] : data;
 
     if (error || !row || !row.delivery_id) {
-      content.innerHTML = emptyCard('📦', 'No live tracking available for this order yet.') + backLink();
+      content.innerHTML = emptyCard('📦', trackToken
+        ? 'We couldn’t find live tracking for this link. Check you opened the full link from your email, or contact support.'
+        : 'No live tracking for this order on your account. If you checked out without signing in, open the “Track my delivery” link from your order confirmation email.') + backLink();
       if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
       return;
     }

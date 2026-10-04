@@ -9,7 +9,10 @@
 // the order, and this returns nothing personal: payment status plus the
 // service lines needed to render next steps.
 //
-// GET ?m=<m_payment_id>  → { paymentStatus, services: [...] }
+// GET ?m=<m_payment_id>  → { paymentStatus, hasPhysical, services: [...], trackPath? }
+// trackPath (paid orders with a delivery): the private tracking link
+// (/track.html?order=<id>&t=<token>) — guests have no account, so this link
+// is how they follow their delivery.
 const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async function (event) {
@@ -20,7 +23,7 @@ exports.handler = async function (event) {
   }
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const { data: order } = await supabase.from('orders')
-    .select('payment_status, items').eq('m_payment_id', m).maybeSingle();
+    .select('id, payment_status, items').eq('m_payment_id', m).maybeSingle();
   if (!order) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Order not found' }) };
 
   const items = Array.isArray(order.items) ? order.items : [];
@@ -45,5 +48,10 @@ exports.handler = async function (event) {
       }))
     : [];
   const hasPhysical = items.some(i => (i.listing_type || 'product') !== 'service');
-  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services }) };
+  let trackPath = null;
+  if (order.payment_status === 'paid' && hasPhysical) {
+    const { data: delivery } = await supabase.from('deliveries').select('tracking_token').eq('order_id', order.id).maybeSingle();
+    if (delivery && delivery.tracking_token) trackPath = `/track.html?order=${order.id}&t=${delivery.tracking_token}`;
+  }
+  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services, trackPath }) };
 };

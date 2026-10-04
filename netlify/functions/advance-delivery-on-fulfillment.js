@@ -80,7 +80,7 @@ exports.handler = async function (event) {
     // populate_order_items_on_payment fix made it reliably populated.
     const { data: orderItems, error: orderItemsError } = await supabase
       .from('order_items')
-      .select('id, seller_id')
+      .select('id, seller_id, product_id, selected_size')
       .eq('order_id', orderId);
     if (orderItemsError) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order items', detail: orderItemsError.message }) };
@@ -96,7 +96,9 @@ exports.handler = async function (event) {
       const READY_STATUSES = ['fulfilled', 'delivered', 'refunded'];
       const sellersOnOrder = [...new Set(orderItems.map(i => i.seller_id).filter(Boolean))];
       const allSellersReady = sellersOnOrder.every(sellerId => {
-        const sellerItemCount = orderItems.filter(i => i.seller_id === sellerId).length;
+        // Distinct lines (product + size), so a duplicated order_items row
+        // can never make a seller look "not ready" forever.
+        const sellerItemCount = new Set(orderItems.filter(i => i.seller_id === sellerId).map(i => `${i.product_id || i.id}|${i.selected_size || ''}`)).size;
         const sellerReadyCount = (statusRows || []).filter(s => s.seller_id === sellerId && READY_STATUSES.includes(s.status)).length;
         return sellerReadyCount >= sellerItemCount;
       });

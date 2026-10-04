@@ -4980,7 +4980,20 @@ async function submitToPayFast(cartItems, orderId, total) {
     // "write to orders before payment" rule either way). Returns
     // { orderId, total, validatedCart } or null (having already shown the
     // error and reset the given button).
+    // One order per Pay press: a second tap (or the desktop + mobile Pay
+    // buttons) during the first few seconds — before the button disables —
+    // used to create a duplicate pending order (2026-10-04).
+    let orderPrepInFlight = false;
     async function preparePendingOrder(triggerBtn, triggerLabel) {
+      if (orderPrepInFlight) return null;
+      orderPrepInFlight = true;
+      try {
+        return await preparePendingOrderOnce(triggerBtn, triggerLabel);
+      } finally {
+        orderPrepInFlight = false;
+      }
+    }
+    async function preparePendingOrderOnce(triggerBtn, triggerLabel) {
         // Validate shipping form
         if (!validateShippingForm()) {
             return null;

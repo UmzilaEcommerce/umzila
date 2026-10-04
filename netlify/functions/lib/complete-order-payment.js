@@ -198,6 +198,13 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     if (pfData.custom_str1 !== 'seller_enrollment' && existingOrder.label !== 'seller_enrollment' && existingOrder.customer_email) {
         const RESEND_KEY = process.env.RESEND_API_KEY || '';
         if (RESEND_KEY) {
+            // Private tracking link (the delivery row is created by a trigger
+            // when the order turns paid) — guests have no account to track from.
+            let trackToken = null;
+            try {
+                const { data: dl } = await supabase.from('deliveries').select('tracking_token').eq('order_id', existingOrder.id).maybeSingle();
+                trackToken = (dl && dl.tracking_token) || null;
+            } catch (_) { /* no delivery for this order */ }
             try {
                 const emailRes = await fetch('https://api.resend.com/emails', {
                     method: 'POST',
@@ -206,7 +213,7 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                         from:    'Umzila <orders@umzila.store>',
                         to:      [existingOrder.customer_email],
                         subject: `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
-                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl)
+                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken)
                     })
                 });
                 if (!emailRes.ok) {
@@ -315,8 +322,13 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
             });
         }
 
-        // Insert order_items rows in one batch
-        if (orderItemInserts.length) {
+        // Insert order_items rows in one batch — unless the
+        // populate_order_items_on_payment DB trigger already did when the order
+        // turned 'paid' (it always does now; both writing them doubled every
+        // paid order's items, which blocked "Mark Ready" — 2026-10-04).
+        const { count: existingItems } = await supabase
+            .from('order_items').select('id', { count: 'exact', head: true }).eq('order_id', existingOrder.id);
+        if (orderItemInserts.length && !existingItems) {
             const { error: itemsErr } = await supabase
                 .from('order_items')
                 .insert(orderItemInserts);
@@ -751,7 +763,7 @@ function buildSellerOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl) 
 }
 
 // ── Order confirmation email builder ─────────────────────────────────────────
-function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
+function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackToken) {
     const site      = siteUrl || '';
     const orderRef  = order.order_number || mPaymentId || 'N/A';
     const firstName = (order.customer_name || pfData.name_first || 'there').split(/\s+/)[0];
@@ -923,8 +935,10 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl) {
     ${serviceNextStepsHtml}
 
     <div class="cta">
-      <a href="${esc(site)}/profile.html" class="btn">View My Orders &rarr;</a>
+      ${trackToken ? `<a href="${esc(site)}/track.html?order=${esc(order.id)}&amp;t=${esc(trackToken)}" class="btn">📍 Track my delivery &rarr;</a><br><br>` : ''}
+      <a href="${esc(site)}/profile.html" class="btn"${trackToken ? ' style="background:#6c757d"' : ''}>View My Orders &rarr;</a>
     </div>
+    ${trackToken ? '<p style="font-size:13px;color:#555;text-align:center;margin:0 0 8px">Your tracking link works without an account — it shows your rider live and the 4-digit PIN to give them.</p>' : ''}
 
     <p style="font-size:13px;color:#888;text-align:center;margin-top:8px">
       Questions? <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a>

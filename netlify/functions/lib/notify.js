@@ -62,9 +62,11 @@ function emailShell(siteBaseUrl, headline, bodyHtml, ctaHtml) {
 </html>`;
 }
 
-function trackCta(siteBaseUrl, orderId, label) {
+// The private tracking link (works without an account — guests, or buyers
+// who signed up after ordering): deliveries.tracking_token.
+function trackCta(siteBaseUrl, orderId, label, token) {
   return `<div style="text-align:center;margin:28px 0 8px">
-      <a href="${esc(siteBaseUrl)}/track.html?order=${esc(orderId)}" style="display:inline-block;background:#0a2f66;color:#fff;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px">${esc(label || 'Track your order')}</a>
+      <a href="${esc(siteBaseUrl)}/track.html?order=${esc(orderId)}${token ? '&amp;t=' + esc(token) : ''}" style="display:inline-block;background:#0a2f66;color:#fff;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px">${esc(label || 'Track your order')}</a>
     </div>`;
 }
 
@@ -85,7 +87,7 @@ function buildEmailContent(eventType, order, delivery, siteBaseUrl) {
       subject: 'Your Umzila order is on the way',
       html: emailShell(siteBaseUrl, "You're on your way! 🛵",
         `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your order <strong>#${esc(orderRef)}</strong> has been collected and is now on its way to you.</p>${pinBlock(delivery.delivery_pin)}<p style="color:#555;font-size:13px;line-height:1.6">When your driver arrives, please provide the PIN above so they can confirm the delivery.</p>`,
-        trackCta(siteBaseUrl, order.id, 'Track your order'))
+        trackCta(siteBaseUrl, order.id, 'Track your order', delivery.tracking_token))
     };
   }
   if (eventType === 'ARRIVING') {
@@ -93,7 +95,7 @@ function buildEmailContent(eventType, order, delivery, siteBaseUrl) {
       subject: 'Your rider is almost there!',
       html: emailShell(siteBaseUrl, "You're up next 👋",
         `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is arriving now with order <strong>#${esc(orderRef)}</strong>.</p>${pinBlock(delivery.delivery_pin)}`,
-        trackCta(siteBaseUrl, order.id, 'Track your order'))
+        trackCta(siteBaseUrl, order.id, 'Track your order', delivery.tracking_token))
     };
   }
   if (eventType === 'DELIVERED') {
@@ -137,7 +139,7 @@ async function notify(supabase, deliveryId, eventType) {
   try {
     const { data: delivery, error: deliveryError } = await supabase
       .from('deliveries')
-      .select('id, order_id, delivery_pin, customer_id')
+      .select('id, order_id, delivery_pin, customer_id, tracking_token')
       .eq('id', deliveryId)
       .maybeSingle();
     if (deliveryError || !delivery) return { skipped: true, reason: 'delivery_not_found' };

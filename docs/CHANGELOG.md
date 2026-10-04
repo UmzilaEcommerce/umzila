@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — First live delivery test: "Mark Ready" did nothing, guests couldn't track, duplicate orders
+
+**Reported (founder's live test, R5 free-delivery item → 34 Umgudulu Rd):** the order went through, but the rider app showed nothing when online; "Mark Ready for Pickup" appeared to do nothing; a buyer who isn't signed in can't track and isn't told where to; after creating an account, tracking said "No live tracking".
+
+**Root causes:**
+1. **Every paid order got its items twice in `order_items`** — the `populate_order_items_on_payment` trigger *and* `complete-order-payment.js` both inserted them. (A regression from the 2026-10-03 `.catch()` fix: before it, the JS insert crashed and never ran.) `advance-delivery-on-fulfillment.js` then compared 2 item rows to 1 "fulfilled" mark → "awaiting other sellers" → silently skipped; the delivery stayed `PENDING`, so dispatch never ran and the rider app had nothing.
+2. **Tracking only worked for the signed-in account that placed the order** (`get_delivery_tracking` matched `customer_id = auth.uid()`). Guest orders have no customer, `track.html` bounced anyone not signed in to the homepage, and nothing gave guests a link. Creating an account afterwards doesn't attach the guest order (and auto-attaching by email would be unsafe: sign-ups aren't email-verified).
+3. **Duplicate pending orders:** Pay could be pressed twice in the first seconds (before the button disabled) → two `orders` rows.
+
+**Fixes:**
+- `complete-order-payment.js` skips its `order_items` insert when the trigger already wrote them; `advance-delivery-on-fulfillment.js` counts distinct lines (product + size) per seller. The test order's duplicate was removed; only that one paid order was affected.
+- **Private tracking link:** new `deliveries.tracking_token`; `get_delivery_tracking(p_order_id, p_token)` accepts the owner *or* the token (anon-callable). The link (`/track.html?order=…&t=…`) is on the payment-success page ("Track your delivery", via `order-status.js` → `trackPath`), in the order confirmation email ("Track my delivery") and in the delivery emails. `track.html` works with the link and no account; without one it explains where the link is.
+- Checkout: `preparePendingOrder()` is single-flight — one order per Pay press.
+
+**Verified:** the test delivery advanced `PENDING → READY_FOR_DISPATCH` and was offered to the online rider immediately; the founder then accepted it and progressed it to picked up / on the way live. Locally: `order-status` returns the link for the paid order; `track.html` with the link (no sign-in) shows "On the way to you", live rider position and the PIN; no link → explanation; wrong token → "couldn't find live tracking".
+
+**Files:** `netlify/functions/{advance-delivery-on-fulfillment,order-status}.js`, `netlify/functions/lib/{complete-order-payment,notify}.js`, `track.html`, `checkout-success.html`, `checkout.html`; migration `delivery_tracking_token`.
+
+---
+
 ## 2026-10-04 — Rider dispatch no longer stalls: missed offers released, waiting orders re-offered
 
 **Found while preparing the founder's first live end-to-end delivery test:** dispatch only ran once, at the moment a seller marked an order ready. If no rider was online right then, the delivery sat at `READY_FOR_DISPATCH` forever (the code comments mentioned a "heartbeat or admin redispatch" that was never built). An offer nobody answered within its 2 minutes left the delivery stuck at `OFFERED` forever too — it was only marked expired if a rider tried to accept it late.
