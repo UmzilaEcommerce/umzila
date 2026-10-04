@@ -18,7 +18,7 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - `handle_new_user` fills `profiles.email/first_name/last_name` from the sign-up (there's no session yet when confirmation is on, so the browser can't).
 - Every sign-up passes `emailRedirectTo` = the current page (checkout comes back signed in; the saved code re-applies on load) and, without a session, shows "we sent a confirmation link to …" instead of closing. Every sign-in that fails with "Email not confirmed" re-sends the link and says so: main modal (`script.js`), checkout (code-box panel, account card, inline sign-in), mystery gift (`index.html`), `login-admin.html`. Fixed `script.js` passing sign-up options as a second argument (the name was silently dropped).
 
-**Needs in Supabase (dashboard):** Auth → URL Configuration → Redirect URLs must allow `https://umzila.store/**` (otherwise links land on the Site URL); Auth emails must go through a real SMTP (e.g. Resend) — Supabase's built-in mailer only reaches team addresses and a few emails per hour.
+**Needs in Supabase (dashboard):** Auth → URL Configuration → Redirect URLs must allow the live site with `/**` after it (the SITE_BASE_URL value) (otherwise links land on the Site URL); Auth emails must go through a real SMTP (e.g. Resend) — Supabase's built-in mailer only reaches team addresses and a few emails per hour.
 
 **Files:** `script.js`, `checkout.html`, `index.html`, `login-admin.html`, `profile.html`, `track.html`; migrations `verified_email_ownership`, `reset_past_accounts_email_confirmation`.
 
