@@ -154,7 +154,7 @@ exports.handler = async function (event, context) {
       return badRequest('Invalid JSON body');
     }
 
-    const { cartItems, userId } = body;
+    const { cartItems } = body;
     const destinationLat = toFiniteNumber(body.destinationLat ?? body.lat ?? body.latitude);
     const destinationLon = toFiniteNumber(body.destinationLon ?? body.lon ?? body.lng ?? body.longitude);
     const priority = !!body.priority;
@@ -166,9 +166,6 @@ exports.handler = async function (event, context) {
         destinationLat < -90 || destinationLat > 90 || destinationLon < -180 || destinationLon > 180) {
       return badRequest('Invalid or missing destination coordinates');
     }
-    if (userId != null && (typeof userId !== 'string' || !UUID_RE.test(userId))) {
-      return badRequest('Invalid userId');
-    }
 
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -176,6 +173,17 @@ exports.handler = async function (event, context) {
       return serverError('Server configuration error');
     }
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // The quote's owner comes from the buyer's session token, never the
+    // body — validate-cart.js only honours a quote for its owner (or an
+    // ownerless guest quote), so a client-sent id could claim anyone's.
+    let userId = null;
+    const authHeader = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      const { data: authData } = await supabase.auth.getUser(token);
+      userId = (authData && authData.user && authData.user.id) || null;
+    }
 
     // ---- Re-fetch products/variants server-side by id — never trust
     // client-supplied prices or seller_ids from cartItems (same defensive

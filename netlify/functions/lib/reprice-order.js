@@ -17,9 +17,9 @@ async function repriceOrder(supabase, mPaymentId) {
 
   const res = await validateCart.handler({
     httpMethod: 'POST',
+    trustedUserId: order.user_id || null, // server-side: the order's own buyer
     body: JSON.stringify({
       cartItems: Array.isArray(order.items) ? order.items : [],
-      userId: order.user_id || undefined,
       couponCode: order.coupon_code || undefined,
       customerEmail: order.customer_email || '',
       quoteId: order.delivery_quote_id || undefined,

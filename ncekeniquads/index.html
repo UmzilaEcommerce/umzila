@@ -89,6 +89,18 @@ section[id],footer[id]{scroll-margin-top:72px}
 /* header */
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:color-mix(in srgb,var(--bone) 86%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);transition:box-shadow .3s}
 .top.scrolled{box-shadow:0 1px 0 var(--line)}
+.uz-strip{background:#0B3A5A;color:#DCE6EE;font:500 .84rem/1.4 var(--font-body,system-ui,sans-serif)}
+.uz-strip .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;padding-block:5px}
+.uz-strip a{color:#fff;text-decoration:none;font-weight:600}
+.uz-strip a:hover{text-decoration:underline}
+.uz-home{display:inline-flex;align-items:center;gap:6px;padding:.2rem .7rem .2rem .45rem;border-radius:999px;background:rgb(255 255 255 / .1);border:1px solid rgb(255 255 255 / .18)}
+.uz-home:hover{background:rgb(255 255 255 / .18);text-decoration:none!important}
+.uz-home svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.uz-mid{color:#9FB6C8}
+@media (max-width:640px){.uz-mid{display:none}}
+.uz-back{display:grid;place-items:center;width:28px;height:28px;margin-right:-6px;border-radius:50%;color:var(--ink-2);flex:0 0 auto}
+.uz-back:hover{background:var(--canvas);color:var(--ink)}
+.uz-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .top-row{display:flex;align-items:center;gap:clamp(10px,2vw,20px);height:68px}
 .logo{display:flex;align-items:center;gap:10px;margin-right:auto;color:var(--ink);text-decoration:none;min-width:0}
 .logo img{width:44px;height:auto;flex:0 0 auto;filter:drop-shadow(0 2px 4px rgb(0 0 0 / .18))}
@@ -102,7 +114,8 @@ section[id],footer[id]{scroll-margin-top:72px}
 .bag-n{position:absolute;top:-4px;right:-5px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:var(--ink);color:var(--paper);font:600 .66rem/19px var(--font-mono);text-align:center}
 .bag-n.bump{animation:bump .5s cubic-bezier(.2,2,.4,1)}
 @keyframes bump{from{transform:scale(.4)}}
-@media (max-width:960px){.nav{display:none}}
+.nav a,.top-row .btn{white-space:nowrap}
+@media (max-width:1080px){.nav{display:none}}
 @media (max-width:440px){.logo b{font-size:.8rem}.logo img{width:38px}.top-row .btn{padding:.6rem .85rem}.book-head{flex-wrap:wrap}.book{padding:18px}}
 @media (max-width:400px){.logo b{display:none}}
 
@@ -445,8 +458,17 @@ section[id],footer[id]{scroll-margin-top:72px}
 <body>
 
 
+<div class="uz-strip">
+  <div class="wrap">
+    <a class="uz-home" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Umzila home</a>
+    <span class="uz-mid">Durban's best local businesses, delivered by Umzila</span>
+    <a href="/track.html">Track an order</a>
+  </div>
+</div>
+
 <header class="top" id="topBar">
   <div class="wrap top-row">
+    <a class="uz-back" href="/" aria-label="Back to Umzila home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></a>
     <a class="logo" href="#home" aria-label="Nceks Quad Biking home">
       <img src="/ncekeniquads/img/logo.webp" width="238" height="256" alt="">
       <b>Nceks Quad Biking</b>

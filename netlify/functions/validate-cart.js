@@ -103,7 +103,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, userId, couponCode, customerEmail, quoteId, persistCart } = JSON.parse(event.body);
+        const { cartItems, couponCode, customerEmail, quoteId, persistCart } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -121,6 +121,25 @@ exports.handler = async function(event, context) {
                 statusCode: 500,
                 body: JSON.stringify({ error: 'Server configuration error' })
             };
+        }
+
+        // Who the buyer is comes from their session token, never from the
+        // request body: a client-sent userId let anyone overwrite another
+        // user's saved cart, use their delivery quote, or borrow their
+        // first-order / per-user discount allowances. Server-side callers
+        // (lib/reprice-order.js) pass the order's own user as trustedUserId —
+        // a property no HTTP request can set.
+        let userId = null;
+        if (event.trustedUserId !== undefined) {
+            userId = event.trustedUserId || null;
+        } else {
+            const authHeader = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';
+            const token = authHeader.replace(/^Bearers+/i, '').trim();
+            if (token) {
+                const authClient = createClient(supabaseUrl, supabaseKey, { auth: { autoRefreshToken: false, persistSession: false } });
+                const { data: authData } = await authClient.auth.getUser(token);
+                userId = (authData && authData.user && authData.user.id) || null;
+            }
         }
         
         const supabase = createClient(supabaseUrl, supabaseKey);

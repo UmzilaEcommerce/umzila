@@ -16,8 +16,12 @@ Every store on Umzila lives at `umzila.store/<slug>`. Unless the store has a bes
 - One set of weekly hours per store: **`seller_availability`** (day_of_week + start/end, SAST). It is the same table the booking calendar uses, so a service store's opening hours *are* its booking hours. Sellers edit it in **Dashboard → My Shop → Opening Hours** (also still from the scheduled-service quiz, which writes the same rows).
 - **`get_store_hours_status(seller_ids uuid[])`** (SQL, anon-callable, ≤100 ids) answers `has_hours, open_now, closes_at, next_open_at` server-side in Africa/Johannesburg time. The store page and checkout both use it — never compute open/closed in the browser from the raw rows.
 - No hours set → nothing is shown and nothing is gated (treated as always open). Hours can't cross midnight yet (validation asks for close ≤ 23:59).
-- Store page: "Open now · until 17:00" / "Closed now · opens tomorrow at 10:00", a closed note under the hero and in the cart drawer, refreshed every 5 minutes.
-- **Checkout gate:** when Pay is pressed, if any line that waits for the store (physical items, and services other than timed bookings and gift vouchers) belongs to a closed store, a popup says which store, when it opens, and that the order will be prepared then (likely the next day). "Yes, order anyway" continues (remembered for that page visit); "Not now" stops before any order is written. A failed hours lookup never blocks a sale. Lives in `checkout.html` → `confirmClosedStores()`, called at the top of `preparePendingOrder()` so it covers Pay Now and Pay with saved card.
+- **Only goods wait for a store to open.** Services of every kind book through calendars that already follow the store's hours, so they never get a warning or popup (owner's rule, 2026-10-04: "no friction at all while booking").
+  - Service-only store (Nceks, Sneaker Cleaners, braiding): "Open now · until 17:00", or a neutral "Opens today at 09:00" — no "Closed" chip, note or popup.
+  - Goods-only store: "Closed now · opens tomorrow at 10:00", a closed note under the hero, a line in quick view and the cart drawer.
+  - Mixed store: the same, but the note says services can be booked as normal and only goods may be delayed.
+  - Refreshed every 5 minutes.
+- **Checkout gate:** when Pay is pressed, if any **goods** line belongs to a closed store, a popup says which store, when it opens, and that goods will be prepared then (likely the next day); if the cart also has services it says those go ahead as normal. "Yes, order anyway" continues (remembered for that page visit); "Not now" stops before any order is written. A failed hours lookup never blocks a sale. Lives in `checkout.html` → `confirmClosedStores()`, called at the top of `preparePendingOrder()` so it covers Pay Now and Pay with saved card.
 
 ## Cart: one cart, per-store views
 

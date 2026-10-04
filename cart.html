@@ -338,12 +338,15 @@
   async function refreshAppliedCoupon(){
     if (!appliedCoupon?.code) { currentDiscountInfo = null; return; }
     try {
+      // The buyer is identified by their session token (validate-cart.js
+      // ignores any userId in the body).
+      const headers = { 'Content-Type': 'application/json' };
+      try { const { data } = await sb.auth.getSession(); if (data?.session?.access_token) headers.Authorization = 'Bearer ' + data.session.access_token; } catch (_) {}
       const res = await fetch('/.netlify/functions/validate-cart', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           cartItems: cart,
-          userId: currentUser?.id,
           couponCode: appliedCoupon.code,
           customerEmail: currentUser?.email || ''
         })

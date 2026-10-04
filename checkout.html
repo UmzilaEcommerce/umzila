@@ -3298,13 +3298,12 @@ async function saveCartToServer() {
       try {
         const res = await fetch('/.netlify/functions/get-delivery-quote', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await validateCartHeaders(), // the quote's owner = the signed-in buyer, from their token
           body: JSON.stringify({
             cartItems: state.cart,
             destinationLat: state.destinationGeo.lat,
             destinationLon: state.destinationGeo.lon,
-            priority: !!state.priorityDelivery,
-            userId: state.user?.id || null
+            priority: !!state.priorityDelivery
           })
         });
         if (!res.ok) return; // not configured yet, or ineligible -- silent fallback
@@ -3638,12 +3637,12 @@ async function loadBuyNowItem() {
       try {
         const res = await fetch('/.netlify/functions/validate-cart', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await validateCartHeaders(),
           body: JSON.stringify({
             cartItems: state.cart,
-            userId: state.user?.id,
             couponCode: code,
-            customerEmail: state.user?.email || elements.customerEmail?.value || ''
+            customerEmail: state.user?.email || elements.customerEmail?.value || '',
+            persistCart: !(state.isBuyNow || state.storeScope)
           })
         });
         if (!res.ok) return false;
@@ -3703,7 +3702,18 @@ async function loadBuyNowItem() {
       }
     }
 	
-	// Secure checkout validation
+	// validate-cart.js identifies the buyer from their session token (never
+// from a userId in the body), for their saved cart and per-user discounts.
+async function validateCartHeaders() {
+    const h = { 'Content-Type': 'application/json' };
+    try {
+        const { data } = await supabaseClient.auth.getSession();
+        if (data && data.session && data.session.access_token) h.Authorization = 'Bearer ' + data.session.access_token;
+    } catch (_) { /* guest */ }
+    return h;
+}
+
+// Secure checkout validation
 async function validateCheckout() {
     try {
         if (state.cart.length === 0) {
@@ -3715,12 +3725,9 @@ async function validateCheckout() {
         // current sign-in state — not whatever was true when they typed it.
         const response = await fetch('/.netlify/functions/validate-cart', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: await validateCartHeaders(),
             body: JSON.stringify({
                 cartItems: state.cart,
-                userId: state.user?.id,
                 couponCode: state.couponCode || undefined,
                 customerEmail: state.user?.email || elements.customerEmail?.value || '',
                 // Stage 3 — only present once fetchDeliveryQuote() has actually
@@ -4902,14 +4909,11 @@ async function submitToPayFast(cartItems, orderId, total) {
         return { orderId, total, validatedCart };
     }
 
-    // Lines that wait for the store to open: physical items and services
-    // that are worked on — not timed bookings (the calendar already only
-    // offers open hours) and not gift vouchers (sent automatically).
+    // Only goods wait for a store to open. Services (bookings, drop-offs
+    // with collection slots, vouchers…) book through calendars that already
+    // follow the store's hours, so they never trigger the notice.
     function waitsForOpenStore(item) {
-        if ((item.listing_type || 'product') !== 'service') return true;
-        if (item.is_voucher) return false;
-        if (item.booking_id || (item.fulfillment_type === 'in_person' && item.booking_mode === 'scheduled')) return false;
-        return true;
+        return (item.listing_type || 'product') !== 'service';
     }
     function sastWhen(iso) {
         const f = (d, o) => new Intl.DateTimeFormat('en-ZA', Object.assign({ timeZone: 'Africa/Johannesburg' }, o)).format(d);
@@ -4929,6 +4933,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         if (!closed.length) return true;
         const { data: sellers } = await supabaseClient.from('sellers').select('id, shop_name').in('id', closed.map(h => h.seller_id));
         const nameOf = id => ((sellers || []).find(s => s.id === id) || {}).shop_name || 'This store';
+        const hasServiceLines = state.cart.some(i => (i.listing_type || 'product') === 'service');
         const lines = closed.map(h => '<li style="margin:4px 0"><strong>' + escapeHtmlLite(nameOf(h.seller_id)) + '</strong> is closed' +
             (h.next_open_at ? ' and opens again <strong>' + escapeHtmlLite(sastWhen(h.next_open_at)) + '</strong>' : '') + '.</li>').join('');
         return new Promise(resolve => {
@@ -4942,7 +4947,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                   '<div style="font-size:30px;line-height:1;margin-bottom:8px">🕘</div>' +
                   '<h3 id="closedStoreTitle" style="margin:0 0 8px;font-size:19px;color:#0a2f66">' + (closed.length === 1 ? 'This store is closed right now' : 'Some stores are closed right now') + '</h3>' +
                   '<ul style="margin:0 0 10px;padding-left:18px;color:#374151;font-size:14px">' + lines + '</ul>' +
-                  '<p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.5">You can still place your order — it will be prepared when the store opens, so expect a delay (most likely until the next day). Do you want to go ahead?</p>' +
+                  '<p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.5">You can still place your order — ' + (hasServiceLines ? 'services you\'ve booked go ahead as normal, but goods' : 'it') + ' will be prepared when the store opens, so expect a delay (most likely until the next day). Do you want to go ahead?</p>' +
                   '<button type="button" data-yes style="width:100%;padding:13px;border:0;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px">Yes, order anyway</button>' +
                   '<button type="button" data-no style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:999px;background:#fff;color:#374151;font-weight:600;font-size:14px;cursor:pointer">Not now</button>' +
                 '</div>';

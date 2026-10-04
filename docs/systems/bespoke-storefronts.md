@@ -13,6 +13,7 @@ Every store *without* a folder gets the default template, `shop.html` — see `s
   - weekly hours (`seller_availability`) and live load (`get_booking_load`), all in SAST
 - **Booking**: "Pay on Umzila" → `hold-service-booking` (guests allowed) → writes the line into the shared cart (`localStorage.ss_cart`, same item shape as `script.js` `addToCart`) → `/checkout.html`. The bag is the real Umzila cart filtered to this store.
 - **Vouchers**: `?voucher=CODE` (from the voucher email) is kept in `sessionStorage` and sent to checkout as `?coupon=`. `?product=<id>` opens that ride (used by checkout's "pick a time again").
+- **Way back to Umzila**: the same navy strip as the default template ("‹ Umzila home" pill, "Track an order") sits above the store's header, plus a back-arrow beside the store logo. Every bespoke store should keep these.
 - **Help**: the booking flow's WhatsApp fallback goes to Umzila's line; the footer keeps the business's own contact details (owner's choice).
 - Display copy/photos per ride length live in `RIDE_ART` in the page; prices/durations/capacity/hours are edited in the seller dashboard, never in the file.
 

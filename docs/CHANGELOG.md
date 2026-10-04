@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Back-in-stock emails actually sent, buyer identity from tokens, service stores never "closed", Nceks way back to Umzila
+
+**Asked:** how "Notify me" works (and whether signed-in buyers still type their email); fix the client-trusted `userId` gap; no closed-store friction for calendar/service businesses (only mixed stores, saying services book normally and goods may be delayed); the Umzila pill/arrow on the Nceks store.
+
+**Back-in-stock alerts — root cause:** "Notify me" saved a `stock_alerts` row (and fed the marketing-email list via the existing capture trigger), but **nothing ever sent an email** — no function read the table and `notified_at` was never set. Also: the homepage modal ignored the insert's `{error}` (Supabase doesn't throw) and always said "You're on the list"; repeat taps created duplicates; signed-in buyers had to type their email.
+- New scheduled function `send-stock-alerts.js` (`netlify.toml`, every 15 min): pending alerts whose product is visible, in stock and from an active store → one email per address listing everything that's back (image, store, price, "View it" → `/<slug>?product=<id>` via SITE_BASE_URL), then `notified_at` is stamped. Max 40 emails/run, 600 ms apart. Scheduled functions can't be hit by URL in production.
+- Unique pending index `stock_alerts_one_pending` (product + lower(email) where not yet notified) — a repeat tap is "You're already on the list"; after an alert is sent they can sign up for the next restock.
+- Signed in: no email box — one tap, sent to the account email (store page quick view + homepage modal).
+- Note: `auto_hide_out_of_stock` hides a product when its stock hits 0 (and re-shows it on restock), so "Notify me" only appears on sold-out items that are still visible. Unchanged — flagged to the owner.
+
+**Security — buyer identity from the session token:** `validate-cart.js` took `userId` from the request body and used it for the saved-cart upsert, delivery-quote ownership and first-order / per-user discount checks — anyone could overwrite another user's saved cart or borrow their discount allowances. Now it reads the user from the `Authorization: Bearer` token (server-side callers pass `event.trustedUserId`, which no HTTP request can set — used by `lib/reprice-order.js`). Same fix in `get-delivery-quote.js` (quote owner). `checkout.html` (`validateCartHeaders()`) and `cart.html` now send the token; checkout's coupon re-check also sends `persistCart:false` for scoped/Buy Now carts. Verified: a spoofed body `userId` is ignored (no cart row written), a bad token is treated as a guest, pricing unchanged.
+
+**Closed-store rules:** only **goods** wait for a store to open. Services (bookings, drop-offs with collection slots, digital, vouchers) never trigger anything — their calendars already follow store hours. Service-only store page: just "Opens today at 09:00" (no warning, note or popup). Goods-only: unchanged. Mixed store: note/popup say services can be booked as normal and goods may be delayed. Checkout popup only counts goods lines.
+
+**Nceks:** the same navy strip ("‹ Umzila home" pill, "Track an order") and a back-arrow beside the Nceks logo, added through the build script; nav/"Book now" kept on one line at mid widths (nav hides below 1080px).
+
+**Files:** `netlify/functions/{send-stock-alerts,validate-cart,get-delivery-quote}.js`, `netlify/functions/lib/reprice-order.js`, `netlify.toml`, `shop.html`, `checkout.html`, `cart.html`, `index.html`, `script.js`, `ncekeniquads/index.html`, docs, `CLAUDE.md`; migration `stock_alerts_one_pending_per_email`.
+
+---
+
 ## 2026-10-04 — New default store template, store sections, saved stores, opening hours, per-store cart & checkout
 
 Full write-up: [`docs/systems/store-pages.md`](systems/store-pages.md) (cart side also in [`checkout-cart-loading.md`](systems/checkout-cart-loading.md)).
@@ -28,7 +48,7 @@ Full write-up: [`docs/systems/store-pages.md`](systems/store-pages.md) (cart sid
 **Verified locally (netlify dev, live DB):** Velaphi + Sneaker Cleaners on the template at 390px and desktop; sections; quick-add → drawer shows only Velaphi with the "2 items from another store" line; `?store=` checkout priced only the R70 plate (+R22 delivery, `persistCart:false`) while `ss_cart` kept both; closed popup ("opens tomorrow at 10:00") — "Not now" wrote nothing, "Yes" continued to the order step (insert blocked by the test; no order created); Sneaker Cleaners "Closed now · opens today at 09:00"; guest saved store shown on the homepage; hold-restore tested live (old hold back to `held`); bespoke `/ncekeniquads` unaffected. Test hours, holds and carts removed.
 **Not verified in a browser (needs a seller login):** the dashboard Opening Hours / colour / store-section fields (syntax-checked; same patterns as the existing quiz). Signed-in saved-stores sync tested by code path only.
 
-**Known / not done:** services on the template still hand over to the homepage modal for setup; hours can't cross midnight; `validate-cart.js` trusts the client-sent `userId` for its saved-cart upsert (pre-existing — anyone could overwrite another user's saved cart contents; worth fixing by reading the user from the auth token).
+**Known / not done:** services on the template still hand over to the homepage modal for setup; hours can't cross midnight; the client-sent `userId` gap was fixed in the entry above.
 
 **Files:** `shop.html` (rewritten), `checkout.html`, `checkout-success.html`, `cart.html`, `index.html`, `seller-dashboard.html`, `ncekeniquads/index.html`, `netlify/functions/{validate-cart,hold-service-booking}.js`, `netlify/functions/lib/reprice-order.js`, `CLAUDE.md`, docs; migration `store_template_saved_stores_hours_status`.
 

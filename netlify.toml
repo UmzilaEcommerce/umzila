@@ -5,6 +5,10 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "ADMIN_EMAILS"
 
+# Back-in-stock emails for "Notify me" sign-ups (stock_alerts).
+[functions."send-stock-alerts"]
+  schedule = "*/15 * * * *"
+
 # Clean store URLs: umzila.store/<slug> -> shop.html (URL stays clean).
 # Real files (cart.html, style.css, …) are always served first, so this only
 # catches single-segment paths that aren't files; shop.html resolves the

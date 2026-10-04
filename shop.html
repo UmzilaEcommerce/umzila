@@ -595,6 +595,12 @@ function whenLabel(iso){
   return `${sastFmt(iso, {weekday: 'long'})} at ${t}`;
 }
 const isClosed = () => !!(S.hours && S.hours.has_hours && !S.hours.open_now);
+// Only goods wait for a store to open. Services book straight into the
+// calendar (which only offers open hours), so a service-only store never
+// shows a "closed" warning — just when it opens; a mixed store says
+// services book as normal and only goods may be delayed.
+const hasGoods = () => S.products.some(p => !isService(p));
+const hasServices = () => S.products.some(isService);
 // sellers.delivery_method is an internal code (always 'self_dropoff' from the
 // dashboard) — buyers see who brings the order instead.
 const deliveryLine = s => Number(s.self_arranged_radius_km) > 0 ? 'Delivered by the store' : 'Delivered by Umzila';
@@ -623,6 +629,7 @@ function renderMeta(){
   const s = S.seller, h = S.hours, meta = [];
   if (h && h.has_hours) {
     if (h.open_now) meta.push(`<li class="open">Open now${h.closes_at ? ' · until ' + esc(sastFmt(h.closes_at, {hour: '2-digit', minute: '2-digit', hour12: false})) : ''}</li>`);
+    else if (!hasGoods()) { if (h.next_open_at) meta.push(`<li>${ICON.clock}Opens ${esc(whenLabel(h.next_open_at))}</li>`); }
     else meta.push(`<li class="closed">Closed now${h.next_open_at ? ' · opens ' + esc(whenLabel(h.next_open_at)) : ''}</li>`);
   }
   if (s.location) meta.push(`<li>${ICON.pin}${esc(s.location)}</li>`);
@@ -630,9 +637,14 @@ function renderMeta(){
   meta.push(`<li>${ICON.bike}${esc(deliveryLine(s))}</li>`);
   if (s.years_operating) meta.push(`<li>${ICON.star}${esc(s.years_operating)} year${Number(s.years_operating) === 1 ? '' : 's'} in business</li>`);
   $('#storeMeta').innerHTML = meta.join('');
-  const closed = isClosed();
+  const closed = isClosed() && hasGoods();
   $('#closedNote').hidden = !closed;
-  if (closed) $('#closedNoteT').textContent = `${s.shop_name} is closed right now${h.next_open_at ? ' and opens ' + whenLabel(h.next_open_at) : ''}. You can still order — it's prepared when they open.`;
+  if (closed) {
+    const opens = h.next_open_at ? ' and opens ' + whenLabel(h.next_open_at) : '';
+    $('#closedNoteT').textContent = hasServices()
+      ? `${s.shop_name} is closed right now${opens}. You can still book services as normal — goods ordered now are prepared when they open, so expect a short delay.`
+      : `${s.shop_name} is closed right now${opens}. You can still order — it's prepared when they open.`;
+  }
 }
 
 /* ================= RENDER: CATALOG ================= */
@@ -704,7 +716,7 @@ function renderAbout(){
   const s = S.seller, h = S.hours;
   const facts = [
     s.location && [ICON.pin, 'Where', s.location],
-    h && h.has_hours && [ICON.clock, 'Hours', h.open_now ? `Open now${h.closes_at ? ', until ' + sastFmt(h.closes_at, {hour: '2-digit', minute: '2-digit', hour12: false}) : ''}` : `Closed now${h.next_open_at ? ', opens ' + whenLabel(h.next_open_at) : ''}`],
+    h && h.has_hours && [ICON.clock, 'Hours', h.open_now ? `Open now${h.closes_at ? ', until ' + sastFmt(h.closes_at, {hour: '2-digit', minute: '2-digit', hour12: false}) : ''}` : hasGoods() ? `Closed now${h.next_open_at ? ', opens ' + whenLabel(h.next_open_at) : ''}` : (h.next_open_at ? `Opens ${whenLabel(h.next_open_at)}` : 'See booking times')],
     s.turnaround_time && [ICON.clock, 'Timing', s.turnaround_time],
     [ICON.bike, 'Delivery', deliveryLine(s)],
     s.return_policy && [ICON.chat, 'If something goes wrong', s.return_policy],
@@ -890,10 +902,14 @@ function openQV(id){
   $('#qvOpts').innerHTML = p.sizes.length ? `<fieldset class="opt-group"><legend>Size</legend><div class="opts">${p.sizes.map((o, oi) => `<label class="opt"><input type="radio" name="size" value="${esc(o)}"${oi === 0 ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div></fieldset>` : '';
   $('#qvBuy').hidden = out || unpriced(p);
   $('#qvNotify').hidden = !out;
-  $('#qvNotifyEmail').value = '';
+  // Signed in: one tap, sent to the account's email.
+  $('#qvNotifyEmail').value = (user && user.email) || '';
+  $('#qvNotifyEmail').hidden = !!(user && user.email);
+  $('#qvNotifyBtn').textContent = user && user.email ? 'Notify me when it’s back' : 'Notify me';
+  $('#qvNotifyBtn').style.flex = user && user.email ? '1' : '';
   $('.stepper', qv).hidden = svc;
   $('#qvAdd').textContent = svc ? (p.booking_mode === 'scheduled' ? 'Choose a time' : 'Set it up') : 'Add to cart';
-  const closedLine = isClosed() && !(svc && p.booking_mode === 'scheduled') && !p.is_voucher
+  const closedLine = isClosed() && !svc
     ? `${ICON.clock}<span>Closed right now — orders are prepared when the store opens${S.hours.next_open_at ? ' (' + esc(whenLabel(S.hours.next_open_at)) + ')' : ''}</span>` : '';
   $('#qvAssure').innerHTML = [
     closedLine,
@@ -924,8 +940,10 @@ $('#qvNotifyBtn').addEventListener('click', async () => {
   const btn = $('#qvNotifyBtn'); btn.disabled = true;
   const {error} = await sb.from('stock_alerts').insert({product_id: qvP.id, email});
   btn.disabled = false;
-  if (error) { toast('Couldn’t save that', 'Please try again'); return; }
-  qv.close(); toast('We’ll let you know', `When ${qvP.title} is back`);
+  // 23505: already signed up for this item (one pending alert per product + email)
+  if (error && error.code !== '23505') { toast('Couldn’t save that', 'Please try again'); return; }
+  qv.close();
+  toast(error ? 'You’re already on the list' : 'We’ll let you know', `We’ll email ${email} once ${qvP.title} is back`);
 });
 $('#qvCopy').addEventListener('click', async () => {
   const url = location.origin + '/' + S.seller.slug + '?product=' + qvP.id;
@@ -996,7 +1014,7 @@ function renderCart(){
     return;
   }
   const sum = ls.reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
-  const closed = isClosed() && ls.some(l => !l.booking_id);
+  const closed = isClosed() && ls.some(l => l.listing_type !== 'service');
   body.innerHTML = `<div class="store-line"><span class="mini-logo">${s.logo_url ? `<img src="${esc(s.logo_url)}" alt="">` : `<span style="font:800 .75rem var(--font-display)">${esc(initials(s.shop_name))}</span>`}</span>${esc(s.shop_name)}</div>
     <ul class="lines">${ls.map(l => {
       const key = esc((l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || ''));
@@ -1009,7 +1027,7 @@ function renderCart(){
       return `<li class="line"><span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
         <div><b>${esc(title)}</b><span>${showSize ? 'Size ' + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
     }).join('')}</ul>
-    ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; it's prepared when they open.</p>` : ''}
+    ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
     <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>
     <a class="btn btn-accent btn-block" href="/checkout.html?store=${encodeURIComponent(s.id)}" style="margin-top:6px;padding-block:1rem">Check out ${esc(s.shop_name)} · ${money(sum)}</a>
     ${othersLine || '<p class="note">Secure checkout with PayFast. Delivery fee depends on your distance.</p>'}</div>`;

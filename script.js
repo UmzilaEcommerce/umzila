@@ -2192,7 +2192,13 @@ function openNotifyModal(productId, title) {
   var sucEl   = document.getElementById('notifySuccess');
   if (!modal) return;
   if (titleEl) titleEl.textContent = title ? 'Notify me when "' + title + '" is back' : 'Back in stock alert';
-  if (emailEl) emailEl.value = '';
+  // Signed in: no typing — the alert goes to the account's email.
+  var accountEmail = (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '';
+  var textEl = document.getElementById('notifyModalText');
+  if (textEl) textEl.textContent = accountEmail
+    ? "We'll email " + accountEmail + " once, the moment this is available again."
+    : "Enter your email and we'll notify you the moment this is available again.";
+  if (emailEl) { emailEl.value = accountEmail; emailEl.style.display = accountEmail ? 'none' : ''; }
   if (errEl)   errEl.style.display = 'none';
   if (sucEl)   sucEl.style.display = 'none';
   modal.classList.add('active');
@@ -2228,7 +2234,11 @@ function closeNotifyModal() {
         submitBtn.disabled = true; submitBtn.textContent = '…';
         try {
           if (window.supabase) {
-            await window.supabase.from('stock_alerts').insert({ product_id: _notifyProductId, email: email.trim().toLowerCase() });
+            // Supabase returns errors rather than throwing. 23505 = already
+            // signed up for this item (one pending alert per product+email).
+            var ins = await window.supabase.from('stock_alerts').insert({ product_id: _notifyProductId, email: email.trim().toLowerCase() });
+            if (ins.error && ins.error.code !== '23505') throw ins.error;
+            if (sucEl) sucEl.textContent = ins.error ? "✓ You're already on the list for this one." : "✓ You're on the list! We'll email you when it's back.";
           }
           if (sucEl) sucEl.style.display = 'block';
           if (errEl) errEl.style.display = 'none';
