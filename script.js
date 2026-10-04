@@ -2876,15 +2876,19 @@ function makeCardHTML(p){
     in_person: isScheduledService ? '📅 Bookable session' : '📍 In-person',
     digital: '💻 Digital delivery'
   }[p.fulfillment_type] || '🔧 Service') : '';
-  const metaParts = isServiceCard
+  // Gift vouchers are "services" underneath, but buyers should see a gift,
+  // not "Digital delivery · Request".
+  const isVoucherCard = isServiceCard && !!(p.metadata && p.metadata.voucher === true);
+  const metaParts = isVoucherCard ? ['🎁 Gift voucher · emailed']
+    : isServiceCard
     ? [svcMetaLabel, p.service_turnaround || ''].filter(Boolean)
     : [p.color || '', lowStock ? `${totalStock} left` : ''].filter(Boolean);
-  const ctaLabel = isScheduledService ? 'Book' : 'Request';
+  const ctaLabel = isVoucherCard ? 'Buy gift' : isScheduledService ? 'Book' : 'Request';
   return `<div class="product-card fade-up${outOfStock ? ' is-soldout' : ''}" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${esc(p.title)}">
       <div class="badges">
         ${(window._sponsoredProductIds && window._sponsoredProductIds.has(p.id)) ? '<span class="badge badge-sponsored">Sponsored</span>' : ''}
-        ${isServiceCard ? '<span class="badge badge-service">Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${esc(p.badge)}</span>`:'')}
+        ${isVoucherCard ? '<span class="badge badge-service" style="background:#DB8410!important">Gift</span>' : isServiceCard ? '<span class="badge badge-service">Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${esc(p.badge)}</span>`:'')}
         ${isOnSale && !p.badge && !isServiceCard ? '<span class="badge sale">Sale</span>' : ''}
         ${outOfStock ? '<span class="badge badge-soldout">Sold out</span>' : ''}
       </div>

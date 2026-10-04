@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Designed product images for Nceks; voucher cards read as gifts
+
+**Reported:** every Nceks listing used a generic quad photo, and each ride and its gift voucher shared the *same* photo, so you had to read titles carefully to tell a booking from a voucher.
+
+**What changed:**
+- 8 designed images (1200×1200 WebP) uploaded to `product-images/stores/ncekeniquads/` and set as each listing's primary image (`product_images` order 0 + `products.image`; the photos stay in the gallery). **Rides:** photo full-bleed, huge duration ("1 HOUR", "1½ HOURS"…), "Quad bike ride", orange "Book a time" pill. **Vouchers:** cream gift card with ribbon + bow over a blurred photo, "Gift voucher", "Emailed instantly · valid 3 years". Key content stays inside the crop-safe centre (3:4 cards, 4:3 phone modal). Source + render/upload scripts in `docs/design/nceks-product-images/`.
+- Homepage cards (`script.js`): gift vouchers now show a "Gift" badge, "🎁 Gift voucher · emailed" and a "Buy gift" button instead of "Service · Digital delivery · Request".
+- The bespoke `/ncekeniquads` page keeps its own photos (only its bag line uses the listing image).
+
+**Files:** `script.js`, `docs/design/nceks-product-images/*`; storage + product rows (data).
+
+---
+
 ## 2026-10-04 — Sold-out items: listed on their store, search-only on the homepage
 
 **Asked for:** keep "Sold out · Notify me" on storefronts; on the Umzila homepage sold-out items must not show or rank anywhere in browsing — only in search results, marked sold out, with Notify me in the modal.
