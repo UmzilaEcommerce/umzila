@@ -2,7 +2,7 @@
 //
 // Delivery network (plan §139/§20, delivery-network-spec.md Stage 3):
 // computes and locks a delivery fee quote *before* checkout, using real
-// road-distance pricing from Google's Routes API. Writes a `delivery_quotes`
+// road-distance pricing (OpenRouteService, cached per leg — see lib/road-distance.js). Writes a `delivery_quotes`
 // row and returns only { quoteId, totalDeliveryFee, expiresAt } — customers
 // see the total, not the breakdown (plan §139).
 //
@@ -38,7 +38,7 @@ const MULTI_SELLER_REASON = "This basket needs separate deliveries. Some items a
 // Stage 4 (delivery-network-spec.md §B.2 -> real build 2026-09-17): a cart
 // spanning more than this many distinct sellers still refuses with
 // MULTI_SELLER_REASON. Capped at 2 deliberately -- it keeps the quote-time
-// route sequencing below a cheap 2-permutation Google Routes comparison
+// route sequencing to a cheap 2-permutation comparison of cached road legs
 // instead of needing real route optimization (which bills at a materially
 // higher rate). Revisit once a third real seller has a nearby pickup_geo.
 const MAX_BUNDLE_SELLERS = 2;
@@ -92,7 +92,7 @@ function parseGeographyPoint(hex) {
 
 // Straight-line only -- self-arranged eligibility is a simple "close enough
 // to sort out yourselves" radius check, not a real road-distance quote, so
-// there's no reason to spend a paid Google Routes call on it.
+// there's no reason to spend a routing call on it.
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -101,45 +101,10 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Stage 4 -- one computeRoutes call for a specific 2-pickup visiting order
-// (origin -> intermediate -> destination). Requests routes.legs so the
-// origin->intermediate leg (the real inter-store distance) is available
-// from the same call, at no extra cost, for the max_bundle_leg_km check --
-// no separate straight-line-only lookup needed. Returns null on any
-// failure; the caller treats that the same as the existing hard-error path
-// (never falls back to straight-line distance for pricing, plan §11).
-async function computeBundleRoute(googleRoutesKey, originPoint, intermediatePoint, destLat, destLon) {
-  const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': googleRoutesKey,
-      'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration,routes.legs.distanceMeters'
-    },
-    body: JSON.stringify({
-      origin: { location: { latLng: { latitude: originPoint.lat, longitude: originPoint.lon } } },
-      intermediates: [{ location: { latLng: { latitude: intermediatePoint.lat, longitude: intermediatePoint.lon } } }],
-      destination: { location: { latLng: { latitude: destLat, longitude: destLon } } },
-      travelMode: 'DRIVE',
-      routingPreference: 'TRAFFIC_AWARE',
-      units: 'METRIC'
-    })
-  }).catch(() => null);
-  if (!res) return null;
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json || !Array.isArray(json.routes) || !json.routes.length) return null;
-  const route = json.routes[0];
-  const distanceMeters = Number(route.distanceMeters);
-  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return null;
-  const durationSeconds = typeof route.duration === 'string' ? parseFloat(route.duration.replace(/s$/, '')) : Number(route.duration);
-  const legs = Array.isArray(route.legs) ? route.legs : [];
-  const interStoreLegMeters = legs.length && Number.isFinite(Number(legs[0].distanceMeters)) ? Number(legs[0].distanceMeters) : null;
-  return {
-    totalDistanceKm: distanceMeters / 1000,
-    totalDurationMin: Number.isFinite(durationSeconds) ? durationSeconds / 60 : null,
-    interStoreLegKm: interStoreLegMeters != null ? interStoreLegMeters / 1000 : null
-  };
-}
+// Road distances come from lib/road-distance.js (OpenRouteService + a
+// permanent per-leg cache in route_distance_cache), replacing Google Routes
+// 2026-10-04. A 2-store bundle is priced as the sum of its legs.
+const { getRoadLeg } = require('./lib/road-distance');
 
 exports.handler = async function (event, context) {
   if (event.httpMethod !== 'POST') {
@@ -317,11 +282,6 @@ exports.handler = async function (event, context) {
       return ineligible(OUTSIDE_ZONE_REASON);
     }
 
-    // ---- Google Routes API key (server-only, not yet provided by founder) ----
-    const googleRoutesKey = process.env.GOOGLE_ROUTES_SERVER_KEY;
-    if (!googleRoutesKey) {
-      return serverError('Delivery pricing is not yet configured (missing GOOGLE_ROUTES_SERVER_KEY) — quotes cannot be generated until this is added in Netlify.');
-    }
 
     // ---- Active pricing config (single source of truth for all tariff numbers) ----
     const { data: pricingConfig, error: pricingError } = await supabase
@@ -359,12 +319,10 @@ exports.handler = async function (event, context) {
       pickupPointBySellerId[id] = pt;
     }
 
-    // ---- Road distance via Google Routes API ----
-    // https://routes.googleapis.com/directions/v2:computeRoutes
-    // Server-only key via X-Goog-Api-Key header; field mask restricts the
-    // (billed) response to just what we need. Never falls back to
-    // straight-line distance for pricing (plan §11) — a Routes API failure
-    // is a hard error, not a silent downgrade.
+    // ---- Road distance (OpenRouteService via lib/road-distance.js, cached
+    // per leg forever). Never falls back to straight-line distance for
+    // pricing (plan §11) — a routing failure is a hard error here, and
+    // checkout then uses its class-based fallback price instead. ----
     let distanceKm, durationMin;
     // Stage 4: for a bundled 2-seller cart, `orderedSellerIds` may differ
     // from `pickupSellerIds` -- it's the actual visiting order the quote was
@@ -375,69 +333,28 @@ exports.handler = async function (event, context) {
     let orderedSellerIds = pickupSellerIds;
 
     if (pickupSellerIds.length === 1) {
-      const pickupPoint = pickupPointBySellerId[pickupSellerIds[0]];
-      try {
-        const routesRes = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': googleRoutesKey,
-            'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
-          },
-          body: JSON.stringify({
-            origin: { location: { latLng: { latitude: pickupPoint.lat, longitude: pickupPoint.lon } } },
-            destination: { location: { latLng: { latitude: destinationLat, longitude: destinationLon } } },
-            travelMode: 'DRIVE',
-            routingPreference: 'TRAFFIC_AWARE',
-            units: 'METRIC'
-          })
-        });
-
-        const routesJson = await routesRes.json().catch(() => null);
-        if (!routesRes.ok || !routesJson || !Array.isArray(routesJson.routes) || !routesJson.routes.length) {
-          return serverError('Failed to compute delivery route (Google Routes API error).', { status: routesRes.status, body: routesJson });
-        }
-        const route = routesJson.routes[0];
-        const distanceMeters = Number(route.distanceMeters);
-        const durationSeconds = typeof route.duration === 'string' ? parseFloat(route.duration.replace(/s$/, '')) : Number(route.duration);
-        if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
-          return serverError('Google Routes API returned an invalid distance.');
-        }
-        distanceKm = distanceMeters / 1000;
-        durationMin = Number.isFinite(durationSeconds) ? durationSeconds / 60 : null;
-      } catch (err) {
-        return serverError('Failed to reach Google Routes API.', err);
-      }
+      const leg = await getRoadLeg(supabase, pickupPointBySellerId[pickupSellerIds[0]], { lat: destinationLat, lon: destinationLon });
+      if (!leg) return serverError('Failed to compute delivery route (routing unavailable).');
+      distanceKm = leg.distanceKm;
+      durationMin = leg.durationMin;
     } else {
-      // Exactly 2 sellers (MAX_BUNDLE_SELLERS): try both visiting orders --
-      // A->B->customer vs B->A->customer -- and price off whichever totals
-      // less distance. optimizeWaypointOrder exists but bills at a materially
-      // higher rate for what's only ever 2 possible orderings here, so 2
-      // plain calls is the cheaper, simpler choice for this pilot.
+      // Exactly 2 sellers (MAX_BUNDLE_SELLERS): A->B->customer vs
+      // B->A->customer, priced off whichever is shorter. Four cached legs;
+      // the store-to-store ones are almost always cache hits.
       const [a, b] = pickupSellerIds;
-      let optionAB, optionBA;
-      try {
-        [optionAB, optionBA] = await Promise.all([
-          computeBundleRoute(googleRoutesKey, pickupPointBySellerId[a], pickupPointBySellerId[b], destinationLat, destinationLon),
-          computeBundleRoute(googleRoutesKey, pickupPointBySellerId[b], pickupPointBySellerId[a], destinationLat, destinationLon)
-        ]);
-      } catch (err) {
-        return serverError('Failed to reach Google Routes API.', err);
-      }
+      const A = pickupPointBySellerId[a], B = pickupPointBySellerId[b], D = { lat: destinationLat, lon: destinationLon };
+      const [ab, ba, aD, bD] = await Promise.all([getRoadLeg(supabase, A, B), getRoadLeg(supabase, B, A), getRoadLeg(supabase, A, D), getRoadLeg(supabase, B, D)]);
+      const optionAB = ab && bD ? { totalDistanceKm: ab.distanceKm + bD.distanceKm, totalDurationMin: (ab.durationMin || 0) + (bD.durationMin || 0), interStoreLegKm: ab.distanceKm } : null;
+      const optionBA = ba && aD ? { totalDistanceKm: ba.distanceKm + aD.distanceKm, totalDurationMin: (ba.durationMin || 0) + (aD.durationMin || 0), interStoreLegKm: ba.distanceKm } : null;
       if (!optionAB && !optionBA) {
-        return serverError('Failed to compute delivery route (Google Routes API error).');
+        return serverError('Failed to compute delivery route (routing unavailable).');
       }
       const winner = (!optionBA || (optionAB && optionAB.totalDistanceKm <= optionBA.totalDistanceKm)) ? optionAB : optionBA;
       orderedSellerIds = (winner === optionAB) ? [a, b] : [b, a];
-
-      if (winner.interStoreLegKm == null) {
-        return serverError('Google Routes API did not return the inter-store leg distance.');
-      }
       const maxBundleLegKm = Number(pricingConfig.max_bundle_leg_km);
       if (Number.isFinite(maxBundleLegKm) && winner.interStoreLegKm > maxBundleLegKm) {
         return ineligible(MULTI_SELLER_REASON);
       }
-
       distanceKm = winner.totalDistanceKm;
       durationMin = winner.totalDurationMin;
     }

@@ -515,9 +515,9 @@ const supabaseClient = supabase.createClient(
 
                 <label>Delivery Class</label>
                 <select id="prodDeliveryClass">
-                  <option value="small">Small — envelopes, accessories (R12)</option>
-                  <option value="medium" selected>Medium — clothing, shoes, tech (R22)</option>
-                  <option value="large">Large — bags, large items (R50)</option>
+                  <option value="small">Small — envelopes, accessories (R23)</option>
+                  <option value="medium" selected>Medium — clothing, shoes, tech (R42.50)</option>
+                  <option value="large">Large — bags, large items (R96.50)</option>
                 </select>
 
                 <label>Units per delivery bag <span style="font-weight:400;color:#6b7280;font-size:12px">(optional — how many fit in one trip before it steps up a size)</span></label>
@@ -1883,9 +1883,9 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         <div>
           <label>Delivery Class</label>
           <select id="edit_delivery_class" style="width:100%;box-sizing:border-box">
-            <option value="small"${p.delivery_class==='small'?' selected':''}>Small (R12)</option>
-            <option value="medium"${(!p.delivery_class||p.delivery_class==='medium')?' selected':''}>Medium (R22)</option>
-            <option value="large"${p.delivery_class==='large'?' selected':''}>Large (R50)</option>
+            <option value="small"${p.delivery_class==='small'?' selected':''}>Small (R23)</option>
+            <option value="medium"${(!p.delivery_class||p.delivery_class==='medium')?' selected':''}>Medium (R42.50)</option>
+            <option value="large"${p.delivery_class==='large'?' selected':''}>Large (R96.50)</option>
           </select>
         </div>
         <div>

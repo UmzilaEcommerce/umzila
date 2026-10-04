@@ -2427,19 +2427,12 @@
     /* ─────────────────────────────────────────
        PICKUP ADDRESS (delivery-network-spec.md §9)
        The only delivery detail a seller controls — price, radius and rider
-       assignment are all decided elsewhere. Google Places autocomplete via
-       the server-side google-places.js proxy (switched from OpenStreetMap
-       Photon 2026-09-17 — founder feedback: Photon's suggestions weren't
-       accurate enough), WITH a Photon fallback (same reasoning as checkout.html:
-       GOOGLE_ROUTES_SERVER_KEY isn't live yet, so pickup-address entry keeps
-       working via Photon until it is) — same pattern as checkout.html's
-       wireAddressAutocomplete() — duplicated locally since this file has no
-       shared JS module with checkout.html, but kept faithful to the original
-       rather than reinvented.
+       assignment are all decided elsewhere. Address suggestions come from HERE
+       Geocoding & Search via the server-side address-search.js proxy
+       (2026-10-04; replaced Google Places + the Photon fallback) — same
+       pattern as checkout.html's wireAddressAutocomplete(), duplicated locally
+       since this file has no shared JS module with checkout.html.
     ───────────────────────────────────────── */
-    var PICKUP_CAMPUS_LAT = -29.8175;
-    var PICKUP_CAMPUS_LON = 30.9436;
-    var PICKUP_SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // Photon fallback only
 
     function escapeHtmlLite(s) {
       return String(s || '').replace(/[&<>"']/g, function(c) {
@@ -2447,20 +2440,13 @@
       });
     }
 
-    async function fetchGoogleSuggestionsPickup(query, signal) {
-      var res = await fetch('/.netlify/functions/google-places?action=autocomplete&input=' + encodeURIComponent(query), { signal: signal });
-      if (!res.ok) return null;
+    async function fetchAddressSuggestionsPickup(query, signal) {
+      var res = await fetch('/.netlify/functions/address-search?action=autocomplete&input=' + encodeURIComponent(query), { signal: signal });
+      if (!res.ok) return [];
       var data = await res.json();
       return (data && data.suggestions) || [];
     }
 
-    async function fetchPhotonFeaturesPickup(query, signal) {
-      var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=5&lang=en&lat=' + PICKUP_CAMPUS_LAT + '&lon=' + PICKUP_CAMPUS_LON + '&bbox=' + PICKUP_SOUTH_AFRICA_BBOX;
-      var res = await fetch(url, { signal: signal });
-      var data = await res.json();
-      var allFeatures = (data && data.features) || [];
-      return allFeatures.filter(function(f) { return (f.properties || {}).countrycode === 'ZA'; });
-    }
 
     function wireAddressAutocomplete(inputEl, onSelect) {
       if (!inputEl) return;
@@ -2486,19 +2472,7 @@
           abortCtrl = new AbortController();
           var signal = abortCtrl.signal;
           try {
-            var source = 'google';
-            var suggestions = await fetchGoogleSuggestionsPickup(query, signal).catch(function(e) { if (e.name === 'AbortError') throw e; return null; });
-            if (suggestions === null) {
-              source = 'photon';
-              var features = await fetchPhotonFeaturesPickup(query, signal);
-              suggestions = features.map(function(f) {
-                return {
-                  __photonFeature: f,
-                  mainText: [((f.properties || {}).housenumber), ((f.properties || {}).street || (f.properties || {}).name)].filter(Boolean).join(' '),
-                  secondaryText: (f.properties || {}).city || ''
-                };
-              });
-            }
+            var suggestions = await fetchAddressSuggestionsPickup(query, signal);
             if (!suggestions.length) { closeDropdown(); return; }
             dropdown.innerHTML = suggestions.map(function(s, i) {
               var label = s.mainText ? [s.mainText, s.secondaryText].filter(Boolean).join(', ') : (s.text || 'Unknown address');
@@ -2509,15 +2483,9 @@
               el.addEventListener('click', async function() {
                 var suggestion = suggestions[Number(el.dataset.idx)];
                 closeDropdown();
-                if (!suggestion) return;
-                if (source === 'photon') {
-                  var f = suggestion.__photonFeature;
-                  if (f) onSelect(f.properties || {}, f.geometry || null);
-                  return;
-                }
-                if (!suggestion.placeId) return;
+                if (!suggestion || !suggestion.placeId) return;
                 try {
-                  var detailsRes = await fetch('/.netlify/functions/google-places?action=details&placeId=' + encodeURIComponent(suggestion.placeId));
+                  var detailsRes = await fetch('/.netlify/functions/address-search?action=details&placeId=' + encodeURIComponent(suggestion.placeId));
                   if (!detailsRes.ok) return;
                   var details = await detailsRes.json();
                   var props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
@@ -2526,7 +2494,7 @@
                     : null;
                   onSelect(props, geometry);
                 } catch (e) {
-                  console.warn('google-places details lookup failed', e);
+                  console.warn('address lookup failed', e);
                 }
               });
             });

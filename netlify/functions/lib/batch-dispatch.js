@@ -30,14 +30,14 @@ const OFFER_TTL_MINUTES = 2; // same as dispatch.js
 const MAX_BATCH_IMPACT_MINUTES = 90;
 const TARGET_AVERAGE_BATCH_IMPACT_MINUTES = 60;
 
-// Estimating added minutes without a live Google Routes call for THIS leg
+// Estimating added minutes without a live routing call for THIS leg
 // specifically (that stays reserved for get-delivery-quote.js's paid,
 // customer-facing quote -- calling it again per batch-evaluation would add
 // ongoing cost for a low-stakes internal dispatch decision). Decomposed into
 // two legs: driver's current position -> new pickup (unknown; estimated from
 // find_batchable_routes' straight-line distance at an assumed urban speed),
 // and new pickup -> destination (REAL: the delivery's own delivery_quotes
-// row already has this from Google Routes at quote-creation time -- reused
+// row already has this from the routing provider at quote-creation time -- reused
 // here rather than re-estimated). This is an approximation, not exact, but
 // meaningfully better than a flat distance-only proxy since half of it is
 // real routed-duration data.

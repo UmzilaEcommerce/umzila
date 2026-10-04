@@ -42,7 +42,7 @@ exports.handler = async function (event) {
     }
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Most orders won't have one yet -- no GOOGLE_ROUTES_SERVER_KEY means no
+    // Most orders won't have one yet -- no ORS_API_KEY (routing) means no
     // quote ever succeeded, which means orders.delivery_quote_id (and so this
     // deliveries row) was never created. That's expected, not an error: this
     // order simply isn't part of the delivery network (yet, or ever, if it's

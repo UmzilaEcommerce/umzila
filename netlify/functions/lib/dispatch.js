@@ -166,7 +166,7 @@ async function dispatchDelivery(supabase, deliveryId) {
       payout_amount: payoutAmount,
       distance_impact_km: distanceKm,
       // duration_impact_min intentionally omitted -- no external routing call
-      // here (that's the paid Google Routes API, reserved for get-delivery-quote.js's
+      // here (that's the routing API, reserved for get-delivery-quote.js's
       // customer-facing quote, not an internal ranking/informational field).
       status: 'pending',
       expires_at: expiresAt

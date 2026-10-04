@@ -163,6 +163,8 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 🎟️ CODES & ACCOUNTS (added 2026-10-04): only reusable "once per person" codes (discount_codes.multi_use) need an account; one-off codes (gift vouchers, mystery gift, referral) stay guest-usable. A guest entering a multi-use code gets the inline create-password / sign-in panel under the code box (checkout.html renderPromoSignin / signInOrCreateAccount) — never send them away.
 
+🗺️ ADDRESSES & DISTANCE (added 2026-10-04): address suggestions = HERE via netlify/functions/address-search.js (HERE_API_KEY, server-only); road distance = OpenRouteService via lib/road-distance.js (ORS_API_KEY), every leg cached forever in route_distance_cache — never call a routing API without going through it. No Google Maps/Places/Routes and no Photon anywhere. Without a live quote, delivery is the class-based fallback in validate-cart.js (authoritative) + checkout.html (preview): small R23 / medium R42.50 / large R96.50, cap R155 — change both together.
+
 🔔 BACK-IN-STOCK (added 2026-10-04): "Notify me" inserts stock_alerts (one pending row per product+email; 23505 = already on the list; signed-in buyers use their account email, no typing). send-stock-alerts.js (scheduled every 15 min in netlify.toml) emails once the product is visible + in stock and stamps notified_at.
 
 🎨 BESPOKE STOREFRONTS — see docs/systems/bespoke-storefronts.md. A folder named after a store's slug (e.g. /ncekeniquads/) overrides the generic shop page; it is a skin over Umzila data/cart/checkout, never its own payment flow.

@@ -2,7 +2,11 @@ const { createClient } = require('@supabase/supabase-js');
 const { validateCode, computeDiscount } = require('./lib/discounts');
 
 // Must match checkout.html's client-side copies — this server copy is authoritative.
-const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
+// Fallback class prices — used whenever there's no live distance quote
+// (no address coordinates, routing unavailable). Re-based 2026-10-04 on the
+// founder's R42.50 average (medium); small/large and the cap scaled by the
+// same factor (×1.93).
+const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
 const PER_SELLER_FEE          = 3;
 const FREE_DELIVERY_THRESHOLD = 600;
 const SERVICE_COLLECT_FEE     = 15; // rep collects buyer's item from their address
@@ -10,7 +14,7 @@ const SERVICE_RETURN_FEE      = 15; // finished item delivered to an address
 // Quantity-aware fee stepping — must match checkout.html exactly.
 const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
 const LARGE_OVERFLOW_FEE      = 10;
-const MAX_DELIVERY_FEE        = 80;
+const MAX_DELIVERY_FEE        = 155;
 
 // A client-supplied slot is only trusted if it parses to a real, future
 // instant — anything else (missing, malformed, already past) is treated as

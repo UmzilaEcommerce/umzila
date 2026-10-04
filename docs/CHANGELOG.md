@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Delivery: R42.50 fallback, HERE address search, OpenRouteService distance with a permanent cache (Google removed)
+
+**Asked for:** remove Photon address suggestions; use HERE Geocoding & Search (better Durban house-number coverage); price delivery by OpenRouteService distance (traffic doesn't change distance); only use HERE/TomTom for times if times are shown; cache distances so usage stays far below free limits; and first, fix the fallback so a medium parcel (e.g. any Velaphi plate) is R42.50 when live pricing isn't available.
+
+**Fallback price (the part customers pay today):** without a live distance quote — which was *every* order, since the Google key never existed — delivery used the class prices. Re-based on the founder's R42.50 average: **small R23 · medium R42.50 · large R96.50**, cap **R155** (all ×1.93 from R12/R22/R50/R80). Per-extra-seller (R3), large-overflow (R10) and the R600 free-delivery threshold unchanged. Server (`validate-cart.js`, authoritative) and checkout preview changed together; admin's package-size labels updated. Verified: a single Velaphi plate → `productDelivery: 42.5`.
+
+**Address search:** new `address-search.js` (HERE Autocomplete + Lookup, server-only `HERE_API_KEY`, Durban-biased, ZA only) replaces `google-places.js` (deleted) **and every direct Photon call** in checkout, profile and the seller dashboard's pickup address. Same response shape, so the pages only changed their fetch; Photon branches/constants removed. Suburb + city go into the City field ("Morningside, Durban"). Responses are cached at Netlify's edge (suggestions 1 day, coordinates 7 days). Without the key: no suggestions (503), buyers type the address, checkout uses the fallback price — nothing breaks.
+
+**Distance:** new `lib/road-distance.js` — OpenRouteService directions (driving-car), server-only `ORS_API_KEY` — replaces Google Routes in `get-delivery-quote.js`. Every leg (store → address, store → store) is cached forever in the new `route_distance_cache` table (service-role only; points rounded to ~11 m), so a store's distance to a saved address is fetched once. Bundles are priced as sums of cached legs (A→B→customer vs B→A→customer). Pricing logic itself (payout formula, margin, 20 km cutoff, zone promos) unchanged.
+
+**Times:** checkout only shows the store's turnaround ("~2–4 hours"), not drive times, so no HERE/TomTom time lookup was added (per the instruction).
+
+**Verified:** without keys — address search 503s cleanly, quote fails cleanly → fallback R42.50; with HERE stubbed (HERE's documented response format) — suggestion/coordinate mapping correct; with ORS stubbed at 9 km — full quote against the live DB returned R40 (payout formula), the second identical quote was served from the cache with **no** routing call; test quotes/cache rows deleted. **Not yet verified against the real HERE/ORS services** — needs the two keys in Netlify (then re-test house-number search on real Durban addresses).
+
+**Files:** `netlify/functions/{address-search,get-delivery-quote,validate-cart}.js`, `netlify/functions/lib/road-distance.js`, `netlify/functions/google-places.js` (deleted), `checkout.html`, `profile.html`, `seller-dashboard.html`, `admin.html`, comments in `lib/{dispatch,batch-dispatch,payout-formula}.js` + `advance-delivery-on-fulfillment.js`; migration `route_distance_cache`.
+
+---
+
 ## 2026-10-04 — Product images point to the button; Nceks "Pick your ride" shows the full design; Velaphi plates redesigned
 
 **Asked for:** Nceks ride images that show everything and point to the button below to book; redesign Velaphi's images if needed.

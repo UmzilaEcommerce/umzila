@@ -1416,7 +1416,7 @@
                "why this fee is worth it" message is on-screen with the
                total the buyer is about to pay. Distance is straight-line
                (haversine, seller pickup_geo <-> the picked address) since
-               there's no live GOOGLE_ROUTES_SERVER_KEY yet for a real road
+               there's no live ORS_API_KEY (routing) yet for a real road
                distance — see updateTimeSavedEstimate(). Hidden until both
                a real address and seller pickup location are known. -->
           <div id="timeSavedBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px">
@@ -1688,7 +1688,11 @@
      ********************/
     
     // ── Delivery pricing constants (edit here to update rates) ──────────────
-    const DELIVERY_CLASS_PRICES   = { small: 12, medium: 22, large: 50 };
+    // Fallback class prices — used whenever there's no live distance quote
+    // (no address coordinates, routing unavailable). Re-based 2026-10-04 on the
+    // founder's R42.50 average (medium); small/large and the cap scaled by the
+    // same factor (×1.93).
+    const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
     const PER_SELLER_FEE          = 3;
     const FREE_DELIVERY_THRESHOLD = 600; // subtotal >= this → delivery free
     // Quantity-aware fee stepping — must match validate-cart.js exactly.
@@ -1698,7 +1702,7 @@
     // bulky quantities do.
     const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
     const LARGE_OVERFLOW_FEE      = 10; // per extra trip once already at 'large'
-    const MAX_DELIVERY_FEE        = 80;
+    const MAX_DELIVERY_FEE        = 155;
 
     // ── Delivery zones — edit this list to add/remove areas ─────────────────
     const DELIVERY_ZONES = [
@@ -1960,7 +1964,7 @@
                                    // delivery-network Stage 2, see applyAddressSuggestion()
       addressValidatedAt: null,
       deliveryQuoteId: null,       // Stage 3 — see fetchDeliveryQuote(). Null until a quote
-                                    // succeeds (won't yet, until GOOGLE_ROUTES_SERVER_KEY is
+                                    // succeeds (won't yet, until ORS_API_KEY (routing) is
                                     // added in Netlify) -- validateCheckout() only sends it
                                     // along when set, and validate-cart.js already falls back
                                     // to its existing pricing whenever no quote is supplied.
@@ -3034,38 +3038,18 @@ async function saveCartToServer() {
     }
 
     /********************
-     * ADDRESS AUTOCOMPLETE (Google Places, via the server-side google-places.js
-     * proxy — never a browser-facing Google key, per the founder's earlier,
-     * explicit rejection of exposing any Google Maps key client-side.
-     * Switched from OpenStreetMap Photon 2026-09-17 (founder feedback: Photon's
-     * suggestions weren't accurate enough), WITH a Photon fallback: this is a
-     * live, payment-adjacent checkout field, and GOOGLE_ROUTES_SERVER_KEY isn't
-     * live in Netlify yet at the time this shipped, so a hard cutover would
-     * have meant zero address suggestions for every real customer until the
-     * key is added. Google is tried first; only on failure (key not yet
-     * configured, network error, anything) does it fall back to the exact
-     * Photon call this file used before — automatically stops falling back
-     * the moment the key goes live, no further code changes needed.
-     * onSelect(props, geometry) keeps the same shape either source produces,
-     * so applyAddressSuggestion() below needed zero changes.
+     * ADDRESS AUTOCOMPLETE — HERE Geocoding & Search via the server-side
+     * address-search.js proxy (2026-10-04; replaced Google Places + the
+     * Photon fallback). The key never reaches the browser. Picking a
+     * suggestion looks up its exact coordinates, which the delivery quote
+     * uses; if search is unavailable the buyer just types the address and
+     * checkout prices delivery with the class-based fallback.
      ********************/
-    const CAMPUS_LAT = -29.8175;
-    const CAMPUS_LON = 30.9436;
-    const SOUTH_AFRICA_BBOX = '16.3,-34.9,32.95,-22.0'; // minLon,minLat,maxLon,maxLat — Photon fallback only
-
-    async function fetchGoogleSuggestions(query, signal) {
-      const res = await fetch(`/.netlify/functions/google-places?action=autocomplete&input=${encodeURIComponent(query)}`, { signal });
-      if (!res.ok) return null; // signals "unavailable, fall back to Photon"
-      const data = await res.json();
+    async function fetchAddressSuggestions(query, signal) {
+      const res = await fetch(`/.netlify/functions/address-search?action=autocomplete&input=${encodeURIComponent(query)}`, { signal });
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => ({}));
       return (data && data.suggestions) || [];
-    }
-
-    async function fetchPhotonFeatures(query, signal) {
-      const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lang=en&lat=${CAMPUS_LAT}&lon=${CAMPUS_LON}&bbox=${SOUTH_AFRICA_BBOX}`;
-      const res = await fetch(url, { signal });
-      const data = await res.json();
-      const allFeatures = (data && data.features) || [];
-      return allFeatures.filter(f => (f.properties || {}).countrycode === 'ZA');
     }
 
     function wireAddressAutocomplete(inputEl, onSelect) {
@@ -3092,17 +3076,7 @@ async function saveCartToServer() {
           abortCtrl = new AbortController();
           const signal = abortCtrl.signal;
           try {
-            let source = 'google';
-            let suggestions = await fetchGoogleSuggestions(query, signal).catch(e => { if (e.name === 'AbortError') throw e; return null; });
-            if (suggestions === null) {
-              source = 'photon';
-              const features = await fetchPhotonFeatures(query, signal);
-              suggestions = features.map(f => ({
-                __photonFeature: f,
-                mainText: [((f.properties || {}).housenumber), ((f.properties || {}).street || (f.properties || {}).name)].filter(Boolean).join(' '),
-                secondaryText: (f.properties || {}).city || ''
-              }));
-            }
+            const suggestions = await fetchAddressSuggestions(query, signal);
             if (!suggestions.length) { closeDropdown(); return; }
             dropdown.innerHTML = suggestions.map((s, i) => {
               const label = s.mainText ? [s.mainText, s.secondaryText].filter(Boolean).join(', ') : (s.text || 'Unknown address');
@@ -3113,15 +3087,9 @@ async function saveCartToServer() {
               el.addEventListener('click', async () => {
                 const suggestion = suggestions[Number(el.dataset.idx)];
                 closeDropdown();
-                if (!suggestion) return;
-                if (source === 'photon') {
-                  const f = suggestion.__photonFeature;
-                  if (f) onSelect(f.properties || {}, f.geometry || null);
-                  return;
-                }
-                if (!suggestion.placeId) return;
+                if (!suggestion || !suggestion.placeId) return;
                 try {
-                  const detailsRes = await fetch(`/.netlify/functions/google-places?action=details&placeId=${encodeURIComponent(suggestion.placeId)}`);
+                  const detailsRes = await fetch(`/.netlify/functions/address-search?action=details&placeId=${encodeURIComponent(suggestion.placeId)}`);
                   if (!detailsRes.ok) return;
                   const details = await detailsRes.json();
                   const props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
@@ -3130,7 +3098,7 @@ async function saveCartToServer() {
                     : null;
                   onSelect(props, geometry);
                 } catch (e) {
-                  console.warn('google-places details lookup failed', e);
+                  console.warn('address lookup failed', e);
                 }
               });
             });
@@ -3226,7 +3194,7 @@ async function saveCartToServer() {
 
     // Straight-line (haversine) distance, seller pickup point -> the picked
     // address -- an approximation of the real road distance since there's
-    // no live GOOGLE_ROUTES_SERVER_KEY yet to get a real one from
+    // no live ORS_API_KEY (routing) yet to get a real one from
     // get-delivery-quote.js. For a multi-seller cart, travel uses the
     // farthest seller (the real single round trip has to cover whichever
     // store is furthest out), but the wait-in-queue time is per store
@@ -3274,7 +3242,7 @@ async function saveCartToServer() {
     // Delivery network Stage 3 (docs/systems/delivery-network-spec.md §E) — asks
     // the server for a locked road-distance delivery quote once a real address
     // has been picked. Deliberately opportunistic and non-blocking: this cannot
-    // succeed yet (GOOGLE_ROUTES_SERVER_KEY hasn't been added in Netlify), and
+    // succeed yet (ORS_API_KEY (routing) hasn't been added in Netlify), and
     // when it fails for any reason at all -- missing key, network error,
     // ineligible address, anything -- state.deliveryQuoteId simply stays null
     // and checkout proceeds exactly as it does today. validate-cart.js already
@@ -5003,7 +4971,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // Stage 5 — only ever the server-confirmed quote (see validateCheckout()).
                 // The Postgres trigger create_delivery_on_payment() only creates a
                 // deliveries row when this is set, so an order without a real quote
-                // (e.g. before GOOGLE_ROUTES_SERVER_KEY exists) correctly gets no
+                // (e.g. before ORS_API_KEY (routing) exists) correctly gets no
                 // delivery job -- same reasoning as the ineligible-quote case.
                 delivery_quote_id: state.appliedDeliveryQuoteId || null,
                 // No customer-facing priority opt-in UI yet (plan §21, future stage) --

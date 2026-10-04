@@ -10,7 +10,7 @@
 // counts once it's actually done. This JS copy is ONLY for showing a driver a
 // pre-acceptance ESTIMATE on a new driver_offers row -- the real route hasn't
 // happened yet, so it estimates using the delivery_quotes row's own
-// distance_km/duration_min (already computed via Google Routes at quote time)
+// distance_km/duration_min (already computed via OpenRouteService at quote time)
 // as a stand-in for what the trip will look like. Keep the constants here
 // numerically identical to the trigger's -- if the founder changes the
 // formula, update both places.
