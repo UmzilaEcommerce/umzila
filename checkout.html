@@ -4103,7 +4103,9 @@ async function validateCheckout() {
       const promo = state.appliedPromoCode;
       if (promo?.requiresSignIn) {
         elements.discountRow.classList.remove('hidden');
-        elements.discountRow.innerHTML = `<span>Discount (${promo.code})</span> <span>-${formatCurrency(promo.previewAmount || 0)}</span>`;
+        // Not applied yet: the total above/below excludes it until the buyer
+        // has an account, so this row must not look like a live discount.
+        elements.discountRow.innerHTML = `<span style="color:#6b7280">Code ${escapeHtmlLite(promo.code)} <em style="font-style:normal">(not applied yet)</em></span> <span style="color:#9ca3af;text-decoration:line-through">-${formatCurrency(promo.previewAmount || 0)}</span>`;
         let note = document.getElementById('discountSignInNote');
         if (!note) {
           note = document.createElement('div');
@@ -4111,7 +4113,7 @@ async function validateCheckout() {
           note.style.cssText = 'font-size:11px;color:#e0284f;text-align:right;margin-top:-8px;margin-bottom:4px';
           elements.discountRow.insertAdjacentElement('afterend', note);
         }
-        note.textContent = `Sign in or create an account to use this code — ${formatCurrency(promo.previewAmount || 0)} off waiting for you`;
+        note.textContent = `Add a password at the code box to apply this — your total comes down by ${formatCurrency(promo.previewAmount || 0)} once your account is set up.`;
         note.style.display = 'block';
       } else {
         const existingNote = document.getElementById('discountSignInNote');
