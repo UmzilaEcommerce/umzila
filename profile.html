@@ -1083,6 +1083,20 @@
     const container = document.getElementById('ordersContainer');
     container.innerHTML = '<div class="p-card"><div class="p-empty"><div class="icon">⏳</div><p>Loading your orders…</p></div></div>';
 
+    // Tracking links this device received (ss_track_links — success page /
+    // track page). Link those guest orders to this account first (only works
+    // when the account email is the order email), then the Track buttons
+    // below carry the token.
+    let deviceLinks = [];
+    try { deviceLinks = JSON.parse(localStorage.getItem('ss_track_links') || '[]') || []; } catch (e) {}
+    if (!Array.isArray(deviceLinks)) deviceLinks = [];
+    window.__trackTokens = {};
+    for (const l of deviceLinks) {
+      if (!l || !l.o || !l.t) continue;
+      window.__trackTokens[l.o] = l.t;
+      try { await sb.rpc('claim_order_with_token', { p_order_id: l.o, p_token: l.t }); } catch (e) {}
+    }
+
     try {
       // Fetch by user_id first; also fetch by customer_email to catch orders placed on the
       // buyer's behalf (e.g. admin-assisted checkout where user_id was set to a different account).
@@ -1476,7 +1490,7 @@
     // aren't in a terminal state where tracking wouldn't show anything new.
     const trackableStatuses = ['Cancelled', 'cancelled', 'Returned'];
     const trackHtml = (o.delivery_quote_id && !trackableStatuses.includes(o.order_status))
-      ? `<a class="track-order-btn" href="track.html?order=${esc(o.id)}">📍 Track delivery</a>` : '';
+      ? `<a class="track-order-btn" href="track.html?order=${esc(o.id)}${window.__trackTokens && window.__trackTokens[o.id] ? '&t=' + esc(window.__trackTokens[o.id]) : ''}">📍 Track delivery</a>` : '';
 
     return `<div class="order-card" data-order-id="${esc(o.id)}">
       <div class="order-header">
