@@ -4,6 +4,20 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Product images point to the button; Nceks "Pick your ride" shows the full design; Velaphi plates redesigned
+
+**Asked for:** Nceks ride images that show everything and point to the button below to book; redesign Velaphi's images if needed.
+
+**What changed:**
+- **Nceks product images (v2):** the "Book a time" pill inside the image looked like a button but wasn't one — replaced with a "Tap **Book** below" / "Tap **Buy gift** below" cue and an orange arrow pointing bottom-right at the real button (homepage card "+"/Book, modal button). New filenames (`-v2`) so the 7-day image cache can't keep the old ones.
+- **Nceks "Pick your ride" cards (bespoke page):** now show a 4:5 card version of the design (`ncekeniquads/img/card-<m>.webp`) that fits the 4:5 card exactly — nothing cropped — with the arrow pointing at that card's Book button. Top corners and bottom-left are kept clear for the best-value tag, gauge and next-time tag. The booking summary thumbnail keeps the photo. Changed via `build-nceks.js`/`nceks-script.js` (`RIDE_ART[m].card`).
+- **Velaphi:** each plate keeps its own photo, now labelled "BEEF & WORS" + bold "PLATE" / "FOR TWO" / "+2…+6 WINGS" + "FREE SIDES" chips — the five wing plates were indistinguishable before. Originals were 1.6–2.9 MB PNGs; the designs are ~70–180 KB WebP (much faster on phones). Originals stay in each product's gallery.
+- Design source moved to `docs/design/product-images/` (was `nceks-product-images/`), now covering both stores.
+
+**Files:** `ncekeniquads/index.html`, `ncekeniquads/img/card-*.webp`, `docs/design/product-images/*`; storage + product rows (data, live immediately).
+
+---
+
 ## 2026-10-04 — Forgot password: fixed end to end
 
 **Tested every entry point** (homepage sign-in modal + Mystery Gift sign-in, checkout quick sign-in, checkout "welcome back" card, checkout code-box panel, profile → Security) and the landing page.
@@ -46,7 +60,7 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 **Reported:** every Nceks listing used a generic quad photo, and each ride and its gift voucher shared the *same* photo, so you had to read titles carefully to tell a booking from a voucher.
 
 **What changed:**
-- 8 designed images (1200×1200 WebP) uploaded to `product-images/stores/ncekeniquads/` and set as each listing's primary image (`product_images` order 0 + `products.image`; the photos stay in the gallery). **Rides:** photo full-bleed, huge duration ("1 HOUR", "1½ HOURS"…), "Quad bike ride", orange "Book a time" pill. **Vouchers:** cream gift card with ribbon + bow over a blurred photo, "Gift voucher", "Emailed instantly · valid 3 years". Key content stays inside the crop-safe centre (3:4 cards, 4:3 phone modal). Source + render/upload scripts in `docs/design/nceks-product-images/`.
+- 8 designed images (1200×1200 WebP) uploaded to `product-images/stores/ncekeniquads/` and set as each listing's primary image (`product_images` order 0 + `products.image`; the photos stay in the gallery). **Rides:** photo full-bleed, huge duration ("1 HOUR", "1½ HOURS"…), "Quad bike ride", orange "Book a time" pill. **Vouchers:** cream gift card with ribbon + bow over a blurred photo, "Gift voucher", "Emailed instantly · valid 3 years". Key content stays inside the crop-safe centre (3:4 cards, 4:3 phone modal). Source + render/upload scripts in `docs/design/product-images/` (renamed later the same day).
 - Homepage cards (`script.js`): gift vouchers now show a "Gift" badge, "🎁 Gift voucher · emailed" and a "Buy gift" button instead of "Service · Digital delivery · Request".
 - The bespoke `/ncekeniquads` page keeps its own photos (only its bag line uses the listing image).
 

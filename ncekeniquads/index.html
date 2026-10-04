@@ -822,10 +822,10 @@ const SAST_OFFSET_MS = 2 * 3600 * 1000;   // Africa/Johannesburg, no DST
 /* Display copy + photos per ride length; price, duration and id come from
    the live listings (products.metadata.ride_minutes). */
 const RIDE_ART = {
-  30:  {photo:'/ncekeniquads/img/ride-30.webp',  pos:'50% 55%', alt:'Quad bikes parked and ready below the hills', blurb:'A quick first ride. Good for kids, first-timers and a taste of the trails.'},
-  60:  {photo:'/ncekeniquads/img/ride-60.webp',  pos:'50% 60%', alt:'Riders on quads riding through tall green grass', blurb:'Time to settle in and ride further along the valley with your guide.'},
-  90:  {photo:'/ncekeniquads/img/ride-90.webp',  pos:'50% 60%', alt:'Two quads on a dusty bush trail', blurb:'Longer trails through the bush, with time to stop for photos.'},
-  120: {photo:'/ncekeniquads/img/ride-120.webp', pos:'72% 50%', alt:'Two riders on a ridge overlooking the green valley', blurb:'The full off-road adventure: remote trails, cliffs and the best views of the dam.'}
+  30:  {photo:'/ncekeniquads/img/ride-30.webp', card:'/ncekeniquads/img/card-30.webp',  pos:'50% 55%', alt:'Quad bikes parked and ready below the hills', blurb:'A quick first ride. Good for kids, first-timers and a taste of the trails.'},
+  60:  {photo:'/ncekeniquads/img/ride-60.webp', card:'/ncekeniquads/img/card-60.webp',  pos:'50% 60%', alt:'Riders on quads riding through tall green grass', blurb:'Time to settle in and ride further along the valley with your guide.'},
+  90:  {photo:'/ncekeniquads/img/ride-90.webp', card:'/ncekeniquads/img/card-90.webp',  pos:'50% 60%', alt:'Two quads on a dusty bush trail', blurb:'Longer trails through the bush, with time to stop for photos.'},
+  120: {photo:'/ncekeniquads/img/ride-120.webp', card:'/ncekeniquads/img/card-120.webp', pos:'72% 50%', alt:'Two riders on a ridge overlooking the green valley', blurb:'The full off-road adventure: remote trails, cliffs and the best views of the dam.'}
 };
 const labelFor = mins => mins < 60 ? `${mins} minutes` : (mins % 60 ? `${mins / 60} hours` : (mins === 60 ? '1 hour' : `${mins / 60} hours`));
 
@@ -1151,7 +1151,7 @@ $('#payLink').addEventListener('click', async e => {
 /* ================= RIDE CARDS ================= */
 function renderRideCards(){
   $('#rideCards').innerHTML = RIDES.map((r, i) => `<article class="ride rise" style="--i:${i}">
-  <div class="ph"><img src="${r.photo}" alt="${esc(r.alt)}" loading="lazy" decoding="async" style="object-position:${r.pos}">${r.id === BEST ? '<span class="tag mono best-tag">Best value</span>' : ''}
+  <div class="ph"><img src="${r.card || r.photo}" alt="${esc(r.label)} quad ride, tap Book below. ${esc(r.alt)}" loading="lazy" decoding="async" style="object-position:${r.card ? '50% 50%' : r.pos}">${r.id === BEST ? '<span class="tag mono best-tag">Best value</span>' : ''}
     <span class="gauge" aria-hidden="true"><svg viewBox="0 0 40 40"><circle class="g-bg" cx="20" cy="20" r="15.9"/><circle class="g-val" cx="20" cy="20" r="15.9" pathLength="100" style="--v:${Math.round(Math.min(r.mins, 120) / 120 * 100)}"/></svg></span>
     <span class="next-tag" id="nx-${r.id}"></span></div>
   <h3 class="display">${esc(r.label)}</h3>
