@@ -53,6 +53,9 @@
   .t-headline p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
   .t-distance { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; background: var(--accent-light); color: var(--accent); font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
   .t-distance[hidden] { display: none; }
+  .t-rider { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .t-rider strong { color: var(--text, #111); }
+  .t-rider[hidden] { display: none; }
 
   /* ── interactive step timeline ── */
   .t-track { position: relative; display: flex; justify-content: space-between; margin: 4px 0 0; }
@@ -548,8 +551,11 @@
     const isDone = row.status === 'DELIVERED';
     const stage = isProblem ? null : STEPS[meta.stepIdx];
     const atDoor = row.status === 'PIN_REQUIRED';
-    const title = isProblem ? meta.label : atDoor ? 'Your rider is here!' : stage.title;
-    const sub = isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.' : stage.sub;
+    // The rider's first name (only that) once one is assigned.
+    const riderName = row.driver_name || null;
+    const named = s => riderName ? s.replace(/^Your rider/, riderName).replace(/^Rider collecting/, riderName + ' is collecting').replace(/Your rider/g, riderName) : s;
+    const title = named(isProblem ? meta.label : atDoor ? 'Your rider is here!' : stage.title);
+    const sub = named(isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.' : stage.sub);
 
     // First render sets up the static shell once; subsequent polls only
     // patch the live bits (status pill, scene, steps, map marker) rather
@@ -566,6 +572,7 @@
             <h1 id="heroTitle">${esc(title)}</h1>
             <p id="heroSub">${esc(sub)}</p>
             <span class="t-distance" id="distanceChip" hidden></span>
+            <div class="t-rider" id="riderChip"${riderName ? '' : ' hidden'}>🛵 Your rider: <strong id="riderName">${esc(riderName || '')}</strong></div>
           </div>
         </div>
         ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
@@ -588,6 +595,8 @@
       document.getElementById('heroTitle').textContent = title;
       document.getElementById('heroSub').textContent = sub;
       document.getElementById('stepsCard').hidden = isProblem;
+      const rc = document.getElementById('riderChip');
+      if (rc) { rc.hidden = !riderName; document.getElementById('riderName').textContent = riderName || ''; }
     }
 
     // Only swap the scene/timeline when the stage actually changes, so the

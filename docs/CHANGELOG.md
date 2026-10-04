@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Rider app rebuilt: the rider sees the customer, the customer sees the rider's name
+
+**Reported (founder):** the rider "sees nothing" yet they're the one moving — they need all the customer's details; the customer should only know the rider's name.
+
+**Root cause:** the rider panel (`logistics.html` → Delivery) only ever showed a store name and "Navigate" buttons — it never loaded the customer (name, phone, address, instructions), the order number, the items to hand over, or the store's phone. It also made ~6 separate queries per 10 s refresh, only polled while the Delivery tab was open (offers were missed on any other tab), showed "offline" after a reload while dispatch still had the rider online, and used low-accuracy one-off GPS fixes every 30 s.
+
+**What changed:**
+- New RPC `get_driver_board()` (SECURITY DEFINER, caller's own driver row only): offers (payout, expiry, store(s) + area, drop-off area, distance/time, item count, parcel size — never the customer's identity) and the active route with every stop's store (name, address, phone), items (+ collected), coordinates, and for the drop: customer name, phone, address, area, postal code, delivery instructions/notes, order ref, PIN-locked flag. Customer contact details exist only while the route is active.
+- Rider screen rebuilt (mobile-first): online switch that resumes the real state on load; GPS as a continuous high-accuracy watch with a status line (blocked / weak / good); offers with countdown, Accept/Decline, vibration + beep and a badge on the Delivery tab even when on another tab; job view with a stepper (stores → customer), big Navigate (Google Maps directions to the exact pin) / Call / WhatsApp buttons for store and customer, item checklist, delivery instructions highlighted, sticky main action ("I'm at the store" → "Collected — continue" → "Start trip to customer" → "I've arrived" → PIN). Heartbeat every 12 s on the way to the customer (30 s otherwise). Server actions unchanged (`advance-route`, `confirm-delivery-pin`, `respond-to-driver-offer`, `driver-heartbeat`).
+- Customer: `get_delivery_tracking` also returns `driver_name` (first name only); `track.html` shows "🛵 Your rider: <name>" and uses it in the headline.
+
+**Verified:** `get_driver_board()` as the test rider on the real (temporarily re-opened, rolled back) route returned store, items, customer name/phone/address. Headless Chrome (390 px) with stubbed data rendered every stage — offline, waiting, offer, go to store, at store (checklist), picked up, driving, PIN — with no page errors. `track.html` on the real order shows "Your rider: Ntando".
+
+**Files:** `logistics.html`, `track.html`; migration `driver_board_and_driver_name`.
+
+---
+
 ## 2026-10-04 — Email confirmation on: signing in now proves you own the email
 
 **Asked for (founder):** a buyer signed in with the order's email should be able to track from their profile without hunting for the email link; turn on "Confirm email" so future accounts confirm, and past accounts go through confirmation the next time they sign in.

@@ -249,6 +249,103 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   .analytics-metrics{grid-template-columns:1fr}
 }
 
+/* === RIDER (delivery panel) — mobile-first, big touch targets === */
+.nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.bnav-item{position:relative}
+.bnav-item .nav-badge{position:absolute;top:4px;left:calc(50% + 6px);margin:0}
+.nav-badge.dot{min-width:10px;width:10px;height:10px;padding:0}
+.rd-panel{max-width:560px;margin:0 auto}
+.rd-status{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:10px;transition:border-color .2s,background .2s}
+.rd-status.on{border-color:#86efac;background:linear-gradient(135deg,#f0fdf4,#fff)}
+.rd-status-main{display:flex;align-items:center;gap:12px}
+.rd-dot{width:12px;height:12px;border-radius:50%;background:#9ca3af;flex-shrink:0}
+.rd-status.on .rd-dot{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:rdPulse 1.8s infinite}
+@keyframes rdPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.rd-status-title{font-weight:800;font-size:16px}
+.rd-status-sub{font-size:12px;color:var(--muted);margin-top:1px}
+.rd-switch{width:58px;height:34px;border-radius:17px;border:none;background:#d1d5db;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s}
+.rd-switch span{position:absolute;top:3px;left:3px;width:28px;height:28px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:transform .2s}
+.rd-switch[aria-checked="true"]{background:#22c55e}
+.rd-switch[aria-checked="true"] span{transform:translateX(24px)}
+.rd-switch:disabled{opacity:.6}
+.rd-gps{font-size:12px;font-weight:600;padding:8px 12px;border-radius:10px;margin-bottom:10px}
+.rd-gps.ok{background:#f0fdf4;color:#166534}
+.rd-gps.warn{background:#fffbeb;color:#92400e}
+.rd-gps.bad{background:#fef2f2;color:#991b1b}
+.rd-section-label{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:16px 2px 8px}
+.rd-link{background:none;border:none;color:var(--accent);font-weight:700;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0}
+.rd-empty{background:var(--surface);border:1px dashed var(--border);border-radius:16px;padding:32px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+.rd-empty-ico{font-size:34px;margin-bottom:6px}
+.rd-pulse{animation:rdBob 2s ease-in-out infinite}
+@keyframes rdBob{50%{transform:translateY(-4px)}}
+.rd-offer{background:var(--surface);border:2px solid var(--accent);border-radius:18px;padding:16px;box-shadow:0 8px 24px rgba(79,70,229,.15);margin-bottom:12px;animation:rdIn .25s ease}
+@keyframes rdIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.rd-offer-top{display:flex;justify-content:space-between;align-items:flex-start}
+.rd-kicker{font-size:11px;font-weight:800;color:var(--accent);text-transform:uppercase;letter-spacing:.8px}
+.rd-pay{font-size:30px;font-weight:900;line-height:1.1;margin-top:2px}
+.rd-timer{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;background:var(--accent-light);color:var(--accent);padding:6px 10px;border-radius:10px}
+.rd-timer.urgent{background:#fef2f2;color:#dc2626}
+.rd-legs{margin:14px 0 10px;display:flex;flex-direction:column;gap:10px;position:relative}
+.rd-leg{display:flex;gap:10px;align-items:flex-start}
+.rd-leg-dot{width:12px;height:12px;border-radius:50%;margin-top:4px;flex-shrink:0}
+.rd-leg-dot.a{background:var(--accent)}
+.rd-leg-dot.b{background:#22c55e}
+.rd-leg-k{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.rd-leg-v{font-weight:700;font-size:15px}
+.rd-leg-s{font-size:12px;color:var(--muted)}
+.rd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.rd-chips span{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--text2)}
+.rd-offer-actions{display:grid;grid-template-columns:1fr 2fr;gap:10px}
+.rd-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:10px 14px;border-radius:12px;border:none;font-size:15px;font-weight:800;cursor:pointer;text-decoration:none;font-family:inherit;transition:transform .08s,background .15s}
+.rd-btn:active{transform:scale(.97)}
+.rd-btn:disabled{opacity:.5;cursor:not-allowed}
+.rd-btn.primary{background:var(--accent);color:#fff}
+.rd-btn.primary:hover{background:var(--accent-dark)}
+.rd-btn.ghost{background:var(--surface);color:var(--text);border:1.5px solid var(--border)}
+.rd-btn.nav{background:#111827;color:#fff;flex:1.4}
+.rd-btn.big{width:100%;min-height:56px;font-size:17px;border-radius:14px}
+.rd-steps{display:flex;align-items:center;gap:6px;margin:6px 0 12px;overflow-x:auto;padding-bottom:2px}
+.rd-steps i{flex:1;min-width:14px;height:2px;background:var(--border)}
+.rd-step{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.rd-step span{width:24px;height:24px;border-radius:50%;background:var(--surface2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--muted)}
+.rd-step em{font-style:normal;font-size:12px;font-weight:700;color:var(--muted);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rd-step.done span{background:#22c55e;border-color:#22c55e;color:#fff}
+.rd-step.cur span{background:var(--accent);border-color:var(--accent);color:#fff}
+.rd-step.cur em{color:var(--text)}
+.rd-person{background:var(--surface);border-radius:18px;padding:16px;box-shadow:var(--shadow-md);margin-bottom:10px;border-top:5px solid var(--accent)}
+.rd-person.cust{border-top-color:#22c55e}
+.rd-person-k{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+.rd-person-name{font-size:21px;font-weight:900;margin-top:2px;line-height:1.2}
+.rd-person-sub{font-size:12px;color:var(--accent);font-weight:700;margin-top:2px}
+.rd-addr{font-size:15px;margin-top:8px;line-height:1.4}
+.rd-instr{margin-top:10px;background:#fffbeb;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600}
+.rd-contact{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.rd-contact .rd-btn{flex:1;min-width:0;font-size:14px;white-space:nowrap;padding:10px 8px}
+.rd-note{font-size:12px;color:var(--muted);margin-top:8px}
+.rd-muted{color:var(--muted)}
+.rd-small{font-size:12px;margin-top:8px}
+.rd-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.rd-card-k{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.rd-items{display:flex;flex-direction:column;gap:6px}
+.rd-item{display:flex;align-items:center;gap:10px;font-size:15px;padding:8px 10px;border-radius:10px;background:var(--surface2)}
+.rd-item.check{cursor:pointer;border:2px solid transparent;min-height:48px}
+.rd-item.check.on{border-color:#22c55e;background:#f0fdf4}
+.rd-item input{width:22px;height:22px;accent-color:#22c55e;flex-shrink:0}
+.rd-qty{font-weight:900;color:var(--accent);min-width:28px}
+.rd-next{margin-bottom:10px}
+.rd-next summary{cursor:pointer;list-style:none;background:var(--surface);border:1px dashed var(--border);border-radius:14px;padding:12px 14px;font-size:13px;color:var(--text2)}
+.rd-next summary::-webkit-details-marker{display:none}
+.rd-next summary::after{content:' ▾';color:var(--muted)}
+.rd-next[open] summary{margin-bottom:10px}
+.rd-pin input{width:100%;font-size:30px;letter-spacing:14px;text-align:center;padding:12px;border:2px solid var(--border);border-radius:14px;font-weight:800;font-family:ui-monospace,monospace;outline:none}
+.rd-pin input:focus{border-color:var(--accent)}
+.rd-err{color:#dc2626;font-size:13px;font-weight:600;margin-top:6px;min-height:1em}
+.rd-actionbar{position:sticky;bottom:0;padding:10px 0 12px;background:linear-gradient(to top,var(--bg) 70%,transparent);z-index:5}
+.rd-done{background:var(--surface);border-radius:18px;padding:36px 18px;text-align:center;box-shadow:var(--shadow-md)}
+.rd-done-ico{width:64px;height:64px;border-radius:50%;background:#22c55e;color:#fff;font-size:34px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;animation:rdIn .3s ease}
+.rd-done-t{font-size:22px;font-weight:900}
+@media(max-width:768px){.rd-actionbar{bottom:60px}}
+
 /* Weekly availability grid — same pattern as seller-dashboard.html's
    service-listing scheduler, reused here for rep delivery/collection hours. */
 .svc-availability-grid { display: flex; flex-direction: column; gap: 6px; }
@@ -515,28 +612,25 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
     <div id="available-service-tasks-list"><div class="orders-empty">Loading…</div></div>
   </section>
 
-  <!-- Delivery -->
-  <section id="panel-delivery" class="panel">
-    <div class="panel-title">
-      Delivery
-      <button class="btn btn-ghost btn-sm" id="refreshDeliveryOffers">Refresh</button>
-    </div>
-
-    <div class="item-card" style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <!-- Delivery (rider) -->
+  <section id="panel-delivery" class="panel rd-panel">
+    <div class="rd-status" id="rdStatus">
+      <div class="rd-status-main">
+        <span class="rd-dot"></span>
         <div>
-          <div style="font-weight:700;font-size:14px" id="deliveryStatusLabel">You're offline</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px" id="deliveryStatusSub">Go online to start receiving delivery offers</div>
+          <div class="rd-status-title" id="deliveryStatusLabel">You're offline</div>
+          <div class="rd-status-sub" id="deliveryStatusSub">Go online to get delivery offers.</div>
         </div>
-        <button class="btn btn-primary btn-sm" id="deliveryToggleBtn">Go Online for Delivery</button>
       </div>
+      <button class="rd-switch" id="deliveryToggleBtn" role="switch" aria-checked="false" aria-label="Online for deliveries"><span></span></button>
     </div>
+    <div id="rdGps" class="rd-gps" style="display:none"></div>
 
-    <div id="delivery-active-route" style="display:none;margin-bottom:16px"></div>
+    <div id="delivery-active-route" style="display:none"></div>
 
     <div id="delivery-offers-wrap">
-      <div style="margin-bottom:8px;font-size:13px;font-weight:700;color:var(--muted)">DELIVERY OFFERS</div>
-      <div id="delivery-offers-list"><div class="orders-empty">Go online to start receiving delivery offers</div></div>
+      <div class="rd-section-label">Delivery offers <button class="rd-link" id="refreshDeliveryOffers">Refresh</button></div>
+      <div id="delivery-offers-list"><div class="rd-empty">Loading…</div></div>
     </div>
   </section>
 
@@ -632,11 +726,6 @@ document.addEventListener('sb-ready', function(e){
   let deliveryOnline = false;
   let deliveryHeartbeatTimer = null;
   let deliveryOffersTimer = null;
-  let ACTIVE_ROUTE = null;
-  let ACTIVE_ROUTE_STOPS = [];
-  let pickupItemsBlocked = false;
-  let pickupItems = [];
-  let collectedItemIds = new Set();
 
   /* ═══════════════════════════════════════════
      AUTH
@@ -2133,34 +2222,77 @@ document.addEventListener('sb-ready', function(e){
   }
 
   /* ═══════════════════════════════════════════
-     DELIVERY (live rider dispatch — same reps, new capability;
-     driver-heartbeat.js / respond-to-driver-offer.js do the writes,
-     driver_offers is read directly since RLS already scopes it to
-     the caller's own driver row)
+     DELIVERY (rider) — rebuilt 2026-10-04
+     One RPC, get_driver_board(), returns the rider's offers, active route,
+     every stop's store / customer details and items (was ~6 queries per
+     refresh and the rider never saw the customer). The rider's state is
+     polled whenever they're online — on ANY tab — so offers aren't missed,
+     and GPS runs as a high-accuracy watch so the customer's map is right.
   ═══════════════════════════════════════════ */
+  let BOARD = null, BOARD_SIG = '', boardTimer = null, gpsWatchId = null;
+  let LAST_FIX = null, GPS_ERR = null, offerTick = null, lastOfferIds = new Set();
+  const localChecked = new Set(); // pickup items ticked on this phone (sent on "Collected")
+
+  function telLink(p){ const d = String(p||'').replace(/[^\d+]/g,''); return d ? 'tel:' + d : null; }
+  function waLink(p){
+    let d = String(p||'').replace(/\D/g,'');
+    if(!d) return null;
+    if(d.startsWith('0')) d = '27' + d.slice(1);
+    return 'https://wa.me/' + d;
+  }
+  function navLink(stop, fallbackText){
+    if(stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lon))
+      return 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + stop.lat + ',' + stop.lon;
+    return fallbackText ? 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(fallbackText) : null;
+  }
+
+  // ── GPS: continuous high-accuracy watch while online ──
+  function startGps(){
+    if(gpsWatchId != null || !navigator.geolocation) return;
+    gpsWatchId = navigator.geolocation.watchPosition(p=>{
+      GPS_ERR = null;
+      LAST_FIX = { lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy,
+                   heading:p.coords.heading, speed:p.coords.speed, at:Date.now() };
+      renderGpsBadge();
+    }, err=>{ GPS_ERR = err.code; renderGpsBadge(); },
+    { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
+  }
+  function stopGps(){
+    if(gpsWatchId != null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+    const el = document.getElementById('rdGps'); if(el) el.style.display = 'none';
+  }
+  function renderGpsBadge(){
+    const el = document.getElementById('rdGps');
+    if(!el) return;
+    if(!deliveryOnline){ el.style.display = 'none'; return; }
+    let cls = 'ok', txt;
+    if(GPS_ERR === 1){ cls = 'bad'; txt = 'Location is blocked — customers can’t see you coming. Allow location for this site in your browser settings.'; }
+    else if(GPS_ERR){ cls = 'warn'; txt = 'Can’t get your location right now — move to open sky or check that location is on.'; }
+    else if(!LAST_FIX){ cls = 'warn'; txt = 'Finding your location…'; }
+    else if(LAST_FIX.acc > 100){ cls = 'warn'; txt = `GPS is weak (±${Math.round(LAST_FIX.acc)} m) — the customer’s map may be off.`; }
+    else txt = `GPS good · ±${Math.round(LAST_FIX.acc)} m`;
+    el.className = 'rd-gps ' + cls; el.textContent = txt; el.style.display = '';
+  }
   function getGeoPosition(){
+    if(LAST_FIX && Date.now() - LAST_FIX.at < 60000) return Promise.resolve(LAST_FIX);
     return new Promise(resolve=>{
       if(!navigator.geolocation){ resolve(null); return; }
       navigator.geolocation.getCurrentPosition(
-        pos=>resolve({
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          heading: pos.coords.heading==null?undefined:pos.coords.heading,
-          speed: pos.coords.speed==null?undefined:pos.coords.speed
-        }),
+        p=>resolve({ lat:p.coords.latitude, lon:p.coords.longitude, heading:p.coords.heading, speed:p.coords.speed, acc:p.coords.accuracy }),
         ()=>resolve(null),
-        { enableHighAccuracy:false, timeout:5000, maximumAge:15000 }
+        { enableHighAccuracy:true, timeout:8000, maximumAge:15000 }
       );
     });
   }
 
   async function sendDriverHeartbeat(isOnline){
-    const geo = await getGeoPosition();
+    const geo = isOnline ? await getGeoPosition() : null;
     const body = { isOnline };
     if(geo){
       body.lat = geo.lat; body.lon = geo.lon;
-      if(geo.heading!==undefined) body.heading = geo.heading;
-      if(geo.speed!==undefined) body.speed = geo.speed;
+      if(geo.heading != null && Number.isFinite(geo.heading)) body.heading = geo.heading;
+      if(geo.speed != null && Number.isFinite(geo.speed)) body.speed = geo.speed;
     }
     const { data:{ session } } = await sb.auth.getSession();
     const res = await fetch('/.netlify/functions/driver-heartbeat', {
@@ -2170,7 +2302,7 @@ document.addEventListener('sb-ready', function(e){
     });
     const result = await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(result.error||'Could not update delivery status');
-    if(result?.id) DRIVER_ID = result.id;
+    if(result?.driver?.id) DRIVER_ID = result.driver.id;
     return result;
   }
 
@@ -2181,80 +2313,188 @@ document.addEventListener('sb-ready', function(e){
     return DRIVER_ID;
   }
 
+  // Heartbeat every 12 s while heading to a customer (they're watching the
+  // map), 30 s otherwise. Polling the board every 8 s while online.
+  function onDropLeg(){
+    const st = BOARD?.route?.stops || [];
+    const drop = st.find(s=>s.type==='drop');
+    return !!(drop && (drop.status==='active' || drop.status==='arriving'));
+  }
+  function scheduleHeartbeat(){
+    if(deliveryHeartbeatTimer) clearTimeout(deliveryHeartbeatTimer);
+    if(!deliveryOnline) return;
+    deliveryHeartbeatTimer = setTimeout(async ()=>{
+      try{ await sendDriverHeartbeat(true); } catch(_){}
+      scheduleHeartbeat();
+    }, onDropLeg() ? 12000 : 30000);
+  }
+  function stopDeliveryIntervals(){
+    if(deliveryHeartbeatTimer){ clearTimeout(deliveryHeartbeatTimer); deliveryHeartbeatTimer=null; }
+    if(boardTimer){ clearInterval(boardTimer); boardTimer=null; }
+  }
+  function startDeliveryIntervals(){
+    stopDeliveryIntervals();
+    scheduleHeartbeat();
+    boardTimer = setInterval(()=>refreshBoard(), 8000);
+  }
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && (deliveryOnline || BOARD?.route)) refreshBoard(true); });
+
   function updateDeliveryToggleUI(){
     const btn = document.getElementById('deliveryToggleBtn');
     const label = document.getElementById('deliveryStatusLabel');
     const sub = document.getElementById('deliveryStatusSub');
+    const card = document.getElementById('rdStatus');
     if(!btn) return;
-    if(deliveryOnline){
-      btn.textContent = "You're Online";
-      btn.classList.remove('btn-primary'); btn.classList.add('btn-ghost');
-      if(label){ label.textContent = "You're online"; label.style.color = 'var(--success)'; }
-      if(sub) sub.textContent = "We'll notify you when a delivery offer comes in.";
-    } else {
-      btn.textContent = 'Go Online for Delivery';
-      btn.classList.remove('btn-ghost'); btn.classList.add('btn-primary');
-      if(label){ label.textContent = "You're offline"; label.style.color = ''; }
-      if(sub) sub.textContent = 'Go online to start receiving delivery offers';
-    }
-  }
-
-  function stopDeliveryIntervals(){
-    if(deliveryHeartbeatTimer){ clearInterval(deliveryHeartbeatTimer); deliveryHeartbeatTimer=null; }
-    if(deliveryOffersTimer){ clearInterval(deliveryOffersTimer); deliveryOffersTimer=null; }
-  }
-
-  function startDeliveryIntervals(){
-    stopDeliveryIntervals();
-    deliveryHeartbeatTimer = setInterval(()=>{ sendDriverHeartbeat(true).catch(()=>{}); }, 30000);
-    deliveryOffersTimer = setInterval(refreshDeliveryPanel, 10000);
+    btn.setAttribute('aria-checked', deliveryOnline ? 'true' : 'false');
+    if(card) card.classList.toggle('on', deliveryOnline);
+    if(label) label.textContent = deliveryOnline ? "You're online" : "You're offline";
+    if(sub) sub.textContent = deliveryOnline
+      ? (BOARD?.route ? 'On a delivery — offers pause until you finish.' : 'Waiting for delivery offers — keep this page open.')
+      : 'Go online to get delivery offers.';
+    renderGpsBadge();
   }
 
   async function setDeliveryOnline(next){
     const btn = document.getElementById('deliveryToggleBtn');
     if(btn) btn.disabled = true;
     try{
+      if(next) startGps();
       await sendDriverHeartbeat(next);
       deliveryOnline = next;
+      if(next){ startDeliveryIntervals(); primeAlertSound(); }
+      else { stopDeliveryIntervals(); stopGps(); }
       updateDeliveryToggleUI();
-      if(next){
-        startDeliveryIntervals();
-        await renderDeliveryOffers();
-      } else {
-        stopDeliveryIntervals();
-        const el = document.getElementById('delivery-offers-list');
-        if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
-      }
+      await refreshBoard(true);
     } catch(err){
+      if(next) stopGps();
       toast(err.message || 'Could not update delivery status', 'error');
     } finally {
       if(btn) btn.disabled = false;
     }
   }
 
-  function renderDeliveryOfferCard(o){
-    return `<div class="item-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-        <div>
-          <div style="font-weight:700;font-size:14px">NEW DELIVERY</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:2px">Estimated payout: <strong style="color:var(--text)">${fmt(o.payout_amount)}</strong></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" data-offer-respond="accept" data-offer-id="${esc(o.id)}">Accept</button>
-          <button class="btn btn-ghost btn-sm" data-offer-respond="decline" data-offer-id="${esc(o.id)}">Decline</button>
-        </div>
-      </div>
-    </div>`;
+  // ── New-offer alert: vibrate + short beep (audio unlocked by the online tap) ──
+  let audioCtx = null;
+  function primeAlertSound(){ try{ audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch(_){} }
+  function alertNewOffer(){
+    try{ navigator.vibrate && navigator.vibrate([250,120,250]); } catch(_){}
+    try{
+      if(!audioCtx) return;
+      [0, 0.25].forEach(t=>{
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.3, audioCtx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + t + 0.2);
+        o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.22);
+      });
+    } catch(_){}
   }
-
-  function wireDeliveryOfferActions(){
-    document.querySelectorAll('[data-offer-respond]').forEach(btn=>{
-      btn.addEventListener('click', ()=> respondToDriverOffer(btn.dataset.offerId, btn.dataset.offerRespond));
+  function setDeliveryNavBadge(n){
+    document.querySelectorAll('[data-panel="delivery"]').forEach(b=>{
+      let dot = b.querySelector('.nav-badge');
+      if(!n){ if(dot) dot.remove(); return; }
+      if(!dot){ dot = document.createElement('span'); dot.className = 'nav-badge'; b.appendChild(dot); }
+      dot.classList.toggle('dot', n === '●');
+      dot.textContent = n === '●' ? '' : n;
     });
   }
 
+  // ── Board ──
+  let boardLoading = null;
+  async function refreshBoard(force){
+    if(boardLoading) return boardLoading;
+    boardLoading = (async ()=>{
+      try{
+        const { data, error } = await sb.rpc('get_driver_board');
+        if(error) throw error;
+        BOARD = data || { driver:null, offers:[], route:null };
+        if(BOARD.driver?.id) DRIVER_ID = BOARD.driver.id;
+        const offers = BOARD.offers || [];
+        const fresh = offers.filter(o=>!lastOfferIds.has(o.id));
+        if(fresh.length && deliveryOnline){
+          alertNewOffer();
+          if(activePanel!=='delivery') toast('New delivery offer — open Delivery', 'success');
+        }
+        lastOfferIds = new Set(offers.map(o=>o.id));
+        setDeliveryNavBadge(BOARD.route ? '●' : (offers.length || 0));
+        const sig = JSON.stringify(BOARD);
+        if(activePanel==='delivery' && (force || sig !== BOARD_SIG)){ BOARD_SIG = sig; renderBoard(); }
+        updateDeliveryToggleUI();
+      } catch(e){
+        if(activePanel==='delivery' && !BOARD){
+          const el = document.getElementById('delivery-offers-list');
+          if(el) el.innerHTML = '<div class="rd-empty">Couldn’t load deliveries — check your connection. Retrying…</div>';
+        }
+      } finally { boardLoading = null; }
+    })();
+    return boardLoading;
+  }
+  // Kept for older callers.
+  async function refreshDeliveryPanel(){ return refreshBoard(true); }
+  async function renderDeliveryOffers(){ return refreshBoard(true); }
+
+  function renderBoard(){
+    const routeEl = document.getElementById('delivery-active-route');
+    const offersWrap = document.getElementById('delivery-offers-wrap');
+    if(!routeEl || !offersWrap) return;
+    if(BOARD?.route){
+      offersWrap.style.display = 'none';
+      routeEl.style.display = '';
+      renderJob(BOARD.route);
+    } else {
+      routeEl.style.display = 'none'; routeEl.innerHTML = '';
+      offersWrap.style.display = '';
+      renderOffers(BOARD?.offers || []);
+    }
+  }
+
+  function renderOffers(offers){
+    const listEl = document.getElementById('delivery-offers-list');
+    if(offerTick){ clearInterval(offerTick); offerTick = null; }
+    if(!deliveryOnline){
+      listEl.innerHTML = `<div class="rd-empty"><div class="rd-empty-ico">🛵</div>You're offline.<br>Switch on above to start getting delivery offers.</div>`;
+      return;
+    }
+    if(!offers.length){
+      listEl.innerHTML = `<div class="rd-empty"><div class="rd-empty-ico rd-pulse">📡</div>No offers right now.<br>We'll buzz this phone the moment one comes in.</div>`;
+      return;
+    }
+    listEl.innerHTML = offers.map(o=>{
+      const stores = (o.stores||[]).join(' + ') || 'Umzila store';
+      const km = o.distance_km != null ? Number(o.distance_km).toFixed(1) + ' km' : null;
+      const mins = o.duration_min != null ? Math.round(o.duration_min) + ' min drive' : null;
+      return `<div class="rd-offer" data-offer-card="${esc(o.id)}">
+        <div class="rd-offer-top">
+          <div><div class="rd-kicker">New delivery</div><div class="rd-pay">${fmt(o.payout)}</div></div>
+          <div class="rd-timer" data-expires="${esc(o.expires_at)}">—</div>
+        </div>
+        <div class="rd-legs">
+          <div class="rd-leg"><span class="rd-leg-dot a"></span><div><div class="rd-leg-k">Pick up</div><div class="rd-leg-v">${esc(stores)}</div>${o.store_area?`<div class="rd-leg-s">${esc(o.store_area)}</div>`:''}</div></div>
+          <div class="rd-leg"><span class="rd-leg-dot b"></span><div><div class="rd-leg-k">Drop off</div><div class="rd-leg-v">${esc(o.drop_area || 'Customer address')}</div></div></div>
+        </div>
+        <div class="rd-chips">${[km, mins, o.item_count ? o.item_count + (o.item_count==1?' item':' items') : null, o.delivery_class ? esc(o.delivery_class) + ' parcel' : null].filter(Boolean).map(c=>`<span>${c}</span>`).join('')}</div>
+        <div class="rd-offer-actions">
+          <button class="rd-btn ghost" data-offer-respond="decline" data-offer-id="${esc(o.id)}">Decline</button>
+          <button class="rd-btn primary" data-offer-respond="accept" data-offer-id="${esc(o.id)}">Accept</button>
+        </div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('[data-offer-respond]').forEach(btn=>{
+      btn.addEventListener('click', ()=> respondToDriverOffer(btn.dataset.offerId, btn.dataset.offerRespond));
+    });
+    const tick = ()=>{
+      listEl.querySelectorAll('.rd-timer').forEach(t=>{
+        const left = Math.max(0, Math.round((new Date(t.dataset.expires).getTime() - Date.now())/1000));
+        t.textContent = left ? `${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}` : 'Expired';
+        t.classList.toggle('urgent', left <= 30);
+        if(!left) t.closest('.rd-offer')?.querySelectorAll('button').forEach(b=>b.disabled = true);
+      });
+    };
+    tick(); offerTick = setInterval(tick, 1000);
+  }
+
   async function respondToDriverOffer(offerId, response){
-    const card = document.querySelector(`[data-offer-id="${offerId}"]`)?.closest('.item-card');
     document.querySelectorAll(`[data-offer-id="${offerId}"]`).forEach(b=>b.disabled=true);
     try{
       const { data:{ session } } = await sb.auth.getSession();
@@ -2265,353 +2505,206 @@ document.addEventListener('sb-ready', function(e){
       });
       const result = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(result.error || 'Could not respond to offer');
-      if(card) card.remove();
-      toast(response==='accept' ? 'Delivery accepted' : 'Offer declined');
+      toast(response==='accept' ? 'Accepted — head to the store' : 'Offer declined', response==='accept' ? 'success' : '');
     } catch(err){
       toast(err.message || 'Could not respond to offer', 'error');
     } finally {
-      renderDeliveryOffers();
+      await refreshBoard(true);
     }
   }
 
-  async function renderDeliveryOffers(){
-    if(!deliveryOnline || activePanel!=='delivery') return;
-    const listEl = document.getElementById('delivery-offers-list');
-    if(!listEl) return;
-    try{
-      await ensureDriverId();
-      if(!DRIVER_ID){
-        listEl.innerHTML = '<div class="orders-empty">No delivery offers right now — we\'ll notify you when one comes in.</div>';
-        return;
-      }
-      const { data, error } = await sb.from('driver_offers')
-        .select('id, payout_amount, status, expires_at, created_at')
-        .eq('driver_id', DRIVER_ID)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending:false });
-      if(error){ listEl.innerHTML = `<div class="orders-empty">Error: ${esc(error.message)}</div>`; return; }
-      if(!data || !data.length){
-        listEl.innerHTML = '<div class="orders-empty">No delivery offers right now — we\'ll notify you when one comes in.</div>';
-        return;
-      }
-      listEl.innerHTML = data.map(renderDeliveryOfferCard).join('');
-      wireDeliveryOfferActions();
-    } catch(_){
-      listEl.innerHTML = '<div class="orders-empty">Could not load delivery offers.</div>';
-    }
+  // ── Active job ──
+  function personCard(kind, title, sub, lines, phone, navHref){
+    const tel = telLink(phone), wa = waLink(phone);
+    return `<div class="rd-person ${kind}">
+      <div class="rd-person-k">${kind==='store'?'Pick up from':'Deliver to'}</div>
+      <div class="rd-person-name">${esc(title)}</div>
+      ${sub ? `<div class="rd-person-sub">${esc(sub)}</div>` : ''}
+      ${lines.join('')}
+      <div class="rd-contact">
+        ${navHref ? `<a class="rd-btn nav" href="${navHref}" target="_blank" rel="noopener">🧭 Navigate</a>` : ''}
+        ${tel ? `<a class="rd-btn ghost" href="${tel}">📞 Call</a>` : ''}
+        ${wa ? `<a class="rd-btn ghost" href="${wa}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
+      </div>
+      ${!phone ? `<div class="rd-note">No phone number on file.</div>` : ''}
+    </div>`;
+  }
+  function itemsList(items, checkable){
+    if(!items || !items.length) return `<div class="rd-note">No items listed — confirm with the store before leaving.</div>`;
+    return `<div class="rd-items">${items.map(it=>{
+      const label = `${esc(it.name||'Item')}${it.size && it.size!=='One Size' ? ` <span class="rd-muted">(${esc(it.size)})</span>` : ''}`;
+      const qty = `<span class="rd-qty">×${Number(it.qty||1)}</span>`;
+      if(!checkable) return `<div class="rd-item">${qty}<div>${label}</div></div>`;
+      const on = it.collected || localChecked.has(it.id);
+      return `<label class="rd-item check ${on?'on':''}"><input type="checkbox" class="pickup-item-cb" data-item-id="${esc(it.id)}" ${on?'checked':''} ${it.collected?'disabled':''}/>${qty}<div>${label}</div></label>`;
+    }).join('')}</div>`;
   }
 
-  /* ── Active route (Stage 9/10 — route progression UI) ──
-     routes/route_stops/route_stop_items are RLS-scoped to the caller's own
-     driver row (routes_select_own / route_stops_select_own /
-     route_stop_items_select_own), so — same as driver_offers above — they're
-     read directly here, no function needed.
-
-     The current delivery "stage" is derived from routes.status +
-     route_stops.status rather than deliveries.status: drivers currently have
-     no RLS SELECT policy on `deliveries` at all (only deliveries_select_own,
-     scoped to the paying customer), so that table can't be read from this
-     client for a driver session — confirmed against the live schema, not
-     assumed. advance-route.js keeps routes/route_stops in lockstep with the
-     delivery state machine on every transition, so this derivation is a
-     reliable stand-in. See handback report for the precise RLS gap. */
-  async function loadActiveRoute(){
-    const { data, error } = await sb.from('routes')
-      .select('id, driver_id, status, created_at')
-      .eq('driver_id', DRIVER_ID)
-      .neq('status', 'completed')
-      .order('created_at', { ascending:false })
-      .limit(1);
-    if(error || !data || !data.length) return null;
-    return data[0];
-  }
-
-  async function loadRouteStops(routeId){
-    const { data, error } = await sb.from('route_stops')
-      .select('id, route_id, stop_type, seq_order, seller_id, delivery_id, status')
-      .eq('route_id', routeId)
-      .order('seq_order', { ascending:true });
-    if(error || !data) return [];
-    return data;
-  }
-
-  // Stage 4 (2026-09-17): pickupStop -> pickupStop (still singular per call,
-  // just resolved as "the current one" among possibly several).
-  async function loadPickupChecklist(pickupStop){
-    pickupItemsBlocked = false; pickupItems = []; collectedItemIds = new Set();
-    // Already-collected items — route_stop_items is readable by the driver.
-    const { data: rsi } = await sb.from('route_stop_items').select('order_item_id, collected').eq('route_stop_id', pickupStop.id);
-    (rsi||[]).forEach(r=>{ if(r.collected) collectedItemIds.add(r.order_item_id); });
-
-    // deliveries_select_assigned_driver / order_items_select_assigned_driver
-    // RLS policies now grant a driver read access along the
-    // route_stops -> routes -> drivers chain (added same day this panel was
-    // built — a genuine gap the first pass of this UI correctly caught and
-    // worked around rather than silently failing; fixed properly since,
-    // this fallback stays as defense-in-depth, not because it's expected to
-    // trigger in normal operation).
-    const { data: deliveryRow } = await sb.from('deliveries').select('order_id').eq('id', pickupStop.delivery_id).maybeSingle();
-    if(!deliveryRow || !deliveryRow.order_id){ pickupItemsBlocked = true; return; }
-
-    const { data: items, error: itemsErr } = await sb.from('order_items')
-      .select('id, product_name, quantity')
-      .eq('order_id', deliveryRow.order_id)
-      .eq('seller_id', pickupStop.seller_id);
-    if(itemsErr || !items || !items.length){ pickupItemsBlocked = true; return; }
-    pickupItems = items;
-  }
-
-  function mapsLink(query){
-    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
-  }
-
-  // route_stops.location (geography) comes back over PostgREST as raw EWKB
-  // hex, not directly usable — get_route_stop_coordinates() (SECURITY
-  // INVOKER, so route_stops_select_own's RLS still applies — a driver can
-  // only ever get coordinates for their own stop) decodes it to plain
-  // lat/lon server-side. This is what makes a real "Navigate to customer"
-  // link possible at all (destination_snapshot lives on `deliveries`, which
-  // has its own access story — going through the stop's own coordinates
-  // instead sidesteps that entirely for navigation purposes).
-  async function stopMapsLink(stopId, fallbackQuery){
-    try{
-      const { data, error } = await sb.rpc('get_route_stop_coordinates', { p_route_stop_id: stopId });
-      const row = Array.isArray(data) ? data[0] : data;
-      if(!error && row && Number.isFinite(row.lat) && Number.isFinite(row.lon)){
-        return mapsLink(row.lat + ',' + row.lon);
-      }
-    } catch(_) {}
-    return fallbackQuery ? mapsLink(fallbackQuery) : null;
-  }
-
-  function hideActiveRouteCard(){
-    const container = document.getElementById('delivery-active-route');
-    const offersWrap = document.getElementById('delivery-offers-wrap');
-    if(container){ container.style.display = 'none'; container.innerHTML = ''; }
-    if(offersWrap) offersWrap.style.display = '';
-  }
-
-  async function renderActiveRoute(route){
-    const container = document.getElementById('delivery-active-route');
-    const offersWrap = document.getElementById('delivery-offers-wrap');
-    if(!container) return;
-    container.style.display = '';
-    if(offersWrap) offersWrap.style.display = 'none';
-
-    const stops = await loadRouteStops(route.id);
-    ACTIVE_ROUTE = route; ACTIVE_ROUTE_STOPS = stops;
-    // Stage 4 (2026-09-17): a route can carry N pickup stops (one per bundled
-    // seller) before its one drop — only one is ever 'active' at a time
-    // (advance-route.js resolves this server-side too, same rule).
-    const pickupStops = stops.filter(s=>s.stop_type==='pickup');
-    const dropStop = stops.find(s=>s.stop_type==='drop');
-    if(!pickupStops.length || !dropStop){
-      container.innerHTML = '<div class="item-card"><div class="orders-empty">This route is missing its stops — contact dispatch.</div></div>';
+  function renderJob(route){
+    const el = document.getElementById('delivery-active-route');
+    const stops = route.stops || [];
+    const pickups = stops.filter(s=>s.type==='pickup');
+    const drop = stops.find(s=>s.type==='drop');
+    if(!pickups.length || !drop){
+      el.innerHTML = `<div class="rd-empty">This route is missing its stops — contact dispatch.</div>`;
       return;
     }
-    const currentPickupStop = pickupStops.find(s=>s.status!=='completed'); // undefined once every pickup is done
-    const allPickupsCompleted = !currentPickupStop;
-    const pickupProgressLabel = pickupStops.length > 1 && currentPickupStop
-      ? `Store ${pickupStops.indexOf(currentPickupStop)+1} of ${pickupStops.length}`
-      : '';
+    const cur = pickups.find(s=>s.status!=='completed');
+    const c = drop.customer || {};
+    const custLines = [
+      c.address ? `<div class="rd-addr">${esc(c.address)}${c.area?`<br><span class="rd-muted">${esc(c.area)}${c.postal_code?' '+esc(c.postal_code):''}</span>`:''}</div>` : '',
+      c.instructions ? `<div class="rd-instr">📝 ${esc(c.instructions)}</div>` : '',
+      c.order_ref ? `<div class="rd-muted rd-small">Order #…${esc(String(c.order_ref).toUpperCase())}</div>` : ''
+    ];
+    const customerCard = personCard('cust', c.name || 'Customer', null, custLines, c.phone, navLink(drop, [c.address, c.area].filter(Boolean).join(', ')));
 
-    // sellers is publicly readable (sellers_select_public), so the shop name
-    // and its free-text address are available even though the pickup stop's
-    // own `location` (PostGIS geography) is not — see handback report.
-    let seller = null, shopName = 'Pickup store';
-    if(currentPickupStop){
-      const { data: sellerRow } = await sb.from('sellers').select('shop_name, location').eq('id', currentPickupStop.seller_id).maybeSingle();
-      seller = sellerRow;
-      shopName = seller?.shop_name || 'Pickup store';
-    }
+    // Stepper
+    const steps = pickups.map((p,i)=>({ label: p.store?.name || `Store ${i+1}`, done: p.status==='completed', cur: p===cur }))
+      .concat([{ label: c.name ? c.name.split(' ')[0] : 'Customer', done: drop.status==='completed', cur: !cur }]);
+    const stepper = `<div class="rd-steps">${steps.map((s,i)=>`<div class="rd-step ${s.done?'done':''} ${s.cur?'cur':''}"><span>${s.done?'✓':i+1}</span><em>${esc(s.label)}</em></div>`).join('<i></i>')}</div>`;
 
-    // ── before pickup: route accepted, not yet started ──
-    if(route.status==='assigned' && currentPickupStop && pickupStops[0].status==='pending'){
-      const pickupNavLink = await stopMapsLink(currentPickupStop.id, seller?.location);
-      container.innerHTML = `<div class="item-card">
-        <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">${pickupProgressLabel ? esc(pickupProgressLabel)+' — ' : ''}Route accepted — head to the store to start pickup.</div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          ${pickupNavLink ? `<a class="btn btn-ghost btn-sm" href="${pickupNavLink}" target="_blank" rel="noopener">Navigate to store</a>` : ''}
-          <button class="btn btn-primary btn-sm" id="routeStartBtn">Start Route</button>
-        </div>
-      </div>`;
-      document.getElementById('routeStartBtn')?.addEventListener('click', ()=>callAdvanceRoute('start_route'));
-      return;
-    }
-
-    // ── during pickup: DRIVER_AT_PICKUP or PARTIALLY_PICKED_UP — same UI ──
-    if(currentPickupStop && currentPickupStop.status==='active'){
-      await loadPickupChecklist(currentPickupStop);
-      let itemsHtml;
-      if(pickupItemsBlocked){
-        itemsHtml = `<div class="orders-empty" style="text-align:left;padding:10px 0">Pickup items couldn't be loaded right now. Confirm the order with the store directly before marking pickup complete — dispatch has been notified.</div>`;
+    let body = '', action = '';
+    if(cur){
+      const s = cur.store || {};
+      const storeCard = personCard('store', s.name || 'Store', pickups.length>1 ? `Store ${pickups.indexOf(cur)+1} of ${pickups.length}` : null,
+        [s.address ? `<div class="rd-addr">${esc(s.address)}</div>` : ''], s.phone, navLink(cur, s.address));
+      if(cur.status==='pending'){
+        body = storeCard + `<div class="rd-card"><div class="rd-card-k">To collect</div>${itemsList(cur.items,false)}</div>`
+             + `<details class="rd-next"><summary>Then deliver to <strong>${esc(c.name||'the customer')}</strong>${c.area?' · '+esc(c.area):''}</summary>${customerCard}</details>`;
+        action = `<button class="rd-btn primary big" data-route-action="start_route">I'm at the store</button>`;
       } else {
-        itemsHtml = pickupItems.map(it=>`
-          <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px">
-            <input type="checkbox" class="pickup-item-cb" data-item-id="${esc(it.id)}" ${collectedItemIds.has(it.id)?'checked':''}/>
-            ${esc(it.product_name||'Item')}${it.quantity>1?` × ${it.quantity}`:''}
-          </label>`).join('');
+        body = storeCard + `<div class="rd-card"><div class="rd-card-k">Tick each item as you collect it</div>${itemsList(cur.items,true)}</div>`
+             + `<details class="rd-next"><summary>Then deliver to <strong>${esc(c.name||'the customer')}</strong>${c.area?' · '+esc(c.area):''}</summary>${customerCard}</details>`;
+        const total = (cur.items||[]).length, done = (cur.items||[]).filter(it=>it.collected || localChecked.has(it.id)).length;
+        action = `<button class="rd-btn primary big" id="pickupCompleteBtn" ${total && !done ? 'disabled' : ''}>Collected ${total?`(${done}/${total})`:''} — continue</button>`;
       }
-      const pickupNavLink2 = await stopMapsLink(currentPickupStop.id, seller?.location);
-      container.innerHTML = `<div class="item-card">
-        <div style="font-weight:700;font-size:14px">${esc(shopName)}</div>
-        ${pickupProgressLabel ? `<div style="font-size:11px;color:var(--muted);font-weight:600">${esc(pickupProgressLabel)}</div>` : ''}
-        <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Orders to collect:</div>
-        <div id="pickupItemsList">${itemsHtml}</div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          ${pickupNavLink2 ? `<a class="btn btn-ghost btn-sm" href="${pickupNavLink2}" target="_blank" rel="noopener">Navigate to store</a>` : ''}
-          <button class="btn btn-primary btn-sm" id="pickupCompleteBtn" ${pickupItemsBlocked?'disabled':''}>Mark pickup complete</button>
-        </div>
+    } else if(drop.status==='pending'){
+      body = customerCard + `<div class="rd-card"><div class="rd-card-k">Hand over</div>${itemsList(drop.items,false)}</div>`;
+      action = `<button class="rd-btn primary big" data-route-action="start_delivery">Start trip to customer</button>`;
+    } else if(drop.status==='active'){
+      body = customerCard + `<div class="rd-card"><div class="rd-card-k">Hand over</div>${itemsList(drop.items,false)}</div>`;
+      action = `<button class="rd-btn primary big" data-route-action="arrive_at_drop">I've arrived</button>`;
+    } else if(drop.status==='arriving'){
+      body = customerCard + `<div class="rd-card rd-pin">
+        <div class="rd-card-k">Ask ${esc(c.name ? c.name.split(' ')[0] : 'the customer')} for their 4-digit PIN</div>
+        ${c.pin_locked ? `<div class="rd-instr">Too many wrong PINs — call dispatch.</div>` : ''}
+        <input type="text" id="deliveryPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" placeholder="• • • •">
+        <div id="pinConfirmMsg" class="rd-err"></div>
+        <div class="rd-card-k" style="margin-top:12px">Hand over</div>${itemsList(drop.items,false)}
       </div>`;
-      document.getElementById('pickupCompleteBtn')?.addEventListener('click', ()=>{
-        const checked = Array.from(document.querySelectorAll('.pickup-item-cb:checked')).map(cb=>cb.dataset.itemId);
-        callAdvanceRoute('complete_pickup', { collectedOrderItemIds: checked });
+      action = `<button class="rd-btn primary big" id="pinConfirmBtn">Confirm delivery</button>`;
+    } else {
+      body = `<div class="rd-empty">Finishing up…</div>`;
+    }
+
+    el.innerHTML = `${stepper}${body}<div class="rd-actionbar">${action}</div>`;
+
+    el.querySelectorAll('[data-route-action]').forEach(b=>b.addEventListener('click', ()=>callAdvanceRoute(b.dataset.routeAction)));
+    el.querySelectorAll('.pickup-item-cb').forEach(cb=>cb.addEventListener('change', ()=>{
+      if(cb.checked) localChecked.add(cb.dataset.itemId); else localChecked.delete(cb.dataset.itemId);
+      cb.closest('.rd-item')?.classList.toggle('on', cb.checked);
+      const all = el.querySelectorAll('.pickup-item-cb'), done = Array.from(all).filter(x=>x.checked).length;
+      const btn = document.getElementById('pickupCompleteBtn');
+      if(btn){ btn.disabled = all.length && !done; btn.textContent = `Collected (${done}/${all.length}) — continue`; }
+    }));
+    document.getElementById('pickupCompleteBtn')?.addEventListener('click', ()=>{
+      const checked = Array.from(el.querySelectorAll('.pickup-item-cb:checked')).map(cb=>cb.dataset.itemId);
+      callAdvanceRoute('complete_pickup', { collectedOrderItemIds: checked });
+    });
+    const pinInput = document.getElementById('deliveryPinInput');
+    pinInput?.addEventListener('input', ()=>{ pinInput.value = pinInput.value.replace(/\D/g,'').slice(0,4); });
+    document.getElementById('pinConfirmBtn')?.addEventListener('click', ()=>confirmPin(drop.delivery_id));
+  }
+
+  async function confirmPin(deliveryId){
+    const pinInput = document.getElementById('deliveryPinInput');
+    const msgEl = document.getElementById('pinConfirmMsg');
+    const btn = document.getElementById('pinConfirmBtn');
+    const pin = (pinInput?.value || '').trim();
+    if(!/^\d{4}$/.test(pin)){ if(msgEl) msgEl.textContent = 'Enter the 4-digit PIN.'; return; }
+    if(msgEl) msgEl.textContent = '';
+    if(btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+    try{
+      const { data:{ session } } = await sb.auth.getSession();
+      const res = await fetch('/.netlify/functions/confirm-delivery-pin', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
+        body: JSON.stringify({ deliveryId, pin })
       });
-      return;
+      const result = await res.json().catch(()=>({}));
+      if(!res.ok){
+        if(msgEl) msgEl.textContent = result.error || 'PIN incorrect. Please try again.';
+        if(btn){ btn.disabled = false; btn.textContent = 'Confirm delivery'; }
+        if(pinInput){ pinInput.value=''; pinInput.focus(); }
+        return;
+      }
+      localChecked.clear();
+      document.getElementById('delivery-active-route').innerHTML =
+        `<div class="rd-done"><div class="rd-done-ico">✓</div><div class="rd-done-t">Delivered</div><div class="rd-muted">Nice work. Looking for your next delivery…</div></div>`;
+      try{ navigator.vibrate && navigator.vibrate(120); } catch(_){}
+      setTimeout(()=>refreshBoard(true), 1500);
+    } catch(e){
+      if(msgEl) msgEl.textContent = 'Could not confirm — check your connection and try again.';
+      if(btn){ btn.disabled = false; btn.textContent = 'Confirm delivery'; }
     }
-
-    // ── pickup done, delivery leg not started yet ──
-    if(allPickupsCompleted && dropStop.status==='pending'){
-      const dropNavLink = await stopMapsLink(dropStop.id, null);
-      container.innerHTML = `<div class="item-card">
-        <div style="font-weight:700;font-size:14px">Pickup complete</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Ready to head to the customer.</div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          ${dropNavLink ? `<a class="btn btn-ghost btn-sm" href="${dropNavLink}" target="_blank" rel="noopener">Navigate to customer</a>` : ''}
-          <button class="btn btn-primary btn-sm" id="startDeliveryBtn">Start Delivery Route</button>
-        </div>
-      </div>`;
-      document.getElementById('startDeliveryBtn')?.addEventListener('click', ()=>callAdvanceRoute('start_delivery'));
-      return;
-    }
-
-    // ── en route to customer (IN_ROUTE) ──
-    if(dropStop.status==='active'){
-      const dropNavLink2 = await stopMapsLink(dropStop.id, null);
-      container.innerHTML = `<div class="item-card">
-        <div style="font-weight:700;font-size:14px">On the way to the customer</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">Tap once you've arrived at the drop-off location.</div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          ${dropNavLink2 ? `<a class="btn btn-ghost btn-sm" href="${dropNavLink2}" target="_blank" rel="noopener">Navigate to customer</a>` : ''}
-          <button class="btn btn-primary btn-sm" id="arriveBtn">I've Arrived</button>
-        </div>
-      </div>`;
-      document.getElementById('arriveBtn')?.addEventListener('click', ()=>callAdvanceRoute('arrive_at_drop'));
-      return;
-    }
-
-    // ── arrived (ARRIVING / PIN_REQUIRED) — confirm-delivery-pin.js (Stage 13) ──
-    if(dropStop.status==='arriving'){
-      container.innerHTML = `<div class="item-card">
-        <div style="font-weight:700;font-size:14px">Arrived</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:6px">Ask the customer for their delivery PIN to confirm drop-off.</div>
-        <div id="pinConfirmMsg" style="font-size:12px;color:#c0392b;margin-top:6px"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-          <input type="text" id="deliveryPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="4-digit PIN"
-                 style="width:110px;padding:8px 10px;border:1px solid var(--border,#ddd);border-radius:8px;font-size:16px;letter-spacing:2px;text-align:center">
-          <button class="btn btn-primary btn-sm" id="pinConfirmBtn">Confirm delivery</button>
-        </div>
-      </div>`;
-      const pinInput = document.getElementById('deliveryPinInput');
-      pinInput?.addEventListener('input', ()=>{ pinInput.value = pinInput.value.replace(/\D/g,'').slice(0,4); });
-      document.getElementById('pinConfirmBtn')?.addEventListener('click', async ()=>{
-        const pin = (pinInput?.value || '').trim();
-        const msgEl = document.getElementById('pinConfirmMsg');
-        if(!/^\d{4}$/.test(pin)){ if(msgEl) msgEl.textContent = 'Enter the 4-digit PIN.'; return; }
-        if(msgEl) msgEl.textContent = '';
-        const btn = document.getElementById('pinConfirmBtn');
-        if(btn) btn.disabled = true;
-        try{
-          const { data:{ session } } = await sb.auth.getSession();
-          const res = await fetch('/.netlify/functions/confirm-delivery-pin', {
-            method:'POST',
-            headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
-            body: JSON.stringify({ deliveryId: dropStop.delivery_id, pin })
-          });
-          const result = await res.json().catch(()=>({}));
-          if(!res.ok){
-            if(msgEl) msgEl.textContent = result.error || 'PIN incorrect. Please try again.';
-            if(btn) btn.disabled = false;
-            if(pinInput){ pinInput.value=''; pinInput.focus(); }
-            return;
-          }
-          toast('Delivered ✓');
-          container.innerHTML = `<div class="item-card"><div style="font-weight:700;font-size:14px;color:var(--success)">Delivered ✓</div><div style="font-size:12px;color:var(--muted);margin-top:6px">Nice work. Looking for your next delivery…</div></div>`;
-          setTimeout(refreshDeliveryPanel, 1500);
-        } catch(e){
-          if(msgEl) msgEl.textContent = 'Could not confirm delivery — check your connection and try again.';
-          if(btn) btn.disabled = false;
-        }
-      });
-      return;
-    }
-
-    const pickupStatusLabel = currentPickupStop ? currentPickupStop.status : 'all completed';
-    container.innerHTML = `<div class="item-card"><div class="orders-empty">Route status: ${esc(route.status)} / pickup: ${esc(pickupStatusLabel)} / drop: ${esc(dropStop.status)}</div></div>`;
   }
 
   async function callAdvanceRoute(action, extra){
-    if(!ACTIVE_ROUTE) return;
-    document.querySelectorAll('#delivery-active-route button').forEach(b=>b.disabled=true);
+    const route = BOARD?.route;
+    if(!route) return;
+    const bar = document.querySelector('#delivery-active-route .rd-actionbar button');
+    const label = bar ? bar.textContent : '';
+    if(bar){ bar.disabled = true; bar.textContent = 'Updating…'; }
     try{
       const { data:{ session } } = await sb.auth.getSession();
       const res = await fetch('/.netlify/functions/advance-route', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+(session?.access_token||'') },
-        body: JSON.stringify(Object.assign({ routeId: ACTIVE_ROUTE.id, action }, extra||{}))
+        body: JSON.stringify(Object.assign({ routeId: route.id, action }, extra||{}))
       });
       const result = await res.json().catch(()=>({}));
-      if(!res.ok) throw new Error(result.error || 'Could not update route');
-      if(action==='complete_pickup' && result.movedToNextPickup){
-        toast('Store pickup complete — next store up', 'success');
-      } else if(action==='complete_pickup' && result.allCollected===false){
-        toast('Some items still need to be collected', '');
-      } else {
-        toast('Updated', 'success');
-      }
+      if(!res.ok) throw new Error(result.error || 'Could not update');
+      if(action==='complete_pickup'){ localChecked.clear(); }
+      if(action==='complete_pickup' && result.movedToNextPickup) toast('Store done — next store up', 'success');
+      else if(action==='complete_pickup' && result.allCollected===false) toast('Some items still need collecting', 'warn');
+      else if(action==='start_delivery') toast('Customer can now see you on the map', 'success');
+      if(action==='start_delivery' && deliveryOnline){ sendDriverHeartbeat(true).catch(()=>{}); }
     } catch(err){
-      toast(err.message || 'Could not update route', 'error');
+      toast(err.message || 'Could not update', 'error');
+      if(bar){ bar.disabled = false; bar.textContent = label; }
     } finally {
-      const route = await loadActiveRoute();
-      if(route) await renderActiveRoute(route); else hideActiveRouteCard();
-    }
-  }
-
-  async function refreshDeliveryPanel(){
-    if(activePanel!=='delivery') return;
-    await ensureDriverId();
-    if(!DRIVER_ID) return;
-    const route = await loadActiveRoute();
-    if(route){
-      await renderActiveRoute(route);
-    } else {
-      hideActiveRouteCard();
-      if(deliveryOnline) renderDeliveryOffers();
+      await refreshBoard(true);
+      scheduleHeartbeat();
     }
   }
 
   async function renderDeliveryPanel(){
-    await ensureDriverId();
     updateDeliveryToggleUI();
-    if(deliveryOnline) startDeliveryIntervals();
-    const route = DRIVER_ID ? await loadActiveRoute() : null;
-    if(route){
-      await renderActiveRoute(route);
-    } else {
-      hideActiveRouteCard();
-      if(deliveryOnline){
-        renderDeliveryOffers();
-      } else {
-        const el = document.getElementById('delivery-offers-list');
-        if(el) el.innerHTML = '<div class="orders-empty">Go online to start receiving delivery offers</div>';
+    BOARD_SIG = '';
+    await refreshBoard(true);
+  }
+
+  // On load: resume the rider's real online state (they used to show
+  // "offline" after a reload while dispatch still saw them online).
+  async function resumeDeliveryState(){
+    try{
+      const { data } = await sb.rpc('get_driver_board');
+      BOARD = data || null;
+      if(BOARD?.driver?.id) DRIVER_ID = BOARD.driver.id;
+      lastOfferIds = new Set((BOARD?.offers||[]).map(o=>o.id));
+      if(BOARD?.driver?.is_online){
+        deliveryOnline = true;
+        startGps();
+        startDeliveryIntervals();
+        sendDriverHeartbeat(true).catch(()=>{});
       }
-    }
+      setDeliveryNavBadge(BOARD?.route ? '●' : ((BOARD?.offers||[]).length || 0));
+      updateDeliveryToggleUI();
+    } catch(_){}
   }
 
   document.getElementById('deliveryToggleBtn')?.addEventListener('click', ()=> setDeliveryOnline(!deliveryOnline));
-  document.getElementById('refreshDeliveryOffers')?.addEventListener('click', refreshDeliveryPanel);
+  document.getElementById('refreshDeliveryOffers')?.addEventListener('click', ()=>refreshBoard(true));
 
   /* ═══════════════════════════════════════════
      STORES
@@ -2726,6 +2819,9 @@ document.addEventListener('sb-ready', function(e){
     localStorage.setItem('scp_current_user',JSON.stringify({email:auth.user.email,role:auth.role,user_id:auth.user.id}));
     const name=auth.user.email.split('@')[0];
     document.getElementById('profileChip').textContent=name;
+
+    // Resume the rider's real online state + offer alerts on every tab
+    resumeDeliveryState();
 
     // Prefetch products
     await fetchProducts();
