@@ -9,11 +9,11 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 **Reported (founder):** no way to log out once signed in; the hamburger menu's "Profile" opened the login popup even when signed in; where does "estimated delivery 2–4 hrs" come from? — wanted: road distance × 2 min/km + 25 min, worded as a target, not a guarantee.
 
 **Root causes / changes:**
-- Hamburger: `updateAuthUI` only relabelled the item; its click always opened the login modal. Signed in it's now **My profile** (→ profile.html) and a **Log out** item appears (`signOutEverywhere()` — signs out, broadcasts `ss_signout` to other tabs, resets the header).
+- Hamburger: `updateAuthUI` only relabelled the item; its click always opened the login modal. Signed in it's now **My profile** (→ profile.html). Log out lives only on the profile page (founder: not a standalone menu item).
 - profile.html hid its "Log out" button at ≤600 px, so phones had no logout anywhere — now shown (compact).
 - Checkout ETA strip used the store's own "ready within" text mapped to fixed ranges ("1 hour" → "~2–4 hours", "Same day" → "today"…; before that "usually within 1–3 days") — no distance at all. Now: **Delivery target: about N min** = live quote road km × 2 + 25 (same road route as the price), with "We aim to get it to you in this time or sooner — a target, not a guarantee." Before an address: "Add your address to see your delivery time"; services-only carts hide it. Recomputed whenever the quote changes.
 
-**Verified:** headless Chrome — guest menu → Sign In opens login; fake signed-in session → "My profile" + Log out, Log out clears the session and resets the menu; no page errors. Checkout with a Berea address → "Delivery target: about 33 min".
+**Verified:** headless Chrome — guest menu → Sign In opens login; fake signed-in session → "My profile"; no page errors. Checkout with a Berea address → "Delivery target: about 33 min".
 
 **Files:** `index.html`, `script.js`, `profile.html`, `checkout.html`.
 
