@@ -4,6 +4,29 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Checkout pay section redesigned (save card by default, named cards); saved cards can't be hijacked via profile email
+
+**Asked for (founder, after confirming saved-card payments work live):** make people more likely to save their card, let them name it and pick it by name next time, confirm whether several cards can be saved, and make the bottom of checkout uncluttered and flowing — no thinking about boxes.
+
+**Multiple cards:** yes — every saved card is its own `payment_methods` row (one PayFast token each, unique per user+token), so naming matters.
+
+**What changed (checkout.html):**
+- One "How do you want to pay?" panel: saved cards listed by nickname ("Last used …"), most recent preselected, plus "A new card". New card → "You'll type your card on PayFast next", a **Save this card** switch that is **on by default**, and a **Card nickname** field right under it (hidden if the switch is off).
+- One button matching the choice ("Agree & pay" / "Agree & pay with FNB debit"; phone bar "Pay with FNB debit"). Terms are agreed by pressing it — the line sits right above it (and next to the phone pay bar); the old checkbox is kept hidden and ticked on press so validation and `terms_accepted_at` are unchanged.
+- Order note became "+ Add a note for the store or rider". "Send me deals from Umzila shops (unsubscribe anytime)" is pre-ticked (POPIA allows this for a buyer's own purchase, with an easy opt-out).
+- Tokenizing now follows the switch (it used to be forced for anyone with a saved card); the nickname is only stored when saving.
+- Guests can save too: the token stays on the order and is added to their saved cards when they confirm that email (`claim_my_email_orders`).
+
+**Security fix (complete-order-payment.js):** after payment it linked a guest order — and saved the guest's card — to whichever account had that email in `profiles.email`, a field users can edit. Someone could set their profile email to a victim's and receive the victim's saved card (chargeable). Now only an account that proved the email by confirmation link (`verified_user_id_for_email`, service-role only) is linked, and a signed-in buyer's order is never moved.
+
+**Verified:** PayFast token lookup (read-only) accepted our signature on live and the founder's saved-card payment succeeded. Headless Chrome 390/1280 px: guest (switch on, nickname, one "Agree & pay"); signed-in with 2 fake saved cards (named + unnamed fallback "Card added …", most recent preselected, button "Agree & pay with FNB debit", "A new card" reveals switch + nickname, switch off hides nickname); no page errors.
+
+**Not changed (flagged):** `payfast-itn.js` seller-enrollment activation also finds the user by `profiles.email`; left alone (PayFast ITN rule) — worth switching to the application's own user id.
+
+**Files:** `checkout.html`, `netlify/functions/lib/complete-order-payment.js`; migration `verified_owner_for_cards_and_orders`.
+
+---
+
 ## 2026-10-04 — Every paid delivery order now reaches a rider; seller "Fulfillment" dropdown removed
 
 **Reported (founder's 2nd live test, signed in, R5 free-delivery item):** paid, showed on the seller dashboard with a Pending/Packaging/Fulfilled/Delivered/Returned dropdown (makes no sense for a seller), never appeared in logistics, and stayed "Pending" in the buyer's profile.

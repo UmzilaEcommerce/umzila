@@ -61,21 +61,23 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     // ITN arriving after the saved-card path already completed this order)
     if (alreadyPaid || !existingOrder) return;
 
-    // ── Backfill user_id if order was placed on buyer's behalf ─
+    // ── Link a guest order to its buyer's account ─────────────
+    // Only to an account that has PROVEN it owns this email (confirmed by
+    // link — verified_user_id_for_email). It used to match profiles.email,
+    // which any user can set to someone else's address: that attached the
+    // victim's guest order — and their saved card — to the other account.
+    // A signed-in buyer's own order (user_id set at checkout) is never moved.
     const buyerEmailForLookup = (existingOrder.customer_email || pfData.email_address || '').toLowerCase();
     let resolvedUserId = existingOrder.user_id || null;
-    if (buyerEmailForLookup) {
+    if (!resolvedUserId && buyerEmailForLookup) {
         try {
-            const { data: buyerProfile } = await supabase
-                .from('profiles')
-                .select('user_id')
-                .ilike('email', buyerEmailForLookup)
-                .maybeSingle();
-            if (buyerProfile?.user_id && buyerProfile.user_id !== existingOrder.user_id) {
-                await supabase.from('orders').update({ user_id: buyerProfile.user_id }).eq('id', existingOrder.id);
-                console.log('completeOrderPayment: user_id corrected to buyer profile for order', existingOrder.id);
+            const { data: verifiedOwner } = await supabase.rpc('verified_user_id_for_email', { p_email: buyerEmailForLookup });
+            if (verifiedOwner) {
+                await supabase.from('orders').update({ user_id: verifiedOwner }).eq('id', existingOrder.id).is('user_id', null);
+                await supabase.from('deliveries').update({ customer_id: verifiedOwner }).eq('order_id', existingOrder.id).is('customer_id', null);
+                resolvedUserId = verifiedOwner;
+                console.log('completeOrderPayment: guest order linked to verified account for order', existingOrder.id);
             }
-            if (buyerProfile?.user_id) resolvedUserId = buyerProfile.user_id;
         } catch (e) { console.warn('completeOrderPayment: user_id backfill error:', e.message); }
     }
 
@@ -86,7 +88,10 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     // `onConflict` + `ignoreDuplicates` makes this INSERT ... ON CONFLICT DO
     // NOTHING — a defensive guard against ITN retries re-delivering the same
     // token, not an update path (last_used_at is only ever set by an actual
-    // charge in charge-payfast-token.js, never here).
+    // charge in charge-payfast-token.js, never here). A guest with no
+    // verified account yet keeps the token on the order (pf_response); it is
+    // added to their saved cards when they confirm this email
+    // (claim_my_email_orders).
     if (pfData.token && resolvedUserId) {
         try {
             const { error: pmErr } = await supabase.from('payment_methods')

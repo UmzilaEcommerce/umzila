@@ -693,20 +693,7 @@
          never competes for width. Confirmed real gap: before this rule,
          mobile buyers had zero path to pay with a new card once one was
          already saved. */
-      .mobile-pay-bar.has-saved-card {
-        flex-wrap: wrap;
-      }
-      .mobile-pay-bar.has-saved-card #payNowBtnMobile {
-        flex: 1 1 100%;
-        order: 3;
-        background: none !important;
-        color: var(--muted) !important;
-        box-shadow: none !important;
-        padding: 4px !important;
-        font-size: 13px !important;
-        min-height: auto;
-        text-decoration: underline;
-      }
+      .pay-secure-line { display: none; }
     }
     @media (min-width: 769px) {
       .mobile-pay-bar, .mobile-pay-trust { display: none; }
@@ -867,17 +854,47 @@
     }
     .more-options-disclosure[open] > summary::before { transform: rotate(90deg); }
 
-    /* Saved-card fast path is the dominant CTA when available — regular
-       Pay Now demotes to a plain link underneath instead of two
-       equal-weight buttons. */
-    .has-saved-card #payNowBtn {
-      background: none !important;
-      color: var(--muted) !important;
-      box-shadow: none !important;
-      padding: 10px !important;
-      font-size: 14px !important;
-      text-decoration: underline;
-    }
+    /* ── PAY PANEL (2026-10-04) ── */
+    .pay-panel { margin-top: 18px; border-top: 1px solid #eee; padding-top: 18px; }
+    .pay-panel-h { font-weight: 800; font-size: 17px; margin-bottom: 12px; color: var(--text, #1a1a2e); }
+    .pay-choices { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .pay-choice { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: #fff; border: 2px solid #e3e8f2; border-radius: 14px; padding: 13px 14px; cursor: pointer; font-family: inherit; font-size: 15px; color: #1a1a2e; min-height: 56px; transition: border-color .15s, background .15s; }
+    .pay-choice:hover { border-color: #c9d3e6; }
+    .pay-choice .pc-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #b8c2d6; flex-shrink: 0; position: relative; }
+    .pay-choice.selected { border-color: var(--accent); background: #f5f8ff; }
+    .pay-choice.selected .pc-radio { border-color: var(--accent); }
+    .pay-choice.selected .pc-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+    .pay-choice .pc-ico { font-size: 20px; line-height: 1; }
+    .pay-choice .pc-text { display: flex; flex-direction: column; min-width: 0; }
+    .pay-choice .pc-text strong { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pay-choice .pc-text small { color: var(--muted); font-size: 12px; }
+    .new-card-box { background: #f7f9fc; border: 1px solid #e8edf5; border-radius: 14px; padding: 14px; margin-bottom: 12px; }
+    .new-card-note { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .save-switch { display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 4px 0; }
+    .save-switch input { position: absolute; opacity: 0; pointer-events: none; }
+    .save-switch-ui { width: 46px; height: 28px; border-radius: 14px; background: #cfd6e3; position: relative; flex-shrink: 0; transition: background .2s; }
+    .save-switch-ui::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.2); transition: transform .2s; }
+    .save-switch input:checked + .save-switch-ui { background: #16a34a; }
+    .save-switch input:checked + .save-switch-ui::after { transform: translateX(18px); }
+    .save-switch input:focus-visible + .save-switch-ui { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .save-switch-text { display: flex; flex-direction: column; }
+    .save-switch-text strong { font-size: 15px; }
+    .save-switch-text small { font-size: 12px; color: var(--muted); }
+    .card-name-group { margin: 12px 0 0; }
+    .card-name-hint { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .note-disclosure { margin: 2px 0 10px; }
+    .note-disclosure > summary { list-style: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--accent); padding: 8px 0; min-height: 40px; display: flex; align-items: center; }
+    .note-disclosure > summary::-webkit-details-marker { display: none; }
+    .note-disclosure[open] > summary { color: var(--muted); }
+    .optin-row { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; cursor: pointer; padding: 6px 0 12px; }
+    .optin-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+    .optin-row small { color: var(--muted); }
+    .terms-line { font-size: 12.5px; color: var(--muted); text-align: center; margin: 4px 0 10px; line-height: 1.5; }
+    .terms-hidden-box { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    #termsAcceptedNote { display: none !important; }
+    .pay-btn-row { margin: 0; text-align: center; }
+    .pay-main-btn { width: 100%; padding: 16px 20px !important; font-size: 17px !important; font-weight: 800 !important; border-radius: 14px !important; background: var(--cta) !important; min-height: 56px; }
+    .pay-secure-line { text-align: center; font-size: 12px; color: var(--muted); margin-top: 10px; }
 
     /* Foldable card switcher — folded row is just this button; the list
        underneath only unhides when #cardSwitcherToggle is expanded. */
@@ -925,9 +942,7 @@
        default and only *closing* it on mobile via one line of JS (see
        setupEventListeners) is the reliable approach, not fighting it with
        CSS the other way. */
-    @media (min-width: 769px) {
-      .more-options-disclosure > summary { display: none; }
-    }
+
 
     /* Address autocomplete suggestions */
     .address-suggestions {
@@ -1542,97 +1557,63 @@
             </div>
           </div>
 
-          <!-- Order notes + "save my card" are real but non-essential to a
-               fast checkout — grouped under a disclosure. Native <details>
-               so no JS is needed; CSS forces it open on desktop where
-               there's no space pressure, native collapse-by-default on
-               mobile (see MORE-OPTIONS rules). -->
-          <details id="moreOptionsDisclosure" class="more-options-disclosure" open>
-            <summary>More options</summary>
-            <div class="form-group">
-              <label class="form-label">Order Notes (Optional)</label>
-              <textarea id="orderNotes" class="form-control" rows="3" placeholder="Any special notes for your order"></textarea>
-            </div>
+          <!-- PAY PANEL (redesigned 2026-10-04): one clear choice of card, the
+               save switch on by default with its nickname right under it, a
+               small "add a note" link, and ONE button whose label matches the
+               choice. Pressing it is the agreement to the Terms (the line
+               sits right above it) — no box to think about. All element ids
+               the rest of the page uses are kept. -->
+          <div class="pay-panel" id="payPanel">
+            <div class="pay-panel-h">How do you want to pay?</div>
 
-            <div class="form-group" id="saveCardCheckboxGroup">
-              <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                <input type="checkbox" id="saveCardCheckbox" style="width: auto;">
-                <span>Save my card for faster checkout next time</span>
+            <!-- Saved cards (signed in, 1+ cards) + "A new card" — renderPayChoices() -->
+            <div id="payChoices" class="pay-choices hidden" role="radiogroup" aria-label="Choose a card"></div>
+
+            <div id="newCardBox" class="new-card-box">
+              <div class="new-card-note"><svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>You'll type your card details on PayFast's secure page next.</div>
+              <label class="save-switch" id="saveCardCheckboxGroup">
+                <input type="checkbox" id="saveCardCheckbox" checked>
+                <span class="save-switch-ui" aria-hidden="true"></span>
+                <span class="save-switch-text"><strong>Save this card</strong><small id="saveCardSub">Pay in one tap next time.</small></span>
               </label>
+              <div class="form-group card-name-group" id="cardNameGroup">
+                <label class="form-label" for="cardNameInput">Card nickname</label>
+                <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. FNB debit, Mom's Visa" maxlength="40" autocomplete="off">
+                <div class="card-name-hint">So you can pick it next time — you can save as many cards as you like.</div>
+              </div>
             </div>
-          </details>
 
-          <!-- PayFast never returns a masked card number, so a buyer-chosen
-               name is the only way to tell saved cards apart in the switcher.
-               Shown once "save my card" is ticked (first-timer) or, once at
-               least one card is already saved, unconditionally every time
-               this "different card" redirect path is used — see
-               loadProfileData()/the saveCardCheckbox change listener. -->
-          <div class="form-group hidden" id="cardNameGroup">
-            <label class="form-label" for="cardNameInput">Name this card (optional)</label>
-            <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. My Debit Card" maxlength="40">
-          </div>
+            <details id="moreOptionsDisclosure" class="note-disclosure">
+              <summary>+ Add a note for the store or rider</summary>
+              <textarea id="orderNotes" class="form-control" rows="2" placeholder="e.g. Gate code 1234, call when outside"></textarea>
+            </details>
 
-          <!-- Terms + marketing opt-in always visible on every breakpoint —
-               never hide a consent checkbox behind a disclosure. Kept
-               visually distinct from each other (divider) so opting into
-               marketing never reads as bundled into agreeing to the order.
-               A signed-in buyer who already accepted terms on a prior order
-               (profiles.terms_accepted_at set) sees this pre-checked and
-               locked instead of re-asked — see applyTermsConsentUI(). -->
-          <div class="form-group" id="termsAgreementGroup">
-            <label class="checkbox-row">
-              <input type="checkbox" id="termsAgreement" required style="width: auto;">
-              <span id="termsAgreementText">I agree to the <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a></span>
+            <label class="optin-row" id="marketingOptInGroup">
+              <input type="checkbox" id="marketingOptIn" checked>
+              <span>Send me deals from Umzila shops <small>(unsubscribe anytime)</small></span>
             </label>
-            <div id="termsAcceptedNote" class="hidden" style="font-size:12px;color:var(--text-muted,#888);margin-top:4px;margin-left:26px;"></div>
-          </div>
 
-          <div class="consent-divider"></div>
+            <div id="paymentError" class="error-message hidden"></div>
 
-          <div class="form-group" id="marketingOptInGroup">
-            <label class="checkbox-row">
-              <input type="checkbox" id="marketingOptIn" style="width: auto;">
-              <span>Send me deals from shops (unsubscribe anytime)</span>
-            </label>
-          </div>
+            <!-- Old switcher kept (hidden) — the choices above replace it. -->
+            <div class="hidden" id="cardSwitcherGroup">
+              <button type="button" id="cardSwitcherToggle"><span id="cardSwitcherSelectedText"></span></button>
+              <div id="cardSwitcherList"></div>
+            </div>
 
-          <div id="paymentError" class="error-message hidden"></div>
+            <div class="terms-line" id="termsAgreementGroup">
+              <input type="checkbox" id="termsAgreement" class="terms-hidden-box" tabindex="-1" aria-hidden="true">
+              <span id="termsAgreementText">By paying you agree to Umzila's <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a>.</span>
+              <div id="termsAcceptedNote" class="hidden"></div>
+            </div>
 
-          <!-- Foldable card switcher — only rendered (see renderCardSwitcher())
-               once 2+ cards are saved; with exactly one, there's nothing to
-               switch between so this stays hidden and "Pay with saved card"
-               below just charges that one card. Deliberately a sibling of
-               #savedCardGroup / .pay-now-inline-wrapper, NOT nested inside
-               either — both of those are force-hidden on mobile (see the
-               .pay-now-inline-wrapper, #savedCardGroup rule), and the
-               switcher must stay visible there too. -->
-          <div class="form-group hidden" id="cardSwitcherGroup" style="margin-bottom:12px;padding:12px 16px;background:#f0f4ff;border-radius:10px">
-            <button type="button" id="cardSwitcherToggle" class="card-switcher-toggle">
-              <span style="font-size:14px;color:#1a1a2e;text-align:left">
-                <svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Paying with:</strong> <span id="cardSwitcherSelectedText"></span>
-              </span>
-              <span class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Switch</span>
-            </button>
-            <div id="cardSwitcherList" class="hidden" style="margin-top:10px"></div>
-          </div>
-
-          <!-- Saved-card fast path becomes the dominant CTA once it's
-               available (checkoutSection.has-saved-card, toggled in JS
-               alongside savedCardGroup's own visibility) — the regular Pay
-               Now demotes to a plain "pay another way" link underneath it
-               instead of two equally-weighted buttons competing. -->
-          <div class="form-group" id="savedCardGroup" style="display:none">
-            <button type="button" id="payWithSavedCardBtn" class="btn" style="width:100%;padding:14px;background:var(--color-ink-navy,#0a2f66)">
-              Pay with saved card
-            </button>
-          </div>
-
-          <div class="text-center mt-4 pay-now-inline-wrapper">
-            <button id="payNowBtn" class="btn" style="padding: 15px 50px; font-size: 18px; background: var(--cta);">
-              Pay Now
-            </button>
-            <div class="text-muted mt-3" style="font-size: 12px;">
+            <div class="form-group pay-btn-row" id="savedCardGroup" style="display:none">
+              <button type="button" id="payWithSavedCardBtn" class="btn pay-main-btn">Agree &amp; pay</button>
+            </div>
+            <div class="pay-now-inline-wrapper pay-btn-row">
+              <button id="payNowBtn" class="btn pay-main-btn">Agree &amp; pay</button>
+            </div>
+            <div class="pay-secure-line">
               <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
             </div>
           </div>
@@ -1671,12 +1652,12 @@
        The equivalent "Secured by PayFast" trust line (normally part of the
        inline Pay Now wrapper, which is hidden on mobile) is re-shown here. -->
   <div class="mobile-pay-trust">
-    <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
+    By paying you agree to the Terms &amp; Privacy Policy · <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
   </div>
   <div class="mobile-pay-bar" id="mobilePayBar">
     <span class="mobile-pay-bar-total amount-roll" id="mobilePayBarTotal">R0.00</span>
-    <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--color-ink-navy,#0a2f66)">Pay with saved card</button>
-    <button type="button" id="payNowBtnMobile" class="btn" style="background:var(--cta)">Pay Now</button>
+    <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--cta)">Agree &amp; pay</button>
+    <button type="button" id="payNowBtnMobile" class="btn" style="background:var(--cta)">Agree &amp; pay</button>
   </div>
 
   <!-- PayFast Form (Hidden) -->
@@ -2395,43 +2376,7 @@
       renderContactCard();
       refreshEstimatedTime();
 
-      // Offer the one-click "pay with saved card" fast-path once this buyer
-      // has at least one saved payment_methods row. has-saved-card also
-      // demotes the regular Pay Now button visually (see .has-saved-card
-      // #payNowBtn) so the two CTAs aren't competing.
-      const savedCardGroup = document.getElementById('savedCardGroup');
-      const hasEverSavedCard = state.paymentMethods.length > 0;
-      if (savedCardGroup) savedCardGroup.style.display = hasEverSavedCard ? '' : 'none';
-      elements.checkoutSection?.classList.toggle('has-saved-card', hasEverSavedCard);
-      document.getElementById('payWithSavedCardBtnMobile')?.classList.toggle('hidden', !hasEverSavedCard);
-      // No longer force-hidden on mobile once a card exists — relabeled and
-      // demoted instead (see .mobile-pay-bar.has-saved-card #payNowBtnMobile)
-      // so mobile buyers keep a real path to pay with a different card.
-      document.getElementById('mobilePayBar')?.classList.toggle('has-saved-card', hasEverSavedCard);
-
-      // Once a card is already saved, "save my card for next time" has
-      // nothing left to offer — hide it entirely instead of re-asking, and
-      // every future checkout auto-saves silently (see the subscription_type
-      // assignment in submitToPayFast()). Guests never reach here
-      // (loadProfileData only runs after a profile loads), so this never
-      // affects the guest checkout.
-      elements.saveCardCheckboxGroup?.classList.toggle('hidden', hasEverSavedCard);
-
-      // The regular Pay button becomes the "pay another way" fallback once a
-      // saved card exists — relabel both the desktop and mobile copies of it
-      // (CSS alone can only restyle, not change the text).
-      const payNowLabel = hasEverSavedCard ? 'Want to use a different card?' : 'Pay Now';
-      if (elements.payNowBtn) elements.payNowBtn.textContent = payNowLabel;
-      const payNowBtnMobileEl = document.getElementById('payNowBtnMobile');
-      if (payNowBtnMobileEl) payNowBtnMobileEl.textContent = payNowLabel;
-
-      // Card-naming input: unconditional once a card already exists (nothing
-      // left to opt into, tokenization is now automatic); for a first-timer
-      // it only appears once "save my card" is ticked — see the
-      // saveCardCheckbox change listener.
-      elements.cardNameGroup?.classList.toggle('hidden', !hasEverSavedCard && !elements.saveCardCheckbox?.checked);
-
-      renderCardSwitcher();
+      renderPayChoices();
 
       // Signed-in buyer: don't re-ask for consent already on file.
       // Terms/privacy acceptance is remembered via profiles.terms_accepted_at;
@@ -2441,6 +2386,65 @@
         applyTermsConsentUI();
         checkMarketingOptInVisibility();
       }
+    }
+
+    // ── Pay panel: which card, save switch, one matching button ──
+    // state.payWithNewCard: false = charge the selected saved card,
+    // true = PayFast redirect with a new card (saved if the switch is on).
+    function renderPayChoices() {
+      const box = document.getElementById('payChoices');
+      const cards = state.paymentMethods || [];
+      if (!box) return;
+      if (!cards.length) {
+        state.payWithNewCard = true;
+        box.classList.add('hidden');
+        box.innerHTML = '';
+      } else {
+        // Most recent saved card is the default until the buyer picks something.
+        if (!state.payChoiceTouched) state.payWithNewCard = false;
+        if (!cards.some(c => c.id === state.selectedPaymentMethodId)) state.selectedPaymentMethodId = cards[0].id;
+        const when = c => c.last_used_at ? 'Last used ' + formatSAST(c.last_used_at, { day: 'numeric', month: 'short' })
+                                          : 'Saved ' + formatSAST(c.created_at, { day: 'numeric', month: 'short', year: 'numeric' });
+        box.innerHTML = cards.map(c => `
+          <button type="button" class="pay-choice${!state.payWithNewCard && c.id === state.selectedPaymentMethodId ? ' selected' : ''}" role="radio" aria-checked="${!state.payWithNewCard && c.id === state.selectedPaymentMethodId}" data-card-id="${escapeHtmlLite(c.id)}">
+            <span class="pc-radio"></span><span class="pc-ico">💳</span>
+            <span class="pc-text"><strong>${escapeHtmlLite(paymentMethodLabel(c))}</strong><small>${escapeHtmlLite(when(c))}</small></span>
+          </button>`).join('') + `
+          <button type="button" class="pay-choice${state.payWithNewCard ? ' selected' : ''}" role="radio" aria-checked="${!!state.payWithNewCard}" data-card-id="new">
+            <span class="pc-radio"></span><span class="pc-ico">➕</span>
+            <span class="pc-text"><strong>A new card</strong><small>Enter it securely on PayFast</small></span>
+          </button>`;
+        box.classList.remove('hidden');
+      }
+      syncPayChoice();
+    }
+    function syncPayChoice() {
+      const useSaved = !state.payWithNewCard && (state.paymentMethods || []).length > 0;
+      const card = useSaved ? state.paymentMethods.find(c => c.id === state.selectedPaymentMethodId) : null;
+      document.getElementById('newCardBox')?.classList.toggle('hidden', useSaved);
+      const saving = !!elements.saveCardCheckbox?.checked;
+      elements.cardNameGroup?.classList.toggle('hidden', !saving);
+      const sub = document.getElementById('saveCardSub');
+      if (sub) sub.textContent = state.user
+        ? 'Pay in one tap next time.'
+        : 'Pay in one tap next time you sign in with this email.';
+      const savedLabel = card ? `Agree & pay with ${paymentMethodLabel(card)}` : 'Agree & pay';
+      const newLabel = 'Agree & pay';
+      const savedGroup = document.getElementById('savedCardGroup');
+      if (savedGroup) savedGroup.style.display = useSaved ? '' : 'none';
+      document.querySelector('.pay-now-inline-wrapper')?.classList.toggle('hidden', useSaved);
+      const sBtn = document.getElementById('payWithSavedCardBtn'); if (sBtn && !sBtn.classList.contains('is-processing')) sBtn.textContent = savedLabel;
+      if (elements.payNowBtn && !elements.payNowBtn.classList.contains('is-processing')) elements.payNowBtn.textContent = newLabel;
+      const sM = document.getElementById('payWithSavedCardBtnMobile'), nM = document.getElementById('payNowBtnMobile');
+      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!sM.classList.contains('is-processing')) sM.textContent = card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'; }
+      if (nM) { nM.classList.toggle('hidden', useSaved); if (!nM.classList.contains('is-processing')) nM.textContent = newLabel; }
+    }
+    // Pressing Pay is the agreement to the Terms (the line sits right above
+    // the button) — tick the kept checkbox so validation + terms_accepted_at
+    // recording work exactly as before.
+    function agreeAndRun(fn) {
+      if (elements.termsAgreement && !elements.termsAgreement.disabled) elements.termsAgreement.checked = true;
+      fn();
     }
 
     // A buyer-chosen name, falling back to "Card added {date}" at render
@@ -4945,8 +4949,8 @@ async function submitToPayFast(cartItems, orderId, total) {
   // is unconditional from that point on; a first-timer still opts in via
   // the checkbox. Left unset for every ordinary checkout otherwise, matching
   // generate-payfast-signature.js's additive fields.
-  const hasEverSavedCard = state.paymentMethods && state.paymentMethods.length > 0;
-  if (hasEverSavedCard || document.getElementById('saveCardCheckbox')?.checked) {
+  // "Save this card" switch — on by default, the buyer can switch it off.
+  if (document.getElementById('saveCardCheckbox')?.checked) {
     payload.subscription_type = 2;
   }
 
@@ -5140,7 +5144,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // "the token only arrives later via ITN" — read back by
                 // completeOrderPayment() when it inserts the payment_methods
                 // row. Harmless when no card ends up getting tokenized.
-                pending_card_name: (elements.cardNameInput?.value || '').trim().substring(0, 100) || null,
+                pending_card_name: elements.saveCardCheckbox?.checked ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || null) : null,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
@@ -5492,13 +5496,22 @@ async function submitToPayFast(cartItems, orderId, total) {
       // Pay now button
       elements.payNowBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        processPayment();
+        agreeAndRun(processPayment);
+      });
+      document.getElementById('payChoices')?.addEventListener('click', (e) => {
+        const b = e.target.closest('.pay-choice');
+        if (!b) return;
+        state.payChoiceTouched = true;
+        if (b.dataset.cardId === 'new') state.payWithNewCard = true;
+        else { state.payWithNewCard = false; state.selectedPaymentMethodId = b.dataset.cardId; }
+        renderPayChoices();
+        if (state.payWithNewCard) document.getElementById('newCardBox')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
 
       // Pay with saved card button (one-click, shown only when a token is on file)
       document.getElementById('payWithSavedCardBtn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        payWithSavedCard();
+        agreeAndRun(payWithSavedCard);
       });
 
       // Foldable card switcher — fold/unfold, and select a card from the list.
@@ -5516,9 +5529,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       // First-timer only: the name input only makes sense once they've
       // opted into saving a card at all (once a card already exists, the
       // input is shown unconditionally by loadProfileData() instead).
-      elements.saveCardCheckbox?.addEventListener('change', () => {
-        elements.cardNameGroup?.classList.toggle('hidden', !elements.saveCardCheckbox.checked);
-      });
+      elements.saveCardCheckbox?.addEventListener('change', syncPayChoice);
 
       // Order summary item-list accordion — applies on every breakpoint now
       // (see .order-summary:not(.expanded) #orderSummaryBody in the CSS).
@@ -5540,22 +5551,18 @@ async function submitToPayFast(cartItems, orderId, total) {
 
       
 
-      // "More options" ships open (so desktop needs no JS at all) — close it
-      // by default only on mobile, where it should start collapsed. The
-      // native <summary> click still opens/closes it from there either way.
-      if (window.innerWidth < 769) {
-        document.getElementById('moreOptionsDisclosure')?.removeAttribute('open');
-      }
 
       // Sticky mobile Pay bar — same handlers as the full-size buttons above.
       document.getElementById('payNowBtnMobile')?.addEventListener('click', (e) => {
         e.preventDefault();
-        processPayment();
+        agreeAndRun(processPayment);
       });
       document.getElementById('payWithSavedCardBtnMobile')?.addEventListener('click', (e) => {
         e.preventDefault();
-        payWithSavedCard();
+        agreeAndRun(payWithSavedCard);
       });
+      // Guests (and anyone before the profile loads) get the new-card panel.
+      renderPayChoices();
 
       // Apply promo code button
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
