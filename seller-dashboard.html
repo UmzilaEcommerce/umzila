@@ -2489,6 +2489,9 @@
                   if (!detailsRes.ok) return;
                   var details = await detailsRes.json();
                   var props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
+                  // Street-level match (HERE doesn't know that exact number):
+                  // keep the house number the buyer typed.
+                  if (!props.housenumber) { var typedNo = query.match(/^s*(d+[A-Za-z]?)/); if (typedNo) props.housenumber = typedNo[1]; }
                   var geometry = (Number.isFinite(details.lat) && Number.isFinite(details.lon))
                     ? { type: 'Point', coordinates: [details.lon, details.lat] }
                     : null;

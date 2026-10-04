@@ -963,6 +963,9 @@
                 if (!detailsRes.ok) return;
                 const details = await detailsRes.json();
                 const props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
+                  // Street-level match (HERE doesn't know that exact number):
+                  // keep the house number the buyer typed.
+                  if (!props.housenumber) { const typedNo = query.match(/^s*(d+[A-Za-z]?)/); if (typedNo) props.housenumber = typedNo[1]; }
                 const geometry = Number.isFinite(details.lat) && Number.isFinite(details.lon)
                   ? { type: 'Point', coordinates: [details.lon, details.lat] }
                   : null;

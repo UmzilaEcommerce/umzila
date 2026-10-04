@@ -4,6 +4,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Address search tuned on real Durban addresses (keys live)
+
+With `HERE_API_KEY`/`ORS_API_KEY` added, tested real searches. HERE Autocomplete alone: exact house numbers for "400 Umgeni Road", "35 Musgrave Road", "10 Problem Mkhize Road", "5 Jan Hofmeyr Road Westville" — but "12 Florida Road" ranked Evander (Mpumalanga) first, anything with the suburb typed ("120 Florida Road Morningside", "1 Ridge Road Umbilo") returned **nothing**, and places by name ("Gateway", "Wushwini Arts Centre") weren't found.
+
+**Changed (`address-search.js`):** results limited to the Durban metro (80 km circle); when Autocomplete finds fewer than 3, HERE Discover (free-text) runs in the same area and is merged — now "120 Florida Road Morningside" → 120 Florida Rd, "1 Ridge Road Umbilo" → 1 Peter Mokaba Ridge (the road's new name), Gateway / Wushwini Art Centre / The Pavilion found; places show their name first. Pages (checkout, profile, seller dashboard): when HERE only knows the street, the house number the buyer typed is kept.
+
+**Verified on a draft deploy with the real keys:** the searches above; lookup of 35 Musgrave Rd → exact coordinates; a real OpenRouteService quote from Velaphi → 4.15 km → **R20.61** (payout formula), second quote from the cache. Real customer quotes were already filling the cache (Velaphi → Westville, 16 km). Test quotes deleted.
+
+**Pricing note for the founder:** live quotes are the driver-payout formula (R4 + R4/km, min R20, margin 0%), so short trips now price *below* the R42.50 fallback (≈R20 at 4 km, ≈R44 at 10 km, ≈R68 at 16 km). Raise `margin_percent` (admin → Delivery Pricing) to add profit on top.
+
+---
+
 ## 2026-10-04 — Delivery: R42.50 fallback, HERE address search, OpenRouteService distance with a permanent cache (Google removed)
 
 **Asked for:** remove Photon address suggestions; use HERE Geocoding & Search (better Durban house-number coverage); price delivery by OpenRouteService distance (traffic doesn't change distance); only use HERE/TomTom for times if times are shown; cache distances so usage stays far below free limits; and first, fix the fallback so a medium parcel (e.g. any Velaphi plate) is R42.50 when live pricing isn't available.
