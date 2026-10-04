@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Seller orders auto-refresh + product-first cards, notes everywhere, widget clears after delivery, one job per rider, seller activation by application
+
+**Reported (founder):** the test item (said to be at 0) was still orderable; the home widget stays after delivery; seller orders need manual refresh and should lead with what was ordered (buyer's full name to tell orders apart at pickup); checkout notes should show everywhere; can a rider take several orders at once / multi-stop routes?; switch seller activation to the application's account; hide the test item; free delivery off.
+
+**Findings & changes:**
+- **Stock was right:** 2 → 0 after the two founder test orders; it was restocked to 3 for the saved-card test and the third order came after that (now 2). The test item is now hidden, stock 0, free delivery off.
+- **Home widget** re-checks every minute while the page is open and shows "Order delivered ✓" for only 5 minutes after the PIN (was 2 hours; and it never updated without a reload).
+- **Seller dashboard orders:** refresh themselves every 3 minutes and when the tab is reopened ("Updates automatically · last checked …"), with a "🛎 New order — <name>" alert and a highlighted card. Each card now leads with the products (big "2× Quarter chicken & chips", size), labelled "For <buyer's full name>" + time + short ref, the buyer's note highlighted, and phone / area / amount / paid on one small line.
+- **Checkout note everywhere:** seller cards, rider job screen (already), logistics detail (already), admin → Deliveries (new "Customer & note" column), customer profile order card ("Your note"), tracking page (`get_delivery_tracking` now also returns `delivery_note`), confirmation + seller emails (already).
+- **Several orders per rider — not safe yet, now prevented:** an order with several stores (one customer) works end-to-end. But (1) the batching path (`lib/batch-dispatch.js`) could offer a moving rider a second customer, while `advance-route.js` and the rider screen only progress ONE delivery per route — an accepted batch would leave the added order stuck; (2) `find_nearest_eligible_drivers` didn't skip riders already on a route or holding an open offer, so a busy rider could get a second route and the rider screen would show only the newer one. Batching is switched off (`BATCHING_ENABLED = false`) and busy riders are skipped; waiting orders go to the next free rider (the heartbeat re-offers them). Proper multi-drop routes = a follow-up build.
+- **Seller activation (payfast-itn.js):** the enrollment payment now activates the store linked to the application (`sellers.application_id`, set by initiate-seller-enrollment) instead of looking the user up by `profiles.email` (user-editable).
+
+**Files:** `index.html`, `seller-dashboard.html`, `admin.html`, `profile.html`, `track.html`, `netlify/functions/payfast-itn.js`, `netlify/functions/lib/batch-dispatch.js`; migrations `tracking_returns_delivery_note`, `one_job_per_rider_until_multi_drop`.
+
+---
+
 ## 2026-10-04 — Checkout pay section redesigned (save card by default, named cards); saved cards can't be hijacked via profile email
 
 **Asked for (founder, after confirming saved-card payments work live):** make people more likely to save their card, let them name it and pick it by name next time, confirm whether several cards can be saved, and make the bottom of checkout uncluttered and flowing — no thinking about boxes.

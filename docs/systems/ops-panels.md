@@ -71,6 +71,14 @@ These live in `attentionReason()` in logistics and `liveWhy()` in admin. Keep th
 - PIN locked.
 - Failed.
 
+## One job per rider (for now)
+
+`advance-route.js` and the rider screen progress **one delivery per route** (an order from several stores is fine — several pickups, one drop). So:
+- `find_nearest_eligible_drivers` skips riders with an open route (assigned/started/active/completing) or a pending offer;
+- batch offers (`lib/batch-dispatch.js`) are disabled with `BATCHING_ENABLED = false`.
+
+Building multi-drop routes means: per-drop actions in `advance-route.js` (each delivery's own transitions + PIN), route completion only after the last drop, `get_driver_board()` already returns every stop, and the rider screen must list the drops in order with each customer's name. Only then turn batching back on and relax the busy-rider filter.
+
 ## Gotchas
 
 - **`saveOrder()` in logistics** must never write `user_id`, `created_at` or `payment_status` on an existing order. It writes `order_status` only when `statusChanged` is set by the status buttons. It used to hand the customer's order to the rep and overwrite `paid`.

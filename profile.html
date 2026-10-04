@@ -1511,6 +1511,7 @@
       <div class="order-body">
         ${refundTimerHtml}
         ${addrHtml}
+        ${(o.delivery_instructions || o.notes) ? `<div style="margin:6px 0 8px;background:#fffbeb;border:1px solid #fde68a;color:#78350f;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:600">📝 Your note: ${esc(o.delivery_instructions || o.notes)}</div>` : ''}
         ${itemsHtml || '<div style="color:var(--muted);font-size:13px;padding:8px 0">No item details available.</div>'}
         <div class="order-actions">
           <a class="wa-order-btn" href="${esc(waLink(waMsg))}" target="_blank" rel="noopener noreferrer">

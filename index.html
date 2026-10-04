@@ -1090,6 +1090,16 @@
       if (!sb) return;
       var widget = document.getElementById('activeDeliveryWidget');
       if (!widget) return;
+      // Re-checked every minute so the widget follows the delivery while the
+      // page stays open (it used to show the state from page load forever).
+      var claimedOnce = false;
+      async function refreshWidget() {
+        var show = await computeWidget();
+        if (!show) widget.style.display = 'none';
+      }
+      refreshWidget();
+      setInterval(function() { if (!document.hidden) refreshWidget(); }, 60000);
+      async function computeWidget() {
       try {
         var sessionRes = await sb.auth.getSession();
         var user = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user;
@@ -1106,8 +1116,9 @@
         if (user) {
           // Link this account's guest orders: by confirmed email, and any
           // tracking link saved on this device (token + same email).
-          try { await sb.rpc('claim_my_email_orders'); } catch (e) {}
-          for (var i = 0; i < links.length; i++) {
+          if (!claimedOnce) { try { await sb.rpc('claim_my_email_orders'); } catch (e) {} }
+          claimedOnce = true;
+          for (var i = 0; !claimedOnce && i < links.length; i++) {
             try { await sb.rpc('claim_order_with_token', { p_order_id: links[i].o, p_token: links[i].t }); } catch (e) {}
           }
           var res = await sb.from('deliveries')
@@ -1141,13 +1152,15 @@
         var ARRIVING = ['ARRIVING', 'PIN_REQUIRED'];
 
         if (d.status === 'DELIVERED') {
-          // Only show the transient "delivered" transform for a couple of
-          // hours -- after that it correctly stops occupying homepage real
-          // estate at all, per §50 ("no need to permanently occupy...").
+          // "Delivered" shows for 5 minutes after the PIN is confirmed, then
+          // the widget goes away (founder 2026-10-04) — also on a page that
+          // stays open past that point.
+          var DELIVERED_SHOW_MS = 5 * 60 * 1000;
           var deliveredMs = d.delivered_at ? (Date.now() - new Date(d.delivered_at).getTime()) : Infinity;
-          if (deliveredMs > 2 * 60 * 60 * 1000) return;
+          if (deliveredMs > DELIVERED_SHOW_MS) return;
           statusEl.textContent = 'Order delivered ✓';
           iconEl.textContent = '✅';
+          setTimeout(function() { widget.style.display = 'none'; }, DELIVERED_SHOW_MS - deliveredMs);
         } else if (ARRIVING.indexOf(d.status) !== -1) {
           statusEl.textContent = "Your driver has arrived";
           iconEl.textContent = '📍';
@@ -1166,8 +1179,11 @@
 
         widget.href = href || ('track.html?order=' + encodeURIComponent(d.order_id));
         widget.style.display = '';
+        return true;
       } catch (e) {
         console.warn('active delivery widget failed to load', e);
+        return widget.style.display !== 'none'; // keep what's shown on a network blip
+      }
       }
     });
 

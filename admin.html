@@ -4842,7 +4842,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('deliveries')
-        .select('id, order_id, status, created_at, dispatched_at, delivered_at, orders(order_number)')
+        .select('id, order_id, status, created_at, dispatched_at, delivered_at, delivery_instructions, orders(order_number, customer_name, notes)')
         .order('created_at', { ascending: false })
         .limit(50);
       if(error){ console.warn('loadDeliveriesList error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load deliveries</p>'; return; }
@@ -4877,18 +4877,19 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     mount.innerHTML = `<h3 style="margin-bottom:8px">Recent Deliveries</h3>
       <div style="overflow:auto">
         <table id="deliveriesTable">
-          <thead><tr><th>Order</th><th>Status</th><th>Created</th><th>Dispatched</th><th>Delivered</th></tr></thead>
+          <thead><tr><th>Order</th><th>Customer &amp; note</th><th>Status</th><th>Created</th><th>Dispatched</th><th>Delivered</th></tr></thead>
           <tbody>${deliveriesListCache.map(d => {
             const ref = (d.orders && d.orders.order_number) ? d.orders.order_number : d.order_id;
             return `<tr class="delivery-row" data-delivery-id="${escapeHtml(d.id)}" style="cursor:pointer">
               <td>${escapeHtml(String(ref))}</td>
+              <td style="white-space:normal;max-width:260px">${escapeHtml((d.orders && d.orders.customer_name) || '—')}${(d.delivery_instructions || (d.orders && d.orders.notes)) ? `<div style="font-size:12px;color:#92400e">📝 ${escapeHtml(d.delivery_instructions || d.orders.notes)}</div>` : ''}</td>
               <td>${deliveryStatusBadge(d.status)}</td>
               <td>${fmt(d.created_at)}</td>
               <td>${fmt(d.dispatched_at)}</td>
               <td>${fmt(d.delivered_at)}</td>
             </tr>
             <tr class="delivery-timeline-row" data-delivery-timeline-for="${escapeHtml(d.id)}" style="display:none">
-              <td colspan="5" style="background:#f9fafb;padding:14px 18px"></td>
+              <td colspan="6" style="background:#f9fafb;padding:14px 18px"></td>
             </tr>`;
           }).join('')}</tbody>
         </table>

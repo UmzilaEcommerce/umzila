@@ -576,6 +576,7 @@
           </div>
         </div>
         ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
+        ${row.delivery_note ? `<div class="t-card" style="background:#fffbeb;border:1px solid #fde68a;color:#78350f;font-size:14px;font-weight:600">📝 Your note to the store &amp; rider: ${esc(row.delivery_note)}</div>` : ''}
         <div class="t-card" id="stepsCard"${isProblem ? ' hidden' : ''}><div id="stepsWrap"></div></div>
         <div class="t-card">
           <div id="mapMount"></div>

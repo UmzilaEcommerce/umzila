@@ -111,17 +111,20 @@ async function activateSellerEnrollment(supabase, pfData) {
             return;
         }
 
-        // Get user from profile (created before payment by initiate-seller-enrollment)
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('user_id')
-            .eq('email', email)
+        // The store row this payment is for: linked to the application by
+        // initiate-seller-enrollment (sellers.application_id). It used to be
+        // found via profiles.email, which any user can set to someone
+        // else's address — that could activate the wrong person's store.
+        const { data: sellerRow } = await supabase
+            .from('sellers')
+            .select('id, user_id')
+            .eq('application_id', applicationId)
             .maybeSingle();
 
-        const userId = profile?.user_id || null;
+        const userId = sellerRow?.user_id || null;
 
-        if (!userId) {
-            console.error('ITN seller activation: no profile found for email', email);
+        if (!sellerRow || !userId) {
+            console.error('ITN seller activation: no seller row linked to application', applicationId);
             return;
         }
 
@@ -129,7 +132,7 @@ async function activateSellerEnrollment(supabase, pfData) {
         const { error: sellerErr } = await supabase
             .from('sellers')
             .update({ status: 'active' })
-            .eq('user_id', userId);
+            .eq('id', sellerRow.id);
 
         if (sellerErr) {
             console.error('ITN seller activation: sellers update error', sellerErr);

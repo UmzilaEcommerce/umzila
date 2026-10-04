@@ -186,6 +186,20 @@
     /* ── Orders ── */
     .orders-list { display: flex; flex-direction: column; gap: 10px; }
     .order-row { padding: 14px 16px; background: #f9f9fb; border-radius: 10px; border: 1px solid #ebebf0; }
+    /* Order card (2026-10-04): what was ordered first, buyer's full name as the label that tells orders apart */
+    .oc { padding: 14px 16px; background: #fff; border-radius: 14px; border: 1px solid #e6e8ef; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+    .oc.oc-new { border-color: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.18); }
+    .oc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+    .oc-for { font-size: 13px; color: var(--text, #111); }
+    .oc-for strong { font-size: 16px; font-weight: 800; }
+    .oc-items { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 4px; }
+    .oc-item { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 700; line-height: 1.3; }
+    .oc-qty { color: var(--primary, #0a2f66); font-weight: 900; min-width: 30px; }
+    .oc-size { font-size: 13px; font-weight: 600; color: var(--muted); }
+    .oc-note { margin-top: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; border-radius: 10px; padding: 7px 10px; font-size: 13px; font-weight: 600; }
+    .oc-meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+    .oc .order-status-row { border-top: 1px solid #f0f1f5; padding-top: 10px; margin-top: 10px; }
+    .orders-autorefresh { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
     .order-row-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 4px; }
     .order-row-id { font-size: 12px; color: var(--muted); font-weight: 600; }
     .order-row-date { font-size: 12px; color: var(--muted); }
@@ -1081,6 +1095,7 @@
           </div>
         </div>
         <div id="ordersSubActivePanel">
+          <div class="orders-autorefresh" id="ordersAutoRefresh"></div>
           <div class="spinner-wrap" id="ordersLoading"><div class="spinner"></div></div>
           <div class="orders-list" id="ordersList"></div>
           <div class="empty-state" id="ordersEmpty" style="display:none">
@@ -3458,10 +3473,13 @@
     ───────────────────────────────────────── */
     var ordersLoaded = false;
 
-    async function loadOrders() {
+    async function loadOrders(opts) {
       if (ordersLoaded) return;
-      document.getElementById('ordersLoading').style.display = '';
-      document.getElementById('ordersEmpty').style.display = 'none';
+      var silent = opts && opts.silent;
+      if (!silent) {
+        document.getElementById('ordersLoading').style.display = '';
+        document.getElementById('ordersEmpty').style.display = 'none';
+      }
 
       // Get seller's product IDs — via the shared, fully-columned loader
       // (see loadProgressBar's comment) rather than an id-only fetch that
@@ -3477,7 +3495,7 @@
       // Fetch recent paid orders only — pending/abandoned orders are not shown to sellers
       var { data, error } = await SD.sb
         .from('orders')
-        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, total, notes')
+        .select('id, order_number, created_at, order_status, payment_status, customer_name, customer_email, customer_phone, delivery_address, city, items, total, notes, delivery_instructions')
         .eq('payment_status', 'paid')
         .order('created_at', { ascending: false })
         .limit(150);
@@ -3538,10 +3556,35 @@
         }
       });
 
+      // New-order alert on auto-refresh (not on the first load).
+      SD._newOrderIds = SD._newOrderIds || {};
+      if (SD._seenOrderIds) {
+        var fresh = myOrders.filter(function(o) { return !SD._seenOrderIds[o.id]; });
+        fresh.forEach(function(o) { SD._newOrderIds[o.id] = true; });
+        if (fresh.length) {
+          toast('🛎 New order' + (fresh.length > 1 ? 's' : '') + ' — ' + fresh.map(function(o) { return o.customer_name || 'customer'; }).join(', '));
+          try { navigator.vibrate && navigator.vibrate([200, 100, 200]); } catch (e) {}
+        }
+      }
+      SD._seenOrderIds = {};
+      myOrders.forEach(function(o) { SD._seenOrderIds[o.id] = true; });
+
       SD.orders   = myOrders;
       ordersLoaded = true;
       renderOrders(myOrders, myProductIds);
+      var stamp = document.getElementById('ordersAutoRefresh');
+      if (stamp) stamp.textContent = 'Updates automatically · last checked ' + new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
     }
+
+    // Orders refresh themselves every 3 minutes (and the moment the tab is
+    // reopened) — sellers no longer have to reload the page to see new ones.
+    function refreshOrdersQuietly() {
+      if (!SD.seller || document.hidden) return;
+      ordersLoaded = false;
+      loadOrders({ silent: true }).catch(function(e) { console.warn('orders auto-refresh failed', e); });
+    }
+    setInterval(refreshOrdersQuietly, 3 * 60 * 1000);
+    document.addEventListener('visibilitychange', function() { if (!document.hidden && SD._seenOrderIds) refreshOrdersQuietly(); });
 
     window.switchOrdersSub = function(sub) {
       var activeBtn  = document.getElementById('ordersSubActive');
@@ -3695,15 +3738,29 @@
           '</div>';
         }
 
-        return '<div class="order-row" id="order-' + order.id + '">' +
-          '<div class="order-row-header">' +
-            '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
+        // What was ordered is the headline; the buyer's full name labels the
+        // order (that's how a rider tells two pickups apart); the rest is small.
+        var bigItems = items.map(function(i) {
+          var qty = i.qty || i.quantity || 1;
+          var size = i.size && i.size !== 'One Size' ? '<span class="oc-size">' + escapeHtmlLite(i.size) + '</span>' : '';
+          return '<div class="oc-item"><span class="oc-qty">' + escapeHtmlLite(String(qty)) + '×</span><span>' + escapeHtmlLite(i.title || i.name || i.product_name || 'Product') + '</span>' + size + '</div>';
+        }).join('');
+        var myTotal = items.reduce(function(s, i) { return s + (Number(i.price || i.unit_price || 0) * Number(i.qty || i.quantity || 1)); }, 0);
+        var ref = String(order.order_number || order.id).slice(-6).toUpperCase();
+        var t = new Date(order.created_at);
+        var when = t.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) + ' · ' + t.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+        var note = order.notes || order.delivery_instructions || '';
+        return '<div class="oc' + (SD._newOrderIds && SD._newOrderIds[order.id] ? ' oc-new' : '') + '" id="order-' + order.id + '">' +
+          '<div class="oc-top"><span class="oc-for">For <strong>' + escapeHtmlLite(order.customer_name || 'Customer') + '</strong></span>' +
+            '<span>' + escapeHtmlLite(when) + ' · #…' + escapeHtmlLite(ref) + '</span></div>' +
+          '<div class="oc-items">' + bigItems + '</div>' +
+          (note ? '<div class="oc-note">📝 ' + escapeHtmlLite(note) + '</div>' : '') +
+          '<div class="oc-meta">' +
+            (order.customer_phone ? '<span>📞 ' + escapeHtmlLite(order.customer_phone) + '</span>' : '') +
+            (order.city || order.delivery_address ? '<span>📍 ' + escapeHtmlLite(order.city || order.delivery_address) + '</span>' : '') +
+            '<span>' + fmt(myTotal) + '</span>' +
             '<span class="payment-pill ' + payPillClass + '">' + payLabel + '</span>' +
-            '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
           '</div>' +
-          '<div class="order-items-list">' + itemLines + '</div>' +
-          buyerAddressHtml +
-          (order.notes ? '<div class="order-buyer" style="color:#0a2f66">🚚 Preferred delivery: ' + order.notes + '</div>' : '') +
           '<div class="order-status-row">' +
             renderFulfillmentControl(order, fulfillStatus) +
           '</div>' +

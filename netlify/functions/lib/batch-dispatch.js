@@ -65,7 +65,15 @@ function estimateAddedMinutes(driverToPickupKm, quoteDurationMin) {
  *     | 'transition_failed'
  *   , detail? }
  */
+// OFF (2026-10-04): appending a second customer to a moving rider's route
+// isn't finished end-to-end — advance-route.js progresses ONE delivery per
+// route and the rider screen shows one customer — so an accepted batch offer
+// would leave the added order stuck. Until multi-drop routes are built, each
+// order goes to a free rider (find_nearest_eligible_drivers skips busy ones).
+const BATCHING_ENABLED = false;
+
 async function evaluateBatchCandidates(supabase, deliveryId) {
+  if (!BATCHING_ENABLED) return { batched: false, reason: 'disabled' };
   if (!supabase || !deliveryId) {
     return { batched: false, reason: 'not_ready', detail: 'Missing supabase/deliveryId' };
   }
