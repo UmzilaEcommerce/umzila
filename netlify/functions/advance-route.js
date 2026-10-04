@@ -1,8 +1,9 @@
 // netlify/functions/advance-route.js
 //
 // Delivery network Stage 9/10 (delivery-network-spec.md §E) — the driver-
-// facing actions that move a route (and its linked delivery) forward, one
-// step at a time. Consolidated into one function rather than four tiny ones,
+// facing actions that move a route forward, one step at a time. Since
+// 2026-10-05 a route is a multi-drop TRIP: several orders, worked stop by
+// stop (see the "current stop" note below). Consolidated into one function rather than four tiny ones,
 // since they share the same auth/ownership verification and are always
 // called in sequence by the same UI flow.
 //
@@ -90,148 +91,122 @@ exports.handler = async function (event) {
     .eq('route_id', routeId)
     .order('seq_order', { ascending: true });
   if (stopsError) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load route stops' }) };
-  const pickupStop = stops.find(s => s.stop_type === 'pickup');
-  const dropStop = stops.find(s => s.stop_type === 'drop');
-  if (!pickupStop || !dropStop) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Route is missing its pickup/drop stops' }) };
-  }
-  const deliveryId = pickupStop.delivery_id; // pilot: single delivery per route, both stops share it
+  if (!stops || !stops.length) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Route has no stops' }) };
 
-  // ── start_route: ASSIGNED -> DRIVER_AT_PICKUP, route assigned -> started ──
-  if (action === 'start_route') {
-    if (route.status !== 'assigned') {
-      return { statusCode: 409, headers, body: JSON.stringify({ error: `Route is not in a startable state (currently ${route.status})` }) };
+  // ── Multi-drop (2026-10-05): the rider always works the CURRENT stop = the
+  // first stop (by seq_order) that isn't completed. Pickups at the same store
+  // that follow each other are one visit ("group"). Each stop belongs to one
+  // delivery; only that delivery's status moves. The client sends stopId so a
+  // stale screen can't act on the wrong stop (409 → refresh). ──
+  const current = stops.find(s => s.status !== 'completed');
+  if (!current) return { statusCode: 409, headers, body: JSON.stringify({ error: 'This trip is already finished' }) };
+  const group = [];
+  if (current.stop_type === 'pickup') {
+    for (const s of stops.slice(stops.indexOf(current))) {
+      if (s.status === 'completed') continue;
+      if (s.stop_type !== 'pickup' || s.seller_id !== current.seller_id) break;
+      group.push(s);
     }
-    const transitionResult = await transitionDelivery(admin, deliveryId, 'DRIVER_AT_PICKUP', { type: 'driver', id: driverId }, { eventType: 'AT_PICKUP' });
-    if (!transitionResult.ok) {
-      return { statusCode: transitionResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not start route', detail: transitionResult.detail || transitionResult.reason }) };
+  } else {
+    group.push(current);
+  }
+  const requestedStopId = body.stopId || null;
+  if (requestedStopId && !group.some(s => s.id === requestedStopId)) {
+    return { statusCode: 409, headers, body: JSON.stringify({ error: 'Your trip changed — refreshing.', code: 'TRIP_CHANGED' }) };
+  }
+  const target = requestedStopId ? group.find(s => s.id === requestedStopId) : group[0];
+  const actor = { type: 'driver', id: driverId };
+  const fail = (r, msg) => ({ statusCode: r.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: msg, detail: r.detail || r.reason }) });
+  const deliveryStatus = async id => (await admin.from('deliveries').select('status, order_id').eq('id', id).maybeSingle()).data;
+
+  // ── start_route = "I'm at the store": every pickup of this store visit
+  // becomes active; each of those orders ASSIGNED → DRIVER_AT_PICKUP. ──
+  if (action === 'start_route') {
+    if (current.stop_type !== 'pickup') return { statusCode: 409, headers, body: JSON.stringify({ error: 'Next stop is a customer, not a store', code: 'TRIP_CHANGED' }) };
+    for (const s of group) {
+      const d = await deliveryStatus(s.delivery_id);
+      if (d && d.status === 'ASSIGNED') {
+        const r = await transitionDelivery(admin, s.delivery_id, 'DRIVER_AT_PICKUP', actor, { eventType: 'AT_PICKUP', metadata: { stop_id: s.id } });
+        if (!r.ok) return fail(r, 'Could not start pickup');
+      }
+      await admin.from('route_stops').update({ status: 'active', arrived_at: new Date().toISOString() }).eq('id', s.id).eq('status', 'pending');
     }
     await admin.from('routes').update({ status: 'started', started_at: new Date().toISOString() }).eq('id', routeId).eq('status', 'assigned');
-    await admin.from('route_stops').update({ status: 'active' }).eq('id', pickupStop.id).eq('status', 'pending');
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: transitionResult.delivery }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, stops: group.map(s => s.id) }) };
   }
 
-  // ── complete_pickup: check off route_stop_items for the CURRENT pickup
-  // stop; DRIVER_AT_PICKUP -> PICKED_UP or PARTIALLY_PICKED_UP only once
-  // EVERY pickup stop for this delivery is done (Stage 4, 2026-09-17: a
-  // bundled delivery has N pickup stops, seq_order 1..N, only one ever
-  // 'active' at a time -- no client-supplied stop id needed, the server
-  // resolves it). deliveries.status deliberately stays at DRIVER_AT_PICKUP
-  // while moving between stores: delivery-state.js's TRANSITIONS map has no
-  // "at pickup stop N of M" state, and PARTIALLY_PICKED_UP has no path back
-  // to DRIVER_AT_PICKUP, so "transition once, after the last stop" is the
-  // only design that doesn't require touching the state machine's enum. ──
+  // ── complete_pickup: tick off THIS stop's items (its order, this store);
+  // the stop is done; once that order has no pickups left it becomes
+  // PICKED_UP (or PARTIALLY_PICKED_UP — a valid state, plan §38). ──
   if (action === 'complete_pickup') {
+    if (target.stop_type !== 'pickup') return { statusCode: 409, headers, body: JSON.stringify({ error: 'No pickup to complete here', code: 'TRIP_CHANGED' }) };
     const collectedIds = Array.isArray(body.collectedOrderItemIds) ? body.collectedOrderItemIds : [];
-
-    const pickupStops = stops.filter(s => s.stop_type === 'pickup'); // already seq_order-sorted
-    const currentPickupStop = pickupStops.find(s => s.status === 'active') || pickupStops.find(s => s.status === 'pending');
-    if (!currentPickupStop) {
-      return { statusCode: 409, headers, body: JSON.stringify({ error: 'No active pickup stop to complete' }) };
+    const d = await deliveryStatus(target.delivery_id);
+    if (!d) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
+    if (d.status === 'ASSIGNED') {
+      const r = await transitionDelivery(admin, target.delivery_id, 'DRIVER_AT_PICKUP', actor, { eventType: 'AT_PICKUP', metadata: { stop_id: target.id } });
+      if (!r.ok) return fail(r, 'Could not update pickup status');
     }
-
-    // Resolve which order_items actually belong to THIS stop's seller on the
-    // underlying order (route_stop_items rows are created lazily here, on
-    // first checklist submission, rather than pre-populated when the route
-    // is created -- simpler, and the checklist UI already knows the full set
-    // of item ids to send from its own order/product view).
-    const { data: delivery, error: deliveryError } = await admin.from('deliveries').select('order_id').eq('id', deliveryId).maybeSingle();
-    if (deliveryError || !delivery) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
-    const { data: allItems, error: itemsError } = await admin.from('order_items').select('id').eq('order_id', delivery.order_id).eq('seller_id', currentPickupStop.seller_id);
+    const { data: allItems, error: itemsError } = await admin.from('order_items').select('id').eq('order_id', d.order_id).eq('seller_id', target.seller_id);
     if (itemsError) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order items for this pickup' }) };
     const allItemIds = (allItems || []).map(i => i.id);
+    if (!allItemIds.length) return { statusCode: 400, headers, body: JSON.stringify({ error: 'No order items found for this pickup stop' }) };
 
-    if (!allItemIds.length) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'No order items found for this pickup stop' }) };
-    }
-
-    // Upsert a route_stop_items row per item -- collected:true only for ids
-    // the driver actually checked off this call (plan §38: partial pickup is
-    // a real, valid state, not an error, and must not block moving to the
-    // next store in a bundled pickup).
     const nowIso = new Date().toISOString();
     for (const itemId of allItemIds) {
       const collected = collectedIds.includes(itemId);
-      const { data: existing } = await admin.from('route_stop_items').select('id').eq('route_stop_id', currentPickupStop.id).eq('order_item_id', itemId).maybeSingle();
+      const { data: existing } = await admin.from('route_stop_items').select('id').eq('route_stop_id', target.id).eq('order_item_id', itemId).maybeSingle();
       if (existing) {
         if (collected) await admin.from('route_stop_items').update({ collected: true, collected_at: nowIso }).eq('id', existing.id);
       } else {
-        await admin.from('route_stop_items').insert({ route_stop_id: currentPickupStop.id, order_item_id: itemId, collected, collected_at: collected ? nowIso : null });
+        await admin.from('route_stop_items').insert({ route_stop_id: target.id, order_item_id: itemId, collected, collected_at: collected ? nowIso : null });
       }
     }
+    await admin.from('route_stops').update({ status: 'completed', completed_at: nowIso }).eq('id', target.id);
 
-    // This stop is done regardless of full/partial collection -- always mark
-    // it completed before deciding what's next.
-    await admin.from('route_stops').update({ status: 'completed', completed_at: nowIso }).eq('id', currentPickupStop.id);
-
-    const nextPickupStop = pickupStops.find(s => s.id !== currentPickupStop.id && s.status !== 'completed');
-    if (nextPickupStop) {
-      // More stores to visit -- activate the next one, no transitionDelivery
-      // call at all (status stays DRIVER_AT_PICKUP).
-      await admin.from('route_stops').update({ status: 'active' }).eq('id', nextPickupStop.id).eq('status', 'pending');
-      return { statusCode: 200, headers, body: JSON.stringify({ ok: true, movedToNextPickup: true, nextSellerId: nextPickupStop.seller_id }) };
+    // Other pickups for this same order (an order from 2 stores) still to do?
+    const ownPickups = stops.filter(s => s.stop_type === 'pickup' && s.delivery_id === target.delivery_id);
+    const pendingOwn = ownPickups.filter(s => s.id !== target.id && s.status !== 'completed');
+    if (pendingOwn.length) {
+      return { statusCode: 200, headers, body: JSON.stringify({ ok: true, movedToNextPickup: true, nextSellerId: pendingOwn[0].seller_id }) };
     }
-
-    // Last pickup stop for this delivery -- aggregate collection across
-    // EVERY pickup stop (not just the one just completed) before deciding
-    // PICKED_UP vs PARTIALLY_PICKED_UP.
-    const pickupStopIds = pickupStops.map(s => s.id);
-    const bundleSellerIds = pickupStops.map(s => s.seller_id);
-    const { data: finalItems } = await admin.from('route_stop_items').select('collected').in('route_stop_id', pickupStopIds);
-    const { data: allBundleItems } = await admin.from('order_items').select('id').eq('order_id', delivery.order_id).in('seller_id', bundleSellerIds);
-    const totalItemCount = (allBundleItems || []).length;
-    const allCollected = (finalItems || []).length >= totalItemCount && (finalItems || []).every(i => i.collected);
-
-    const targetStatus = allCollected ? 'PICKED_UP' : 'PARTIALLY_PICKED_UP';
-    const transitionResult = await transitionDelivery(admin, deliveryId, targetStatus, { type: 'driver', id: driverId }, { eventType: 'ORDER_PICKED_UP', metadata: { all_collected: allCollected } });
-    if (!transitionResult.ok) {
-      return { statusCode: transitionResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not update pickup status', detail: transitionResult.detail || transitionResult.reason }) };
-    }
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, allCollected, delivery: transitionResult.delivery }) };
+    const ownIds = ownPickups.map(s => s.id);
+    const { data: finalItems } = await admin.from('route_stop_items').select('collected').in('route_stop_id', ownIds);
+    const { data: allOrderItems } = await admin.from('order_items').select('id').eq('order_id', d.order_id).in('seller_id', ownPickups.map(s => s.seller_id));
+    const allCollected = (finalItems || []).length >= (allOrderItems || []).length && (finalItems || []).every(i => i.collected);
+    const r = await transitionDelivery(admin, target.delivery_id, allCollected ? 'PICKED_UP' : 'PARTIALLY_PICKED_UP', actor, { eventType: 'ORDER_PICKED_UP', metadata: { all_collected: allCollected } });
+    if (!r.ok) return fail(r, 'Could not update pickup status');
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, allCollected, delivery: r.delivery }) };
   }
 
-  // ── start_delivery: PICKED_UP -> IN_ROUTE, drop stop pending -> active, route started -> active ──
-  // Real bug found via live testing 2026-09-18 (pre-existing, not introduced
-  // by Stage 4's multi-pickup work -- it already affected a single partially-
-  // collected pickup): PARTIALLY_PICKED_UP has no direct transition to
-  // IN_ROUTE in delivery-state.js's TRANSITIONS map (only PICKED_UP does), so
-  // a driver who left even one item uncollected (plan §38's explicitly valid
-  // "partial pickup" state) could never start the delivery leg -- "Start
-  // Delivery Route" failed every time with no way forward. Fixed by routing
-  // through PICKED_UP first when starting from PARTIALLY_PICKED_UP -- both
-  // are legitimate "all pickup stops are done, ready to head out" states.
+  // ── start_delivery = "Start trip to <customer>": only the customer whose
+  // drop is now current becomes IN_ROUTE ("heading your way" + live map). Any
+  // other order on the trip stays PICKED_UP until its own turn. ──
   if (action === 'start_delivery') {
-    const { data: currentDelivery, error: currentDeliveryError } = await admin.from('deliveries').select('status').eq('id', deliveryId).maybeSingle();
-    if (currentDeliveryError || !currentDelivery) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
-    if (currentDelivery.status === 'PARTIALLY_PICKED_UP') {
-      const upgradeResult = await transitionDelivery(admin, deliveryId, 'PICKED_UP', { type: 'driver', id: driverId }, { eventType: 'ORDER_PICKED_UP', metadata: { note: 'auto-upgrade from partial before starting delivery leg' } });
-      if (!upgradeResult.ok) {
-        return { statusCode: upgradeResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not start delivery leg', detail: upgradeResult.detail || upgradeResult.reason }) };
-      }
+    if (target.stop_type !== 'drop' || target.status !== 'pending') return { statusCode: 409, headers, body: JSON.stringify({ error: 'Next stop is not a customer yet', code: 'TRIP_CHANGED' }) };
+    const d = await deliveryStatus(target.delivery_id);
+    if (!d) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load delivery' }) };
+    if (d.status === 'PARTIALLY_PICKED_UP') {
+      const up = await transitionDelivery(admin, target.delivery_id, 'PICKED_UP', actor, { eventType: 'ORDER_PICKED_UP', metadata: { note: 'auto-upgrade from partial before starting delivery leg' } });
+      if (!up.ok) return fail(up, 'Could not start delivery leg');
     }
-    const transitionResult = await transitionDelivery(admin, deliveryId, 'IN_ROUTE', { type: 'driver', id: driverId }, { eventType: 'ROUTE_STARTED' });
-    if (!transitionResult.ok) {
-      return { statusCode: transitionResult.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not start delivery leg', detail: transitionResult.detail || transitionResult.reason }) };
-    }
-    await admin.from('routes').update({ status: 'active' }).eq('id', routeId).eq('status', 'started');
-    await admin.from('route_stops').update({ status: 'active' }).eq('id', dropStop.id).eq('status', 'pending');
-    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: transitionResult.delivery }) };
+    const r = await transitionDelivery(admin, target.delivery_id, 'IN_ROUTE', actor, { eventType: 'ROUTE_STARTED', metadata: { stop_id: target.id } });
+    if (!r.ok) return fail(r, 'Could not start delivery leg');
+    await admin.from('routes').update({ status: 'active' }).eq('id', routeId).in('status', ['assigned', 'started']);
+    await admin.from('route_stops').update({ status: 'active' }).eq('id', target.id).eq('status', 'pending');
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: r.delivery }) };
   }
 
-  // ── arrive_at_drop: IN_ROUTE -> NEXT_STOP -> ARRIVING, drop stop -> arriving ──
-  // Stops here -- confirm-delivery-pin.js (Stage 13) is what completes the
-  // drop stop, the delivery (-> DELIVERED), and (via the route-completion
-  // trigger) the route and payout. Not built yet, by design at this stage.
+  // ── arrive_at_drop: that customer IN_ROUTE → NEXT_STOP → ARRIVING; the PIN
+  // (confirm-delivery-pin.js) completes the stop, and the trip once every
+  // stop is done (payout trigger). ──
   if (action === 'arrive_at_drop') {
-    const step1 = await transitionDelivery(admin, deliveryId, 'NEXT_STOP', { type: 'driver', id: driverId }, { eventType: 'DRIVER_NEARBY' });
-    if (!step1.ok) {
-      return { statusCode: step1.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not update delivery status', detail: step1.detail || step1.reason }) };
-    }
-    const step2 = await transitionDelivery(admin, deliveryId, 'ARRIVING', { type: 'driver', id: driverId }, { eventType: 'DRIVER_ARRIVING' });
-    if (!step2.ok) {
-      return { statusCode: step2.reason === 'conflict' ? 409 : 500, headers, body: JSON.stringify({ error: 'Could not update delivery status', detail: step2.detail || step2.reason }) };
-    }
-    await admin.from('route_stops').update({ status: 'arriving', arrived_at: new Date().toISOString() }).eq('id', dropStop.id).eq('status', 'active');
+    if (target.stop_type !== 'drop' || target.status !== 'active') return { statusCode: 409, headers, body: JSON.stringify({ error: 'Start the trip to this customer first', code: 'TRIP_CHANGED' }) };
+    const step1 = await transitionDelivery(admin, target.delivery_id, 'NEXT_STOP', actor, { eventType: 'DRIVER_NEARBY' });
+    if (!step1.ok) return fail(step1, 'Could not update delivery status');
+    const step2 = await transitionDelivery(admin, target.delivery_id, 'ARRIVING', actor, { eventType: 'DRIVER_ARRIVING' });
+    if (!step2.ok) return fail(step2, 'Could not update delivery status');
+    await admin.from('route_stops').update({ status: 'arriving', arrived_at: new Date().toISOString() }).eq('id', target.id).eq('status', 'active');
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, delivery: step2.delivery }) };
   }
 

@@ -434,6 +434,19 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .rd-pin input:focus{border-color:var(--accent)}
 .rd-err{color:#dc2626;font-size:13px;font-weight:600;margin-top:6px;min-height:1em}
 .rd-actionbar{position:sticky;bottom:0;padding:10px 0 12px;background:linear-gradient(to top,var(--bg) 70%,transparent);z-index:5}
+.rd-trip-h{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px 6px;font-size:14px}
+.rd-trip-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-bottom:12px}
+.rd-trip-bar i{display:block;height:100%;background:#22c55e;transition:width .3s}
+.rd-bag-h{font-size:14px;margin-bottom:8px}
+.rd-prio{display:inline-block;background:#fef3c7;color:#92400e;border-radius:8px;padding:1px 7px;font-size:11px;font-weight:800}
+.rd-hint{font-size:12px;font-weight:700;color:#1e40af;background:#eff6ff;border-radius:10px;padding:8px 10px;margin-bottom:10px}
+.rd-upnext{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.rd-upnext-row{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--border);font-size:13px}
+.rd-upnext-row:first-of-type{border-top:none}
+.rd-upnext-row span{width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--muted);flex-shrink:0}
+.rd-offer.batch{border-color:#16a34a;box-shadow:0 8px 24px rgba(22,163,74,.15)}
+.rd-offer.batch .rd-kicker{color:#16a34a}
+.rd-fit{font-size:13px;color:var(--text2);margin-top:6px}
 .rd-done{background:var(--surface);border-radius:18px;padding:36px 18px;text-align:center;box-shadow:var(--shadow-md)}
 .rd-done-ico{width:64px;height:64px;border-radius:50%;background:#22c55e;color:#fff;font-size:34px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;animation:rdIn .3s ease}
 .rd-done-t{font-size:22px;font-weight:900}
@@ -685,12 +698,13 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
     </div>
     <div id="rdGps" class="rd-gps" style="display:none"></div>
 
-    <div id="delivery-active-route" style="display:none"></div>
-
     <div id="delivery-offers-wrap">
       <div class="rd-section-label">Delivery offers <button class="rd-link" id="refreshDeliveryOffers">Refresh</button></div>
       <div id="delivery-offers-list"><div class="rd-empty">Loading…</div></div>
     </div>
+
+    <div id="delivery-active-route" style="display:none"></div>
+
   </section>
 
   <!-- Stores -->
@@ -1199,7 +1213,7 @@ document.addEventListener('sb-ready', function(e){
           ${riders.length ? riders.map(r=>`<div class="ops-rider-row">
             <span class="ops-dot ${r.online?'on':''}"></span>
             <div class="ops-rider-name">${esc(r.name)}${!r.eligible?' <span class="ops-muted">(not approved)</span>':''}</div>
-            <div class="ops-muted">${r.on_route ? 'On a delivery' : r.online ? 'Waiting' : r.last_seen_at ? 'Last seen ' + esc(agoLabel(r.last_seen_at)) + ' ago' : 'Never online'}</div>
+            <div class="ops-muted">${r.on_route ? (r.trip_orders > 1 ? 'On a trip · ' + r.trip_orders + ' orders' : 'On a delivery') : r.online ? 'Waiting' : r.last_seen_at ? 'Last seen ' + esc(agoLabel(r.last_seen_at)) + ' ago' : 'Never online'}</div>
           </div>`).join('') : `<div class="ops-lane-empty">No riders yet — a rep becomes a rider by going online in Deliver.</div>`}
         </div>
         <div class="ops-section"><div class="ops-section-h">Delivered today</div>
@@ -2524,8 +2538,7 @@ document.addEventListener('sb-ready', function(e){
   // map), 30 s otherwise. Polling the board every 8 s while online.
   function onDropLeg(){
     const st = BOARD?.route?.stops || [];
-    const drop = st.find(s=>s.type==='drop');
-    return !!(drop && (drop.status==='active' || drop.status==='arriving'));
+    return st.some(s=>s.type==='drop' && (s.status==='active' || s.status==='arriving'));
   }
   function scheduleHeartbeat(){
     if(deliveryHeartbeatTimer) clearTimeout(deliveryHeartbeatTimer);
@@ -2556,7 +2569,7 @@ document.addEventListener('sb-ready', function(e){
     if(card) card.classList.toggle('on', deliveryOnline);
     if(label) label.textContent = deliveryOnline ? "You're online" : "You're offline";
     if(sub) sub.textContent = deliveryOnline
-      ? (BOARD?.route ? 'On a delivery — offers pause until you finish.' : 'Waiting for delivery offers — keep this page open.')
+      ? (BOARD?.route ? 'On a trip — orders on your way may be offered to add.' : 'Waiting for delivery offers — keep this page open.')
       : 'Go online to get delivery offers.';
     renderGpsBadge();
   }
@@ -2645,19 +2658,24 @@ document.addEventListener('sb-ready', function(e){
     const routeEl = document.getElementById('delivery-active-route');
     const offersWrap = document.getElementById('delivery-offers-wrap');
     if(!routeEl || !offersWrap) return;
+    const offers = BOARD?.offers || [];
     if(BOARD?.route){
-      offersWrap.style.display = 'none';
       routeEl.style.display = '';
       renderJob(BOARD.route);
+      // On a trip, the only offers are optional additions to it (spec §32).
+      offersWrap.style.display = offers.length ? '' : 'none';
+      if(offers.length) renderOffers(offers, true);
     } else {
       routeEl.style.display = 'none'; routeEl.innerHTML = '';
       offersWrap.style.display = '';
-      renderOffers(BOARD?.offers || []);
+      renderOffers(offers, false);
     }
   }
 
-  function renderOffers(offers){
+  function renderOffers(offers, onTrip){
     const listEl = document.getElementById('delivery-offers-list');
+    const label = document.querySelector('#delivery-offers-wrap .rd-section-label');
+    if(label && label.firstChild) label.firstChild.textContent = onTrip ? 'Add to your trip? ' : 'Delivery offers ';
     if(offerTick){ clearInterval(offerTick); offerTick = null; }
     if(!deliveryOnline){
       listEl.innerHTML = `<div class="rd-empty"><div class="rd-empty-ico">🛵</div>You're offline.<br>Switch on above to start getting delivery offers.</div>`;
@@ -2669,21 +2687,27 @@ document.addEventListener('sb-ready', function(e){
     }
     listEl.innerHTML = offers.map(o=>{
       const stores = (o.stores||[]).join(' + ') || 'Umzila store';
+      const batch = o.offer_type === 'batch_addition';
       const km = o.distance_km != null ? Number(o.distance_km).toFixed(1) + ' km' : null;
       const mins = o.duration_min != null ? Math.round(o.duration_min) + ' min drive' : null;
-      return `<div class="rd-offer" data-offer-card="${esc(o.id)}">
+      const chips = batch
+        ? [o.extra_km != null ? '+' + Number(o.extra_km).toFixed(1) + ' km' : null, o.extra_min != null ? '+' + Math.round(o.extra_min) + ' min' : null,
+           o.item_count ? o.item_count + (o.item_count==1?' item':' items') : null, o.priority ? '⚡ priority' : null]
+        : [km, mins, o.item_count ? o.item_count + (o.item_count==1?' item':' items') : null, o.delivery_class ? esc(o.delivery_class) + ' parcel' : null, o.priority ? '⚡ priority' : null];
+      return `<div class="rd-offer ${batch?'batch':''}" data-offer-card="${esc(o.id)}">
         <div class="rd-offer-top">
-          <div><div class="rd-kicker">New delivery</div><div class="rd-pay">${fmt(o.payout)}</div></div>
+          <div><div class="rd-kicker">${batch ? 'Add to your trip' : 'New delivery'}</div><div class="rd-pay">${batch?'+':''}${fmt(o.payout)}</div></div>
           <div class="rd-timer" data-expires="${esc(o.expires_at)}">—</div>
         </div>
+        ${batch ? `<div class="rd-fit">On your way${o.after ? ` · drop-off after <strong>${esc(o.after)}</strong>` : ' · first drop-off'}</div>` : ''}
         <div class="rd-legs">
           <div class="rd-leg"><span class="rd-leg-dot a"></span><div><div class="rd-leg-k">Pick up</div><div class="rd-leg-v">${esc(stores)}</div>${o.store_area?`<div class="rd-leg-s">${esc(o.store_area)}</div>`:''}</div></div>
           <div class="rd-leg"><span class="rd-leg-dot b"></span><div><div class="rd-leg-k">Drop off</div><div class="rd-leg-v">${esc(o.drop_area || 'Customer address')}</div></div></div>
         </div>
-        <div class="rd-chips">${[km, mins, o.item_count ? o.item_count + (o.item_count==1?' item':' items') : null, o.delivery_class ? esc(o.delivery_class) + ' parcel' : null].filter(Boolean).map(c=>`<span>${c}</span>`).join('')}</div>
+        <div class="rd-chips">${chips.filter(Boolean).map(c=>`<span>${c}</span>`).join('')}</div>
         <div class="rd-offer-actions">
-          <button class="rd-btn ghost" data-offer-respond="decline" data-offer-id="${esc(o.id)}">Decline</button>
-          <button class="rd-btn primary" data-offer-respond="accept" data-offer-id="${esc(o.id)}">Accept</button>
+          <button class="rd-btn ghost" data-offer-respond="decline" data-offer-id="${esc(o.id)}">${batch ? 'No thanks' : 'Decline'}</button>
+          <button class="rd-btn primary" data-offer-respond="accept" data-offer-id="${esc(o.id)}">${batch ? 'Add to trip' : 'Accept'}</button>
         </div>
       </div>`;
     }).join('');
@@ -2703,6 +2727,7 @@ document.addEventListener('sb-ready', function(e){
 
   async function respondToDriverOffer(offerId, response){
     document.querySelectorAll(`[data-offer-id="${offerId}"]`).forEach(b=>b.disabled=true);
+    const batch = (BOARD?.offers||[]).find(o=>o.id===offerId)?.offer_type === 'batch_addition';
     try{
       const { data:{ session } } = await sb.auth.getSession();
       const res = await fetch('/.netlify/functions/respond-to-driver-offer', {
@@ -2712,7 +2737,7 @@ document.addEventListener('sb-ready', function(e){
       });
       const result = await res.json().catch(()=>({}));
       if(!res.ok) throw new Error(result.error || 'Could not respond to offer');
-      toast(response==='accept' ? 'Accepted — head to the store' : 'Offer declined', response==='accept' ? 'success' : '');
+      toast(response==='accept' ? (batch ? 'Added to your trip' : 'Accepted — head to the store') : (batch ? 'Not added' : 'Offer declined'), response==='accept' ? 'success' : '');
     } catch(err){
       toast(err.message || 'Could not respond to offer', 'error');
     } finally {
@@ -2720,13 +2745,13 @@ document.addEventListener('sb-ready', function(e){
     }
   }
 
-  // ── Active job ──
+  // ── Active trip (multi-drop, 2026-10-05) ──
   function personCard(kind, title, sub, lines, phone, navHref){
     const tel = telLink(phone), wa = waLink(phone);
     return `<div class="rd-person ${kind}">
       <div class="rd-person-k">${kind==='store'?'Pick up from':'Deliver to'}</div>
       <div class="rd-person-name">${esc(title)}</div>
-      ${sub ? `<div class="rd-person-sub">${esc(sub)}</div>` : ''}
+      ${sub ? `<div class="rd-person-sub">${sub}</div>` : ''}
       ${lines.join('')}
       <div class="rd-contact">
         ${navHref ? `<a class="rd-btn nav" href="${navHref}" target="_blank" rel="noopener">🧭 Navigate</a>` : ''}
@@ -2736,77 +2761,91 @@ document.addEventListener('sb-ready', function(e){
       ${!phone ? `<div class="rd-note">No phone number on file.</div>` : ''}
     </div>`;
   }
-  function itemsList(items, checkable){
+  function itemsList(items, checkable, stopId){
     if(!items || !items.length) return `<div class="rd-note">No items listed — confirm with the store before leaving.</div>`;
     return `<div class="rd-items">${items.map(it=>{
       const label = `${esc(it.name||'Item')}${it.size && it.size!=='One Size' ? ` <span class="rd-muted">(${esc(it.size)})</span>` : ''}`;
       const qty = `<span class="rd-qty">×${Number(it.qty||1)}</span>`;
       if(!checkable) return `<div class="rd-item">${qty}<div>${label}</div></div>`;
       const on = it.collected || localChecked.has(it.id);
-      return `<label class="rd-item check ${on?'on':''}"><input type="checkbox" class="pickup-item-cb" data-item-id="${esc(it.id)}" ${on?'checked':''} ${it.collected?'disabled':''}/>${qty}<div>${label}</div></label>`;
+      return `<label class="rd-item check ${on?'on':''}"><input type="checkbox" class="pickup-item-cb" data-stop-id="${esc(stopId||'')}" data-item-id="${esc(it.id)}" ${on?'checked':''} ${it.collected?'disabled':''}/>${qty}<div>${label}</div></label>`;
     }).join('')}</div>`;
   }
+  const firstName = n => String(n || 'the customer').split(' ')[0];
 
   function renderJob(route){
     const el = document.getElementById('delivery-active-route');
-    const stops = route.stops || [];
-    const pickups = stops.filter(s=>s.type==='pickup');
-    const drop = stops.find(s=>s.type==='drop');
-    if(!pickups.length || !drop){
-      el.innerHTML = `<div class="rd-empty">This route is missing its stops — contact dispatch.</div>`;
-      return;
-    }
-    const cur = pickups.find(s=>s.status!=='completed');
-    const c = drop.customer || {};
-    const custLines = [
-      c.address ? `<div class="rd-addr">${esc(c.address)}${c.area?`<br><span class="rd-muted">${esc(c.area)}${c.postal_code?' '+esc(c.postal_code):''}</span>`:''}</div>` : '',
-      c.instructions ? `<div class="rd-instr">📝 ${esc(c.instructions)}</div>` : '',
-      c.order_ref ? `<div class="rd-muted rd-small">Order #…${esc(String(c.order_ref).toUpperCase())}</div>` : ''
-    ];
-    const customerCard = personCard('cust', c.name || 'Customer', null, custLines, c.phone, navLink(drop, [c.address, c.area].filter(Boolean).join(', ')));
+    const stops = (route.stops || []).slice().sort((a,b)=>a.seq-b.seq);
+    if(!stops.length){ el.innerHTML = `<div class="rd-empty">This trip has no stops — contact dispatch.</div>`; return; }
+    const open = stops.filter(s=>s.status!=='completed');
+    const cur = open[0];
+    if(!cur){ el.innerHTML = `<div class="rd-empty">Finishing up…</div>`; return; }
 
-    // Stepper
-    const steps = pickups.map((p,i)=>({ label: p.store?.name || `Store ${i+1}`, done: p.status==='completed', cur: p===cur }))
-      .concat([{ label: c.name ? c.name.split(' ')[0] : 'Customer', done: drop.status==='completed', cur: !cur }]);
-    const stepper = `<div class="rd-steps">${steps.map((s,i)=>`<div class="rd-step ${s.done?'done':''} ${s.cur?'cur':''}"><span>${s.done?'✓':i+1}</span><em>${esc(s.label)}</em></div>`).join('<i></i>')}</div>`;
+    // Same-store visit: consecutive open pickups at the current store.
+    const group = [];
+    if(cur.type==='pickup'){ for(const s of open){ if(s.type!=='pickup' || s.seller_id!==cur.seller_id) break; group.push(s); } }
+    else group.push(cur);
+
+    const orders = route.orders || new Set(stops.map(s=>s.delivery_id)).size;
+    const doneStops = stops.length - open.length;
+    // Progress: one dot per stop (a same-store visit counts once).
+    const header = `<div class="rd-trip-h"><div><strong>${orders > 1 ? `Trip · ${orders} orders` : 'Your delivery'}</strong></div><div class="rd-muted">Stop ${doneStops + 1} of ${stops.length}</div></div>
+      <div class="rd-trip-bar"><i style="width:${Math.round(doneStops / stops.length * 100)}%"></i></div>`;
 
     let body = '', action = '';
-    if(cur){
+    if(cur.type==='pickup'){
       const s = cur.store || {};
-      const storeCard = personCard('store', s.name || 'Store', pickups.length>1 ? `Store ${pickups.indexOf(cur)+1} of ${pickups.length}` : null,
+      const storeCard = personCard('store', s.name || 'Store', group.length > 1 ? `${group.length} orders to collect here` : `For <strong>${esc(cur.for_customer || 'customer')}</strong>`,
         [s.address ? `<div class="rd-addr">${esc(s.address)}</div>` : ''], s.phone, navLink(cur, s.address));
-      if(cur.status==='pending'){
-        body = storeCard + `<div class="rd-card"><div class="rd-card-k">To collect</div>${itemsList(cur.items,false)}</div>`
-             + `<details class="rd-next"><summary>Then deliver to <strong>${esc(c.name||'the customer')}</strong>${c.area?' · '+esc(c.area):''}</summary>${customerCard}</details>`;
-        action = `<button class="rd-btn primary big" data-route-action="start_route">I'm at the store</button>`;
+      const active = group.every(g=>g.status==='active');
+      const bags = group.map(g=>`<div class="rd-card rd-bag">
+          <div class="rd-bag-h">Bag for <strong>${esc(g.for_customer || 'customer')}</strong>${g.priority?' <span class="rd-prio">⚡ priority</span>':''}<span class="rd-muted"> · #…${esc(String(g.order_ref||'').toUpperCase())}</span></div>
+          ${itemsList(g.items, active, g.id)}
+        </div>`).join('');
+      body = storeCard + (group.length > 1 ? `<div class="rd-hint">Keep each order in its own bag, labelled with the customer's name.</div>` : '') + bags;
+      if(!active){
+        action = `<button class="rd-btn primary big" data-route-action="start_route" data-stop-id="${esc(cur.id)}">I'm at the store</button>`;
       } else {
-        body = storeCard + `<div class="rd-card"><div class="rd-card-k">Tick each item as you collect it</div>${itemsList(cur.items,true)}</div>`
-             + `<details class="rd-next"><summary>Then deliver to <strong>${esc(c.name||'the customer')}</strong>${c.area?' · '+esc(c.area):''}</summary>${customerCard}</details>`;
-        const total = (cur.items||[]).length, done = (cur.items||[]).filter(it=>it.collected || localChecked.has(it.id)).length;
-        action = `<button class="rd-btn primary big" id="pickupCompleteBtn" ${total && !done ? 'disabled' : ''}>Collected ${total?`(${done}/${total})`:''} — continue</button>`;
+        const all = group.flatMap(g=>(g.items||[])), done = all.filter(it=>it.collected || localChecked.has(it.id)).length;
+        action = `<button class="rd-btn primary big" id="pickupCompleteBtn" ${all.length && !done ? 'disabled' : ''}>Collected ${all.length?`(${done}/${all.length})`:''} — continue</button>`;
       }
-    } else if(drop.status==='pending'){
-      body = customerCard + `<div class="rd-card"><div class="rd-card-k">Hand over</div>${itemsList(drop.items,false)}</div>`;
-      action = `<button class="rd-btn primary big" data-route-action="start_delivery">Start trip to customer</button>`;
-    } else if(drop.status==='active'){
-      body = customerCard + `<div class="rd-card"><div class="rd-card-k">Hand over</div>${itemsList(drop.items,false)}</div>`;
-      action = `<button class="rd-btn primary big" data-route-action="arrive_at_drop">I've arrived</button>`;
-    } else if(drop.status==='arriving'){
-      body = customerCard + `<div class="rd-card rd-pin">
-        <div class="rd-card-k">Ask ${esc(c.name ? c.name.split(' ')[0] : 'the customer')} for their 4-digit PIN</div>
-        ${c.pin_locked ? `<div class="rd-instr">Too many wrong PINs — call dispatch.</div>` : ''}
-        <input type="text" id="deliveryPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" placeholder="• • • •">
-        <div id="pinConfirmMsg" class="rd-err"></div>
-        <div class="rd-card-k" style="margin-top:12px">Hand over</div>${itemsList(drop.items,false)}
-      </div>`;
-      action = `<button class="rd-btn primary big" id="pinConfirmBtn">Confirm delivery</button>`;
     } else {
-      body = `<div class="rd-empty">Finishing up…</div>`;
+      const c = cur.customer || {};
+      const custLines = [
+        c.address ? `<div class="rd-addr">${esc(c.address)}${c.area?`<br><span class="rd-muted">${esc(c.area)}${c.postal_code?' '+esc(c.postal_code):''}</span>`:''}</div>` : '',
+        c.instructions ? `<div class="rd-instr">📝 ${esc(c.instructions)}</div>` : '',
+        c.order_ref ? `<div class="rd-muted rd-small">Order #…${esc(String(c.order_ref).toUpperCase())}</div>` : ''
+      ];
+      body = personCard('cust', c.name || 'Customer', cur.priority ? '⚡ Priority order' : null, custLines, c.phone, navLink(cur, [c.address, c.area].filter(Boolean).join(', ')));
+      if(cur.status==='arriving'){
+        body += `<div class="rd-card rd-pin">
+          <div class="rd-card-k">Ask ${esc(firstName(c.name))} for their 4-digit PIN</div>
+          ${c.pin_locked ? `<div class="rd-instr">Too many wrong PINs — call dispatch.</div>` : ''}
+          <input type="text" id="deliveryPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" placeholder="• • • •">
+          <div id="pinConfirmMsg" class="rd-err"></div>
+          <div class="rd-card-k" style="margin-top:12px">Hand over the bag for ${esc(c.name || 'this customer')}</div>${itemsList(cur.items,false)}
+        </div>`;
+        action = `<button class="rd-btn primary big" id="pinConfirmBtn">Confirm delivery</button>`;
+      } else {
+        body += `<div class="rd-card"><div class="rd-card-k">Hand over the bag for ${esc(c.name || 'this customer')}</div>${itemsList(cur.items,false)}</div>`;
+        action = cur.status==='active'
+          ? `<button class="rd-btn primary big" data-route-action="arrive_at_drop" data-stop-id="${esc(cur.id)}">I've arrived</button>`
+          : `<button class="rd-btn primary big" data-route-action="start_delivery" data-stop-id="${esc(cur.id)}">Start trip to ${esc(firstName(c.name))}</button>`;
+      }
     }
 
-    el.innerHTML = `${stepper}${body}<div class="rd-actionbar">${action}</div>`;
+    // What comes after this stop.
+    const later = open.slice(group.length);
+    const next = later.length ? `<div class="rd-upnext"><div class="rd-card-k">Then</div>${later.map((s,i)=>{
+      const label = s.type==='pickup'
+        ? `Collect at <strong>${esc(s.store?.name || 'store')}</strong> — for ${esc(s.for_customer || 'customer')}`
+        : `Deliver to <strong>${esc((s.customer && s.customer.name) || s.for_customer || 'customer')}</strong>${s.customer && s.customer.area ? ' · ' + esc(s.customer.area) : ''}`;
+      return `<div class="rd-upnext-row"><span>${doneStops + group.length + i + 1}</span><div>${s.type==='pickup'?'🏪':'🏠'} ${label}${s.priority?' <span class="rd-prio">⚡</span>':''}</div></div>`;
+    }).join('')}</div>` : '';
 
-    el.querySelectorAll('[data-route-action]').forEach(b=>b.addEventListener('click', ()=>callAdvanceRoute(b.dataset.routeAction)));
+    el.innerHTML = `${header}${body}${next}<div class="rd-actionbar">${action}</div>`;
+
+    el.querySelectorAll('[data-route-action]').forEach(b=>b.addEventListener('click', ()=>callAdvanceRoute(b.dataset.routeAction, { stopId: b.dataset.stopId })));
     el.querySelectorAll('.pickup-item-cb').forEach(cb=>cb.addEventListener('change', ()=>{
       if(cb.checked) localChecked.add(cb.dataset.itemId); else localChecked.delete(cb.dataset.itemId);
       cb.closest('.rd-item')?.classList.toggle('on', cb.checked);
@@ -2814,16 +2853,30 @@ document.addEventListener('sb-ready', function(e){
       const btn = document.getElementById('pickupCompleteBtn');
       if(btn){ btn.disabled = all.length && !done; btn.textContent = `Collected (${done}/${all.length}) — continue`; }
     }));
-    document.getElementById('pickupCompleteBtn')?.addEventListener('click', ()=>{
-      const checked = Array.from(el.querySelectorAll('.pickup-item-cb:checked')).map(cb=>cb.dataset.itemId);
-      callAdvanceRoute('complete_pickup', { collectedOrderItemIds: checked });
-    });
+    document.getElementById('pickupCompleteBtn')?.addEventListener('click', ()=>completeStoreVisit(group));
     const pinInput = document.getElementById('deliveryPinInput');
     pinInput?.addEventListener('input', ()=>{ pinInput.value = pinInput.value.replace(/\D/g,'').slice(0,4); });
-    document.getElementById('pinConfirmBtn')?.addEventListener('click', ()=>confirmPin(drop.delivery_id));
+    document.getElementById('pinConfirmBtn')?.addEventListener('click', ()=>confirmPin(cur.delivery_id, later));
   }
 
-  async function confirmPin(deliveryId){
+  // One "Collected" for a same-store visit: completes each order's pickup in turn.
+  async function completeStoreVisit(group){
+    const btn = document.getElementById('pickupCompleteBtn');
+    if(btn){ btn.disabled = true; btn.textContent = 'Updating…'; }
+    let partial = false;
+    for(const g of group){
+      const checked = Array.from(document.querySelectorAll(`.pickup-item-cb[data-stop-id="${CSS.escape(g.id)}"]:checked`)).map(cb=>cb.dataset.itemId);
+      const r = await postAdvance('complete_pickup', { stopId: g.id, collectedOrderItemIds: checked });
+      if(!r.ok){ toast(r.error || 'Could not update', 'error'); break; }
+      if(r.result.allCollected === false) partial = true;
+    }
+    localChecked.clear();
+    toast(partial ? 'Some items still need collecting' : (group.length > 1 ? `${group.length} orders collected` : 'Collected'), partial ? 'warn' : 'success');
+    await refreshBoard(true);
+    scheduleHeartbeat();
+  }
+
+  async function confirmPin(deliveryId, later){
     const pinInput = document.getElementById('deliveryPinInput');
     const msgEl = document.getElementById('pinConfirmMsg');
     const btn = document.getElementById('pinConfirmBtn');
@@ -2846,22 +2899,20 @@ document.addEventListener('sb-ready', function(e){
         return;
       }
       localChecked.clear();
+      const more = (later || []).length > 0 && !result.routeCompleted;
       document.getElementById('delivery-active-route').innerHTML =
-        `<div class="rd-done"><div class="rd-done-ico">✓</div><div class="rd-done-t">Delivered</div><div class="rd-muted">Nice work. Looking for your next delivery…</div></div>`;
+        `<div class="rd-done"><div class="rd-done-ico">✓</div><div class="rd-done-t">Delivered</div><div class="rd-muted">${more ? 'Next stop coming up…' : 'Nice work. Looking for your next delivery…'}</div></div>`;
       try{ navigator.vibrate && navigator.vibrate(120); } catch(_){}
-      setTimeout(()=>refreshBoard(true), 1500);
+      setTimeout(()=>refreshBoard(true), more ? 900 : 1500);
     } catch(e){
       if(msgEl) msgEl.textContent = 'Could not confirm — check your connection and try again.';
       if(btn){ btn.disabled = false; btn.textContent = 'Confirm delivery'; }
     }
   }
 
-  async function callAdvanceRoute(action, extra){
+  async function postAdvance(action, extra){
     const route = BOARD?.route;
-    if(!route) return;
-    const bar = document.querySelector('#delivery-active-route .rd-actionbar button');
-    const label = bar ? bar.textContent : '';
-    if(bar){ bar.disabled = true; bar.textContent = 'Updating…'; }
+    if(!route) return { ok:false, error:'No trip' };
     try{
       const { data:{ session } } = await sb.auth.getSession();
       const res = await fetch('/.netlify/functions/advance-route', {
@@ -2870,19 +2921,24 @@ document.addEventListener('sb-ready', function(e){
         body: JSON.stringify(Object.assign({ routeId: route.id, action }, extra||{}))
       });
       const result = await res.json().catch(()=>({}));
-      if(!res.ok) throw new Error(result.error || 'Could not update');
-      if(action==='complete_pickup'){ localChecked.clear(); }
-      if(action==='complete_pickup' && result.movedToNextPickup) toast('Store done — next store up', 'success');
-      else if(action==='complete_pickup' && result.allCollected===false) toast('Some items still need collecting', 'warn');
-      else if(action==='start_delivery') toast('Customer can now see you on the map', 'success');
-      if(action==='start_delivery' && deliveryOnline){ sendDriverHeartbeat(true).catch(()=>{}); }
-    } catch(err){
-      toast(err.message || 'Could not update', 'error');
+      return res.ok ? { ok:true, result } : { ok:false, error: result.error, code: result.code };
+    } catch(e){ return { ok:false, error:'Check your connection and try again.' }; }
+  }
+
+  async function callAdvanceRoute(action, extra){
+    const bar = document.querySelector('#delivery-active-route .rd-actionbar button');
+    const label = bar ? bar.textContent : '';
+    if(bar){ bar.disabled = true; bar.textContent = 'Updating…'; }
+    const r = await postAdvance(action, extra);
+    if(!r.ok){
+      toast(r.error || 'Could not update', r.code === 'TRIP_CHANGED' ? 'warn' : 'error');
       if(bar){ bar.disabled = false; bar.textContent = label; }
-    } finally {
-      await refreshBoard(true);
-      scheduleHeartbeat();
+    } else if(action==='start_delivery'){
+      toast('Customer can now see you on the map', 'success');
+      if(deliveryOnline) sendDriverHeartbeat(true).catch(()=>{});
     }
+    await refreshBoard(true);
+    scheduleHeartbeat();
   }
 
   async function renderDeliveryPanel(){

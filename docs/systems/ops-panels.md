@@ -71,13 +71,40 @@ These live in `attentionReason()` in logistics and `liveWhy()` in admin. Keep th
 - PIN locked.
 - Failed.
 
-## One job per rider (for now)
+## Multi-drop trips (built 2026-10-05)
 
-`advance-route.js` and the rider screen progress **one delivery per route** (an order from several stores is fine — several pickups, one drop). So:
-- `find_nearest_eligible_drivers` skips riders with an open route (assigned/started/active/completing) or a pending offer;
-- batch offers (`lib/batch-dispatch.js`) are disabled with `BATCHING_ENABLED = false`.
+A route is a **trip**: up to 5 orders (`MAX_DELIVERIES_PER_TRIP` in `lib/route-insertion.js`), worked stop by stop.
 
-Building multi-drop routes means: per-drop actions in `advance-route.js` (each delivery's own transitions + PIN), route completion only after the last drop, `get_driver_board()` already returns every stop, and the rider screen must list the drops in order with each customer's name. Only then turn batching back on and relax the busy-rider filter.
+**Current stop.** The rider always works the first stop (by `seq_order`) that isn't completed. Pickups at the same store that follow each other are one visit: "I'm at the store" activates all of them, and one "Collected" completes them in order. `advance-route.js` takes `stopId` and returns 409 `TRIP_CHANGED` if it isn't the current stop or group, so a stale screen can't act. Only the order whose stop it is changes status:
+- pickups: ASSIGNED → DRIVER_AT_PICKUP → PICKED_UP;
+- "Start trip to <name>": IN_ROUTE;
+- arrive: NEXT_STOP → ARRIVING;
+- PIN: `confirm-delivery-pin.js`, unchanged; it closes the trip only when every stop is done.
+
+Other orders on the trip stay PICKED_UP until their turn.
+
+**Customers on a shared trip.** `get_delivery_tracking` only looks at that order's own stops.
+- The rider's position is only returned from IN_ROUTE onwards, so a waiting customer never sees the rider driving to someone else.
+- `orders_ahead` is a yes/no flag, never a count, and always no for a priority order. While picked up, `track.html` shows "There is an order/s ahead of you."
+
+**Adding an order to a trip (spec §32–35).** `lib/batch-dispatch.js#evaluateBatchCandidates` runs before idle dispatch: on Mark Ready, on every rider heartbeat (`sweepWaitingDeliveries`), and right after a rider accepts.
+- Candidates come from `find_batchable_routes`: trips that are assigned, started or active, with a fresh rider position, fewer than 5 open orders, no other pending offer, and the rider hasn't declined this order.
+- For each candidate, `planTrip()` tries every order of the not-yet-started stops (pickups before their own drop; started stops stay first) and keeps the **fastest whole trip** under these rules:
+  - Legs are real road distances via `getRoadMatrix` (one OpenRouteService matrix call, cached in `route_distance_cache`), with straight-line × 1.3 only as a fallback. Time is km × 2 + 3 min per stop; a same-store pickup costs 0.
+  - Nobody already on the trip ends up more than **8 min** later. If the added order is priority, only other priority customers keep that protection.
+  - A priority order arrives no later than 8 min after its earliest possible time. That's how a quick close drop-off can still go first.
+  - The new customer arrives within 60 min.
+- The rider gets a `batch_addition` offer showing "Add to your trip · +km · +min · drop-off after <name>". The plan is stored in `driver_offers.insertion`.
+- On accept, `respond-to-driver-offer.js` **re-plans** (the trip may have moved on) and applies the order with `apply_route_sequence()`. That function locks the route, inserts the new stops, renumbers the rest, refuses to move a started stop, and returns `plan_stale` if the trip changed (it re-plans once). If the order no longer fits, the rider gets 409 "no longer fits your trip" and the order goes back to waiting.
+- Free riders are still the only ones offered a **new** trip (`find_nearest_eligible_drivers` skips busy riders); busy riders only ever get additions.
+
+**Pay.** Every delivery on the trip pays its full band (R34–R45), summed by `compute_driver_payout_on_route_completion`. The R15 priority fee is Umzila's.
+
+**Priority (checkout).** A "⚡ Priority delivery +R15" toggle appears once the address is priced; its **?** says only "delivered first, so it gets to you faster". The fee is `delivery_pricing_config.priority_fee` (admin pricing). Toggling re-quotes, and the quote total is what's charged. Priority is read from `delivery_quotes.priority_fee > 0`.
+
+**Limits.**
+- An order from 2 stores always gets its own fresh trip; it's never added to another rider's trip.
+- Locally there's no ORS key, so planning falls back to straight-line distance. Live uses road distance.
 
 ## Gotchas
 

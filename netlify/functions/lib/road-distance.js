@@ -60,4 +60,65 @@ async function getRoadLeg(supabase, from, to) {
   return { distanceKm: r.distance_m / 1000, durationMin: r.duration_s != null ? r.duration_s / 60 : null, cached: false };
 }
 
-module.exports = { getRoadLeg };
+// Road distance between EVERY pair of points in one go (multi-drop trip
+// planning, 2026-10-05). Cached pairs come from route_distance_cache; any
+// missing pair triggers ONE OpenRouteService matrix call for the whole set,
+// and every pair it returns is cached forever. Returns
+// legAt(i, j) → { distanceKm, durationMin, road: true } or null when a pair
+// couldn't be routed (the caller falls back to a straight-line estimate —
+// fine for ordering stops, never used for pricing).
+async function getRoadMatrix(supabase, points) {
+  const pts = points.map(p => ({ lat: round4(p.lat), lon: round4(p.lon) }));
+  const n = pts.length;
+  const table = Array.from({ length: n }, () => new Array(n).fill(null));
+  if (n < 2 || pts.some(p => !Number.isFinite(p.lat) || !Number.isFinite(p.lon))) return (i, j) => (table[i] && table[i][j]) || null;
+
+  const lats = [...new Set(pts.map(p => p.lat))];
+  const { data: rows } = await supabase.from('route_distance_cache')
+    .select('from_lat, from_lon, to_lat, to_lon, distance_m, duration_s')
+    .in('from_lat', lats).in('to_lat', lats);
+  const key = (a, b) => `${a.lat},${a.lon}>${b.lat},${b.lon}`;
+  const cached = new Map((rows || []).map(r => [`${r.from_lat},${r.from_lon}>${r.to_lat},${r.to_lon}`, r]));
+  let missing = false;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    if (i === j || (pts[i].lat === pts[j].lat && pts[i].lon === pts[j].lon)) { table[i][j] = { distanceKm: 0, durationMin: 0, road: true }; continue; }
+    const hit = cached.get(key(pts[i], pts[j]));
+    if (hit) table[i][j] = { distanceKm: hit.distance_m / 1000, durationMin: hit.duration_s != null ? hit.duration_s / 60 : null, road: true };
+    else missing = true;
+  }
+
+  const apiKey = process.env.ORS_API_KEY;
+  if (missing && apiKey) {
+    try {
+      const res = await fetch('https://api.openrouteservice.org/v2/matrix/driving-car', {
+        method: 'POST',
+        headers: { Authorization: apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ locations: pts.map(p => [p.lon, p.lat]), metrics: ['distance', 'duration'], units: 'm' })
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json && Array.isArray(json.distances)) {
+        const toCache = [];
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+          if (table[i][j]) continue;
+          const d = json.distances[i] && json.distances[i][j];
+          const t = json.durations && json.durations[i] ? json.durations[i][j] : null;
+          if (!Number.isFinite(d)) continue;
+          table[i][j] = { distanceKm: d / 1000, durationMin: Number.isFinite(t) ? t / 60 : null, road: true };
+          toCache.push({ from_lat: pts[i].lat, from_lon: pts[i].lon, to_lat: pts[j].lat, to_lon: pts[j].lon,
+                         distance_m: Math.round(d), duration_s: Number.isFinite(t) ? Math.round(t) : null, provider: 'openrouteservice' });
+        }
+        if (toCache.length) {
+          const { error } = await supabase.from('route_distance_cache').upsert(toCache, { onConflict: 'from_lat,from_lon,to_lat,to_lon', ignoreDuplicates: true });
+          if (error) console.warn('road-distance: matrix cache write failed', error.message);
+        }
+      } else {
+        console.warn('road-distance: ORS matrix', res.status, json && json.error ? JSON.stringify(json.error).slice(0, 200) : 'no data');
+      }
+    } catch (e) {
+      console.warn('road-distance: ORS matrix unreachable', e.message);
+    }
+  }
+  return (i, j) => (table[i] && table[i][j]) || null;
+}
+
+module.exports = { getRoadLeg, getRoadMatrix };

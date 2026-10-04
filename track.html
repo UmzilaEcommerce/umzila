@@ -554,8 +554,13 @@
     // The rider's first name (only that) once one is assigned.
     const riderName = row.driver_name || null;
     const named = s => riderName ? s.replace(/^Your rider/, riderName).replace(/^Rider collecting/, riderName + ' is collecting').replace(/Your rider/g, riderName) : s;
-    const title = named(isProblem ? meta.label : atDoor ? 'Your rider is here!' : stage.title);
-    const sub = named(isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.' : stage.sub);
+    // Collected but the rider isn't heading here yet (other drop-offs on a
+    // shared trip come first) — "Picked up", plus a hint when orders are ahead.
+    const pickedUp = row.status === 'PICKED_UP' || row.status === 'PARTIALLY_PICKED_UP';
+    if (pickedUp) meta.label = 'Order picked up';
+    let title = named(isProblem ? meta.label : atDoor ? 'Your rider is here!' : pickedUp ? 'Your order is picked up' : stage.title);
+    let sub = named(isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.'
+      : pickedUp ? (row.orders_ahead ? 'There is an order/s ahead of you.' : 'Your rider will be heading your way shortly.') : stage.sub);
 
     // First render sets up the static shell once; subsequent polls only
     // patch the live bits (status pill, scene, steps, map marker) rather
@@ -648,6 +653,7 @@
       // deliberately hides position until the rider is actually heading to the
       // customer (STAGE_ONWAY+), even once one is ASSIGNED and collecting the order.
       mapNote.textContent = isProblem ? '' :
+        (row.status === 'PICKED_UP' || row.status === 'PARTIALLY_PICKED_UP') ? 'Your rider has your order — live tracking starts once they head your way.' :
         STAGE_PICKUP.includes(row.status) ? 'Your rider is on the way to collect your order — live tracking starts once they head your way.' :
         'A rider hasn\'t been assigned to your delivery yet.';
     }

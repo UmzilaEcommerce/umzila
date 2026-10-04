@@ -4,6 +4,48 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Multi-drop trips: riders carry up to 5 orders; priority delivery at checkout
+
+**Asked for (founder):** riders take several orders per trip (win on volume), following the delivery spec (§31–35: optional additions, insertion points, underway riders). Rules confirmed:
+- up to 5 orders per trip;
+- an added order may make anyone already on the trip at most **8 min** later;
+- the rider earns the full delivery price per added order;
+- orders at one store are collected in one visit;
+- drop-off order is the most efficient whole trip (not simply closest first);
+- priority goes first unless a close drop costs it ≤ 8 min.
+
+Customer side:
+- A waiting customer sees "picked up" plus "There is an order/s ahead of you" (no count; not for priority).
+- The live map appears only once the rider is heading to *them*.
+- Priority must be easy to add and visible, with a **?** saying only that it arrives first.
+
+**Was:** batching appended to the end of a moving rider's route, but `advance-route.js` and the rider screen handled one delivery per route, so an added order got stuck. On 2026-10-04 it was switched off and busy riders were skipped.
+
+**Now:** see [docs/systems/ops-panels.md — Multi-drop trips](systems/ops-panels.md).
+- `advance-route.js` is stop-driven (current stop, same-store visit groups, `stopId` guard).
+- New `lib/route-insertion.js` planner (whole-trip optimisation, 8-min rule, priority rule, 5-order cap).
+- `lib/road-distance.js#getRoadMatrix` (one ORS matrix call, every pair cached).
+- `lib/batch-dispatch.js` uses the planner, has `sweepWaitingDeliveries()`, and is ON again.
+- `respond-to-driver-offer.js` re-plans and applies on accept, then immediately offers other waiting orders to this rider (two orders from one store reach one rider within seconds).
+- `driver-heartbeat.js` runs the sweep.
+- Rider screen: "Trip · N orders · Stop x of y", the store visit with one bag per customer's full name, "Then" list, "Add to your trip" offer at the top.
+- Tracking: per-order stops, `orders_ahead`, "Order picked up".
+- Checkout: priority toggle + **?**.
+- Logistics Today: "On a trip · N orders".
+
+**Verified:**
+- Planner unit runs: same-store merge; opposite directions; 8-min rule; priority close/far; 6th order refused.
+- Rolled-back SQL: `apply_route_sequence` re-orders and refuses to move a started stop or drop one.
+- **End-to-end on the real database and real function code** (rider token mocked in-process; test rows removed; rider restored):
+  - **Founder's scenario:** 29/29 — offer A → accept → B offered as an addition at once → accept → A,B collected in one visit → near A first → B "picked up · order/s ahead", no rider visible → A live → A's PIN → B "heading your way" + live → B's PIN → trip done, rider paid R70.
+  - **Priority variant:** 29/29 — far priority B delivered first, A sees "ahead", rider paid R70 (priority fee kept by Umzila).
+  - **5-order trip:** a 6th order not added, all 5 PINs, paid R172.40.
+- Headless 390 px: store-visit card, second drop, "Add to your trip" offer at the top; checkout priority toggle +R15, ? tooltip, fee R34.46 → R49.46 (quote stand-in locally — no ORS key on this machine).
+
+**Files:** `netlify/functions/{advance-route,respond-to-driver-offer,driver-heartbeat,get-delivery-quote}.js`, `netlify/functions/lib/{route-insertion (new),batch-dispatch,road-distance}.js`, `logistics.html`, `track.html`, `checkout.html`. Migrations: `multi_drop_routes_core` (`driver_offers.insertion`, `get_route_plan_input`, `apply_route_sequence`, `find_batchable_routes` v2), `delivery_plan_point`, `driver_board_multi_drop`, `tracking_multi_drop` (+ ops board trip count).
+
+---
+
 ## 2026-10-04 — Rider pay follows the delivery price
 
 **Asked for (founder):** change rider pay to reflect the new R34–R45 delivery price.

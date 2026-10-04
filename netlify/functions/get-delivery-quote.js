@@ -498,6 +498,9 @@ exports.handler = async function (event, context) {
       body: JSON.stringify({
         quoteId: quoteRow.id,
         totalDeliveryFee,
+        // Priority delivery (checkout toggle): the price to add it, and whether this quote includes it.
+        priorityFee: PRIORITY_FEE,
+        priority: priorityFee > 0,
         roadKm: farthestLeg ? Math.round(farthestLeg.distanceKm * 10) / 10 : null,
         driveMin: farthestLeg && farthestLeg.durationMin != null ? Math.round(farthestLeg.durationMin) : null,
         expiresAt: quoteRow.expires_at

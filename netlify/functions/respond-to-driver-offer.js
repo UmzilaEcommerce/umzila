@@ -9,6 +9,8 @@
 // transitionDelivery() (lib/delivery-state.js).
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
+const { planTrip } = require('./lib/route-insertion');
+const { sweepWaitingDeliveries } = require('./lib/batch-dispatch');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -17,73 +19,34 @@ const headers = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
-// Delivery network Stage 11 — appends a (pickup, drop) pair to an EXISTING
-// route for an accepted 'batch_addition' offer, instead of creating a new
-// route (createRouteForAcceptedOffer, below, still handles 'new_route').
-// Append-to-end-of-current-stops only -- the same deliberate simplification
-// lib/batch-dispatch.js documents (full route-insertion-point optimization
-// is plan §33, more machinery than this pilot needs yet).
-async function appendToExistingRoute(admin, offer, delivery, driverId) {
+// Multi-drop trips (2026-10-05): an accepted 'batch_addition' offer joins the
+// rider's EXISTING trip. The trip may have moved on since the offer was made,
+// so it is re-planned now (lib/route-insertion.js — fastest whole trip, nobody
+// already on it more than 8 min later unless this order bought priority, max
+// 5 orders) and applied atomically by apply_route_sequence(). If it no longer
+// fits, the rider is told and the order goes back to waiting.
+async function planBatchAddition(admin, offer) {
   if (!offer.route_id) return { ok: false, reason: 'no_route_on_offer' };
-  if (!delivery.quote_id) return { ok: false, reason: 'no_quote' };
+  const { data: point } = await admin.rpc('get_delivery_plan_point', { p_delivery_id: offer.delivery_id });
+  if (!point || !point.pickup || !point.drop || point.seller_count !== 1) return { ok: false, reason: 'unroutable' };
+  const { data: input } = await admin.rpc('get_route_plan_input', { p_route_id: offer.route_id });
+  if (!input || !input.route) return { ok: false, reason: 'route_not_found' };
+  if (input.route.driver_id !== offer.driver_id) return { ok: false, reason: 'route_driver_mismatch' };
+  if (!['assigned', 'started', 'active'].includes(input.route.status)) return { ok: false, reason: 'route_no_longer_active' };
+  const plan = await planTrip(admin, input, { deliveryId: offer.delivery_id, sellerId: point.seller_id, pickup: point.pickup, drop: point.drop, customer: point.customer, priority: !!point.priority });
+  return plan.ok ? { ok: true, plan } : { ok: false, reason: plan.reason };
+}
 
-  // Re-validate the route is still live and still this driver's -- time may
-  // have passed between the offer being created and being accepted.
-  const { data: route, error: routeError } = await admin
-    .from('routes')
-    .select('id, driver_id, status')
-    .eq('id', offer.route_id)
-    .maybeSingle();
-  if (routeError || !route) return { ok: false, reason: 'route_not_found', detail: routeError && routeError.message };
-  if (route.driver_id !== driverId) return { ok: false, reason: 'route_driver_mismatch' };
-  if (!['started', 'active'].includes(route.status)) return { ok: false, reason: 'route_no_longer_active' };
-
-  const { data: quote, error: quoteError } = await admin
-    .from('delivery_quotes')
-    .select('pickup_seller_ids')
-    .eq('id', delivery.quote_id)
-    .maybeSingle();
-  if (quoteError || !quote) return { ok: false, reason: 'no_quote', detail: quoteError && quoteError.message };
-
-  // Stage 4 (2026-09-17): deliberately stays single-seller-only, unlike
-  // createRouteForAcceptedOffer below. A bundled order only ever gets a
-  // FRESH route via idle-driver dispatch -- combining Stage 11's append-to-
-  // an-already-moving-route model with multi-seller stop sequencing is real
-  // added combinatorics not justified yet for a 2-driver pilot. Named
-  // limitation, not a stale TODO (delivery-network-spec.md, Stage 4 section).
-  const pickupSellerIds = Array.isArray(quote.pickup_seller_ids) ? quote.pickup_seller_ids : [];
-  if (pickupSellerIds.length !== 1) return { ok: false, reason: 'multi_seller_unsupported' };
-  const sellerId = pickupSellerIds[0];
-
-  const { data: seller, error: sellerError } = await admin
-    .from('sellers')
-    .select('pickup_geo')
-    .eq('id', sellerId)
-    .maybeSingle();
-  if (sellerError || !seller || !seller.pickup_geo) return { ok: false, reason: 'no_pickup_location', detail: sellerError && sellerError.message };
-  if (!delivery.destination_geo) return { ok: false, reason: 'no_destination' };
-
-  const { data: existingStops, error: stopsReadError } = await admin
-    .from('route_stops')
-    .select('seq_order')
-    .eq('route_id', route.id)
-    .order('seq_order', { ascending: false })
-    .limit(1);
-  if (stopsReadError) return { ok: false, reason: 'db_error', detail: stopsReadError.message };
-  const nextSeq = (existingStops && existingStops[0] ? existingStops[0].seq_order : 0) + 1;
-
-  const { error: stopsError } = await admin.from('route_stops').insert([
-    { route_id: route.id, stop_type: 'pickup', seq_order: nextSeq, seller_id: sellerId, delivery_id: delivery.id, location: seller.pickup_geo, status: 'pending' },
-    { route_id: route.id, stop_type: 'drop', seq_order: nextSeq + 1, seller_id: null, delivery_id: delivery.id, location: delivery.destination_geo, status: 'pending' }
-  ]);
-  if (stopsError) return { ok: false, reason: 'db_error', detail: stopsError.message };
-
-  const { error: deliveryLinkError } = await admin.from('deliveries').update({ route_id: route.id }).eq('id', delivery.id);
-  if (deliveryLinkError) return { ok: false, reason: 'db_error', detail: deliveryLinkError.message };
-  // offer.route_id was already set when evaluateBatchCandidates() created
-  // this offer (the route already existed then) -- nothing to link back.
-
-  return { ok: true, routeId: route.id };
+async function appendToExistingRoute(admin, offer, delivery) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const planned = await planBatchAddition(admin, offer);
+    if (!planned.ok) return { ok: false, reason: planned.reason };
+    const { error } = await admin.rpc('apply_route_sequence', { p_route_id: offer.route_id, p_new_delivery_id: delivery.id, p_order: planned.plan.order });
+    if (!error) return { ok: true, routeId: offer.route_id, plan: planned.plan };
+    if (!/plan_stale/.test(error.message || '')) return { ok: false, reason: 'db_error', detail: error.message };
+    // The rider moved on between planning and applying — plan again once.
+  }
+  return { ok: false, reason: 'plan_stale' };
 }
 
 // Delivery network Stage 10 (Stage 4, 2026-09-17: N pickups) — builds the
@@ -248,6 +211,17 @@ exports.handler = async function (event) {
   const nowIso = new Date().toISOString();
 
   if (response === 'accept') {
+    // An addition to a trip: make sure it still fits before taking it.
+    if (offer.offer_type === 'batch_addition') {
+      const pre = await planBatchAddition(admin, offer);
+      if (!pre.ok) {
+        await admin.from('driver_offers').update({ status: 'expired', responded_at: nowIso }).eq('id', offer.id).eq('status', 'pending');
+        await transitionDelivery(admin, offer.delivery_id, 'READY_FOR_DISPATCH', { type: 'system' }, { eventType: 'BATCH_NO_LONGER_FITS', metadata: { offer_id: offer.id, reason: pre.reason } });
+        sweepWaitingDeliveries(admin, { limit: 3 }).catch(() => {});
+        return { statusCode: 409, headers, body: JSON.stringify({ error: 'This order no longer fits your trip — it will go to another rider.', reason: pre.reason }) };
+      }
+    }
+
     // Optimistic guard: only one concurrent 'accept'/'decline' can flip this
     // row from pending -- if 0 rows update, someone else (or the expiry
     // check above) already resolved it.
@@ -300,7 +274,7 @@ exports.handler = async function (event) {
     // route. 'batch_addition' offers append to their existing route instead
     // of creating a new one.
     const routeResult = offer.offer_type === 'batch_addition'
-      ? await appendToExistingRoute(admin, offer, transitionResult.delivery, callerDriver.id)
+      ? await appendToExistingRoute(admin, offer, transitionResult.delivery)
       : await createRouteForAcceptedOffer(admin, offer, transitionResult.delivery, callerDriver.id);
     if (!routeResult.ok) {
       await transitionDelivery(admin, offer.delivery_id, 'REASSIGNING', { type: 'system' }, { eventType: 'ROUTE_CREATION_FAILED', metadata: { offer_id: offer.id, reason: routeResult.reason } })
@@ -313,6 +287,10 @@ exports.handler = async function (event) {
       if (revertError2) console.warn('respond-to-driver-offer: failed to revert offer after route-creation failure', revertError2.message);
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Could not create route for this delivery', detail: routeResult.detail || routeResult.reason }) };
     }
+
+    // Two orders from one store at the same time: now that this rider has a
+    // trip, offer them the other waiting order(s) that fit it straight away.
+    await sweepWaitingDeliveries(admin, { limit: 5 });
 
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true, response: 'accept', delivery: transitionResult.delivery, routeId: routeResult.routeId }) };
   }
@@ -357,5 +335,6 @@ exports.handler = async function (event) {
     };
   }
 
+  if (offer.offer_type === 'batch_addition') await sweepWaitingDeliveries(admin, { limit: 3 });
   return { statusCode: 200, headers, body: JSON.stringify({ ok: true, response: 'decline', delivery: transitionResult.delivery }) };
 };

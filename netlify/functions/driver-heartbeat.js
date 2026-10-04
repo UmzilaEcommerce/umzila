@@ -12,7 +12,7 @@
 // Never trusts a client-supplied driverId/userId -- the caller's identity is
 // always resolved from their own auth token first.
 const { createClient } = require('@supabase/supabase-js');
-const { dispatchDelivery } = require('./lib/dispatch');
+const { sweepWaitingDeliveries } = require('./lib/batch-dispatch');
 const { transitionDelivery } = require('./lib/delivery-state');
 
 const headers = {
@@ -129,8 +129,8 @@ exports.handler = async function (event) {
   // Keep orders moving (2026-10-04 — they used to stall forever):
   //  1. an offer nobody answered within its window is expired and its
   //     delivery goes back to READY_FOR_DISPATCH;
-  //  2. while any eligible rider is online, the oldest waiting delivery is
-  //     offered again (an order that became ready while nobody was online,
+  //  2. while any eligible rider is online, waiting deliveries are offered
+  //     onto a trip that fits them, or to a free rider (an order that became ready while nobody was online,
   //     or whose offer was declined/expired). dispatchDelivery() picks the
   //     nearest eligible online rider and never double-offers.
   // Best-effort: never fails the heartbeat itself.
@@ -146,12 +146,9 @@ exports.handler = async function (event) {
             .catch(() => {});
         }
       }
-      const { data: waiting } = await admin.from('deliveries').select('id')
-        .eq('status', 'READY_FOR_DISPATCH').order('created_at', { ascending: true }).limit(3);
-      for (const w of waiting || []) {
-        const r = await dispatchDelivery(admin, w.id);
-        if (r && r.dispatched) break;
-      }
+      // Waiting orders: onto a rider's trip if they fit (multi-drop), else
+      // to the nearest free rider.
+      await sweepWaitingDeliveries(admin, { limit: 3 });
     } catch (e) {
       console.warn('driver-heartbeat: redispatch sweep failed', e && e.message);
     }
