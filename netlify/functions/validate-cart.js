@@ -508,7 +508,10 @@ variants.forEach(v => {
                 && new Date(quoteRow.expires_at).getTime() > Date.now();
 
             if (!quoteError && quoteRow && quoteBelongsToCaller && quoteStillValid) {
-                fees = { ...fees, total: Number(quoteRow.total_delivery_fee), quotedFee: Number(quoteRow.total_delivery_fee) };
+                // The quote prices product delivery only — rep collection /
+                // return fees for services in the same cart still apply.
+                const quoted = Number(quoteRow.total_delivery_fee);
+                fees = { ...fees, productDelivery: quoted, total: Math.round((quoted + (fees.serviceCollection || 0) + (fees.serviceReturn || 0)) * 100) / 100, quotedFee: quoted };
                 quoteApplied = true;
             }
             // An invalid/expired/mismatched quote is not an error -- it just means

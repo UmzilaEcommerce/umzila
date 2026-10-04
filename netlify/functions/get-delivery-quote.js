@@ -3,8 +3,10 @@
 // Delivery network (plan §139/§20, delivery-network-spec.md Stage 3):
 // computes and locks a delivery fee quote *before* checkout, using real
 // road-distance pricing (OpenRouteService, cached per leg — see lib/road-distance.js). Writes a `delivery_quotes`
-// row and returns only { quoteId, totalDeliveryFee, expiresAt } — customers
-// see the total, not the breakdown (plan §139).
+// row and returns { quoteId, totalDeliveryFee, expiresAt, roadKm, driveMin } —
+// customers see the total, not the fee breakdown (plan §139). roadKm/driveMin
+// (one-way, farthest store → customer, real road route) feed checkout's
+// "time saved" line, which must never use straight-line distance.
 //
 // This mirrors validate-cart.js's supporting fee logic (per-seller surcharge,
 // free_delivery exclusion, bulk-quantity stepping via units_per_trip, the
@@ -324,6 +326,7 @@ exports.handler = async function (event, context) {
     // pricing (plan §11) — a routing failure is a hard error here, and
     // checkout then uses its class-based fallback price instead. ----
     let distanceKm, durationMin;
+    let farthestLeg = null; // { distanceKm, durationMin } — farthest store → customer, for the time-saved line
     // Stage 4: for a bundled 2-seller cart, `orderedSellerIds` may differ
     // from `pickupSellerIds` -- it's the actual visiting order the quote was
     // priced against, stored into delivery_quotes.pickup_seller_ids below.
@@ -335,6 +338,7 @@ exports.handler = async function (event, context) {
     if (pickupSellerIds.length === 1) {
       const leg = await getRoadLeg(supabase, pickupPointBySellerId[pickupSellerIds[0]], { lat: destinationLat, lon: destinationLon });
       if (!leg) return serverError('Failed to compute delivery route (routing unavailable).');
+      farthestLeg = leg;
       distanceKm = leg.distanceKm;
       durationMin = leg.durationMin;
     } else {
@@ -357,6 +361,7 @@ exports.handler = async function (event, context) {
       }
       distanceKm = winner.totalDistanceKm;
       durationMin = winner.totalDurationMin;
+      farthestLeg = [aD, bD].filter(Boolean).sort((x, y) => y.distanceKm - x.distanceKm)[0] || null;
     }
 
     // ---- Hard distance cutoff (founder decision 2026-09-26, §AA): a real
@@ -478,6 +483,8 @@ exports.handler = async function (event, context) {
       body: JSON.stringify({
         quoteId: quoteRow.id,
         totalDeliveryFee,
+        roadKm: farthestLeg ? Math.round(farthestLeg.distanceKm * 10) / 10 : null,
+        driveMin: farthestLeg && farthestLeg.durationMin != null ? Math.round(farthestLeg.durationMin) : null,
         expiresAt: quoteRow.expires_at
       })
     };

@@ -1414,14 +1414,15 @@
           <!-- Time-saved value anchor (founder ask 2026-09-26): sits below
                the delivery address and above the price summary so the
                "why this fee is worth it" message is on-screen with the
-               total the buyer is about to pay. Distance is straight-line
-               (haversine, seller pickup_geo <-> the picked address) since
-               there's no live ORS_API_KEY (routing) yet for a real road
-               distance — see updateTimeSavedEstimate(). Hidden until both
-               a real address and seller pickup location are known. -->
+               total the buyer is about to pay. Uses the real road route and
+               drive time from the live delivery quote — see
+               updateTimeSavedEstimate(). Hidden until a quote exists. -->
           <div id="timeSavedBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px">
             <div id="timeSavedLine" style="font-size:13px;font-weight:700;color:#1a1a2e"></div>
           </div>
+          <!-- Why this address isn't live-priced (outside the delivery zones,
+               over 20 km, stores too far apart…) — the standard fee applies. -->
+          <div id="quoteNoticeBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#fff7ed;border-radius:10px;font-size:13px;color:#9a3412"></div>
 
           <!-- Completeness gate — a service left unfinished (e.g. a required
                file/answer never provided) blocks Pay Now until fixed. This is
@@ -1963,6 +1964,8 @@
       destinationGeo: null,       // { lat, lon } captured from a picked Photon suggestion —
                                    // delivery-network Stage 2, see applyAddressSuggestion()
       addressValidatedAt: null,
+      quote: null,                 // live road-distance quote { id, fee, expiresAt, roadKm, driveMin, cartKey } — see fetchDeliveryQuote()
+      quoteNotice: null,           // why an address couldn't be live-priced (shown under the address)
       deliveryQuoteId: null,       // Stage 3 — see fetchDeliveryQuote(). Null until a quote
                                     // succeeds (won't yet, until ORS_API_KEY (routing) is
                                     // added in Netlify) -- validateCheckout() only sends it
@@ -3146,45 +3149,14 @@ async function saveCartToServer() {
         state.destinationGeo = null;
         state.addressValidatedAt = null;
         state.deliveryQuoteId = null;
+        state.quote = null;
+        state.quoteNotice = null;
+        renderQuoteNotice();
         updateTimeSavedEstimate();
       }
     }
 
     // ---- Time-saved value anchor (founder ask 2026-09-26) ----
-    // PostgREST returns a geography column as hex-encoded (E)WKB text by
-    // default. sellers.pickup_geo is always written as a plain
-    // `SRID=4326;POINT(lon lat)` (see seller-dashboard.html) -- this is the
-    // same decode get-delivery-quote.js's parseGeographyPoint() does
-    // server-side, ported here since there's no shared module between a
-    // Netlify function and a static page to import it from.
-    function decodeGeographyPointHex(hex) {
-      if (!hex || typeof hex !== 'string') return null;
-      try {
-        const bytes = new Uint8Array(hex.length / 2);
-        for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-        const view = new DataView(bytes.buffer);
-        const little = view.getUint8(0) === 1;
-        const type = little ? view.getUint32(1, true) : view.getUint32(1, false);
-        const hasSrid = (type & 0x20000000) !== 0;
-        let offset = 5;
-        if (hasSrid) offset += 4;
-        const lon = little ? view.getFloat64(offset, true) : view.getFloat64(offset, false);
-        const lat = little ? view.getFloat64(offset + 8, true) : view.getFloat64(offset + 8, false);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-        return { lat, lon };
-      } catch (e) {
-        return null;
-      }
-    }
-
-    function haversineKmClient(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
     function formatMinutesRange(lowMin, highMin) {
       const fmt = (mins) => {
         const m = Math.round(mins);
@@ -3195,16 +3167,13 @@ async function saveCartToServer() {
       return `${fmt(lowMin)} – ${fmt(highMin)}`;
     }
 
-    // Straight-line (haversine) distance, seller pickup point -> the picked
-    // address -- an approximation of the real road distance since there's
-    // no live ORS_API_KEY (routing) yet to get a real one from
-    // get-delivery-quote.js. For a multi-seller cart, travel uses the
-    // farthest seller (the real single round trip has to cover whichever
-    // store is furthest out), but the wait-in-queue time is per store
-    // (founder ask 2026-09-26: buying from N stores yourself means N real
-    // queues, not one) -- 20-30min per store, summed across every distinct
-    // seller in the cart, not just the farthest one. Travel: 2.5 min/km one
-    // way, doubled for the round trip.
+    // Uses the live quote's real road route (farthest store -> the picked
+    // address, OpenRouteService) and its drive time — never straight-line.
+    // For a multi-seller cart, travel uses the farthest store (one trip has to
+    // reach it), but the wait-in-queue time is per store (founder ask
+    // 2026-09-26: buying from N stores yourself means N real queues) —
+    // 20-30 min per store. Travel is doubled for the round trip.
+    // KM_TIME_MIN_PER_KM is only used if a route came back without a time.
     const KM_TIME_MIN_PER_KM = 2.5;
     const WAIT_MIN_PER_STORE_LOW = 20;
     const WAIT_MIN_PER_STORE_HIGH = 30;
@@ -3221,20 +3190,17 @@ async function saveCartToServer() {
         return;
       }
 
-      let maxDistanceKm = null;
-      sellers.forEach(s => {
-        const point = decodeGeographyPointHex(s.pickup_geo);
-        if (!point) return;
-        const d = haversineKmClient(point.lat, point.lon, dest.lat, dest.lon);
-        if (maxDistanceKm === null || d > maxDistanceKm) maxDistanceKm = d;
-      });
-      if (maxDistanceKm === null) {
+      // Real road route only (from the live quote: farthest store → this
+      // address, OpenRouteService). No quote → no estimate; never straight-line.
+      const q = activeQuote();
+      if (!q || !(q.roadKm > 0)) {
         block.classList.add('hidden');
         return;
       }
 
       const storeCount = sellers.length;
-      const roundTripTravelMin = maxDistanceKm * KM_TIME_MIN_PER_KM * 2;
+      const oneWayMin = q.driveMin > 0 ? q.driveMin : q.roadKm * KM_TIME_MIN_PER_KM;
+      const roundTripTravelMin = oneWayMin * 2;
       const lowMin = roundTripTravelMin + storeCount * WAIT_MIN_PER_STORE_LOW;
       const highMin = roundTripTravelMin + storeCount * WAIT_MIN_PER_STORE_HIGH;
 
@@ -3251,9 +3217,37 @@ async function saveCartToServer() {
     // and checkout proceeds exactly as it does today. validate-cart.js already
     // falls back to its existing pricing whenever no quoteId is sent, so this
     // can never make checkout worse, only better once the key lands.
-    async function fetchDeliveryQuote() {
+    // Same cart (items + quantities) ⇒ same quote; anything else re-quotes.
+    function cartQuoteKey() {
+      return (state.cart || []).filter(i => (i.listing_type || 'product') !== 'service')
+        .map(i => `${i.id || i.product_id}:${i.quantity || i.qty || 1}`).sort().join(',');
+    }
+    // The live quote, if it still matches this cart and has > 1 min left.
+    function activeQuote() {
+      const q = state.quote;
+      if (!q || !state.destinationGeo) return null;
+      if (q.cartKey !== cartQuoteKey()) return null;
+      if (new Date(q.expiresAt).getTime() - Date.now() < 60000) return null;
+      return q;
+    }
+    // Before paying: make sure the price on screen is a live, unexpired quote
+    // for exactly this cart (so the order is linked to it — that link is what
+    // puts the order into rider dispatch and live tracking).
+    async function ensureFreshQuote() {
+      if (state.destinationGeo && !activeQuote()) await fetchDeliveryQuote();
+      state.deliveryQuoteId = activeQuote() ? activeQuote().id : null;
+    }
+    let quoteInFlight = null;
+    function fetchDeliveryQuote() {
+      if (!quoteInFlight) quoteInFlight = fetchDeliveryQuoteNow().finally(() => { quoteInFlight = null; });
+      return quoteInFlight;
+    }
+    async function fetchDeliveryQuoteNow() {
       state.deliveryQuoteId = null;
-      if (!state.destinationGeo || !state.cart.length) return;
+      state.quote = null;
+      state.quoteNotice = null;
+      if (!state.destinationGeo || !state.cart.length) { renderQuoteNotice(); return; }
+      const cartKey = cartQuoteKey();
       try {
         const res = await fetch('/.netlify/functions/get-delivery-quote', {
           method: 'POST',
@@ -3265,12 +3259,30 @@ async function saveCartToServer() {
             priority: !!state.priorityDelivery
           })
         });
-        if (!res.ok) return; // not configured yet, or ineligible -- silent fallback
-        const data = await res.json();
-        if (data && data.quoteId) state.deliveryQuoteId = data.quoteId;
+        const data = await res.json().catch(() => null);
+        if (res.ok && data && data.quoteId) {
+          state.quote = { id: data.quoteId, fee: Number(data.totalDeliveryFee), expiresAt: data.expiresAt, roadKm: data.roadKm, driveMin: data.driveMin, cartKey };
+          state.deliveryQuoteId = data.quoteId;
+        } else if (res.ok && data && data.eligible === false) {
+          state.quoteNotice = data.reason === 'self_arranged'
+            ? 'This store delivers to you itself.'
+            : /outside Umzila's delivery area/i.test(data.reason || '')
+              ? 'This address is outside our live-priced delivery area (about 20 km around Durban), so the standard delivery fee applies.'
+              : `${data.reason || 'This address can\'t be live-priced.'} The standard delivery fee applies.`;
+        }
+        // Routing unavailable (5xx) → standard fee, no notice needed.
       } catch (e) {
-        console.warn('Delivery quote unavailable, using existing pricing:', e);
+        console.warn('Delivery quote unavailable, using standard pricing:', e);
       }
+      renderQuoteNotice();
+      updateTimeSavedEstimate();
+      updateOrderSummary();
+    }
+    function renderQuoteNotice() {
+      const el = document.getElementById('quoteNoticeBlock');
+      if (!el) return;
+      el.textContent = state.quoteNotice || '';
+      el.classList.toggle('hidden', !state.quoteNotice);
     }
 
     /********************
@@ -4020,7 +4032,16 @@ async function validateCheckout() {
 
       // Use enriched validated cart when available; fall back to raw cart
       const cartForFee = (state.validatedCart && state.validatedCart.length) ? state.validatedCart : state.cart;
-      const { fee, maxClass, uniqueSellers, isFree, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal);
+      let { fee, maxClass, uniqueSellers, isFree, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal);
+      // A live road-distance quote for this exact cart is the real price.
+      const liveQuote = activeQuote();
+      if (liveQuote && cartHasProducts(cartForFee)) {
+        fee = liveQuote.fee;
+        isFree = fee <= 0;
+      } else if (state.quote && state.destinationGeo && cartHasProducts(cartForFee)) {
+        // Cart changed or quote about to expire — re-price in the background.
+        fetchDeliveryQuote();
+      }
       const svcFees = calculateServiceFees(cartForFee);
       state.deliveryFee       = fee + svcFees.total;
       state.deliveryClass     = maxClass;
@@ -4082,7 +4103,9 @@ async function validateCheckout() {
         if (breakdownEl) {
           const classLabel = maxClass.charAt(0).toUpperCase() + maxClass.slice(1);
           const sellerLabel = uniqueSellers === 1 ? '1 seller' : `${uniqueSellers} sellers`;
-          breakdownEl.textContent = `${classLabel} parcel · ${sellerLabel}`;
+          breakdownEl.textContent = liveQuote && liveQuote.roadKm
+            ? `${String(liveQuote.roadKm).replace(/\.0$/, '')} km by road · ${sellerLabel}`
+            : `${classLabel} parcel · ${sellerLabel} · standard fee`;
           breakdownEl.style.display = 'block';
         }
       }
@@ -4854,7 +4877,9 @@ async function submitToPayFast(cartItems, orderId, total) {
         triggerBtn.classList.add('is-processing');
         if (mobileBtn) { mobileBtn.disabled = true; mobileBtn.classList.add('is-processing'); }
 
-        // Server-side cart validation
+        // Price on a live quote for exactly this cart (re-quotes if the cart
+        // changed or the quote expired), then validate server-side.
+        await ensureFreshQuote();
         const validatedCart = await validateCheckout();
 
         if (validatedCart.length === 0) {

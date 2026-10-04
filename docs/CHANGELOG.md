@@ -4,6 +4,28 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Delivery price now actually follows road distance; orders enter dispatch/tracking; time saved uses the road route
+
+**Reported:** delivery always showed R42.50 instead of varying with distance/zones; "time saved" changed but it was unclear whether it used straight-line or road distance; does tracking now work.
+
+**Root causes (three, stacked):**
+1. **Checkout threw the live price away.** `fetchDeliveryQuote()` got the road-distance quote but kept only its id; the delivery line always showed the class fallback. The quote was only used invisibly at payment — and only if it hadn't expired (15 min) and the cart hadn't changed.
+2. **Almost all of Durban was "outside the delivery area".** The only `service_zones` row was the pre-rebrand "westville campus" zone (Berea/Westville/Pinetown). The CBD — where Velaphi is — Umhlanga, Chatsworth, Umlazi etc. got `eligible:false` → fallback.
+3. **"Time saved" used straight-line (haversine) distance** × 2.5 min/km, never the road.
+Consequence: **0 orders had ever carried a `delivery_quote_id`, so `trg_create_delivery_on_payment` never created a delivery** — nothing ever reached rider dispatch, live tracking or PIN confirmation.
+
+**What changed:**
+- `checkout.html`: the live quote is the delivery price on screen ("4.2 km by road · 1 seller"); it re-quotes automatically when the cart changes or the quote nears expiry, and `ensureFreshQuote()` runs right before payment so the price shown is the price charged and the order is linked to the quote. Addresses that can't be live-priced show a plain note and the standard (fallback) fee. Time saved now uses the quote's real road route and drive time (hidden when there's no road quote); the straight-line helpers were removed.
+- `get-delivery-quote.js`: also returns `roadKm`/`driveMin` (one-way, farthest store → customer) for the time-saved line; customers still never see the fee breakdown.
+- `validate-cart.js`: an applied quote now replaces only *product* delivery — rep collection/return fees for services in the same cart were being dropped.
+- DB: new **"Durban metro"** core zone (20 km circle around the CBD). Doesn't widen where orders are accepted (they always were, at the fallback); it lets the city be priced by real distance. The 20 km road cutoff per store still applies. Hillcrest (~27 km) stays on the fallback. Editable in admin → Service Areas.
+
+**Verified on a draft deploy with the real keys, real browser checkout (390 px):** 35 Musgrave Rd → **R20.61**, "4.2 km by road", time saved 32–42 min; 7 Westville Rd → **R55.45**, 12.9 km; 17 Inanda Rd Hillcrest → R42.50 + outside-area note; `validate-cart` with the quote → `productDelivery 20.61, quoteApplied true`. The delivery-creation trigger needs only `delivery_quote_id`, which paid orders now carry. Not run: a real paid order through to a rider (1 driver registered; they must be online in the rider app to receive offers).
+
+**Files:** `checkout.html`, `netlify/functions/{get-delivery-quote,validate-cart}.js`; data: `service_zones` "Durban metro".
+
+---
+
 ## 2026-10-04 — Address search tuned on real Durban addresses (keys live)
 
 With `HERE_API_KEY`/`ORS_API_KEY` added, tested real searches. HERE Autocomplete alone: exact house numbers for "400 Umgeni Road", "35 Musgrave Road", "10 Problem Mkhize Road", "5 Jan Hofmeyr Road Westville" — but "12 Florida Road" ranked Evander (Mpumalanga) first, anything with the suburb typed ("120 Florida Road Morningside", "1 Ridge Road Umbilo") returned **nothing**, and places by name ("Gateway", "Wushwini Arts Centre") weren't found.
