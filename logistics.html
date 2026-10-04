@@ -8,13 +8,13 @@
 <style>
 /* === TOKENS === */
 :root{
-  --bg:#f3f4f6;--surface:#fff;--surface2:#f9fafb;--border:#e5e7eb;
+  --bg:#f4f5f9;--surface:#fff;--surface2:#f8f9fc;--border:#e6e8ef;
   --text:#111827;--text2:#374151;--muted:#6b7280;
   --accent:#4f46e5;--accent-dark:#4338ca;--accent-light:#eef2ff;
   --danger:#ef4444;--danger-light:#fef2f2;
   --success:#22c55e;--warning:#f59e0b;
   --sidebar-bg:#1e1b4b;--sidebar-w:220px;--header-h:58px;
-  --radius:10px;
+  --radius:14px;
   --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
   --shadow-md:0 4px 16px rgba(0,0,0,.09);
   font-family:Inter,-apple-system,system-ui,sans-serif;
@@ -85,8 +85,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 
 /* === ORDER TABLE === */
 .orders-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
-.orders-hdr-row{display:grid;grid-template-columns:140px 1fr 60px 100px 120px 80px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.order-row{display:grid;grid-template-columns:140px 1fr 60px 100px 120px 80px;padding:13px 16px;border-bottom:1px solid var(--border);align-items:center;cursor:pointer;transition:background .1s;font-size:13px}
+.orders-hdr-row{display:grid;grid-template-columns:130px 1fr 80px 100px 190px 24px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.order-row{display:grid;grid-template-columns:130px 1fr 80px 100px 190px 24px;padding:13px 16px;border-bottom:1px solid var(--border);align-items:center;cursor:pointer;transition:background .1s;font-size:13px}
 .order-row:last-child{border-bottom:none}
 .order-row:hover{background:var(--accent-light)}
 .order-id{font-weight:700;color:var(--accent);font-size:12px;font-family:ui-monospace,monospace}
@@ -111,7 +111,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .badge.refunded{background:#ede9fe;color:#5b21b6}
 
 /* === BUTTONS === */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;font-family:inherit;white-space:nowrap;line-height:1}
+.btn{text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;font-family:inherit;white-space:nowrap;line-height:1}
 .btn-primary{background:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent-dark)}
 .btn-ghost{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
@@ -249,6 +249,99 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   .analytics-metrics{grid-template-columns:1fr}
 }
 
+/* === TODAY / OPS BOARD (2026-10-04) === */
+.ops-date{font-size:13px;font-weight:600;color:var(--muted);margin-left:6px}
+.ops-empty{padding:40px 16px;text-align:center;color:var(--muted)}
+.ops-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.ops-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+.ops-kpi-v{font-size:24px;font-weight:900;line-height:1.1}
+.ops-kpi-l{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.ops-kpi.bad .ops-kpi-v{color:#dc2626}
+.ops-kpi.good .ops-kpi-v{color:#16a34a}
+.ops-allgood{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:12px;padding:10px 14px;font-weight:700;font-size:13px;margin-bottom:14px}
+.ops-section{margin-bottom:16px}
+.ops-section-h{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:0 2px 8px}
+.ops-section-h.bad{color:#dc2626}
+.ops-live{display:inline-flex;align-items:center;gap:5px;font-size:11px;text-transform:none;letter-spacing:0;font-weight:600}
+.ops-live i{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:rdPulse 1.8s infinite}
+.ops-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.ops-lanes{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start}
+.ops-lane{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:10px;min-height:90px;display:flex;flex-direction:column;gap:8px}
+.ops-lane-h{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--text2)}
+.ops-lane-h span{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0 8px;font-size:11px}
+.ops-lane-empty{font-size:12px;color:var(--muted);padding:8px 2px}
+.ops-card{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 12px;cursor:pointer;font-family:inherit;box-shadow:var(--shadow);transition:transform .08s,box-shadow .15s}
+.ops-card:hover{box-shadow:var(--shadow-md)}
+.ops-card:active{transform:scale(.99)}
+.ops-card.warn{border-color:#fca5a5;background:#fffafa}
+.ops-card-top{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-weight:700}
+.ops-ref{font-family:ui-monospace,monospace;color:var(--accent)}
+.ops-cust{font-weight:800;font-size:14px;margin-top:2px}
+.ops-meta{font-size:12px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ops-foot{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px}
+.ops-rider{font-size:12px;font-weight:700;color:var(--text2)}
+.ops-why{margin-top:8px;font-size:12px;font-weight:700;color:#b91c1c;background:#fef2f2;border-radius:8px;padding:6px 8px}
+.ops-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap;background:#f3f4f6;color:#374151}
+.ops-pill.l-store{background:#fef3c7;color:#92400e}
+.ops-pill.l-rider{background:#fee2e2;color:#b91c1c}
+.ops-pill.l-pickup{background:#e0e7ff;color:#3730a3}
+.ops-pill.l-road{background:#dbeafe;color:#1e40af}
+.ops-pill.l-done{background:#dcfce7;color:#166534}
+.ops-pill.l-problem{background:#fee2e2;color:#991b1b}
+.ops-pill.fee{background:#f3e8ff;color:#6b21a8}
+.ops-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ops-two .ops-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.ops-rider-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.ops-rider-row:last-child{border-bottom:none}
+.ops-rider-name{font-weight:700;flex:1}
+.ops-dot{width:9px;height:9px;border-radius:50%;background:#d1d5db;flex-shrink:0}
+.ops-dot.on{background:#22c55e}
+.ops-muted{color:var(--muted);font-size:12px}
+.ops-done-row{display:flex;flex-direction:column;align-items:flex-start;width:100%;background:none;border:none;border-bottom:1px solid var(--border);padding:8px 0;text-align:left;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700}
+.ops-done-row:last-child{border-bottom:none}
+.det-status{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.det-status .ops-why{flex-basis:100%;margin-top:0}
+.det-contact{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chip b{font-weight:800;margin-left:2px}
+.chip b:empty{display:none}
+.or-chev{color:var(--muted);font-size:20px;line-height:1}
+
+/* === MORE SHEET (mobile) === */
+.more-sheet-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:600;display:none;align-items:flex-end}
+.more-sheet-bg.open{display:flex}
+.more-sheet{background:var(--surface);width:100%;border-radius:20px 20px 0 0;padding:8px 14px calc(18px + env(safe-area-inset-bottom));animation:sheetUp .2s ease}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+.more-grip{width:40px;height:4px;border-radius:2px;background:var(--border);margin:4px auto 10px}
+.more-item{display:flex;align-items:center;gap:14px;width:100%;padding:14px 8px;border:none;background:none;font-size:16px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);cursor:pointer;font-family:inherit;text-align:left}
+.more-item span{width:28px;text-align:center;font-size:20px}
+.more-item:last-child{border-bottom:none}
+.more-item.danger{color:#dc2626}
+
+@media(max-width:1100px){
+  .ops-kpis{grid-template-columns:repeat(3,1fr)}
+  .ops-lanes{grid-template-columns:1fr 1fr}
+}
+@media(max-width:768px){
+  .hdr .btn#newOrderBtn{display:none}
+  .hdr-search{max-width:none}
+  .ops-kpis{grid-template-columns:repeat(3,1fr);gap:8px}
+  .ops-kpi{padding:10px}
+  .ops-kpi-v{font-size:19px}
+  .ops-kpi-l{font-size:10px}
+  .ops-lanes{grid-template-columns:1fr}
+  .ops-lane{min-height:0}
+  .ops-two{grid-template-columns:1fr}
+  .orders-wrap{background:transparent;border:none;box-shadow:none}
+  .order-row{display:grid;grid-template-columns:1fr auto;grid-template-areas:"ref st" "cust cust" "items total";gap:4px 10px;padding:12px 14px;margin-bottom:8px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow)}
+  .order-row .or-ref{grid-area:ref;display:flex;gap:8px;align-items:baseline}
+  .order-row .or-cust{grid-area:cust}
+  .order-row .or-st{grid-area:st;justify-self:end}
+  .order-row .order-items-count{display:block;grid-area:items;text-align:left;font-size:12px}
+  .order-row .order-total{grid-area:total}
+  .order-row .order-actions{display:none}
+  .bnav-item{font-size:11px}
+}
+
 /* === RIDER (delivery panel) — mobile-first, big touch targets === */
 .nav-badge{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:10px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
 .bnav-item{position:relative}
@@ -384,7 +477,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   <nav class="sb-nav">
     <button class="nav-item active" data-panel="overview">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-      <span>Overview</span>
+      <span>Today</span>
     </button>
     <button class="nav-item" data-panel="orders">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -404,7 +497,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
     </button>
     <button class="nav-item" data-panel="delivery">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-      <span>Delivery</span>
+      <span>Deliver</span>
     </button>
     <button class="nav-item" data-panel="stores">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -427,37 +520,40 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   </div>
 </aside>
 
-<!-- Bottom nav (mobile) -->
+<!-- Bottom nav (mobile): 5 tabs, the rest under More -->
 <nav class="bottom-nav" id="bottomNav">
   <button class="bnav-item active" data-panel="overview">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    <span>Overview</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+    <span>Today</span>
   </button>
   <button class="bnav-item" data-panel="orders">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
     <span>Orders</span>
   </button>
-  <button class="bnav-item" data-panel="past">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-    <span>History</span>
-  </button>
-  <button class="bnav-item" data-panel="baskets">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>
-    <span>Baskets</span>
+  <button class="bnav-item" data-panel="delivery">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    <span>Deliver</span>
   </button>
   <button class="bnav-item" data-panel="services">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/></svg>
-    <span>Services</span>
+    <span>Tasks</span>
   </button>
-  <button class="bnav-item" data-panel="delivery">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-    <span>Delivery</span>
-  </button>
-  <button class="bnav-item" data-panel="analytics">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-    <span>Analytics</span>
+  <button class="bnav-item" id="bnavMore" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    <span>More</span>
   </button>
 </nav>
+<div class="more-sheet-bg" id="moreSheet">
+  <div class="more-sheet">
+    <div class="more-grip"></div>
+    <button class="more-item" data-panel="past"><span>🕘</span>Order history</button>
+    <button class="more-item" data-panel="baskets"><span>🛒</span>Active baskets</button>
+    <button class="more-item" data-panel="stores"><span>🏪</span>Stores</button>
+    <button class="more-item" data-panel="analytics"><span>📊</span>Analytics</button>
+    <button class="more-item" data-panel="settings"><span>⚙️</span>Settings</button>
+    <button class="more-item danger" id="moreLogout"><span>↩</span>Sign out</button>
+  </div>
+</div>
 
 <!-- Header -->
 <header class="hdr">
@@ -482,67 +578,30 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 <!-- Main -->
 <div class="main">
 
-  <!-- Overview -->
+  <!-- Today: live operations board -->
   <section id="panel-overview" class="panel active">
     <div class="panel-title">
-      Overview
-      <button class="btn btn-primary btn-sm" id="newOrderOverview">+ New Order</button>
+      <span>Today <span class="ops-date" id="todayDate"></span></span>
+      <button class="btn btn-ghost btn-sm" id="refreshToday">Refresh</button>
     </div>
-    <div class="stats-grid">
-      <div class="stat-card revenue">
-        <div class="stat-lbl">Revenue</div>
-        <div class="stat-val" id="st-revenue">R0</div>
-      </div>
-      <div class="stat-card pending">
-        <div class="stat-lbl">Pending</div>
-        <div class="stat-val" id="st-pending">0</div>
-      </div>
-      <div class="stat-card packaging">
-        <div class="stat-lbl">Packaging</div>
-        <div class="stat-val" id="st-packaging">0</div>
-      </div>
-      <div class="stat-card fulfilled">
-        <div class="stat-lbl">Fulfilled</div>
-        <div class="stat-val" id="st-fulfilled">0</div>
-      </div>
-      <div class="stat-card delivered">
-        <div class="stat-lbl">Delivered</div>
-        <div class="stat-val" id="st-delivered">0</div>
-      </div>
-      <div class="stat-card returned">
-        <div class="stat-lbl">Returned</div>
-        <div class="stat-val" id="st-returned">0</div>
-      </div>
-    </div>
-    <div class="two-col">
-      <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Recent Orders</div>
-        <div id="ov-recent"></div>
-      </div>
-      <div class="card">
-        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Top Items</div>
-        <div id="ov-items"></div>
-      </div>
-    </div>
+    <div id="today-root"><div class="ops-empty">Loading live operations…</div></div>
   </section>
 
   <!-- Orders Queue -->
   <section id="panel-orders" class="panel">
     <div class="panel-title">
-      Orders Queue
+      Orders
       <button class="btn btn-primary btn-sm" id="newOrderOrders">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         New Order
       </button>
     </div>
     <div class="filter-bar" id="statusChips">
-      <button class="chip active" data-val="QUEUE">Active Queue</button>
-      <button class="chip" data-val="ALL">All Orders</button>
-      <button class="chip" data-val="Pending">Pending</button>
-      <button class="chip" data-val="Packaging">Packaging</button>
-      <button class="chip" data-val="Fulfilled">Fulfilled</button>
-      <button class="chip" data-val="Delivered">Delivered</button>
-      <button class="chip" data-val="Returned">Returned</button>
+      <button class="chip active" data-val="QUEUE">Needs action <b id="cnt-action"></b></button>
+      <button class="chip" data-val="ACTIVE">In progress <b id="cnt-active"></b></button>
+      <button class="chip" data-val="DONE">Delivered</button>
+      <button class="chip" data-val="CANCELLED">Cancelled</button>
+      <button class="chip" data-val="ALL">All</button>
     </div>
     <div class="orders-wrap">
       <div class="orders-hdr-row">
@@ -784,7 +843,13 @@ document.addEventListener('sb-ready', function(e){
     else if(status==='cancelled'||status==='Cancelled') status='Returned';
     else if(status==='pending_payment') return null;
     const items = Array.isArray(r.items)?r.items:(r.items?[r.items]:[]);
+    // Seller enrollment payments live in orders too — not something to deliver.
+    const isFee = items.some(it=>/enrol?lment fee/i.test(String(it.item_name||it.name||it.item||'')));
     return {
+      isFee,
+      rawStatus: r.order_status||null,
+      delivery_instructions: r.delivery_instructions||'',
+      delivery_quote_id: r.delivery_quote_id||null,
       id: r.order_number||r.id,
       dbId: r.id,
       customer: r.customer_name||r.customer||'',
@@ -814,7 +879,10 @@ document.addEventListener('sb-ready', function(e){
 
   async function fetchOrders(){
     try{
-      const {data,error} = await sb.from('orders').select('*').order('created_at',{ascending:false}).limit(1000);
+      const {data,error} = await sb.from('orders')
+        .select('id,order_number,customer_name,customer_email,customer_phone,delivery_address,pickup_address,city,province,postal_code,label,order_status,payment_status,shipping_cost,delivery_class,delivery_zone,coupon_code,items,total,discount,package_type,notes,profile_id,user_id,created_at,delivery_instructions,delivery_quote_id')
+        .neq('order_status','pending_payment')
+        .order('created_at',{ascending:false}).limit(1000);
       if(error){console.warn('fetchOrders error',error);return[];}
       return (data||[]).map(mapOrder).filter(Boolean);
     }catch(e){console.warn('fetchOrders exception',e);return[];}
@@ -891,7 +959,15 @@ document.addEventListener('sb-ready', function(e){
     const {data:existing} = await sb.from('orders').select('id').eq('order_number',order.id).maybeSingle();
     let result;
     if(existing){
-      result = await sb.from('orders').update(payload).eq('order_number',order.id).select('*');
+      // Editing an existing order: never reassign it to this rep (user_id),
+      // never touch payment_status (only the PayFast ITN sets it) or
+      // created_at, and only write order_status when a rep actually changed
+      // it — mapOrder() shows 'paid' as 'Pending', which used to be written
+      // back and wipe out 'paid'.
+      const upd = Object.assign({}, payload);
+      delete upd.user_id; delete upd.created_at; delete upd.payment_status;
+      if(!order.statusChanged) delete upd.order_status;
+      result = await sb.from('orders').update(upd).eq('order_number',order.id).select('*');
     } else {
       result = await sb.from('orders').insert([payload]).select('*');
     }
@@ -978,10 +1054,12 @@ document.addEventListener('sb-ready', function(e){
     document.getElementById('panel-'+name)?.classList.add('active');
     document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
     document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));
-    if(prevPanel==='delivery'&&name!=='delivery') stopDeliveryIntervals();
-    if(name==='orders') renderOrders();
+    if(name==='orders'){ renderOrders(); loadOps().then(()=>{ if(activePanel==='orders') renderOrders(); }); }
     if(name==='past') renderPast();
-    if(name==='overview') renderOverview();
+    if(name==='overview'){ renderOverview(); loadOps().then(()=>{ if(activePanel==='overview') renderOverview(); }); }
+    if(name==='overview'||name==='orders') startOpsTimer(); else stopOpsTimer();
+    document.getElementById('moreSheet')?.classList.remove('open');
+    window.scrollTo(0,0);
     if(name==='stores') loadStores();
     if(name==='baskets') loadBaskets();
     if(name==='services') renderServiceTasks();
@@ -990,69 +1068,192 @@ document.addEventListener('sb-ready', function(e){
     if(name==='settings') renderSettings();
   }
   document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>showPanel(b.dataset.panel)));
+  document.querySelectorAll('.more-item[data-panel]').forEach(b=>b.addEventListener('click',()=>showPanel(b.dataset.panel)));
+  document.getElementById('bnavMore')?.addEventListener('click',()=>document.getElementById('moreSheet')?.classList.add('open'));
+  document.getElementById('moreSheet')?.addEventListener('click',e=>{ if(e.target.id==='moreSheet') e.currentTarget.classList.remove('open'); });
+  document.getElementById('refreshToday')?.addEventListener('click',async()=>{ await Promise.all([loadOps(), fetchOrders().then(r=>{ORDERS=r;})]); renderOverview(); });
 
   /* ═══════════════════════════════════════════
      OVERVIEW
   ═══════════════════════════════════════════ */
   function renderOverview(){
-    const arr=ORDERS;
-    document.getElementById('st-revenue').textContent=fmt(arr.filter(o=>o.status!=='Returned').reduce((s,o)=>s+o.total,0));
-    document.getElementById('st-pending').textContent=arr.filter(o=>o.status==='Pending').length;
-    document.getElementById('st-packaging').textContent=arr.filter(o=>o.status==='Packaging').length;
-    document.getElementById('st-fulfilled').textContent=arr.filter(o=>o.status==='Fulfilled').length;
-    document.getElementById('st-delivered').textContent=arr.filter(o=>o.status==='Delivered').length;
-    document.getElementById('st-returned').textContent=arr.filter(o=>o.status==='Returned').length;
-
-    // Recent
-    const recent=arr.slice(0,6);
-    document.getElementById('ov-recent').innerHTML=recent.length
-      ?recent.map(o=>`<div class="item-card" style="cursor:pointer;margin-bottom:8px" onclick='openDetail("${esc(o.id)}")'>
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><div style="font-weight:700;font-size:13px">${esc(o.id)}</div><div style="font-size:12px;color:var(--muted)">${esc(o.customer)} · ${esc(o.date)}</div></div>
-            ${badge(o.status)}
-          </div></div>`).join('')
-      :'<div style="color:var(--muted);font-size:13px">No orders yet</div>';
-
-    // Top items
-    const itemMap={};
-    arr.filter(o=>o.status!=='Returned').forEach(o=>{
-      (o.items||[]).forEach(it=>{
-        const n=it.item||it.name||it.title||'Unknown';
-        if(!itemMap[n]) itemMap[n]={qty:0,orders:0};
-        itemMap[n].qty+=it.quantity||1;
-        itemMap[n].orders+=1;
-      });
-    });
-    const topItems=Object.entries(itemMap).sort((a,b)=>b[1].orders-a[1].orders).slice(0,5);
-    document.getElementById('ov-items').innerHTML=topItems.length
-      ?topItems.map(([n,v],i)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px"><div>${i+1}. ${esc(n)}</div><div style="color:var(--muted)">${v.orders} orders · qty ${v.qty}</div></div>`).join('')
-      :'<div style="color:var(--muted);font-size:13px">No data</div>';
+    const dEl = document.getElementById('todayDate');
+    if(dEl) dEl.textContent = new Date().toLocaleDateString('en-ZA',{weekday:'short',day:'numeric',month:'short'});
+    renderToday();
   }
   window.openDetail = id => openDetailsModal(id); // expose for inline onclick
+
+  /* ═══════════════════════════════════════════
+     TODAY — live operations board (2026-10-04)
+     get_ops_board() (staff-only RPC) returns every open delivery + the
+     last 2 days, how long each has sat in its state, the riders, and a
+     delivery-status map so Orders shows where an order REALLY is
+     (orders.order_status stays 'paid' while the network delivers it).
+  ═══════════════════════════════════════════ */
+  let OPS = null, opsTimer = null, opsLoading = null;
+  const DSTATE = {
+    PENDING:            { label:'Waiting for store',   lane:'store', bucket:'active' },
+    READY_FOR_DISPATCH: { label:'Finding a rider',     lane:'rider', bucket:'action' },
+    OFFERED:            { label:'Offered to a rider',  lane:'rider', bucket:'action' },
+    REASSIGNING:        { label:'Finding a new rider', lane:'rider', bucket:'action' },
+    ASSIGNED:           { label:'Rider heading to store', lane:'pickup', bucket:'active' },
+    DRIVER_AT_PICKUP:   { label:'Rider at the store',  lane:'pickup', bucket:'active' },
+    PARTIALLY_PICKED_UP:{ label:'Rider at the store',  lane:'pickup', bucket:'active' },
+    PICKED_UP:          { label:'Collected',           lane:'road', bucket:'active' },
+    IN_ROUTE:           { label:'On the way',          lane:'road', bucket:'active' },
+    NEXT_STOP:          { label:'On the way',          lane:'road', bucket:'active' },
+    ARRIVING:           { label:'Arriving',            lane:'road', bucket:'active' },
+    PIN_REQUIRED:       { label:'At the door (PIN)',   lane:'road', bucket:'active' },
+    DELIVERED:          { label:'Delivered',           lane:'done', bucket:'done' },
+    FAILED:             { label:'Failed',              lane:'problem', bucket:'cancelled' },
+    CANCELLED:          { label:'Cancelled',           lane:'problem', bucket:'cancelled' },
+    RETURNED:           { label:'Returned',            lane:'problem', bucket:'cancelled' }
+  };
+  function minsSince(iso){ return iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/60000)) : 0; }
+  function agoLabel(iso){
+    const m = minsSince(iso);
+    if(m < 1) return 'just now';
+    if(m < 60) return m + ' min';
+    const h = Math.floor(m/60); return h < 24 ? `${h} h ${m%60} min` : `${Math.floor(h/24)} d`;
+  }
+  // Why a delivery needs someone's attention (null = fine).
+  function attentionReason(d){
+    const m = minsSince(d.since);
+    if(d.pin_locked) return 'PIN locked — call the customer';
+    if(d.status==='FAILED') return 'Delivery failed' + (d.failure_reason ? ' — ' + d.failure_reason : '');
+    if(['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return `No rider for ${agoLabel(d.since)}`;
+    if(d.status==='OFFERED' && m >= 3) return `Offer unanswered for ${agoLabel(d.since)}`;
+    if(d.status==='PENDING' && m >= 45) return `Store hasn't marked ready (${agoLabel(d.since)})`;
+    if(['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return `Pickup taking long (${agoLabel(d.since)})`;
+    if(['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return `On the road for ${agoLabel(d.since)}`;
+    return null;
+  }
+  function shortRef(n){ const s = String(n||''); return s.length > 8 ? '…' + s.slice(-6).toUpperCase() : s; }
+
+  async function loadOps(){
+    if(opsLoading) return opsLoading;
+    opsLoading = (async ()=>{
+      try{
+        const { data, error } = await sb.rpc('get_ops_board');
+        if(error) throw error;
+        OPS = data;
+      } catch(e){ console.warn('get_ops_board failed', e); }
+      finally { opsLoading = null; }
+      return OPS;
+    })();
+    return opsLoading;
+  }
+  function startOpsTimer(){ stopOpsTimer(); opsTimer = setInterval(async ()=>{ await loadOps(); if(activePanel==='overview') renderToday(); else if(activePanel==='orders') renderOrders(); }, 15000); }
+  function stopOpsTimer(){ if(opsTimer){ clearInterval(opsTimer); opsTimer = null; } }
+
+  function deliveryCard(d){
+    const st = DSTATE[d.status] || { label:d.status };
+    const why = attentionReason(d);
+    return `<button class="ops-card ${why?'warn':''}" data-open-order="${esc(d.order_number || '')}" data-order-db="${esc(d.order_id)}">
+      <div class="ops-card-top"><span class="ops-ref">${esc(shortRef(d.order_number))}</span><span class="ops-age">${esc(agoLabel(d.since))}</span></div>
+      <div class="ops-cust">${esc(d.customer || 'Customer')}</div>
+      <div class="ops-meta">${esc((d.stores||[]).join(' + ') || 'Store')} → ${esc(d.area || '—')}</div>
+      <div class="ops-foot"><span class="ops-pill l-${st.lane||'x'}">${esc(st.label)}</span>${d.rider?`<span class="ops-rider">🛵 ${esc(d.rider)}</span>`:''}</div>
+      ${why ? `<div class="ops-why">⚠ ${esc(why)}</div>` : ''}
+    </button>`;
+  }
+
+  function renderToday(){
+    const root = document.getElementById('today-root');
+    if(!root) return;
+    if(!OPS){ root.innerHTML = `<div class="ops-empty">Loading live operations…</div>`; return; }
+    const ds = OPS.deliveries || [];
+    const open = ds.filter(d=>!['DELIVERED','CANCELLED','FAILED','RETURNED'].includes(d.status));
+    const today0 = new Date(); today0.setHours(0,0,0,0);
+    const deliveredToday = ds.filter(d=>d.status==='DELIVERED' && d.delivered_at && new Date(d.delivered_at) >= today0);
+    const attention = ds.filter(d=>attentionReason(d) && !(d.status==='FAILED' && new Date(d.since) < today0));
+    const riders = OPS.riders || [];
+    const online = riders.filter(r=>r.online);
+    const lane = k => open.filter(d=>(DSTATE[d.status]||{}).lane===k);
+    const paidToday = ORDERS.filter(o=>o.payment_status==='paid' && o.created_at && new Date(o.created_at) >= today0 && !o.isFee);
+    const kpis = [
+      ['Open deliveries', open.length, ''],
+      ['Need attention', attention.length, attention.length ? 'bad' : ''],
+      ['Delivered today', deliveredToday.length, 'good'],
+      ['Riders online', online.length, online.length ? 'good' : 'bad'],
+      ['Paid orders today', paidToday.length, ''],
+      ['Sales today', fmt(paidToday.reduce((s,o)=>s+o.total,0)), '']
+    ];
+    const laneCol = (title, list, emptyTxt) => `<div class="ops-lane">
+      <div class="ops-lane-h">${esc(title)}<span>${list.length}</span></div>
+      ${list.length ? list.map(deliveryCard).join('') : `<div class="ops-lane-empty">${esc(emptyTxt)}</div>`}
+    </div>`;
+    root.innerHTML = `
+      <div class="ops-kpis">${kpis.map(([l,v,c])=>`<div class="ops-kpi ${c}"><div class="ops-kpi-v">${esc(String(v))}</div><div class="ops-kpi-l">${esc(l)}</div></div>`).join('')}</div>
+      ${attention.length ? `<div class="ops-section"><div class="ops-section-h bad">Needs attention</div><div class="ops-grid">${attention.map(deliveryCard).join('')}</div></div>` : `<div class="ops-allgood">✓ Nothing needs attention right now</div>`}
+      <div class="ops-section"><div class="ops-section-h">Live deliveries <span class="ops-live"><i></i>auto-updates</span></div>
+        <div class="ops-lanes">
+          ${laneCol('Waiting for store', lane('store'), 'No orders being prepared')}
+          ${laneCol('Finding a rider', lane('rider'), 'Nothing waiting for a rider')}
+          ${laneCol('Rider collecting', lane('pickup'), 'No pickups in progress')}
+          ${laneCol('On the road', lane('road'), 'Nobody on the road')}
+        </div>
+      </div>
+      <div class="ops-two">
+        <div class="ops-section"><div class="ops-section-h">Riders</div>
+          ${riders.length ? riders.map(r=>`<div class="ops-rider-row">
+            <span class="ops-dot ${r.online?'on':''}"></span>
+            <div class="ops-rider-name">${esc(r.name)}${!r.eligible?' <span class="ops-muted">(not approved)</span>':''}</div>
+            <div class="ops-muted">${r.on_route ? 'On a delivery' : r.online ? 'Waiting' : r.last_seen_at ? 'Last seen ' + esc(agoLabel(r.last_seen_at)) + ' ago' : 'Never online'}</div>
+          </div>`).join('') : `<div class="ops-lane-empty">No riders yet — a rep becomes a rider by going online in Deliver.</div>`}
+        </div>
+        <div class="ops-section"><div class="ops-section-h">Delivered today</div>
+          ${deliveredToday.length ? deliveredToday.slice(0,8).map(d=>`<button class="ops-done-row" data-open-order="${esc(d.order_number||'')}" data-order-db="${esc(d.order_id)}"><span>✓ ${esc(d.customer||'Customer')}</span><span class="ops-muted">${esc(d.area||'')} · ${new Date(d.delivered_at).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit'})}${d.rider?' · '+esc(d.rider):''}</span></button>`).join('') : `<div class="ops-lane-empty">No deliveries completed yet today.</div>`}
+        </div>
+      </div>`;
+    root.querySelectorAll('[data-open-order]').forEach(b=>b.addEventListener('click', ()=>openOrderByAny(b.dataset.openOrder, b.dataset.orderDb)));
+  }
+  function openOrderByAny(orderNumber, dbId){
+    const o = ORDERS.find(x=>x.dbId===dbId) || ORDERS.find(x=>x.id===orderNumber);
+    if(o) openDetailsModal(o.id); else toast('Order not loaded yet — refresh', 'warn');
+  }
+
+  // Where an order really is: the live delivery when there is one, else its own status.
+  function orderState(o){
+    if(o.isFee) return { label:'Seller fee', cls:'fee', bucket:'done' };
+    const ds = OPS?.delivery_status_by_order?.[o.dbId];
+    if(ds){
+      const st = DSTATE[ds] || { label: ds, bucket:'active', lane:'x' };
+      return { label: st.label, cls: 'l-' + (st.lane||'x'), bucket: st.bucket, delivery: ds };
+    }
+    const map = { Pending:['New — needs packing','action','l-store'], Packaging:['Packing','action','l-pickup'], Fulfilled:['Handed over','active','l-road'],
+                  Delivered:['Delivered','done','l-done'], Returned:['Returned / cancelled','cancelled','l-problem'] };
+    const m = map[o.status] || [o.status, 'active', 'l-x'];
+    return { label:m[0], bucket:m[1], cls:m[2] };
+  }
 
   /* ═══════════════════════════════════════════
      ORDER LIST RENDER
   ═══════════════════════════════════════════ */
   function renderOrders(){
     const q=(document.getElementById('searchInput')?.value||'').toLowerCase().trim();
-    let list=ORDERS.filter(o=>{
-      if(activeStatusFilter==='QUEUE') return['Pending','Packaging'].includes(o.status);
-      if(activeStatusFilter==='ALL') return true;
-      return o.status===activeStatusFilter;
-    });
-    if(q) list=list.filter(o=>
+    const withState = ORDERS.map(o=>({ o, st: orderState(o) }));
+    const cA = document.getElementById('cnt-action'), cB = document.getElementById('cnt-active');
+    if(cA) cA.textContent = withState.filter(x=>x.st.bucket==='action').length || '';
+    if(cB) cB.textContent = withState.filter(x=>x.st.bucket==='active').length || '';
+    const want = { QUEUE:'action', ACTIVE:'active', DONE:'done', CANCELLED:'cancelled' }[activeStatusFilter];
+    let list = withState.filter(x=> !want || x.st.bucket===want);
+    if(q) list=list.filter(({o})=>
       o.id.toLowerCase().includes(q)||
       o.customer.toLowerCase().includes(q)||
       (o.email||'').toLowerCase().includes(q)||
       (o.phone||'').includes(q)
     );
-    renderOrderRows('orders-list',list);
+    renderOrderRows('orders-list', list.map(x=>x.o));
   }
 
   function renderPast(){
     const q=(document.getElementById('searchInput')?.value||'').toLowerCase().trim();
-    let list=ORDERS.filter(o=>['Fulfilled','Delivered','Returned'].includes(o.status));
-    if(activeHistoryFilter!=='ALL') list=list.filter(o=>o.status===activeHistoryFilter);
+    // Finished = delivered/cancelled by its REAL state (network delivery or legacy status).
+    let list=ORDERS.filter(o=>['done','cancelled'].includes(orderState(o).bucket) && !o.isFee);
+    if(activeHistoryFilter==='Delivered') list=list.filter(o=>orderState(o).bucket==='done');
+    else if(activeHistoryFilter==='Returned') list=list.filter(o=>orderState(o).bucket==='cancelled');
+    else if(activeHistoryFilter==='Fulfilled') list=list.filter(o=>o.status==='Fulfilled');
     if(q) list=list.filter(o=>
       o.id.toLowerCase().includes(q)||
       o.customer.toLowerCase().includes(q)||
@@ -1065,27 +1266,19 @@ document.addEventListener('sb-ready', function(e){
   function renderOrderRows(containerId, list){
     const el=document.getElementById(containerId);
     if(!el) return;
-    if(!list.length){el.innerHTML='<div class="orders-empty">No orders found</div>';return;}
-    const isMobile=window.innerWidth<=768;
-    el.innerHTML=list.map(o=>isMobile?`
-      <div class="order-row" onclick='openDetailsModal("${esc(o.id)}")'>
-        <div class="order-row-top">
-          <div class="order-id">${esc(o.id)}</div>
-          ${badge(o.status)}
-        </div>
-        <div class="order-row-mid">
-          <div><div class="order-name">${esc(o.customer)}</div><div class="order-date">${esc(o.date)}</div></div>
-          <div class="order-total">${fmt(o.total)}</div>
-        </div>
-      </div>`:`
-      <div class="order-row" onclick='openDetailsModal("${esc(o.id)}")'>
-        <div><div class="order-id">${esc(o.id)}</div><div class="order-date">${esc(o.date)}</div></div>
-        <div><div class="order-name">${esc(o.customer)}</div><div class="order-addr">${[o.city,o.province].filter(Boolean).join(', ')||esc(o.address||'—')}</div></div>
-        <div class="order-items-count">${o.items.length}</div>
+    if(!list.length){el.innerHTML='<div class="orders-empty">Nothing here 🎉</div>';return;}
+    el.innerHTML=list.map(o=>{
+      const st=orderState(o);
+      const n=(o.items||[]).reduce((s,it)=>s+Number(it.quantity||1),0);
+      return `<div class="order-row" onclick='openDetailsModal("${esc(o.id)}")'>
+        <div class="or-ref"><div class="order-id">${esc(shortRef(o.id))}</div><div class="order-date">${esc(o.date)}</div></div>
+        <div class="or-cust"><div class="order-name">${esc(o.customer||'—')}</div><div class="order-addr">${esc([o.address,o.city].filter(Boolean).join(', ')||'—')}</div></div>
+        <div class="order-items-count">${n} item${n===1?'':'s'}</div>
         <div class="order-total">${fmt(o.total)}</div>
-        <div style="text-align:center">${badge(o.status)}</div>
-        <div class="order-actions"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openDetailsModal('${esc(o.id)}')">View</button></div>
-      </div>`).join('');
+        <div class="or-st"><span class="ops-pill ${st.cls}">${esc(st.label)}</span></div>
+        <div class="order-actions"><span class="or-chev">›</span></div>
+      </div>`;
+    }).join('');
   }
 
   // Chip filters — orders
@@ -1107,7 +1300,7 @@ document.addEventListener('sb-ready', function(e){
   });
 
   // Bottom nav
-  document.getElementById('bottomNav')?.querySelectorAll('.bnav-item').forEach(b=>{
+  document.getElementById('bottomNav')?.querySelectorAll('.bnav-item[data-panel]').forEach(b=>{
     b.addEventListener('click',()=>showPanel(b.dataset.panel));
   });
 
@@ -1119,29 +1312,42 @@ document.addEventListener('sb-ready', function(e){
     if(!o) return toast('Order not found','error');
 
     const addrParts=[o.address,o.city,o.province,o.postal_code].filter(Boolean).join(', ');
-    const subtotal=o.items.reduce((s,it)=>s+(it.price*it.quantity),0);
+    const lineTotal=it=>Number(it.subtotal ?? it.total ?? ((Number(it.price ?? it.unit_price)||0)*(Number(it.quantity)||1)));
+    const subtotal=o.items.reduce((s,it)=>s+lineTotal(it),0);
     const total=subtotal-(o.discount||0);
+    const st=orderState(o);
+    const live=(OPS?.deliveries||[]).find(d=>d.order_id===o.dbId);
+    const tel=o.phone?String(o.phone).replace(/[^\d+]/g,''):'';
+    const wa=o.phone?String(o.phone).replace(/\D/g,'').replace(/^0/,'27'):'';
 
     const itemsHtml=o.items.length
       ?`<table class="detail-items-table">
           <thead><tr><th>Item</th><th>Size</th><th style="text-align:center">Qty</th><th style="text-align:right">Price</th><th style="text-align:right">Subtotal</th></tr></thead>
           <tbody>${o.items.map(it=>`<tr>
-            <td>${esc(it.item||it.name||'Item')}</td>
+            <td>${esc(it.item||it.name||it.item_name||'Item')}</td>
             <td>${esc(it.size||'—')}</td>
             <td style="text-align:center">${it.quantity||1}</td>
-            <td style="text-align:right">${fmt(it.price)}</td>
-            <td style="text-align:right">${fmt((it.price||0)*(it.quantity||1))}</td>
+            <td style="text-align:right">${fmt(it.price ?? it.unit_price)}</td>
+            <td style="text-align:right">${fmt(lineTotal(it))}</td>
           </tr>`).join('')}</tbody>
         </table>
         <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:10px;font-size:13px;padding-top:10px;border-top:1px solid var(--border)">
           <span style="color:var(--muted)">Subtotal: ${fmt(subtotal)}</span>
           ${o.discount>0?`<span style="color:var(--muted)">Discount: -${fmt(o.discount)}</span>`:''}
-          <span style="font-weight:700">Total: ${fmt(total)}</span>
+          <span style="font-weight:700">Items: ${fmt(total)}</span>
         </div>`
       :'<div style="color:var(--muted);font-size:13px">No items</div>';
 
-    const totalWithShipping=total+(o.shipping_cost||0);
     const html=`
+      <div class="det-status">
+        <span class="ops-pill ${st.cls}">${esc(st.label)}</span>
+        ${live ? `<span class="ops-muted">for ${esc(agoLabel(live.since))}${live.rider?' · rider '+esc(live.rider):''}</span>` : ''}
+        ${live && attentionReason(live) ? `<div class="ops-why">⚠ ${esc(attentionReason(live))}</div>` : ''}
+      </div>
+      ${(tel||addrParts)?`<div class="det-contact">
+        ${tel?`<a class="btn btn-ghost btn-sm" href="tel:${esc(tel)}">📞 Call</a><a class="btn btn-ghost btn-sm" href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener">💬 WhatsApp</a>`:''}
+        ${addrParts?`<a class="btn btn-ghost btn-sm" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addrParts)}" target="_blank" rel="noopener">🗺 Map</a>`:''}
+      </div>`:''}
       <div class="detail-meta">
         <div>
           <div class="detail-customer">${esc(o.customer)}</div>
@@ -1151,9 +1357,8 @@ document.addEventListener('sb-ready', function(e){
           ${o.pickup_address?`<div style="font-size:12px;color:var(--muted);margin-top:2px">Pickup: ${esc(o.pickup_address)}</div>`:''}
         </div>
         <div style="text-align:right">
-          ${badge(o.status)}
-          <div style="margin-top:6px">${badge(o.payment_status||'pending')}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:6px">${esc(o.category||'—')}</div>
+          ${badge(o.payment_status||'pending')}
+          ${o.category?`<div style="font-size:12px;color:var(--muted);margin-top:6px">${esc(o.category)}</div>`:''}
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(o.date)}</div>
         </div>
       </div>
@@ -1168,18 +1373,19 @@ document.addEventListener('sb-ready', function(e){
 
       <div class="form-section-title" style="margin-bottom:10px">Items</div>
       ${itemsHtml}
-      ${o.shipping_cost?`<div style="display:flex;justify-content:flex-end;gap:24px;margin-top:6px;font-size:13px"><span style="color:var(--muted)">Shipping: ${fmt(o.shipping_cost)}</span><span style="font-weight:700">Grand Total: ${fmt(totalWithShipping)}</span></div>`:''}
+      <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:6px;font-size:13px">${o.shipping_cost?`<span style="color:var(--muted)">Delivery: ${fmt(o.shipping_cost)}</span>`:''}<span style="font-weight:800">Charged: ${fmt(o.total)}</span></div>
+      ${o.delivery_instructions?`<div class="ops-why" style="margin-top:10px">📝 ${esc(o.delivery_instructions)}</div>`:''}
 
       ${o.notes?`<div style="margin-top:14px"><div class="form-section-title" style="margin-bottom:6px">Notes</div><div style="font-size:13px;color:var(--text2);padding:8px;background:var(--surface2);border-radius:8px">${esc(o.notes)}</div></div>`:''}
 
-      <div style="margin-top:18px">
-        <div class="form-section-title" style="margin-bottom:8px">Update Status</div>
-        <div class="status-actions">
+      ${st.delivery ? `<div style="margin-top:18px;font-size:12px;color:var(--muted)">This order is moving through the delivery network — its status updates itself as the store and rider progress (see Today).</div>` : `<div style="margin-top:18px">
+        <div class="form-section-title" style="margin-bottom:8px">Update Status</div>`}
+        ${st.delivery ? '' : `<div class="status-actions">
           ${['Pending','Packaging','Fulfilled','Delivered','Returned'].map(s=>`
             <button class="status-action-btn ${s}" style="${s===o.status?'border-color:currentColor;':''}" data-status="${s}">${s}</button>
           `).join('')}
         </div>
-      </div>
+      </div>`}
 
       <div id="item-statuses-wrap" style="margin-top:18px">
         <div class="form-section-title" style="margin-bottom:8px">Per-Item Tracking</div>
@@ -1189,7 +1395,7 @@ document.addEventListener('sb-ready', function(e){
 
     openModal(o.id, html,
       `<button class="btn btn-ghost" id="det-edit">Edit Order</button>
-       <button class="btn btn-danger btn-sm" id="det-delete">Delete</button>
+       ${o.payment_status==='paid' ? '' : '<button class="btn btn-danger btn-sm" id="det-delete">Delete</button>'}
        <button class="btn btn-ghost" onclick="closeModal()">Close</button>`
     );
 
@@ -1202,6 +1408,7 @@ document.addEventListener('sb-ready', function(e){
           const idx=ORDERS.findIndex(x=>x.id===o.id);
           if(idx!==-1){
             ORDERS[idx].status=ns;
+            ORDERS[idx].statusChanged=true;
             const saved=await saveOrder(ORDERS[idx]);
             if(!saved) toast('Sync failed — check console','warn');
             else toast('Status updated to '+ns,'success');
@@ -2801,6 +3008,7 @@ document.addEventListener('sb-ready', function(e){
   }
   document.getElementById('logoutBtn')?.addEventListener('click',performLogout);
   document.getElementById('logoutBtn2')?.addEventListener('click',performLogout);
+  document.getElementById('moreLogout')?.addEventListener('click',performLogout);
 
   /* ═══════════════════════════════════════════
      INIT
@@ -2823,12 +3031,12 @@ document.addEventListener('sb-ready', function(e){
     // Resume the rider's real online state + offer alerts on every tab
     resumeDeliveryState();
 
-    // Prefetch products
-    await fetchProducts();
+    // Products are only needed for the New/Edit order forms — load in the background
+    fetchProducts();
 
     // Load orders
-    ORDERS=await fetchOrders();
-    renderOverview();
+    const [orders] = await Promise.all([fetchOrders(), loadOps()]);
+    ORDERS=orders;
     showPanel('overview');
   })();
 });

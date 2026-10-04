@@ -4,6 +4,30 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Logistics panel revamp: live "Today" board, real order status, safer edits, mobile layout
+
+**Asked for (founder):** logistics needs a revamp — faster, more accurate, better looking and interactive on mobile.
+
+**What was wrong (accuracy):**
+- Logistics staff can't read `deliveries`, so the panel had no idea where an order was: every network order sat at "Pending" (`order_status = 'paid'` was shown as Pending) even after delivery. Seller enrollment payments (also in `orders`) showed up in the delivery queue.
+- **Changing an order's status rewrote the whole row**: `saveOrder()` set `orders.user_id` to the rep (the customer lost the order from their profile), rewrote `payment_status`, and wrote "Pending" over `paid`.
+- The order detail recomputed totals in the browser from item fields that differ between order types (often R0) instead of the charged `orders.total`. Delete was offered on paid orders.
+- Leaving the Deliver tab stopped the rider's GPS heartbeat + offer polling.
+
+**What changed:**
+- New staff-only RPC `get_ops_board()` (admins or active logistics/admin `user_roles`, same rule as `orders_manage_staff`): every open delivery + the last 2 days, time in current state (last `delivery_events` row), stores, customer, area, rider; riders (online = heartbeat within 3 min, on a route, last seen); and a delivery-status map per order.
+- **Today** (replaces Overview): KPIs (open deliveries, needing attention, delivered today, riders online, paid orders + sales today), a "Needs attention" list with the reason (no rider for 3+ min, offer unanswered, store not ready after 45 min, long pickup/trip, PIN locked, failed), lanes (waiting for store → finding a rider → rider collecting → on the road), riders, delivered today. Auto-refreshes every 15 s; tap a card for the order.
+- **Orders**: status = the live delivery state when there is one (else the legacy status); filters Needs action / In progress / Delivered / Cancelled / All with counts; seller fees tagged, not queued; History uses the same real state. Detail: live status + time + rider + the reason it needs attention, Call / WhatsApp / Map buttons, delivery instructions, "Charged" = stored total, manual status buttons only for orders not in the delivery network, Delete hidden for paid orders.
+- `saveOrder()` on an existing order no longer writes `user_id`, `created_at` or `payment_status`, and writes `order_status` only when a rep actually changed it.
+- Faster: orders query selects only the columns used and skips unpaid checkouts server-side; products for the order form load in the background.
+- Mobile: bottom bar Today / Orders / Deliver / Tasks / More (sheet: history, baskets, stores, analytics, settings, sign out), card-style order rows, compact header; refreshed tokens.
+
+**Verified:** `get_ops_board()` as the logistics test account returned the real delivery and rider. Headless Chrome with stubbed data at 390 px and 1366 px: Today (KPIs, attention reasons, lanes, riders), Orders filters/counts, detail, More sheet — no page errors.
+
+**Files:** `logistics.html`; migrations `ops_board_for_staff`, `ops_board_drop_ready_items`.
+
+---
+
 ## 2026-10-04 — Rider app rebuilt: the rider sees the customer, the customer sees the rider's name
 
 **Reported (founder):** the rider "sees nothing" yet they're the one moving — they need all the customer's details; the customer should only know the rider's name.
