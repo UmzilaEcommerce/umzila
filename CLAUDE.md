@@ -159,6 +159,8 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 🔐 BUYER IDENTITY (added 2026-10-04): server functions identify the buyer from the Authorization Bearer token, never from a userId in the request body (validate-cart.js, get-delivery-quote.js, hold-service-booking.js). Server-to-server callers pass event.trustedUserId to validate-cart.
 
+📦 SOLD OUT (added 2026-10-04): products.visible means "listed", NOT "in stock" — nothing auto-hides at 0 stock any more. Stores show sold-out items ("Sold out · Notify me"); the homepage only browses/ranks/suggests browsableProducts() (listed + in stock) and shows sold-out items only in search results, last. Stock is enforced in validate-cart.js (physical stock is a hard cap) and addToCart — never rely on visible for stock.
+
 🔔 BACK-IN-STOCK (added 2026-10-04): "Notify me" inserts stock_alerts (one pending row per product+email; 23505 = already on the list; signed-in buyers use their account email, no typing). send-stock-alerts.js (scheduled every 15 min in netlify.toml) emails once the product is visible + in stock and stamps notified_at.
 
 🎨 BESPOKE STOREFRONTS — see docs/systems/bespoke-storefronts.md. A folder named after a store's slug (e.g. /ncekeniquads/) overrides the generic shop page; it is a skin over Umzila data/cart/checkout, never its own payment flow.

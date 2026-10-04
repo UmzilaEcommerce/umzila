@@ -294,7 +294,12 @@ variants.forEach(v => {
     booking = b;
   }
 
-  const qty = booking ? booking.units : Math.min(item.quantity || 1, itemStock || Infinity);
+  // Physical stock is a hard cap (0 = sold out → line dropped). Sold-out
+  // products now stay visible, so this — not visibility — is what stops a
+  // stale cart line being bought. Services keep their old behaviour (a 0/null
+  // stock on a service never limited it).
+  const qtyCap = isService ? (itemStock || Infinity) : Math.max(0, itemStock);
+  const qty = booking ? booking.units : Math.min(item.quantity || 1, qtyCap);
   if (qty <= 0) {
     hasChanges = true;
     continue;

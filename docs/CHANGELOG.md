@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Sold-out items: listed on their store, search-only on the homepage
+
+**Asked for:** keep "Sold out · Notify me" on storefronts; on the Umzila homepage sold-out items must not show or rank anywhere in browsing — only in search results, marked sold out, with Notify me in the modal.
+
+**Root cause of the old behaviour:** the `auto_hide_out_of_stock` trigger set `visible=false` the moment stock hit 0 (and back on restock), so sold-out items vanished everywhere — including their own store — and the back-in-stock sign-up was unreachable.
+
+**What changed:**
+- DB: trigger + function dropped (migration `keep_sold_out_products_visible`). `visible` now only means "listed by the seller/admin". The 3 approved physical products hidden purely for being sold out were re-listed (Lumina "Water bottle", Sweet Corner "Sweets 200ml", Lemé "Protection hairstyles"); a hidden service was left alone.
+- **Real bug this exposed, fixed:** `validate-cart.js` capped quantity with `itemStock || Infinity`, so stock 0 meant *unlimited* — previously masked because sold-out products were invisible (dropped as "not found"). Now physical stock is a hard cap (0 → line dropped); services keep their old uncapped behaviour. Verified: a sold-out line is removed, an in-stock line passes.
+- Homepage (`script.js`): new `browsableProducts()` (listed + in stock) feeds every browse section, "See all" views, the homepage section helper and "Frequently bought together". `applyFilters()` includes sold-out items **only when there's a search term**, sorted after everything in stock; category views still exclude them. Cards get a "Sold out" badge (greyed image); search suggestions say "Sold out" instead of a price; the product modal hides quantity/delivery/Add to Cart and shows "Notify me when it's back".
+- Store pages already list sold-out items last with "Sold out · Notify me" — now they actually appear there.
+
+**Verified locally:** homepage browse doesn't contain Velaphi's sold-out 4-wings plate; searching "wings" lists it last, badged; its modal shows the sign-up with Add to Cart hidden; Sweet Corner's store shows "Sweets 200ml · Sold out · Notify me".
+
+**Files:** `script.js`, `style.css`, `index.html`, `netlify/functions/validate-cart.js`, docs, `CLAUDE.md`.
+
+---
+
 ## 2026-10-04 — Back-in-stock emails actually sent, buyer identity from tokens, service stores never "closed", Nceks way back to Umzila
 
 **Asked:** how "Notify me" works (and whether signed-in buyers still type their email); fix the client-trusted `userId` gap; no closed-store friction for calendar/service businesses (only mixed stores, saying services book normally and goods may be delayed); the Umzila pill/arrow on the Nceks store.
@@ -12,7 +30,7 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - New scheduled function `send-stock-alerts.js` (`netlify.toml`, every 15 min): pending alerts whose product is visible, in stock and from an active store → one email per address listing everything that's back (image, store, price, "View it" → `/<slug>?product=<id>` via SITE_BASE_URL), then `notified_at` is stamped. Max 40 emails/run, 600 ms apart. Scheduled functions can't be hit by URL in production.
 - Unique pending index `stock_alerts_one_pending` (product + lower(email) where not yet notified) — a repeat tap is "You're already on the list"; after an alert is sent they can sign up for the next restock.
 - Signed in: no email box — one tap, sent to the account email (store page quick view + homepage modal).
-- Note: `auto_hide_out_of_stock` hides a product when its stock hits 0 (and re-shows it on restock), so "Notify me" only appears on sold-out items that are still visible. Unchanged — flagged to the owner.
+- Note: at the time, `auto_hide_out_of_stock` hid products at 0 stock, so "Notify me" was rarely reachable — removed in the entry above.
 
 **Security — buyer identity from the session token:** `validate-cart.js` took `userId` from the request body and used it for the saved-cart upsert, delivery-quote ownership and first-order / per-user discount checks — anyone could overwrite another user's saved cart or borrow their discount allowances. Now it reads the user from the `Authorization: Bearer` token (server-side callers pass `event.trustedUserId`, which no HTTP request can set — used by `lib/reprice-order.js`). Same fix in `get-delivery-quote.js` (quote owner). `checkout.html` (`validateCartHeaders()`) and `cart.html` now send the token; checkout's coupon re-check also sends `persistCart:false` for scoped/Buy Now carts. Verified: a spoofed body `userId` is ignored (no cart row written), a bad token is treated as a guest, pricing unchanged.
 

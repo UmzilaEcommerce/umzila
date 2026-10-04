@@ -623,6 +623,9 @@ section h2{display:flex;justify-content:space-between;align-items:baseline;font-
 .badge.sale{background:var(--color-cta);}
 .badge-sponsored{background:rgba(255,255,255,0.92)!important;color:var(--color-text-muted)!important;backdrop-filter:blur(4px)}
 .badge-service{background:#6d4fc9!important}
+/* Sold out (homepage search results only — browsing never shows them) */
+.badge-soldout{background:#fff!important;color:#1a1a2e!important;box-shadow:0 0 0 1px #e5e7eb}
+.product-card.is-soldout .product-media img{filter:grayscale(.85);opacity:.7}
 .card-body{padding-top:9px;display:flex;flex-direction:column;gap:4px}
 .title{
   font-weight:600;font-size:14px;color:var(--color-text);

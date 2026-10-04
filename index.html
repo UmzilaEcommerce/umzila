@@ -1481,7 +1481,7 @@
       };
 
       function getProducts(sec) {
-        var all = (typeof state !== 'undefined' && state.products) ? state.products.slice() : [];
+        var all = typeof browsableProducts === 'function' ? browsableProducts() : ((typeof state !== 'undefined' && state.products) ? state.products.slice() : []);
         if (sec === 'hot')      return all.filter(function(p){ return (p.badge||'').toString().toLowerCase()==='hot' || p.price < 200; });
         if (sec === 'mystery')  return all.filter(function(p){ return p.category === 'Mystery Boxes'; });
         if (sec === 'trending') return all.slice().sort(function(a,b){ return (b.popularity||0) - (a.popularity||0); });

@@ -2110,7 +2110,7 @@ function updateSuggestions(q){
     d.className = 'suggestions-prod';
     d.innerHTML = `${img ? `<img class="suggestions-prod-img" src="${esc(img)}" alt="" onerror="this.style.display='none'">` : ''}
       <span class="suggestions-prod-name">${esc(title)}</span>
-      <span class="suggestions-prod-price">R${Number(price).toFixed(2)}</span>`;
+      <span class="suggestions-prod-price">${p.listing_type !== 'service' && (p.stock || 0) <= 0 ? 'Sold out' : 'R' + Number(price).toFixed(2)}</span>`;
     d.addEventListener('click',()=>{
       searchInput.value = title;
       searchClear.style.display = 'block';
@@ -2265,12 +2265,24 @@ document.addEventListener('click', function(e) {
 /********************
  * Filtering / Sorting (updated for new price filters)
  ********************/
+// Everything the homepage may browse, rank or suggest: listed and not sold
+// out. Sold-out products are kept in state.products only so search, shared
+// links and the back-in-stock sign-up still find them.
+function browsableProducts() {
+  return state.products.filter(p => p.visible !== false && (p.listing_type === 'service' || (p.stock || 0) > 0));
+}
+
 function applyFilters(){
   const f = state.filters;
+  // Sold-out products stay listed (their store shows "Sold out · Notify me"),
+  // but the homepage keeps them out of browsing, categories and ranking —
+  // they only appear when someone searches for them, below everything in stock.
+  const searching = !!(f.search && f.search.trim());
+  const soldOut = p => p.listing_type !== 'service' && (p.stock || 0) <= 0;
   let out = state.products.filter(p=>{
     // Never show hidden products; services don't need physical stock
     if (!p.visible) return false;
-    if (p.listing_type !== 'service' && (p.stock || 0) <= 0) return false;
+    if (soldOut(p) && !searching) return false;
     if(f.category!=='All'){
       // Match exact category OR parent group (e.g. "Clothing" matches all sub-cats)
       const group = CATEGORIES.find(g => g.label === f.category);
@@ -2315,6 +2327,7 @@ function applyFilters(){
   });
   else if(f.sort==='new') out.sort((a,b)=>b.id - a.id);
   else out.sort((a,b)=> (b.popularity||0) - (a.popularity||0));
+  if (searching) out = out.filter(p => !soldOut(p)).concat(out.filter(soldOut));
 
   // Decide: active search OR non-All category → show filtered grid view
   const isFiltered = f.search.trim() || f.category !== 'All';
@@ -2867,12 +2880,13 @@ function makeCardHTML(p){
     ? [svcMetaLabel, p.service_turnaround || ''].filter(Boolean)
     : [p.color || '', lowStock ? `${totalStock} left` : ''].filter(Boolean);
   const ctaLabel = isScheduledService ? 'Book' : 'Request';
-  return `<div class="product-card fade-up" data-id="${p.id}">
+  return `<div class="product-card fade-up${outOfStock ? ' is-soldout' : ''}" data-id="${p.id}">
     <div class="product-media" role="button" aria-label="Open ${esc(p.title)}">
       <div class="badges">
         ${(window._sponsoredProductIds && window._sponsoredProductIds.has(p.id)) ? '<span class="badge badge-sponsored">Sponsored</span>' : ''}
         ${isServiceCard ? '<span class="badge badge-service">Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${esc(p.badge)}</span>`:'')}
         ${isOnSale && !p.badge && !isServiceCard ? '<span class="badge sale">Sale</span>' : ''}
+        ${outOfStock ? '<span class="badge badge-soldout">Sold out</span>' : ''}
       </div>
       ${mediaTagForCard(primaryImage, p.title)}
       ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${esc(secondaryImage)}" loading="lazy" alt="${esc(p.title)} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
@@ -3225,9 +3239,13 @@ async function openProductModal(id) {
 
   try {
     // Smart bundle suggestions: same-store primary, cross-category fallback
-    const bundleProducts = getBundleSuggestions(currentModalProduct, state.products, 2);
+    const bundleProducts = getBundleSuggestions(currentModalProduct, browsableProducts(), 2);
     const bundleProduct = bundleProducts[0] || null; // keep legacy var for compatibility
     
+    // Sold out (reachable from search, a shared link or a store page): no
+    // cart controls, just the back-in-stock sign-up.
+    const modalSoldOut = currentModalProduct.listing_type !== 'service' && (currentModalProduct.stock || 0) <= 0;
+
     // Generate description with "see more" functionality
     const words = currentModalProduct.desc ? currentModalProduct.desc.split(' ') : [];
     const shortDescription = esc(words.slice(0, 10).join(' ') + (words.length > 10 ? '...' : ''));
@@ -3367,7 +3385,7 @@ async function openProductModal(id) {
         
         ${colorOptionsHTML}
 
-        ${currentModalProduct.listing_type !== 'service' ? `<div class="product-modal-delivery-pref" style="margin:12px 0">
+        ${currentModalProduct.listing_type !== 'service' && !modalSoldOut ? `<div class="product-modal-delivery-pref" style="margin:12px 0">
           <h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>
           <select id="modal-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">
             <option value="">No preference</option>
@@ -3375,7 +3393,7 @@ async function openProductModal(id) {
           </select>
         </div>` : ''}
 
-        <div class="product-modal-quantity"${currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? ' style="display:none"' : ''}>
+        <div class="product-modal-quantity"${(currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled') || modalSoldOut ? ' style="display:none"' : ''}>
           <h3>Quantity</h3>
           <div class="quantity-selector">
             <button class="quantity-btn" id="decrease-qty">-</button>
@@ -3386,7 +3404,9 @@ async function openProductModal(id) {
         
         ${bundleSuggestionHTML}
         
-        <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}">${currentModalProduct.listing_type === 'service' ? (currentModalProduct.metadata && currentModalProduct.metadata.voucher === true ? 'Add Gift Voucher to Cart' : currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? 'Book This Time' : 'Send Request') : 'Add to Cart'}</button>
+        ${modalSoldOut ? `<div style="margin:6px 0 10px;padding:10px 12px;border-radius:10px;background:#fef2f2;color:#991b1b;font-size:13px;font-weight:600">Sold out right now — get an email the moment it's back.</div>
+        <button class="product-modal-add-to-cart notify-me-btn" type="button" data-id="${currentModalProduct.id}" data-title="${esc(currentModalProduct.title)}">🔔 Notify me when it's back</button>` : ''}
+        <button class="product-modal-add-to-cart" id="modal-add-to-cart" data-id="${currentModalProduct.id}"${modalSoldOut ? ' style="display:none"' : ''}>${currentModalProduct.listing_type === 'service' ? (currentModalProduct.metadata && currentModalProduct.metadata.voucher === true ? 'Add Gift Voucher to Cart' : currentModalProduct.fulfillment_type === 'in_person' && currentModalProduct.booking_mode === 'scheduled' ? 'Book This Time' : 'Send Request') : 'Add to Cart'}</button>
         <button id="modal-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>
 
         <div class="product-modal-description">
@@ -4135,7 +4155,7 @@ window.addEventListener('resize', ()=>{
  ********************/
 function openSectionView(key){
   // Renders into filteredView/filteredGrid for a clean page-like UX
-  const prods = state.products;
+  const prods = browsableProducts();
   function sc(list,opts){ return list.slice().sort(function(a,b){ return computeScore(b,opts||{}) - computeScore(a,opts||{}); }); }
   let items;
   if(key.type==='hot') items=sc(prods.filter(function(p){ return p.sale&&p.salePrice&&p.salePrice<p.price; }),{boostSale:true,boostAfford:true});
