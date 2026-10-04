@@ -1091,6 +1091,7 @@
     .promo-toggle:hover{text-decoration:underline}
     .promo-code-input-panel{overflow:hidden;max-height:0;transition:max-height .28s ease-in-out}
     .promo-code-input-panel.open{max-height:120px}
+    .promo-code-input-panel.open:has(#promoSignin:not(.hidden)){max-height:420px} /* room for the account panel */
 
     /* Driver tip — optional pill row, shown after payment method, never
        pre-selected */
@@ -1463,6 +1464,19 @@
                     <button id="applyPromoCode" class="btn">Apply</button>
                   </div>
                   <div id="promoMessage" class="promo-message"></div>
+                  <!-- Once-per-person codes need an account: the buyer adds a
+                       password (or signs in) right here, using the email they
+                       already gave in step 1 — see renderPromoSignin(). -->
+                  <div id="promoSignin" class="hidden" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:#f0f4ff;border:1px solid #dbe4ff">
+                    <div id="promoSigninTitle" style="font-weight:700;font-size:14px;color:#0a2f66"></div>
+                    <div id="promoSigninHint" style="font-size:12.5px;color:#4b5563;margin:3px 0 10px;line-height:1.45"></div>
+                    <div id="promoSigninRow" style="display:flex;gap:8px;flex-wrap:wrap">
+                      <input type="password" id="promoSigninPassword" class="form-control" placeholder="Password" style="flex:1 1 150px;min-width:0">
+                      <button type="button" id="promoSigninBtn" class="btn" style="padding:10px 16px;font-size:14px;white-space:nowrap"></button>
+                    </div>
+                    <button type="button" id="promoSigninForgot" class="auth-text-link hidden" style="margin-top:8px">Forgot password?</button>
+                    <div id="promoSigninError" class="error-message hidden" style="margin-top:8px"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3004,43 +3018,17 @@ async function saveCartToServer() {
           showError(elements.accountPasswordError, 'This email has an account — sign in above, or use a different email.');
           return false;
         }
-        try {
-          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-          state.user = data.user;
-          await verifyUserProfile(data.user.id);
-          updateAuthUI(data.user);
-          return true;
-        } catch (error) {
-          showError(elements.accountPasswordError, error.message || 'Wrong email or password.');
-          return false;
-        }
+        const res = await signInOrCreateAccount(email, password, true);
+        if (!res.ok) { showError(elements.accountPasswordError, res.message); return false; }
+        return true;
       }
 
       // New email — account creation is optional and never blocks the order.
-      if (password && supabaseClient) {
-        const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
-        try {
-          const { data, error } = await supabaseClient.auth.signUp({
-            email, password, options: { data: { full_name: fullName } }
-          });
-          if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
-            // Race: became registered between the live check and submit.
-            state.emailExists = true;
-            setAccountCardState('returning');
-            showError(elements.accountPasswordError, 'This email already has an account — enter your password to sign in.');
-            return false;
-          } else if (!error && data.user && data.session) {
-            state.user = data.user;
-            await verifyUserProfile(data.user.id);
-            updateAuthUI(data.user);
-          } else if (!error) {
-            showNotification('Account created — check your email to verify it. Your order will still go through as normal.', 'success');
-          }
-          // Any other signup error fails open — continue as guest.
-        } catch (e) {
-          console.warn('Account creation error, continuing as guest', e);
-        }
+      if (password) {
+        const res = await signInOrCreateAccount(email, password, false);
+        if (res.switchToReturning) { showError(elements.accountPasswordError, res.message); return false; }
+        if (res.created) showNotification('Account created — check your email to verify it. Your order will still go through as normal.', 'success');
+        // Any other signup error fails open — continue as guest.
       }
       return true;
     }
@@ -3645,7 +3633,7 @@ async function loadBuyNowItem() {
             persistCart: !(state.isBuyNow || state.storeScope)
           })
         });
-        if (!res.ok) return false;
+        if (!res.ok) { showPromoMessage('Couldn’t check that code — please try again.', 'error'); return false; }
         const result = await res.json();
         const discount = result.discount;
 
@@ -3673,6 +3661,7 @@ async function loadBuyNowItem() {
         openPromoCodePanel();
 
         updateOrderSummary();
+        renderPromoSignin();
         return true;
 
       } catch (error) {
@@ -3692,13 +3681,135 @@ async function loadBuyNowItem() {
       const success = await applyCoupon(code);
       if (success) {
         if (state.appliedPromoCode?.requiresSignIn) {
-          showPromoMessage(`Sign in to use this code — ${formatCurrency(state.appliedPromoCode.previewAmount)} off waiting for you`, 'info');
+          showPromoMessage(Number(state.appliedPromoCode.previewAmount) > 0
+            ? `${formatCurrency(state.appliedPromoCode.previewAmount)} off is waiting — this code needs a quick account (below).`
+            : 'This code needs a quick account (below).', 'info');
         } else {
           showPromoMessage(`Promo code applied! Discount: ${formatCurrency(state.discount)}`, 'success');
         }
         elements.promoCodeInput.value = '';
+      }
+      // On failure applyCoupon() has already said why (expired, used, …).
+    }
+
+    // ── Once-per-person codes: create the account right where the code is ──
+    // Reusable promo codes (multi_use) are tracked per account, so a guest
+    // can only preview them. Instead of sending the buyer away, this panel
+    // under the code box asks for just a password (new email) or their
+    // password (existing account), using the email from step 1. Sign-ups
+    // confirm instantly on this project, so the code applies straight away.
+    let promoSigninMode = null; // 'new' | 'returning'
+    async function emailHasAccount(email) {
+      if (email === emailCheckedValue) return !!state.emailExists;
+      try {
+        const res = await fetch('/.netlify/functions/check-email-exists', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email })
+        });
+        const json = await res.json().catch(() => ({ exists: false }));
+        emailCheckedValue = email;
+        state.emailExists = !!json.exists;
+      } catch (_) { /* unknown → treat as new; sign-up says if it isn't */ }
+      return !!state.emailExists;
+    }
+    async function renderPromoSignin() {
+      const box = document.getElementById('promoSignin');
+      if (!box) return;
+      const promo = state.appliedPromoCode;
+      if (state.user || !promo?.requiresSignIn) { box.classList.add('hidden'); return; }
+      const title = document.getElementById('promoSigninTitle'), hint = document.getElementById('promoSigninHint');
+      const row = document.getElementById('promoSigninRow'), btn = document.getElementById('promoSigninBtn');
+      const forgot = document.getElementById('promoSigninForgot'), err = document.getElementById('promoSigninError');
+      // "R50 off with CODE" when there's an amount to show; a code that
+      // doesn't touch this cart (e.g. only gift vouchers in it) has none.
+      const off = Number(promo.previewAmount) > 0 ? formatCurrency(promo.previewAmount) + ' off' : '';
+      const withOff = s => off ? `${off} with ${promo.code}${s}` : `Use ${promo.code}${s}`;
+      const email = elements.customerEmail.value.trim();
+      err.classList.add('hidden');
+      openPromoCodePanel();
+      // The summary (where the code box lives) starts collapsed on phones.
+      const summary = document.getElementById('summaryToggle')?.closest('.order-summary');
+      if (summary && !summary.classList.contains('expanded')) document.getElementById('summaryToggle').click();
+      box.classList.remove('hidden');
+      if (!isValidEmail(email)) {
+        promoSigninMode = null;
+        title.textContent = withOff('');
+        hint.textContent = 'This code is once per person, so it needs an Umzila account. Add your email in your details first, then come back to finish here.';
+        row.classList.add('hidden'); forgot.classList.add('hidden');
+        return;
+      }
+      row.classList.remove('hidden');
+      promoSigninMode = (await emailHasAccount(email)) ? 'returning' : 'new';
+      const pw = document.getElementById('promoSigninPassword');
+      if (promoSigninMode === 'returning') {
+        title.textContent = `Sign in to use ${promo.code}${off ? ' — ' + off : ''}`;
+        hint.textContent = `${email} already has an Umzila account. Enter its password and the code applies straight away.`;
+        btn.textContent = 'Sign in & apply';
+        pw.setAttribute('autocomplete', 'current-password');
+        forgot.classList.remove('hidden');
       } else {
-        showPromoMessage('Invalid or expired promo code', 'error');
+        title.textContent = withOff(' — just add a password');
+        hint.textContent = `This code is once per person, so it needs an Umzila account. We'll create one for ${email} — no other forms, and you can track your order too.`;
+        btn.textContent = 'Create account & apply';
+        pw.setAttribute('autocomplete', 'new-password');
+        forgot.classList.add('hidden');
+      }
+    }
+    async function submitPromoSignin() {
+      const promo = state.appliedPromoCode;
+      const err = document.getElementById('promoSigninError');
+      const btn = document.getElementById('promoSigninBtn');
+      const password = document.getElementById('promoSigninPassword').value;
+      const email = elements.customerEmail.value.trim();
+      err.classList.add('hidden');
+      if (!promo?.requiresSignIn || !promoSigninMode) return;
+      if (!password) { showError(err, 'Enter a password.'); return; }
+      if (promoSigninMode === 'new' && password.length < 6) { showError(err, 'Use at least 6 characters.'); return; }
+      const label = btn.textContent;
+      btn.disabled = true; btn.textContent = '…';
+      const res = await signInOrCreateAccount(email, password, promoSigninMode === 'returning');
+      btn.disabled = false; btn.textContent = label;
+      if (res.switchToReturning) { promoSigninMode = 'returning'; await renderPromoSignin(); showError(document.getElementById('promoSigninError'), res.message); return; }
+      if (!res.ok) { showError(err, res.message); return; }
+      // Signed in — re-check the code against the real account.
+      document.getElementById('promoSigninPassword').value = '';
+      document.getElementById('promoSignin').classList.add('hidden');
+      if (await applyCoupon(promo.code)) {
+        showPromoMessage(`You're signed in — ${promo.code} applied: -${formatCurrency(state.discount)}`, 'success');
+      }
+    }
+
+    // One place that signs a buyer in or creates their account (used by the
+    // step-1 password card and the promo-code panel).
+    // → { ok, message?, switchToReturning? }
+    async function signInOrCreateAccount(email, password, exists) {
+      if (!supabaseClient) return { ok: false, message: 'Please try again in a moment.' };
+      try {
+        if (exists) {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (error) return { ok: false, message: error.message || 'Wrong email or password.' };
+          state.user = data.user;
+          await verifyUserProfile(data.user.id);
+          updateAuthUI(data.user);
+          return { ok: true };
+        }
+        const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
+        const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+        if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
+          // Race: became registered between the live check and submit.
+          state.emailExists = true;
+          setAccountCardState('returning');
+          return { ok: false, switchToReturning: true, message: 'This email already has an account — enter its password to sign in.' };
+        }
+        if (error) return { ok: false, message: error.message || 'Couldn’t create the account.' };
+        if (data.user && data.session) {
+          state.user = data.user;
+          await verifyUserProfile(data.user.id);
+          updateAuthUI(data.user);
+          return { ok: true };
+        }
+        return { ok: false, created: true, message: 'Account created — check your email to verify it, then sign in to use the code.' };
+      } catch (e) {
+        return { ok: false, message: 'Something went wrong — please try again.' };
       }
     }
 	
@@ -5245,6 +5356,17 @@ async function submitToPayFast(cartItems, orderId, total) {
 
       // Apply promo code button
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
+      document.getElementById('promoSigninBtn')?.addEventListener('click', submitPromoSignin);
+      document.getElementById('promoSigninPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitPromoSignin(); } });
+      document.getElementById('promoSigninForgot')?.addEventListener('click', async () => {
+        const email = elements.customerEmail.value.trim();
+        const err = document.getElementById('promoSigninError');
+        try { await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${CONFIG.siteUrl}/reset-password.html` }); showError(err, 'Password reset email sent — check your inbox, then come back and sign in.'); }
+        catch (_) { showError(err, 'Couldn’t send the reset email — please try again.'); }
+      });
+      // A code restored from the cart page (or applied before the email was
+      // typed) gets its account panel once the email is there.
+      elements.customerEmail?.addEventListener('change', () => renderPromoSignin());
 
       // Collapsed "Have a code?" toggle (order-summary sidebar)
       document.getElementById('promoCodeToggle')?.addEventListener('click', () => {

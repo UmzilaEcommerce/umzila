@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Once-per-person codes: create the account right at the code box
+
+**Asked for:** a guest typing a code that needs an account (reusable, once-per-person promo codes) shouldn't be sent away — explain, show a password field, create the profile, apply the code, carry on paying.
+
+**What changed (`checkout.html`):**
+- When such a code is entered (or restored from the cart page) and the buyer isn't signed in, a panel opens right under the code box using the email from step 1: new email → "R20 off with CODE — just add a password" + **Create account & apply**; existing account → "Sign in to use CODE" + **Sign in & apply** + Forgot password. On success the panel disappears, the code is re-checked against the new account and applied. Sign-ups on this project confirm instantly, so it's one step. Needs ≥6 characters; the phone order summary auto-expands so the panel is seen.
+- Sign-in/sign-up logic now lives once in `signInOrCreateAccount()`, shared by the step-1 password card and this panel.
+- Fixed: a failed code's specific reason ("already used", "first orders only"…) was immediately overwritten by a generic "Invalid or expired".
+- **Decision — not every code:** one-off codes (gift vouchers, mystery-gift, referral) stay guest-usable. They can only be used once in total, so an account adds no protection, and requiring one would add friction for gift recipients. Only reusable "once per person" codes need an account, because that rule can only be enforced against a real login.
+
+**Verified locally (test code, deleted after):** guest + new email shows the create-password panel with the right amount; empty/short password errors; existing-account version (simulated) shows Sign in & apply + Forgot password; zero-amount wording; panel no longer clipped. Not run: the actual sign-up/sign-in against the live auth service (same calls the existing step-1 card uses).
+
+**Files:** `checkout.html`, docs.
+
+---
+
 ## 2026-10-04 — Designed product images for Nceks; voucher cards read as gifts
 
 **Reported:** every Nceks listing used a generic quad photo, and each ride and its gift voucher shared the *same* photo, so you had to read titles carefully to tell a booking from a voucher.
