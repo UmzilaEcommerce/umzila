@@ -4,6 +4,20 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Rider dispatch no longer stalls: missed offers released, waiting orders re-offered
+
+**Found while preparing the founder's first live end-to-end delivery test:** dispatch only ran once, at the moment a seller marked an order ready. If no rider was online right then, the delivery sat at `READY_FOR_DISPATCH` forever (the code comments mentioned a "heartbeat or admin redispatch" that was never built). An offer nobody answered within its 2 minutes left the delivery stuck at `OFFERED` forever too — it was only marked expired if a rider tried to accept it late.
+
+**Fix (`driver-heartbeat.js`):** on every heartbeat from an eligible online rider (every 30 s while the rider app is online): pending offers past `expires_at` are marked expired and their delivery goes back to `READY_FOR_DISPATCH` (`OFFER_EXPIRED` event); then the oldest waiting deliveries are offered via the existing `dispatchDelivery()` (nearest eligible online rider, never double-offers). Best-effort — never fails the heartbeat.
+
+**Also:** a R5, free-delivery test item was added to Velaphi ("Delivery test item (Umzila staff)", stock 2, `metadata.internal_test`) for the founder's live test — hide it afterwards.
+
+**Rider steps confirmed manual by design** (no GPS geofence): Accept → Start route → pickup checklist → Start delivery → "I've Arrived" → customer's 4-digit PIN. GPS (every 30 s) only drives the customer's live map.
+
+**Files:** `netlify/functions/driver-heartbeat.js`; data: test product.
+
+---
+
 ## 2026-10-04 — No delivery outside the zones ("notify me" instead), KZN-only province, free-over-R600 off, store-level free delivery
 
 **Asked for (founder):** addresses outside the zones we draw must not be deliverable — no default R42.50 (e.g. a Cape Town order) — with a button that tells us their name, address and cart so we expand from real demand; the province dropdown should reflect that only KwaZulu-Natal works; turn off free delivery by cart value; free delivery toggleable per store and per product in admin.

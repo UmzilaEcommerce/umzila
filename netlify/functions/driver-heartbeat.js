@@ -12,6 +12,8 @@
 // Never trusts a client-supplied driverId/userId -- the caller's identity is
 // always resolved from their own auth token first.
 const { createClient } = require('@supabase/supabase-js');
+const { dispatchDelivery } = require('./lib/dispatch');
+const { transitionDelivery } = require('./lib/delivery-state');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -122,6 +124,37 @@ exports.handler = async function (event) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update driver record' }) };
     }
     driverRow = updated;
+  }
+
+  // Keep orders moving (2026-10-04 — they used to stall forever):
+  //  1. an offer nobody answered within its window is expired and its
+  //     delivery goes back to READY_FOR_DISPATCH;
+  //  2. while any eligible rider is online, the oldest waiting delivery is
+  //     offered again (an order that became ready while nobody was online,
+  //     or whose offer was declined/expired). dispatchDelivery() picks the
+  //     nearest eligible online rider and never double-offers.
+  // Best-effort: never fails the heartbeat itself.
+  if (isOnline && driverRow && driverRow.eligibility_status === 'eligible' && driverRow.can_do_live_delivery) {
+    try {
+      const { data: stale } = await admin.from('driver_offers').select('id, delivery_id')
+        .eq('status', 'pending').lt('expires_at', nowIso).limit(10);
+      for (const o of stale || []) {
+        const { data: exp } = await admin.from('driver_offers').update({ status: 'expired' })
+          .eq('id', o.id).eq('status', 'pending').select('id');
+        if (exp && exp.length) {
+          await transitionDelivery(admin, o.delivery_id, 'READY_FOR_DISPATCH', { type: 'system', id: null }, { eventType: 'OFFER_EXPIRED' })
+            .catch(() => {});
+        }
+      }
+      const { data: waiting } = await admin.from('deliveries').select('id')
+        .eq('status', 'READY_FOR_DISPATCH').order('created_at', { ascending: true }).limit(3);
+      for (const w of waiting || []) {
+        const r = await dispatchDelivery(admin, w.id);
+        if (r && r.dispatched) break;
+      }
+    } catch (e) {
+      console.warn('driver-heartbeat: redispatch sweep failed', e && e.message);
+    }
   }
 
   return { statusCode: 200, headers, body: JSON.stringify({ ok: true, driver: driverRow }) };
