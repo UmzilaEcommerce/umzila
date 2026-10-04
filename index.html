@@ -241,6 +241,15 @@
       </div>
 
       <!-- FEATURED SHOPS — populated via supabase-ready event -->
+      <!-- Stores the buyer saved ("Save store" on a store page) — saved_stores when
+           signed in, a local list (ss_saved_stores) for guests. Hidden when empty. -->
+      <section class="featured-shops-section" id="savedStoresSection" style="display:none">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <h2 style="margin:0">❤️ Your saved stores</h2>
+        </div>
+        <div class="shops-top3" id="savedStoresRow"></div>
+      </section>
+
       <section class="featured-shops-section fade-up" id="featuredShopsSection" style="display:none">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <h2 style="margin:0">🧑‍🎨 Featured Shops</h2>
@@ -1164,23 +1173,51 @@
 
         var top3 = sellers.slice(0, 3);
         var scroll = document.getElementById('shopsScroll');
-        scroll.innerHTML = top3.map(function(s) {
-          var cnt      = countMap[s.id] || 0;
-          var initials = (s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
+        scroll.innerHTML = top3.map(function(s) { return shopCardHtml(s, countMap[s.id] || 0, featuredIds.has(s.id)); }).join('');
+        document.getElementById('featuredShopsSection').style.display = '';
+        renderSavedStores(sb, sellers, countMap).catch(function(e) { console.warn('saved stores failed', e); });
+
+        function shopCardHtml(s, cnt, isFeatured) {
+          var e = function(v) { return String(v || '').replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+          var initials = e((s.shop_name || '?').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2));
           var logoInner = s.logo_url
-            ? '<img src="' + s.logo_url + '" alt="' + (s.shop_name||'') + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+            ? '<img src="' + e(s.logo_url) + '" alt="' + e(s.shop_name) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
             : '<span>' + initials + '</span>';
-          var featBadge = featuredIds.has(s.id) ? '<span class="shop-card-feat">Featured</span>' : '';
+          var featBadge = isFeatured ? '<span class="shop-card-feat">Featured</span>' : '';
           return '<a class="shop-card" href="' + (s.slug ? '/' + s.slug : 'shop.html?shop=' + encodeURIComponent(s.shop_name)) + '">' +
             '<div class="shop-card-logo">' + logoInner + '</div>' +
             '<div class="shop-card-body">' +
-              '<div class="shop-card-name">' + (s.shop_name || '') + '</div>' +
+              '<div class="shop-card-name">' + e(s.shop_name) + '</div>' +
               '<div class="shop-card-meta">' + cnt + ' item' + (cnt !== 1 ? 's' : '') + featBadge + '</div>' +
             '</div>' +
             '<svg class="shop-card-go" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>' +
           '</a>';
-        }).join('');
-        document.getElementById('featuredShopsSection').style.display = '';
+        }
+
+        // "Your saved stores": signed in → saved_stores (a guest's local list
+        // is copied in first); guest → the local list. Newest first.
+        async function renderSavedStores(sb, activeSellers, counts) {
+          var local = [];
+          try { local = JSON.parse(localStorage.getItem('ss_saved_stores') || '[]'); if (!Array.isArray(local)) local = []; } catch (_) {}
+          var sess = await sb.auth.getSession();
+          var u = sess && sess.data && sess.data.session && sess.data.session.user;
+          var ids = local;
+          if (u) {
+            if (local.length) {
+              var up = await sb.from('saved_stores').upsert(local.map(function(id) { return { user_id: u.id, seller_id: id }; }), { onConflict: 'user_id,seller_id', ignoreDuplicates: true });
+              if (!up.error) { try { localStorage.removeItem('ss_saved_stores'); } catch (_) {} }
+            }
+            var res = await sb.from('saved_stores').select('seller_id').eq('user_id', u.id).order('created_at', { ascending: false });
+            if (res.error) return;
+            ids = (res.data || []).map(function(r) { return r.seller_id; });
+          }
+          var byId = {};
+          activeSellers.forEach(function(s) { byId[s.id] = s; });
+          var list = ids.map(function(id) { return byId[id]; }).filter(Boolean);
+          if (!list.length) return;
+          document.getElementById('savedStoresRow').innerHTML = list.map(function(s) { return shopCardHtml(s, counts[s.id] || 0, false); }).join('');
+          document.getElementById('savedStoresSection').style.display = '';
+        }
 
         /* ── Hero banner ads ── */
         try {

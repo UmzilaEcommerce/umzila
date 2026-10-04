@@ -256,10 +256,30 @@
     try{ localStorage.setItem('ss_cart', JSON.stringify(items)); }catch(e){}
   }
 
+  // The saved carts row uses the server shape (product_id/quantity/name/
+  // image — same as script.js and checkout.html); ss_cart uses the browser
+  // shape (id/qty/title/img). Convert both ways so neither side ends up with
+  // lines the other can't read.
+  const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
+    'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+  function toServerItem(i){
+    const out = { product_id: i.product_id || i.id, name: i.title || i.name, price: i.price, quantity: Number(i.quantity || i.qty || 1),
+      size: i.size, image: i.img || i.image, variant_id: i.variantId || i.variant_id || null, stock: i.stock || 0,
+      max_quantity: i.maxQuantity || i.max_quantity || Number(i.quantity || i.qty || 1) };
+    CART_EXTRA_FIELDS.forEach(k => { if (i[k] !== undefined) out[k] = i[k]; });
+    return out;
+  }
+  function toLocalItem(i){
+    const out = Object.assign({}, i, { id: i.id || i.product_id, title: i.title || i.name, qty: Number(i.qty || i.quantity || 1),
+      img: i.img || i.image, variantId: i.variantId || i.variant_id || null, maxQuantity: i.maxQuantity || i.max_quantity });
+    delete out.product_id; delete out.quantity; delete out.name; delete out.image; delete out.variant_id; delete out.max_quantity;
+    return out;
+  }
+
   async function writeSupabaseCart(items){
     if(!sb || !currentUser) return;
     try{
-      await sb.from('carts').upsert([{ user_id: currentUser.id, items }], { onConflict: ['user_id'] });
+      await sb.from('carts').upsert([{ user_id: currentUser.id, items: items.map(toServerItem).filter(i => i.product_id), updated_at: new Date().toISOString() }], { onConflict: 'user_id' });
     }catch(e){ console.warn('cart sync error',e); }
   }
 
@@ -270,7 +290,7 @@
       try{
         const { data } = await sb.from('carts').select('items').eq('user_id', currentUser.id).single();
         if(data?.items && Array.isArray(data.items) && data.items.length > 0){
-          cart = data.items;
+          cart = data.items.map(toLocalItem);
           writeLocalCart(cart);
         }
       }catch(e){}

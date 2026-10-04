@@ -2,6 +2,8 @@
 
 A paid option for stores that want a site that looks like their own while still being a normal Umzila store: same products, cart, checkout, PayFast, orders, seller dashboard, and its listings still appear on the main site. First one: **Nceks Quad Biking** at `umzila.store/ncekeniquads` (design by Shazi Media), built 2026-10-03.
 
+Every store *without* a folder gets the default template, `shop.html` — see `store-pages.md`.
+
 ## How it fits together
 
 - **Routing**: every store's link is `/<sellers.slug>` (`netlify.toml` rewrites `/:slug` → `shop.html`). A bespoke store is a **folder with the same name as the slug** (`/ncekeniquads/index.html` + `img/`). Netlify serves real files before rewrites, so the folder shadows the generic shop page for that one store. Asset paths are absolute (`/ncekeniquads/img/...`) because the page is served without a trailing slash.

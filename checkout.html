@@ -1933,6 +1933,12 @@
       tip: 0,                    // optional driver tip, buyer-elected, added straight into the total
       paymentMethods: [],        // this buyer's saved cards, most-recently-used first
       selectedPaymentMethodId: null, // which one "Pay with saved card" will charge
+      storeScope: new URLSearchParams(location.search).get('store') || null,
+                                   // one-store checkout from a store page's cart
+                                   // (?store=<seller id>) — see scopeCart()
+      cartRest: [],               // the rest of the buyer's cart while storeScope is set:
+                                   // never priced or paid here, always written back
+      closedStoresAck: false,     // buyer already agreed to order from a closed store
       isBuyNow: false,            // set by loadCart() — a buy-now cart is a single isolated
                                    // item, never the buyer's real ss_cart/server cart, so
                                    // syncCartOnLogin() must leave it alone (see there)
@@ -2830,8 +2836,9 @@ async function syncCartOnLogin(user) {
                 ...cartExtras(item)
             })));
 
-            // Save merged cart
-            localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+            // Save merged cart (the merge is the whole cart — re-apply a store scope)
+            scopeCart(state.cart);
+            persistLocalCart();
             await saveCartToServer();
         } else if (localCart.length > 0) {
             // No server cart, save local cart to server
@@ -2851,11 +2858,11 @@ async function syncCartOnLogin(user) {
 
 // Add saveCartToServer function
 async function saveCartToServer() {
-    if (!supabaseClient || !state.user) return;
-    
+    if (!supabaseClient || !state.user || state.isBuyNow) return;
+
     try {
         const cartData = {
-            items: state.cart.map(item => ({
+            items: fullCart().map(item => ({
                 product_id: item.id,
                 name: item.name,
                 price: item.price,
@@ -3316,6 +3323,7 @@ async function saveCartToServer() {
     // Load cart with server validation
 async function loadCart() {
     try {
+        state.cartRest = [];
         const urlParams = new URLSearchParams(window.location.search);
         const couponCode = urlParams.get('coupon');
 
@@ -3350,7 +3358,8 @@ async function loadCart() {
             // Not logged in, use localStorage only
             await loadFromLocalStorage();
         }
-        
+        scopeCart(state.cart);
+
         // Apply coupon if provided
         if (couponCode) {
             await applyCoupon(couponCode);
@@ -3363,6 +3372,23 @@ async function loadCart() {
         state.cart = [];
         showEmptyCart();
     }
+}
+
+// One-store checkout (?store=<seller id>, from a store page's cart drawer):
+// only that store's lines are priced and paid; the buyer's other lines wait
+// in state.cartRest and are written back with every cart save, so nothing
+// from other stores is lost. Called with the FULL cart each time.
+function scopeCart(fullCart) {
+    if (!state.storeScope || state.isBuyNow) { state.cart = fullCart; state.cartRest = []; return; }
+    state.cart = fullCart.filter(i => i.seller_id === state.storeScope);
+    state.cartRest = fullCart.filter(i => i.seller_id !== state.storeScope);
+}
+function fullCart() { return state.cart.concat(state.cartRest || []); }
+// Every ss_cart write goes through here: a Buy Now never touches the real
+// cart, and a one-store checkout writes the rest of the cart back too.
+function persistLocalCart() {
+    if (state.isBuyNow) return;
+    try { localStorage.setItem('ss_cart', JSON.stringify(fullCart())); } catch (e) { /* storage blocked */ }
 }
 
 // Load and validate cart items from server
@@ -3701,7 +3727,10 @@ async function validateCheckout() {
                 // succeeded; validate-cart.js ignores this key entirely when
                 // absent/invalid and uses its existing pricing, same as before
                 // this field existed.
-                quoteId: state.deliveryQuoteId || undefined
+                quoteId: state.deliveryQuoteId || undefined,
+                // A one-store checkout or Buy Now prices only part of the
+                // cart — the saved cart must keep everything else.
+                persistCart: !(state.isBuyNow || state.storeScope)
             })
         });
 
@@ -3715,7 +3744,7 @@ async function validateCheckout() {
                 state.cart.forEach(i => {
                     if ((i.id || i.product_id) === body.productId) { i.booking_id = null; i.booking_start_at = null; }
                 });
-                try { localStorage.setItem('ss_cart', JSON.stringify(state.cart)); } catch (e) { /* storage blocked */ }
+                persistLocalCart();
                 state.validatedCart = null;
                 if (typeof renderCheckoutBlockers === 'function') renderCheckoutBlockers();
             }
@@ -4239,7 +4268,7 @@ async function validateCheckout() {
         });
         if (!ok) return;
         cartItem.intake = newIntake;
-        localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+        persistLocalCart();
         updateServiceBanner();
         renderCheckoutBlockers();
       });
@@ -4301,7 +4330,7 @@ async function validateCheckout() {
               newOpts.return_slot_end = pickedSlot?.end;
             }
             cartItem.service_options = newOpts;
-            localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+            persistLocalCart();
             updateServiceBanner();
             updateShippingAndTotal();
             renderCheckoutBlockers();
@@ -4700,6 +4729,10 @@ async function submitToPayFast(cartItems, orderId, total) {
             return null;
         }
 
+        // A store outside its opening hours: the buyer may still order, but
+        // only after agreeing to the delay (bookings already pick a time).
+        if (!(await confirmClosedStores())) return null;
+
         // Save shipping info
         if (!state.shippingInfo) {
             await saveShippingInfo();
@@ -4858,7 +4891,71 @@ async function submitToPayFast(cartItems, orderId, total) {
             try { localStorage.setItem('ss_marketing_optin', state.shippingInfo.email || ''); } catch (_) {}
         }
 
+        // What the cart should still hold once this order is paid
+        // (checkout-success.html applies it): a Buy Now leaves the real cart
+        // as it is, a one-store checkout keeps the other stores' lines.
+        try {
+            const keep = state.isBuyNow ? JSON.parse(localStorage.getItem('ss_cart') || '[]') : (state.cartRest || []);
+            localStorage.setItem('ss_cart_after_paid', JSON.stringify(keep));
+        } catch (_) {}
+
         return { orderId, total, validatedCart };
+    }
+
+    // Lines that wait for the store to open: physical items and services
+    // that are worked on — not timed bookings (the calendar already only
+    // offers open hours) and not gift vouchers (sent automatically).
+    function waitsForOpenStore(item) {
+        if ((item.listing_type || 'product') !== 'service') return true;
+        if (item.is_voucher) return false;
+        if (item.booking_id || (item.fulfillment_type === 'in_person' && item.booking_mode === 'scheduled')) return false;
+        return true;
+    }
+    function sastWhen(iso) {
+        const f = (d, o) => new Intl.DateTimeFormat('en-ZA', Object.assign({ timeZone: 'Africa/Johannesburg' }, o)).format(d);
+        const d = new Date(iso), now = new Date(), day = x => f(x, { year: 'numeric', month: '2-digit', day: '2-digit' });
+        const t = f(d, { hour: '2-digit', minute: '2-digit', hour12: false });
+        if (day(d) === day(now)) return 'later today at ' + t;
+        if (day(d) === day(new Date(now.getTime() + 86400000))) return 'tomorrow at ' + t;
+        return f(d, { weekday: 'long' }) + ' at ' + t;
+    }
+    async function confirmClosedStores() {
+        if (state.closedStoresAck || !supabaseClient) return true;
+        const ids = [...new Set(state.cart.filter(waitsForOpenStore).map(i => i.seller_id).filter(Boolean))];
+        if (!ids.length) return true;
+        const { data, error } = await supabaseClient.rpc('get_store_hours_status', { p_seller_ids: ids });
+        if (error || !data) return true; // hours are a courtesy notice — never block a sale on a failed lookup
+        const closed = data.filter(h => h.has_hours && !h.open_now);
+        if (!closed.length) return true;
+        const { data: sellers } = await supabaseClient.from('sellers').select('id, shop_name').in('id', closed.map(h => h.seller_id));
+        const nameOf = id => ((sellers || []).find(s => s.id === id) || {}).shop_name || 'This store';
+        const lines = closed.map(h => '<li style="margin:4px 0"><strong>' + escapeHtmlLite(nameOf(h.seller_id)) + '</strong> is closed' +
+            (h.next_open_at ? ' and opens again <strong>' + escapeHtmlLite(sastWhen(h.next_open_at)) + '</strong>' : '') + '.</li>').join('');
+        return new Promise(resolve => {
+            const wrap = document.createElement('div');
+            wrap.setAttribute('role', 'dialog');
+            wrap.setAttribute('aria-modal', 'true');
+            wrap.setAttribute('aria-labelledby', 'closedStoreTitle');
+            wrap.style.cssText = 'position:fixed;inset:0;z-index:4000;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px';
+            wrap.innerHTML =
+                '<div style="background:#fff;border-radius:18px;max-width:440px;width:100%;padding:22px 20px;box-shadow:0 30px 70px -20px rgba(0,0,0,.45);margin:auto">' +
+                  '<div style="font-size:30px;line-height:1;margin-bottom:8px">🕘</div>' +
+                  '<h3 id="closedStoreTitle" style="margin:0 0 8px;font-size:19px;color:#0a2f66">' + (closed.length === 1 ? 'This store is closed right now' : 'Some stores are closed right now') + '</h3>' +
+                  '<ul style="margin:0 0 10px;padding-left:18px;color:#374151;font-size:14px">' + lines + '</ul>' +
+                  '<p style="margin:0 0 16px;color:#4b5563;font-size:14px;line-height:1.5">You can still place your order — it will be prepared when the store opens, so expect a delay (most likely until the next day). Do you want to go ahead?</p>' +
+                  '<button type="button" data-yes style="width:100%;padding:13px;border:0;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px">Yes, order anyway</button>' +
+                  '<button type="button" data-no style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:999px;background:#fff;color:#374151;font-weight:600;font-size:14px;cursor:pointer">Not now</button>' +
+                '</div>';
+            const done = ok => { wrap.remove(); document.removeEventListener('keydown', onKey); if (ok) state.closedStoresAck = true; resolve(ok); };
+            const onKey = e => { if (e.key === 'Escape') done(false); };
+            wrap.addEventListener('click', e => {
+                if (e.target.closest('[data-yes]')) done(true);
+                else if (e.target.closest('[data-no]') || e.target === wrap) done(false);
+            });
+            document.addEventListener('keydown', onKey);
+            document.body.appendChild(wrap);
+            wrap.querySelector('[data-yes]').focus();
+        });
     }
 
     // R0 orders: complete-zero-total-order.js re-prices the saved order with

@@ -906,7 +906,7 @@ async function loadStore(){
   store.vouchers = prods.filter(p => p.metadata && p.metadata.voucher === true)
     .map(p => ({id: p.id, mins: p.metadata.ride_minutes, label: labelFor(p.metadata.ride_minutes), price: priceOf(p), name: p.name, image: p.image}))
     .sort((a, b) => a.mins - b.mins);
-  store.step = seller.booking_start_interval_minutes || 60;
+  store.step = seller.booking_start_interval_minutes || null; // unset → each ride's own length, same as hold-service-booking.js
   await refreshLoad();
   store.ready = true;
 }
@@ -926,7 +926,7 @@ function startsFor(r, di){
   const out = [];
   store.windows.filter(w => w.day_of_week === days[di].dow).forEach(w => {
     const ws = toMin(w.start_time), we = toMin(w.end_time);
-    for (let m = ws; m + r.mins <= we; m += store.step) out.push(toHM(m));
+    for (let m = ws; m + r.mins <= we; m += (store.step || r.mins)) out.push(toHM(m));
   });
   return out;
 }

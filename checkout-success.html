@@ -155,6 +155,18 @@
       wrap.style.display = '';
     }
 
+    // The order is paid: empty the cart — except what checkout said to keep
+    // (ss_cart_after_paid): a one-store checkout keeps the other stores'
+    // lines, a Buy Now keeps the whole cart. Signed-in buyers: the server
+    // drops their saved cart on payment and the next page re-saves this one.
+    function finishPaidCart() {
+      let keep = null;
+      try { keep = JSON.parse(localStorage.getItem('ss_cart_after_paid') || 'null'); } catch (_) {}
+      localStorage.removeItem('ss_cart_after_paid');
+      if (Array.isArray(keep) && keep.length) localStorage.setItem('ss_cart', JSON.stringify(keep));
+      else localStorage.removeItem('ss_cart');
+    }
+
     // Read seller enrollment data saved in sessionStorage on enroll-seller.html
     const enrollData = JSON.parse(sessionStorage.getItem('seller_enrollment') || '{}');
 
@@ -173,11 +185,11 @@
         (async function() {
           try {
             const res = await fetch('/.netlify/functions/get-client-config');
-            if (!res.ok) { localStorage.removeItem('ss_cart'); return; }
+            if (!res.ok) { finishPaidCart(); return; }
             const cfg = await res.json();
             const url = cfg.SUPABASE_URL || cfg.supabaseUrl || '';
             const key = cfg.SUPABASE_ANON_KEY || cfg.supabaseAnonKey || '';
-            if (!url || !key) { localStorage.removeItem('ss_cart'); return; }
+            if (!url || !key) { finishPaidCart(); return; }
 
             const sb = supabase.createClient(url, key);
 
@@ -212,7 +224,7 @@
                   document.getElementById('successSub').textContent = 'Payment received. Everything you need is below and in your email.';
                   document.getElementById('shipNote').style.display = 'none';
                 }
-                localStorage.removeItem('ss_cart');
+                finishPaidCart();
                 localStorage.removeItem('ss_coupon');
                 console.log('checkout-success: payment confirmed, cart cleared');
 
@@ -245,13 +257,13 @@
                 console.warn('checkout-success: ITN not yet confirmed after polling, clearing cart optimistically');
                 const ps = document.getElementById('payStatus');
                 if (ps) ps.textContent = 'Still confirming with PayFast — your confirmation email follows as soon as it does';
-                localStorage.removeItem('ss_cart');
+                finishPaidCart();
                 localStorage.removeItem('ss_coupon');
               }
             }
           } catch (_) {
             // Fallback: clear cart anyway since user is on success page
-            localStorage.removeItem('ss_cart');
+            finishPaidCart();
             localStorage.removeItem('ss_coupon');
           }
         })();

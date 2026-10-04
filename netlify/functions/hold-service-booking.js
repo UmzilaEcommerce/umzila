@@ -94,10 +94,21 @@ exports.handler = async function (event) {
 
     // Changing an existing hold (new time / different quantity): release it
     // first so it doesn't count against the new one. Only an unpaid hold.
+    let released = null;
     if (typeof body.replaceBookingId === 'string' && body.replaceBookingId) {
-      await supabase.from('service_bookings').update({ status: 'cancelled' })
-        .eq('id', body.replaceBookingId).eq('status', 'held').is('order_id', null);
+      const { data: rel } = await supabase.from('service_bookings').update({ status: 'cancelled' })
+        .eq('id', body.replaceBookingId).eq('status', 'held').is('order_id', null)
+        .select('id, hold_expires_at');
+      released = (rel || [])[0] || null;
     }
+    // If the new time can't be held, give the buyer their old hold back
+    // (while it's still within its own 30 minutes) instead of leaving them
+    // with nothing. Re-checked by the capacity trigger like any hold.
+    const restoreReleased = async () => {
+      if (!released || new Date(released.hold_expires_at).getTime() <= Date.now()) return;
+      const { error: rErr } = await supabase.from('service_bookings').update({ status: 'held' }).eq('id', released.id).eq('status', 'cancelled');
+      if (rErr) console.warn('hold-service-booking: could not restore the previous hold', rErr.message);
+    };
 
     const { data: booking, error } = await supabase.from('service_bookings').insert({
       seller_id: seller.id,
@@ -111,6 +122,7 @@ exports.handler = async function (event) {
     }).select('id, start_at, end_at, units, hold_expires_at').single();
 
     if (error) {
+      await restoreReleased();
       if (/BOOKING_SLOT_FULL/.test(error.message || '')) {
         return fail(409, units > 1 ? `Not enough left at that time for ${units}. Try fewer or another time.` : 'That time was just taken — pick another.', { code: 'SLOT_FULL' });
       }

@@ -22,7 +22,8 @@ async function repriceOrder(supabase, mPaymentId) {
       userId: order.user_id || undefined,
       couponCode: order.coupon_code || undefined,
       customerEmail: order.customer_email || '',
-      quoteId: order.delivery_quote_id || undefined
+      quoteId: order.delivery_quote_id || undefined,
+      persistCart: false // pricing only — never rewrite the buyer's saved cart
     })
   });
   const priced = JSON.parse(res.body || '{}');

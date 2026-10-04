@@ -478,6 +478,25 @@
           <label class="form-label">Return / Refund Policy <span class="opt">(optional)</span></label>
           <textarea id="editReturnPolicy" class="form-control" placeholder="e.g. We accept returns within 7 days of delivery..."></textarea>
         </div>
+        <div class="form-group">
+          <label class="form-label">Store colour <span class="opt">(optional)</span></label>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <input type="color" id="editThemeColor" value="#e8553a" style="width:52px;height:38px;padding:2px;border:1px solid #d9d9df;border-radius:8px;cursor:pointer">
+            <span id="editThemeColorLabel" style="font-size:13px;color:#6b7280">Umzila default</span>
+            <button type="button" class="btn ghost" id="editThemeColorReset" style="padding:4px 12px;font-size:12px">Use default</button>
+          </div>
+          <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Buttons and highlights on your store page use this colour.</small>
+        </div>
+
+        <hr class="section-divider">
+        <!-- Opening hours — seller_availability, shared with the booking calendar -->
+        <div class="section-heading">🕘 Opening Hours</div>
+        <p class="panel-subtitle" style="margin-top:-12px">Your store page shows <strong>Open now</strong> or <strong>Closed</strong> from these hours. Buyers can still order while you're closed — checkout tells them it'll be prepared when you open. If you take bookings, these are also your booking hours.</p>
+        <div class="svc-availability-grid" id="shopHoursGrid"></div>
+        <div id="shopHoursMsg" class="msg"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button type="button" class="btn primary" id="saveShopHoursBtn">Save opening hours</button>
+        </div>
 
         <hr class="section-divider">
         <!-- Pickup Address — the only delivery detail sellers control. Price,
@@ -587,6 +606,12 @@
               </select>
             </div>
           </div>
+          <div class="form-group">
+            <label class="form-label">Store section <span class="opt">(optional)</span></label>
+            <input type="text" id="newProdSection" class="form-control" list="storeSectionList" maxlength="40" placeholder="e.g. Plates with wings">
+            <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Groups items on your store page, like a menu heading. Leave blank to use the category.</small>
+          </div>
+          <datalist id="storeSectionList"></datalist>
           <!-- Multi-image upload -->
           <div class="form-group">
             <label class="form-label">Product Images <span class="opt">(multiple allowed)</span></label>
@@ -865,6 +890,11 @@
               <option value="Limited">Limited</option>
             </select>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Store section <span class="opt">(optional)</span></label>
+          <input type="text" id="editProdSection" class="form-control" list="storeSectionList" maxlength="40" placeholder="e.g. Plates with wings">
+          <small style="display:block;color:#6b7280;margin-top:4px;font-size:12px">Groups items on your store page, like a menu heading. Leave blank to use the category.</small>
         </div>
         <!-- Multi-image upload (edit mode) -->
         <div class="form-group">
@@ -2334,8 +2364,65 @@
       if (lp && s.logo_url) { lp.src = s.logo_url; lp.style.display = ''; }
       var bp = document.getElementById('editBannerPreview');
       if (bp && s.banner_url) { bp.src = s.banner_url; bp.style.display = ''; }
+      setThemeColorInput(s.theme_color || null);
+      loadShopHours();
       renderPickupAddressState();
     }
+
+    /* Store colour (sellers.theme_color, null = Umzila default) */
+    var themeColorSet = false;
+    function setThemeColorInput(c) {
+      var inp = document.getElementById('editThemeColor'), lbl = document.getElementById('editThemeColorLabel');
+      if (!inp) return;
+      themeColorSet = !!c;
+      if (c) inp.value = c;
+      lbl.textContent = c ? c.toUpperCase() : 'Umzila default';
+    }
+    document.getElementById('editThemeColor').addEventListener('input', function(e) { setThemeColorInput(e.target.value); });
+    document.getElementById('editThemeColorReset').addEventListener('click', function() { setThemeColorInput(null); });
+
+    /* Opening hours — the same seller_availability rows the booking
+       calendar uses (one set of weekly hours per store, in SAST). */
+    function fillAvailabilityGrid(gridId, rows) {
+      var grid = document.getElementById(gridId);
+      if (!grid) return;
+      grid.querySelectorAll('.svc-avail-day').forEach(function(dayEl) {
+        var match = rows.find(function(r) { return r.day_of_week === parseInt(dayEl.dataset.day, 10); });
+        dayEl.querySelector('.svc-avail-toggle').checked = !!match;
+        dayEl.classList.toggle('disabled', !match);
+        if (match) {
+          dayEl.querySelector('.svc-avail-start').value = (match.start_time || '09:00').slice(0, 5);
+          dayEl.querySelector('.svc-avail-end').value = (match.end_time || '17:00').slice(0, 5);
+        }
+      });
+    }
+    async function loadShopHours() {
+      buildAvailabilityGrid('shopHoursGrid');
+      if (!SD.seller) return;
+      var res = await SD.sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', SD.seller.id);
+      if (res.error) { setMsg('shopHoursMsg', 'Couldn’t load your hours — refresh to try again.'); return; }
+      fillAvailabilityGrid('shopHoursGrid', res.data || []);
+    }
+    document.getElementById('saveShopHoursBtn').addEventListener('click', async function() {
+      setMsg('shopHoursMsg', '');
+      var grid = document.getElementById('shopHoursGrid');
+      var bad = Array.prototype.some.call(grid.querySelectorAll('.svc-avail-day'), function(d) {
+        return d.querySelector('.svc-avail-toggle').checked && !(d.querySelector('.svc-avail-start').value < d.querySelector('.svc-avail-end').value);
+      });
+      if (bad) { setMsg('shopHoursMsg', 'Closing time must be after opening time on each open day (hours past midnight aren’t supported yet — close at 23:59).'); return; }
+      var rows = getAvailabilityRows('shopHoursGrid');
+      var hasScheduled = (SD.products || []).some(function(p) { return p.listing_type === 'service' && p.booking_mode === 'scheduled' && p.visible; });
+      if (!rows.length && hasScheduled) { setMsg('shopHoursMsg', 'You have bookable listings — keep at least one open day so buyers can book you.'); return; }
+      setBtnLoading('saveShopHoursBtn', true, 'Save opening hours');
+      var del = await SD.sb.from('seller_availability').delete().eq('seller_id', SD.seller.id);
+      var ins = !del.error && rows.length
+        ? await SD.sb.from('seller_availability').insert(rows.map(function(r) { return Object.assign({ seller_id: SD.seller.id }, r); }))
+        : { error: del.error };
+      setBtnLoading('saveShopHoursBtn', false, 'Save opening hours');
+      if (ins.error) { setMsg('shopHoursMsg', ins.error.message); return; }
+      setMsg('shopHoursMsg', rows.length ? 'Opening hours saved.' : 'Hours cleared — your store page won’t show Open/Closed.', 'success');
+      toast('Opening hours saved ✓');
+    });
 
     /* ─────────────────────────────────────────
        PICKUP ADDRESS (delivery-network-spec.md §9)
@@ -2547,7 +2634,8 @@
         social_instagram: gv('editInstagram'),
         social_tiktok:    gv('editTiktok'),
         about_story:      gv('editAboutStory'),
-        owner_story:      gv('editOwnerStory')
+        owner_story:      gv('editOwnerStory'),
+        theme_color:      themeColorSet ? document.getElementById('editThemeColor').value.toLowerCase() : null
       }).eq('id', SD.seller.id).select().single();
 
       setBtnLoading('saveShopBtn', false, 'Save Changes');
@@ -2798,6 +2886,7 @@
       SD.products = data || [];
       productsLoaded = true;
       renderProductList();
+      refreshStoreSectionList();
     }
 
     function renderProductList() {
@@ -2853,6 +2942,19 @@
         document.getElementById('newProductOnlyFields').style.display = isService ? 'none' : '';
       });
     });
+
+    /* Store section (products.metadata.store_section): the seller's own
+       grouping on their store page, e.g. "Plates with wings". The rest of
+       metadata (review_status, delivery_price, storefront_role…) is kept. */
+    function storeSectionValue(id) {
+      var el = document.getElementById(id);
+      return el ? (el.value || '').replace(/\s+/g, ' ').trim().slice(0, 40) : '';
+    }
+    function withStoreSection(meta, section) {
+      var out = Object.assign({}, meta || {});
+      if (section) out.store_section = section; else delete out.store_section;
+      return out;
+    }
 
     /* ── Service quiz helpers (shared by Add + Edit forms) ── */
     var SVC_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -3080,7 +3182,7 @@
         service_location: serviceLocation,
         intake_fields:  intakeFields,
         visible:        false,
-        metadata:    { review_status: 'pending_review' }
+        metadata:    Object.assign({ review_status: 'pending_review' }, storeSectionValue('newProdSection') ? { store_section: storeSectionValue('newProdSection') } : {})
       }).select().single();
 
       setBtnLoading('submitProductBtn', false, 'Submit for Review');
@@ -3132,6 +3234,15 @@
     });
 
     /* Edit product */
+    // Suggestions for the "Store section" field: this store's own sections.
+    function refreshStoreSectionList() {
+      var dl = document.getElementById('storeSectionList');
+      if (!dl) return;
+      var seen = {};
+      (SD.products || []).forEach(function(p) { var s = p.metadata && p.metadata.store_section; if (s) seen[s] = true; });
+      dl.innerHTML = Object.keys(seen).sort().map(function(s) { return '<option value="' + escapeHtmlLite(s) + '"></option>'; }).join('');
+    }
+
     function openEditProduct(id) {
       var p = SD.products.find(function(x) { return x.id === id; });
       if (!p) return;
@@ -3143,6 +3254,7 @@
       document.getElementById('editProdImage').value    = p.image || '';
       document.getElementById('editProdCategory').value = p.category_id || '';
       document.getElementById('editProdBadge').value    = p.badge || '';
+      document.getElementById('editProdSection').value  = (p.metadata && p.metadata.store_section) || '';
 
       // Listing type
       var lt = p.listing_type || 'product';
@@ -3312,6 +3424,9 @@
       }
 
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
+      var curMetaRes = await SD.sb.from('products').select('metadata').eq('id', id).single();
+      if (curMetaRes.error) { setBtnLoading('saveEditProdBtn', false, 'Save Changes'); setMsg('editProdMsg', 'Couldn’t save — please try again.'); return; }
+      var editMeta = withStoreSection(curMetaRes.data.metadata, storeSectionValue('editProdSection'));
       var { data, error } = await SD.sb.from('products').update({
         name:           name,
         description:    desc    || null,
@@ -3335,7 +3450,8 @@
         instant_confirm: isServiceEdit && fulfillmentTypeEdit === 'in_person' && bookingModeEdit === 'scheduled' && !!(document.getElementById('editInstantConfirm') || {}).checked,
         slot_duration_minutes: slotDurationEdit,
         service_location: serviceLocationEdit,
-        intake_fields:  intakeFieldsEdit
+        intake_fields:  intakeFieldsEdit,
+        metadata:       editMeta
       }).eq('id', id).select().single();
 
       setBtnLoading('saveEditProdBtn', false, 'Save Changes');

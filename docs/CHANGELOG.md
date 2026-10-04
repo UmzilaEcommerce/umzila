@@ -4,6 +4,36 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — New default store template, store sections, saved stores, opening hours, per-store cart & checkout
+
+Full write-up: [`docs/systems/store-pages.md`](systems/store-pages.md) (cart side also in [`checkout-cart-loading.md`](systems/checkout-cart-loading.md)).
+
+**Asked for:** every store (except bespoke ones like Nceks) on the supplied template, with store-specific filter groups ("Plates with wings"); a "Save store" list; working Open/Closed from store hours, with a pre-checkout "store is closed — expect a delay" popup (not for bookings); a review of the booking calendar; a quiet but findable way back to Umzila; store-specific bottom nav and cart; a per-store checkout that doesn't wipe the main cart.
+
+**What changed:**
+- **`shop.html` rebuilt from the template**, wired to live data (store by slug, products + images, sponsored boost, favourites, stock alerts, share). Store accent `sellers.theme_color` (new nullable column, seller-editable). "Umzila home" pill + logo back-chevron; bottom nav = Store / Search / Saved / this store's Cart.
+- **Store sections:** `products.metadata.store_section` (no new column), set per product in the seller dashboard (with suggestions); falls back to the category. Velaphi's six plates set to *Plates* / *Plates with wings*, and its accent to the template's red. Product edits re-read the current metadata before saving so an admin approval in between isn't undone.
+- **Opening hours:** reuse `seller_availability` (already the booking hours); new **Dashboard → My Shop → Opening Hours** editor; new SQL `get_store_hours_status()` (SAST, server-side) used by the store page and checkout. Checkout's `confirmClosedStores()` popup runs inside `preparePendingOrder()` (Pay Now + saved card); skips timed bookings and vouchers; never blocks on a failed lookup.
+- **Saved stores:** new `saved_stores` table (own rows only); guests keep a local list merged in at sign-in; homepage "Your saved stores" row.
+- **Per-store cart/checkout:** drawer shows this store's lines from the one shared cart; `/checkout.html?store=<id>` pays only those, keeping the rest (`scopeCart`, `cartRest`, `persistLocalCart`); "Want to check out everything together?" → `/cart.html`; `ss_cart_after_paid` keeps unpaid lines after success.
+
+**Real bugs found and fixed on the way:**
+- Store-page cart changes were never saved to a signed-in buyer's `carts` row, so the homepage/checkout (which read the row first) brought removed items back / dropped added ones.
+- `cart.html` mixed cart shapes: it copied the saved row's `product_id`-shaped items into `ss_cart` (other pages read `id`) and saved `id`-shaped items to the row (checkout reads `product_id`).
+- **Buy Now wiped the buyer's whole cart after payment** (success page cleared `ss_cart`), and validate-cart overwrote the saved cart with the single Buy Now item; `reprice-order.js` (R0 orders / guest signing) also overwrote a signed-in buyer's saved cart with the order's items.
+- Booking calendar: changing a held time to a slot that turned out full cancelled the old hold first and left the buyer with nothing — `hold-service-booking.js` now restores the previous hold. The Nceks page's start-time grid fell back to 60 min while the server falls back to the ride length (latent: Nceks has 60 set) — aligned.
+- Calendar otherwise checked and correct: SAST throughout, slot grid/lead time/horizon match the server, peak-load maths identical in browser, Nceks page and DB trigger, capacity races serialised by the trigger.
+- Homepage shop cards inserted shop names/logo URLs unescaped.
+
+**Verified locally (netlify dev, live DB):** Velaphi + Sneaker Cleaners on the template at 390px and desktop; sections; quick-add → drawer shows only Velaphi with the "2 items from another store" line; `?store=` checkout priced only the R70 plate (+R22 delivery, `persistCart:false`) while `ss_cart` kept both; closed popup ("opens tomorrow at 10:00") — "Not now" wrote nothing, "Yes" continued to the order step (insert blocked by the test; no order created); Sneaker Cleaners "Closed now · opens today at 09:00"; guest saved store shown on the homepage; hold-restore tested live (old hold back to `held`); bespoke `/ncekeniquads` unaffected. Test hours, holds and carts removed.
+**Not verified in a browser (needs a seller login):** the dashboard Opening Hours / colour / store-section fields (syntax-checked; same patterns as the existing quiz). Signed-in saved-stores sync tested by code path only.
+
+**Known / not done:** services on the template still hand over to the homepage modal for setup; hours can't cross midnight; `validate-cart.js` trusts the client-sent `userId` for its saved-cart upsert (pre-existing — anyone could overwrite another user's saved cart contents; worth fixing by reading the user from the auth token).
+
+**Files:** `shop.html` (rewritten), `checkout.html`, `checkout-success.html`, `cart.html`, `index.html`, `seller-dashboard.html`, `ncekeniquads/index.html`, `netlify/functions/{validate-cart,hold-service-booking}.js`, `netlify/functions/lib/reprice-order.js`, `CLAUDE.md`, docs; migration `store_template_saved_stores_hours_status`.
+
+---
+
 ## 2026-10-03 — New favicon, compact featured shops, slim mobile filters, Nceks booking card below the bikers
 
 - **Favicon:** the old `umzila.webp` icon was a thin blue logo that disappeared at tab size. New `favicon.svg`: a white "u" on a navy rounded tile, drawn as a route that ends in an arrow under the red destination dot (the same dot as the wordmark), with a faint white edge so it reads on light and dark tabs. All 16 pages link it, with `umzila.webp` kept as the fallback icon.

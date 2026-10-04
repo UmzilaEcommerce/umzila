@@ -103,7 +103,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, userId, couponCode, customerEmail, quoteId } = JSON.parse(event.body);
+        const { cartItems, userId, couponCode, customerEmail, quoteId, persistCart } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -383,8 +383,10 @@ variants.forEach(v => {
 }
 
         
-        // If user is authenticated, update their cart in database
-        if (userId) {
+        // If user is authenticated, update their cart in database — unless
+        // this is only part of their cart (a one-store checkout or Buy Now),
+        // which must not overwrite the rest of their saved cart.
+        if (userId && persistCart !== false) {
             const cartData = {
                 items: validatedCart.map(item => ({
                     product_id: item.id,

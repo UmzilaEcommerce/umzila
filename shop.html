@@ -1,1417 +1,1150 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <script>
-    // Clean store URLs (umzila.store/<slug>) are rewritten to this page by
-    // netlify.toml. A trailing slash would break every relative asset path
-    // below (style.css, umzila.webp…), so drop it before anything loads.
-    (function () {
-      var p = location.pathname;
-      if (p.length > 1 && p.charAt(p.length - 1) === '/') location.replace(p.replace(/\/+$/, '') + location.search + location.hash);
-    })();
-  </script>
-  <title>Shop — Umzila</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
-  <style>
-    /* ── Shop page – mobile-first Etsy-style ── */
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B3A5A">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
+<title>Store · Umzila</title>
+<meta name="description" content="Shop this store on Umzila, Durban's best local businesses, delivered.">
+<!--
+  UMZILA STORE PAGE — the default template for every store (umzila.store/<slug>,
+  rewritten here by netlify.toml). A store with its own folder (/<slug>/, e.g.
+  /ncekeniquads/) is a bespoke storefront and never reaches this page.
+  Everything comes from Supabase at runtime: sellers, products (+ images),
+  weekly hours (get_store_hours_status), saved stores, favourites.
+  Cart = the shared localStorage ss_cart (+ the signed-in carts row), shown
+  filtered to this store; checkout = /checkout.html?store=<seller id>.
+  See docs/systems/store-pages.md before editing.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<style>
+/* Layout: Umzila chrome (navy) frames each store; store areas take the store's own accent. Hero → sticky shop toolbar → product sections → about → footer. Quick view + cart are sheets. */
+:root{
+  --bg:#F6F5F1;
+  --card:#FFFFFF;
+  --ink:#15171A;
+  --ink-2:#5A5E64;
+  --line:#E5E1D8;
+  --navy:#0B3A5A;
+  --navy-2:#082C45;
+  --dot:#E8553A;
+  --accent:#E8553A;
+  --accent-ink:#FFFFFF;
+  --tint:color-mix(in srgb,var(--accent) 9%,#FFFFFF);
+  --font-display:"Archivo","Arial Black",sans-serif;
+  --font-body:"Hanken Grotesk","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Consolas",monospace;
+  --gutter:clamp(16px,3.5vw,32px);
+  --radius:18px;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+html,body{overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.55 var(--font-body);-webkit-font-smoothing:antialiased}
+img{display:block;max-width:100%}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+.wrap{width:100%;max-width:1280px;margin-inline:auto;padding-inline:var(--gutter)}
+.mono{font-family:var(--font-mono);font-weight:500;font-size:.68rem;letter-spacing:.13em;text-transform:uppercase}
+.display{font-family:var(--font-display);font-weight:800;font-stretch:114%;letter-spacing:-.015em;line-height:1.02}
+.ic{width:20px;height:20px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-    .sh-main { max-width: 1200px; margin: 0 auto; }
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5em;padding:.85rem 1.3rem;border:0;border-radius:999px;cursor:pointer;font-weight:600;text-decoration:none;transition:transform .18s cubic-bezier(.2,.8,.3,1),background-color .18s,box-shadow .18s,color .18s}
+.btn:active{transform:scale(.97)}
+.btn-accent{background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px -14px var(--accent)}
+.btn-accent:hover{filter:brightness(.94)}
+.btn-ink{background:var(--ink);color:#fff}
+.btn-ink:hover{background:var(--navy)}
+.btn-line{background:var(--card);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn-line:hover{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn-block{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
 
-    /* ── Banner ── */
-    .sh-banner {
-      width: 100%; height: 180px;
-      background: var(--accent);
-      background-size: cover; background-position: center;
-      position: relative;
-    }
-    @media (min-width: 768px) { .sh-banner { height: 240px; } }
-    @media (min-width: 1024px) { .sh-banner { height: 300px; } }
+/* umzila strip — the way back to the marketplace, quiet but always there */
+.strip{background:var(--navy);color:#DCE6EE;font-size:.84rem}
+.strip .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;padding-block:5px}
+.strip a{color:#fff;text-decoration:none;font-weight:600}
+.strip a:hover{text-decoration:underline}
+.back-home{display:inline-flex;align-items:center;gap:6px;padding:.2rem .7rem .2rem .45rem;border-radius:999px;background:rgb(255 255 255 / .1);border:1px solid rgb(255 255 255 / .18)}
+.back-home:hover{background:rgb(255 255 255 / .18);text-decoration:none!important}
+.back-home .ic{width:16px;height:16px}
+.strip-mid{color:#9FB6C8}
+@media (max-width:640px){.strip-mid{display:none}}
 
-    .sh-banner-overlay {
-      position: absolute; inset: 0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.35) 100%);
-    }
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:rgb(255 255 255 / .9);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top .wrap{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:clamp(12px,3vw,32px);height:70px}
+.brand{display:flex;align-items:center;gap:2px;text-decoration:none;color:var(--ink-2)}
+.brand .ic{width:18px;height:18px}
+.brand img{height:42px;width:auto}
+.search{position:relative;max-width:620px;width:100%;justify-self:center}
+.search .ic{position:absolute;left:16px;top:50%;transform:translateY(-50%);color:var(--ink-2)}
+.search input{width:100%;height:46px;padding:0 64px 0 46px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);font-size:.98rem;transition:border-color .15s,background-color .15s,box-shadow .15s}
+.search input:focus{outline:none;border-color:var(--ink);background:#fff;box-shadow:0 0 0 4px rgb(21 23 26 / .06)}
+.search kbd{position:absolute;right:14px;top:50%;transform:translateY(-50%);padding:2px 8px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink-2);font:500 .72rem var(--font-mono)}
+.search .clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:0;background:var(--line);cursor:pointer;display:grid;place-items:center}
+.actions{display:flex;align-items:center;gap:6px}
+.icon-btn{position:relative;display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:0;background:transparent;cursor:pointer;color:var(--ink)}
+.icon-btn:hover{background:var(--bg)}
+.count{position:absolute;top:3px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--dot);color:#fff;font:600 .64rem/18px var(--font-mono);text-align:center}
+.count.bump{animation:bump .45s cubic-bezier(.2,2,.4,1)}
+@keyframes bump{from{transform:scale(.4)}}
+.cart-btn{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 12px;border-radius:999px;border:0;background:var(--ink);color:#fff;cursor:pointer;font-weight:600}
+.cart-btn .ic{color:#fff}
+.cart-btn .count{position:static;background:#fff;color:var(--ink)}
+@media (max-width:760px){
+  .top .wrap{grid-template-columns:auto 1fr auto;height:auto;padding-block:10px;row-gap:10px}
+  .search{grid-column:1 / -1;grid-row:2;max-width:none}
+  .search kbd{display:none}
+  .actions{grid-column:3;grid-row:1}
+  .cart-btn .label{display:none}
+}
 
-    /* Logo — overlaps bottom-left of banner */
-    .sh-logo-wrap {
-      position: absolute; bottom: -32px; left: 18px;
-      width: 64px; height: 64px;
-      border-radius: 50%; border: 3px solid #fff;
-      background: var(--accent); overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.22); z-index: 4;
-    }
-    .sh-logo-wrap img { width: 100%; height: 100%; object-fit: cover; }
-    .sh-logo-initials {
-      width: 100%; height: 100%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px; font-weight: 800; color: #fff;
-    }
-    @media (min-width: 768px) {
-      .sh-logo-wrap { width: 80px; height: 80px; bottom: -40px; }
-      .sh-logo-initials { font-size: 28px; }
-    }
+/* breadcrumb */
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:18px 0 14px;color:var(--ink-2);font-size:.86rem}
+.crumbs a{color:var(--ink-2);text-decoration:none}
+.crumbs a:hover{color:var(--ink);text-decoration:underline}
 
-    /* Floating actions — fav count + WA button */
-    .sh-hero-actions {
-      position: absolute; bottom: 12px; right: 12px;
-      display: flex; align-items: center; gap: 8px; z-index: 4;
-    }
-    .sh-fav-pill {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 6px 14px; background: rgba(255,255,255,0.92);
-      border-radius: 999px; font-size: 13px; font-weight: 700;
-      color: #e0284f; backdrop-filter: blur(6px);
-    }
-    .sh-wa-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 16px; background: #25D366; color: #fff;
-      border-radius: 999px; font-size: 13px; font-weight: 700;
-      text-decoration: none; transition: opacity 0.15s;
-    }
-    .sh-wa-btn:hover { opacity: 0.88; }
-    @media (max-width: 380px) {
-      .sh-wa-btn .wa-label { display: none; }
-      .sh-wa-btn { padding: 8px 12px; }
-    }
+/* store hero */
+.hero{position:relative}
+.banner{position:relative;overflow:hidden;height:clamp(200px,26vw,320px);border-radius:24px;background:#17110D}
+.banner > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.banner::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgb(10 12 14 / .55) 0%,rgb(10 12 14 / .12) 55%,rgb(10 12 14 / 0) 100%)}
+.banner.fallback{background:
+  radial-gradient(circle at 76% 62%,color-mix(in srgb,var(--accent) 55%,transparent) 0%,transparent 52%),
+  repeating-linear-gradient(-14deg,transparent 0 58px,rgb(255 255 255 / .045) 58px 64px),
+  linear-gradient(135deg,#1B1410,#120D0A)}
+.banner.fallback::after{display:none}
+.tagline{position:absolute;left:clamp(20px,4vw,48px);top:clamp(20px,4vw,44px);z-index:2;max-width:min(560px,70%);margin:0;color:#fff;font-size:clamp(1.6rem,4.2vw,3.2rem);text-wrap:balance;text-shadow:0 2px 20px rgb(0 0 0 / .3)}
+.identity{position:relative;z-index:3;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:20px 24px;align-items:center;margin:-64px clamp(12px,3vw,32px) 0;padding:22px;border-radius:22px;background:var(--card);box-shadow:0 30px 60px -36px rgb(21 23 26 / .45),0 1px 0 var(--line);outline:1px dashed color-mix(in srgb,var(--accent) 40%,transparent);outline-offset:-8px}
+.logo{display:grid;place-items:center;width:88px;height:88px;border-radius:22px;background:var(--tint);border:3px solid #fff;box-shadow:0 8px 20px -10px rgb(0 0 0 / .4);overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:cover}
+.logo .init{font:800 2rem/1 var(--font-display);color:var(--accent)}
+.id-main{min-width:0}
+.id-name{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.id-name h1{margin:0;font-size:clamp(1.5rem,3vw,2.2rem)}
+.curated{display:inline-flex;align-items:center;gap:6px;padding:.3rem .6rem;border-radius:999px;background:color-mix(in srgb,var(--navy) 8%,#fff);color:var(--navy);font-size:.78rem;font-weight:700}
+.curated svg{width:15px;height:15px}
+.id-desc{margin:6px 0 10px;color:var(--ink-2);max-width:70ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:0;list-style:none}
+.meta li{display:inline-flex;align-items:center;gap:6px;padding:.32rem .65rem;border-radius:999px;background:var(--bg);font-size:.84rem;font-weight:500}
+.meta .ic{width:16px;height:16px;color:var(--ink-2)}
+.meta .open{background:color-mix(in srgb,#2F8F5B 12%,#fff);color:#1F6B42;font-weight:600}
+.meta .open::before{content:"";width:7px;height:7px;border-radius:50%;background:#2F8F5B;animation:live 1.8s infinite}
+.meta .closed{background:color-mix(in srgb,#B8322A 9%,#fff);color:#8E2A22;font-weight:600}
+.meta .closed::before{content:"";width:7px;height:7px;border-radius:50%;background:#B8322A}
+@keyframes live{0%{box-shadow:0 0 0 0 rgb(47 143 91 / .6)}70%{box-shadow:0 0 0 7px rgb(47 143 91 / 0)}100%{box-shadow:0 0 0 0 rgb(47 143 91 / 0)}}
+.id-actions{display:flex;gap:8px}
+#followBtn[aria-pressed="true"] svg{fill:var(--dot);stroke:var(--dot)}
+@media (max-width:760px){
+  .identity{grid-template-columns:minmax(0,1fr);gap:14px;margin-top:-40px;padding:18px}
+  .logo{width:68px;height:68px;border-radius:18px;margin-top:-50px}
+  .id-actions .btn{flex:1;padding-inline:.8rem;white-space:nowrap}
+}
 
-    /* Shop info block */
-    .sh-info {
-      background: #fff; padding: 44px 18px 16px;
-      border-bottom: 1px solid #eaecf0;
-    }
-    @media (min-width: 768px) { .sh-info { padding-top: 54px; } }
-    .sh-shop-name { font-family: var(--font-display, Georgia, serif); font-size: 26px; font-weight: 700; color: var(--accent); margin: 0 0 4px; }
-    @media (min-width: 768px) { .sh-shop-name { font-size: 32px; } }
-    .sh-shop-desc { font-size: 14px; color: var(--muted); margin: 0 0 8px; line-height: 1.5; max-width: 560px; }
-    .sh-shop-meta {
-      display: flex; flex-wrap: wrap; gap: 8px 18px;
-      font-size: 12px; color: var(--muted);
-    }
+/* closed-store note */
+.closed-note{display:flex;gap:10px;align-items:flex-start;margin:16px clamp(12px,3vw,32px) 0;padding:12px 14px;border-radius:14px;background:#FFF7E8;color:#6B4A0E;font-size:.9rem;box-shadow:inset 0 0 0 1px #F2DDAE}
+.closed-note .ic{color:#B7791F;margin-top:2px}
 
-    /* Tabs */
-    .sh-tabs {
-      display: flex; background: #fff;
-      border-bottom: 2px solid #eaecf0;
-      position: sticky; top: 60px; z-index: 10;
-    }
-    .sh-tab {
-      padding: 14px 22px; font-size: 14px; font-weight: 600;
-      color: var(--muted); cursor: pointer;
-      border: none; border-bottom: 3px solid transparent;
-      margin-bottom: -2px; background: none;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .sh-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .sh-tab:hover:not(.active) { color: var(--accent); }
+/* shop toolbar */
+.shopbar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 71px);z-index:40;margin-top:28px;background:color-mix(in srgb,var(--bg) 92%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.shopbar .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding-block:12px}
+.cats{display:flex;gap:8px;flex:1 1 420px;min-width:0;overflow-x:auto;scrollbar-width:none;padding:2px}
+.cats::-webkit-scrollbar{display:none}
+.cat{flex:0 0 auto;display:inline-flex;align-items:center;gap:8px;padding:.55rem .95rem;border-radius:999px;border:1.5px solid var(--line);background:var(--card);cursor:pointer;font-weight:600;font-size:.9rem;transition:background-color .15s,border-color .15s,color .15s}
+.cat:hover{border-color:var(--ink)}
+.cat .n{font:500 .7rem var(--font-mono);color:var(--ink-2)}
+.cat[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.cat[aria-pressed="true"] .n{color:rgb(255 255 255 / .7)}
+.tools{display:flex;align-items:center;gap:8px;margin-left:auto}
+.facet{position:relative}
+.facet summary{display:inline-flex;align-items:center;gap:6px;padding:.55rem .9rem;border-radius:999px;border:1.5px solid var(--line);background:var(--card);cursor:pointer;list-style:none;font-weight:600;font-size:.9rem}
+.facet summary::-webkit-details-marker{display:none}
+.facet summary .dotn{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font:600 .64rem var(--font-mono)}
+.facet[open] summary{border-color:var(--ink)}
+.pop{position:absolute;right:0;top:calc(100% + 8px);z-index:5;width:280px;padding:16px;border-radius:16px;background:var(--card);box-shadow:0 24px 50px -20px rgb(21 23 26 / .4),0 0 0 1px var(--line);display:grid;gap:14px;animation:popIn .2s cubic-bezier(.2,.9,.3,1)}
+@keyframes popIn{from{transform:translateY(-6px);opacity:0}}
+.pop label.row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:500;cursor:pointer}
+.pop input[type="checkbox"]{width:18px;height:18px;accent-color:var(--ink)}
+.range{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.range input{width:100%;height:40px;padding:0 10px;border-radius:10px;border:1.5px solid var(--line)}
+.pop .reset{justify-self:start;padding:0;border:0;background:none;color:var(--ink-2);text-decoration:underline;cursor:pointer;font-size:.86rem}
+.sort{height:40px;padding:0 34px 0 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2315171A' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") right 12px center/16px no-repeat;appearance:none;font-weight:600;font-size:.9rem;cursor:pointer}
+.result-n{color:var(--ink-2);font-size:.86rem;white-space:nowrap}
+@media (max-width:760px){
+  .shopbar{top:calc(env(safe-area-inset-top,0px) + 118px)}
+  .tools{width:100%;margin-left:0}
+  .result-n{margin-left:auto}
+  .pop{right:auto;left:0;width:min(300px,calc(100vw - 32px))}
+}
 
-    /* Controls */
-    .sh-controls {
-      display: flex; gap: 10px; align-items: center;
-      padding: 12px 14px; background: #fafafa;
-      border-bottom: 1px solid #eaecf0;
-    }
-    .sh-search {
-      flex: 1; padding: 9px 14px;
-      border: 1px solid #ddd; border-radius: 8px;
-      font-size: 14px; outline: none;
-      transition: border-color 0.15s;
-    }
-    .sh-search:focus { border-color: var(--accent-2); }
-    .sh-cat-select {
-      padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px;
-      font-size: 14px; background: #fff; cursor: pointer; outline: none;
-    }
-    .sh-cat-select:focus { border-color: var(--accent-2); }
+/* grid */
+.catalog{padding-block:26px 64px}
+.group-title{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:8px 0 16px}
+.group-title h2{margin:0;font-size:1.35rem}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 18px}
+.card{position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;animation:rise .6s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:calc(var(--i,0) * 45ms)}
+@keyframes rise{from{transform:translateY(18px)}}
+.media{position:relative;overflow:hidden;aspect-ratio:1;max-width:100%;border-radius:var(--radius);background:var(--tint);cursor:pointer}
+.media > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .7s cubic-bezier(.2,.8,.2,1)}
+.card:hover .media > img{transform:scale(1.05)}
+.ph{position:absolute;inset:0;display:grid;align-content:space-between;padding:16px;background:
+  radial-gradient(circle at 80% 20%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 55%),var(--tint)}
+.ph .mono{color:color-mix(in srgb,var(--accent) 70%,var(--ink))}
+.ph b{font:800 clamp(1.15rem,2vw,1.55rem)/1.05 var(--font-display);font-stretch:112%;color:var(--ink);text-wrap:balance}
+.badge{position:absolute;top:10px;left:10px;z-index:2;padding:.32rem .55rem;border-radius:6px;background:var(--ink);color:#fff;font:600 .62rem/1 var(--font-mono);letter-spacing:.1em;text-transform:uppercase}
+.badge.sale{background:var(--dot)}
+.badge.out{background:#fff;color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.badge.spons{top:auto;bottom:10px;background:rgb(255 255 255 / .92);color:var(--ink-2)}
+.fav{position:absolute;top:8px;right:8px;z-index:2;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;border:0;background:rgb(255 255 255 / .92);cursor:pointer;color:var(--ink);transition:transform .2s}
+.fav:hover{transform:scale(1.08)}
+.fav[aria-pressed="true"] svg{fill:var(--dot);stroke:var(--dot);animation:bump .4s cubic-bezier(.2,2,.4,1)}
+.qadd{position:absolute;right:10px;bottom:10px;z-index:2;display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer;font-weight:700;font-size:.86rem;box-shadow:0 10px 20px -10px rgb(0 0 0 / .5);opacity:0;transform:translateY(8px);transition:opacity .2s,transform .2s}
+.card:hover .qadd,.card:focus-within .qadd{opacity:1;transform:none}
+.qadd .ic{width:18px;height:18px}
+.card h3{margin:4px 0 0;font-size:1rem;font-weight:700;line-height:1.3}
+.card h3 button{padding:0;border:0;background:none;cursor:pointer;text-align:left;font-weight:inherit}
+.card h3 button:hover{text-decoration:underline;text-underline-offset:3px}
+.sub{margin:0;color:var(--ink-2);font-size:.88rem;line-height:1.4}
+.price-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.price{font:800 1.12rem/1 var(--font-display);font-stretch:108%;font-variant-numeric:tabular-nums}
+.was{color:var(--ink-2);font-size:.88rem;text-decoration:line-through}
+.free{color:#1F6B42;font-size:.8rem;font-weight:700}
+.card.is-out .media > img,.card.is-out .ph{filter:grayscale(1);opacity:.6}
+@media (hover:none){.qadd{opacity:1;transform:none}}
+@media (max-width:1040px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}.qadd .label{display:none}.qadd{width:40px;padding:0;justify-content:center}}
+.empty{display:grid;justify-items:center;gap:12px;padding:56px 16px;text-align:center;color:var(--ink-2);border:1.5px dashed var(--line);border-radius:var(--radius)}
+.empty b{color:var(--ink);font-size:1.1rem}
 
-    /* Product grid */
-    .sh-products-grid {
-      display: grid; grid-template-columns: repeat(2, 1fr);
-      gap: 10px; padding: 12px 10px;
-    }
-    @media (min-width: 768px) {
-      .sh-products-grid { grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 16px; }
-    }
-    @media (min-width: 1024px) { .sh-products-grid { grid-template-columns: repeat(4, 1fr); } }
+/* page states */
+.state{display:grid;justify-items:center;gap:12px;padding:90px 16px;text-align:center;color:var(--ink-2)}
+.state b{color:var(--ink);font-size:1.3rem}
+.spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--navy);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Product card — same visual language as the main index cards
-       (parallel implementation: shop.html has no script.js include, so
-       the markup/JS stay local, but tokens/radii/shadows stay in sync) */
-    .sh-card {
-      background: var(--color-surface, #fff); border-radius: var(--radius-lg, 16px); overflow: hidden;
-      box-shadow: var(--shadow-lg, 0 6px 24px rgba(0,0,0,0.04), 0 2px 10px rgba(0,0,0,0.05));
-      display: flex; flex-direction: column;
-      transition: transform .2s ease-out, box-shadow .2s ease-out;
-    }
-    .sh-card:hover { transform: translateY(-4px); box-shadow: 0 10px 30px rgba(12,16,25,0.1); }
-    .sh-card:active { transform: scale(0.98); transition: transform .12s ease-out; }
-    .sh-card-media {
-      position: relative; aspect-ratio: 1/1;
-      background: var(--color-bg, #f0f0f0); overflow: hidden;
-      border-radius: var(--radius-md, 10px);
-    }
-    .sh-card-media img {
-      width: 100%; height: 100%; object-fit: cover;
-      display: block; transition: transform 0.3s;
-    }
-    .sh-card:hover .sh-card-media img { transform: scale(1.04); }
-    .sh-card-fav {
-      position: absolute; top: 7px; right: 7px;
-      background: rgba(255,255,255,0.88); border: none; border-radius: 50%;
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; font-size: 15px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-      transition: transform 0.15s;
-    }
-    .sh-card-fav:active { transform: scale(1.18); }
-    .sh-card-badge {
-      position: absolute; top: 7px; left: 7px;
-      background: var(--cta, #ff6b2c); color: #fff;
-      font-size: 10px; font-weight: 700;
-      padding: 3px 7px; border-radius: 4px;
-    }
-    .sh-card-body {
-      padding: 9px 10px 10px;
-      display: flex; flex-direction: column; gap: 5px; flex: 1;
-    }
-    .sh-card-name {
-      font-size: 13px; font-weight: 600; color: #222; line-height: 1.3;
-      display: -webkit-box; -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical; overflow: hidden;
-    }
-    .sh-card-price { font-size: 14px; font-weight: 800; color: var(--accent); }
-    .sh-card-price .orig {
-      text-decoration: line-through; color: var(--muted);
-      font-weight: 400; font-size: 12px; margin-right: 4px;
-    }
-    .sh-card-price .sale { color: var(--cta, #ff6b2c); }
-    .sh-card-actions { display: flex; gap: 5px; align-items: center; margin-top: auto; }
-    .sh-size-sel {
-      flex: 1; padding: 6px; min-width: 0;
-      border: 1px solid #ddd; border-radius: 6px; font-size: 12px; background: #fff;
-    }
-    .sh-add-btn {
-      padding: 7px 12px; background: var(--accent); color: #fff;
-      border: none; border-radius: 6px;
-      font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
-      transition: background 0.15s;
-    }
-    .sh-add-btn:hover:not(:disabled) { background: #0c3a7d; }
-    .sh-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* about */
+.about{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:clamp(20px,4vw,48px);padding:clamp(24px,4vw,40px);border-radius:24px;background:var(--card);box-shadow:0 0 0 1px var(--line)}
+.about h2{margin:10px 0 12px;font-size:clamp(1.5rem,3vw,2rem)}
+.about p{margin:0 0 12px;color:var(--ink-2);max-width:60ch;white-space:pre-line}
+.facts{display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.facts li{display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;align-items:start;padding:14px;border-radius:14px;background:var(--bg)}
+.facts .ico{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:var(--tint);color:var(--accent)}
+.facts b{display:block;font-size:.95rem}
+.facts span{display:block;color:var(--ink-2);font-size:.88rem;white-space:pre-line}
+@media (max-width:820px){.about{grid-template-columns:1fr}}
 
-    /* About tab */
-    .sh-about { padding: 24px 18px; max-width: 700px; }
-    .sh-about-section { margin-bottom: 24px; }
-    .sh-about-section h3 { font-size: 15px; font-weight: 700; color: var(--accent); margin: 0 0 8px; }
-    .sh-about-section p { font-size: 14px; color: #333; line-height: 1.65; margin: 0; }
-    .sh-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 480px) { .sh-about-grid { grid-template-columns: 1fr; } }
-    .sh-about-item { background: #f7f8fa; border-radius: 8px; padding: 12px 14px; }
-    .sh-about-item .label {
-      font-size: 11px; font-weight: 700; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
-    }
-    .sh-about-item .value { font-size: 14px; color: #333; }
+/* footer */
+.foot{margin-top:72px;background:var(--navy);color:#C9D7E2}
+.foot .wrap{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:28px;padding-block:48px}
+.foot img{height:30px;width:auto;filter:brightness(0) invert(1)}
+.foot p{margin:12px 0 0;max-width:36ch;font-size:.92rem}
+.foot h3{margin:0 0 10px;color:#fff;font-size:.95rem}
+.foot ul{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:.92rem}
+.foot a{color:#C9D7E2;text-decoration:none}
+.foot a:hover{color:#fff;text-decoration:underline}
+.fine{border-top:1px solid rgb(255 255 255 / .12);padding-block:16px 24px;font-size:.82rem;color:#8FA7BA}
+@media (max-width:820px){.foot .wrap{grid-template-columns:1fr 1fr}.foot .wrap > :first-child{grid-column:1 / -1}}
 
-    /* State messages */
-    .sh-state { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 16px; }
-    .sh-state .sh-state-icon { font-size: 48px; margin-bottom: 12px; }
-    .sh-state a { color: var(--accent-2); }
+/* mobile bottom nav — this store's own: store, search, saved, this store's cart */
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:45;display:none;grid-template-columns:repeat(4,1fr);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));background:rgb(255 255 255 / .94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+.bnav button{position:relative;display:grid;justify-items:center;gap:2px;padding:6px 0;border:0;background:none;cursor:pointer;font-size:.72rem;font-weight:600;color:var(--ink-2)}
+.bnav button[aria-pressed="true"]{color:var(--ink)}
+.bnav .count{top:0;right:calc(50% - 22px)}
+@media (max-width:760px){.bnav{display:grid}.foot{padding-bottom:70px}}
 
-    /* Back-to-home bar */
-    .sh-back-bar {
-      position: sticky; top: 0; z-index: 100;
-      background: #fff; border-bottom: 1px solid #eaecf0;
-      padding: 8px 14px;
-    }
-    .sh-back-link {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 13px; font-weight: 600; color: var(--accent);
-      text-decoration: none; transition: opacity 0.15s;
-    }
-    .sh-back-link:hover { opacity: 0.7; }
+/* sheets */
+.sheet{padding:0;border:0;background:var(--card);color:var(--ink);box-shadow:0 40px 90px -30px rgb(0 0 0 / .5);overflow:auto}
+.sheet::backdrop{background:rgb(21 23 26 / .45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.qv{width:min(940px,calc(100% - 32px));max-height:calc(100% - 32px);border-radius:24px}
+.qv[open]{animation:qvIn .4s cubic-bezier(.2,.9,.3,1)}
+@keyframes qvIn{from{transform:translateY(20px) scale(.97);opacity:0}}
+.qv-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.qv-media{position:relative;min-height:420px;background:var(--tint)}
+.qv-media > img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.qv-thumbs{position:absolute;left:12px;bottom:12px;z-index:2;display:flex;gap:6px;max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none}
+.qv-thumbs button{flex:0 0 auto;width:48px;height:48px;padding:0;border-radius:10px;overflow:hidden;border:2px solid #fff;background:#fff;cursor:pointer;opacity:.75}
+.qv-thumbs button[aria-pressed="true"]{opacity:1;box-shadow:0 0 0 2px var(--ink)}
+.qv-thumbs img{width:100%;height:100%;object-fit:cover}
+.qv-body{display:grid;align-content:start;gap:16px;padding:28px}
+.qv-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.qv-head h2{margin:6px 0 0;font-size:clamp(1.4rem,2.6vw,1.9rem)}
+.qv-store{color:var(--ink-2);font-size:.88rem}
+.x{flex:0 0 auto;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);cursor:pointer;font-size:1.3rem;line-height:1}
+.x:hover{border-color:var(--ink)}
+.qv-price{display:flex;align-items:baseline;gap:10px}
+.qv-price .price{font-size:1.7rem}
+.qv-body p{margin:0;color:var(--ink-2);white-space:pre-line}
+.qv-stock{font-size:.88rem;font-weight:600;color:#B7791F}
+.opt-group{display:grid;gap:8px;margin:0;padding:0;border:0}
+.opt-group legend{padding:0;margin-bottom:8px;font-weight:700;font-size:.92rem}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{position:relative;display:inline-flex}
+.opt input{position:absolute;opacity:0;width:1px;height:1px}
+.opt span{padding:.6rem 1rem;border-radius:999px;border:1.5px solid var(--line);cursor:pointer;font-weight:600;font-size:.92rem;transition:background-color .15s,border-color .15s,color .15s}
+.opt span:hover{border-color:var(--ink)}
+.opt input:checked + span{background:var(--ink);border-color:var(--ink);color:#fff}
+.opt input:focus-visible + span{outline:3px solid var(--navy);outline-offset:2px}
+.buy{display:flex;gap:10px;align-items:center}
+.stepper{display:inline-flex;align-items:center;gap:4px;padding:4px;border-radius:999px;border:1.5px solid var(--line)}
+.stepper button{width:36px;height:36px;border:0;border-radius:50%;background:var(--bg);cursor:pointer;font-size:1.15rem;line-height:1}
+.stepper button:disabled{opacity:.35;cursor:not-allowed}
+.stepper output{min-width:2.2ch;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.buy .btn{flex:1;padding-block:1rem}
+.notify{display:flex;gap:8px}
+.notify input{flex:1;min-width:0;height:48px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line)}
+.assure{display:grid;gap:8px;margin:0;padding:14px;border-radius:14px;background:var(--bg);list-style:none;font-size:.9rem}
+.assure li{display:flex;align-items:center;gap:10px}
+.assure .ic{width:18px;height:18px;color:var(--navy)}
+.qv-link{justify-self:start;padding:0;border:0;background:none;color:var(--ink-2);text-decoration:underline;cursor:pointer;font-size:.86rem}
+@media (max-width:760px){
+  .qv{width:100%;max-width:100%;max-height:94%;margin:auto 0 0;border-radius:24px 24px 0 0}
+  .qv[open]{animation:upIn .4s cubic-bezier(.2,.9,.3,1)}
+  .qv-grid{grid-template-columns:1fr}
+  .qv-media{min-height:0;aspect-ratio:4/3}
+  .qv-body{padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px))}
+}
+@keyframes upIn{from{transform:translateY(100%)}}
+.drawer{position:fixed;inset:0 0 0 auto;width:min(440px,100%);height:100%;max-width:100%;max-height:100%;margin:0;border-radius:24px 0 0 24px}
+.drawer[open]{animation:drIn .4s cubic-bezier(.2,.9,.3,1)}
+@keyframes drIn{from{transform:translateX(100%)}}
+.dr{display:flex;flex-direction:column;min-height:100%;padding:22px 22px calc(22px + env(safe-area-inset-bottom,0px));gap:16px}
+.dr-head{display:flex;justify-content:space-between;align-items:center}
+.dr-head h2{margin:0;font-size:1.5rem}
+#cartBody{display:flex;flex-direction:column;flex:1;gap:14px}
+.store-line{display:flex;align-items:center;gap:10px;font-weight:700}
+.store-line .mini-logo{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--tint);overflow:hidden}
+.store-line .mini-logo img{width:100%;height:100%;object-fit:cover}
+.lines{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+.line{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px;border-radius:14px;background:var(--bg)}
+.line .thumb{position:relative;width:64px;height:64px;border-radius:12px;overflow:hidden;background:var(--tint)}
+.line .thumb img{width:100%;height:100%;object-fit:cover}
+.line .thumb .tx{display:grid;place-items:center;height:100%;font:800 .9rem var(--font-display);color:var(--accent)}
+.line b{display:block;font-size:.93rem;line-height:1.3}
+.line span{display:block;color:var(--ink-2);font-size:.82rem}
+.line .stepper{padding:2px}
+.line .stepper button{width:28px;height:28px;font-size:1rem}
+.line .rm{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:var(--card);cursor:pointer}
+.sum{display:grid;gap:8px;margin-top:auto;padding-top:14px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.sum div{display:flex;justify-content:space-between;gap:12px;color:var(--ink-2)}
+.sum .total{color:var(--ink);font-weight:800;font-size:1.15rem}
+.note{margin:0;text-align:center;color:var(--ink-2);font-size:.84rem}
+.others{margin:0;padding:10px 12px;border-radius:12px;background:var(--bg);font-size:.86rem;color:var(--ink-2)}
+.others a{color:var(--ink);font-weight:700}
+.cart-empty{display:grid;justify-items:center;gap:10px;padding:40px 16px;text-align:center;color:var(--ink-2)}
 
-    /* Cart toast */
-    .cart-toast {
-      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-      background: var(--accent); color: #fff;
-      padding: 10px 22px; border-radius: 999px;
-      font-size: 14px; font-weight: 600;
-      z-index: 9999; opacity: 0; transition: opacity 0.25s; pointer-events: none;
-    }
-    .cart-toast.show { opacity: 1; }
+/* toast + fx */
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));z-index:80;display:flex;align-items:center;gap:12px;width:max-content;max-width:calc(100% - 32px);padding:10px 12px 10px 10px;border-radius:16px;background:var(--ink);color:#fff;box-shadow:0 20px 40px -12px rgb(0 0 0 / .45);transform:translateX(-50%)}
+.toast.show{animation:toastIn .45s cubic-bezier(.2,1.3,.4,1)}
+@keyframes toastIn{from{transform:translate(-50%,140%)}}
+.toast .tk{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--accent);color:var(--accent-ink)}
+.toast .tk svg{width:18px;height:18px}
+.toast b{display:block}
+.toast span.t2{display:block;font-size:.86rem;color:rgb(255 255 255 / .7)}
+.toast button{margin-left:6px;padding:.45rem .8rem;border-radius:999px;border:0;background:#fff;color:var(--ink);font-weight:700;cursor:pointer;white-space:nowrap}
+@media (max-width:760px){.toast{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}
+.flyer{position:fixed;left:0;top:0;z-index:90;width:14px;height:14px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 30%,transparent);pointer-events:none}
 
-    /* Product detail modal */
-    /* Shop product modal uses shared product-modal-overlay classes from style.css */
-
-  </style>
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;animation-delay:0s!important;transition-duration:.001ms!important}
+}
+</style>
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════════
-       HEADER — exact copy from index.html
-  ════════════════════════════════════════════ -->
-  <header>
-    <div class="container header-inner" style="align-items:center">
-      <button class="mobile-menu-icon" id="mobileMenuIcon" style="display:none">☰</button>
-      <button id="leftHamburger" class="left-hamburger" aria-label="Toggle categories (left)" style="display:none">☰</button>
-      <div class="logo" aria-hidden="false">
-        <a href="index.html"><img id="logoImg" src="umzila.webp" alt="Umzila logo"></a>
-        <a class="about-link" href="about.html">About</a>
-      </div>
-      <div class="search-bar" style="margin-left:6px" id="mainSearchBar">
-        <input id="searchInput" class="search-input" placeholder="Search streetwear, hoodies, mystery boxes..." aria-label="Search products" />
-        <button id="searchClear" class="search-clear" aria-label="Clear search">✕</button>
-        <div id="suggestions" class="search-suggestions" role="listbox"></div>
-        <button class="mobile-search-close" id="mobileSearchClose" style="display:none">✕</button>
-      </div>
-      <div class="header-right">
-        <button class="mobile-search-icon" id="mobileSearchIcon" aria-label="Search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        </button>
-        <button class="btn ghost icon-only" id="signBtn" aria-label="Sign In / Sign Up">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
-        </button>
-        <button id="profileBtnHeader" class="btn ghost icon-only" style="display:none" aria-label="Profile">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"/></svg>
-        </button>
-        <span id="orderUpdatesBadge" style="display:none;background:var(--color-cta);color:white;padding:3px 7px;border-radius:6px;font-size:11px;margin-left:6px">updated</span>
-        <div class="cart" id="cartBtn" aria-haspopup="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 12.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6"/><circle cx="10" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="20" r="1.4" fill="currentColor" stroke="none"/></svg>
-          <span class="cart-count" id="cartCount">0</span>
+<div class="strip">
+  <div class="wrap">
+    <a class="back-home" href="/"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>Umzila home</a>
+    <span class="strip-mid">Durban's best local businesses, delivered by Umzila</span>
+    <a href="/track.html">Track an order</a>
+  </div>
+</div>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="Back to Umzila home"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><img src="/umzila.webp" width="360" height="132" alt="Umzila"></a>
+    <label class="search">
+      <span class="sr">Search this store</span>
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" autocomplete="off" placeholder="Search this store">
+      <kbd id="kbd">/</kbd>
+      <button class="clear" type="button" id="qClear" aria-label="Clear search" hidden><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </label>
+    <div class="actions">
+      <button class="icon-btn" type="button" id="savedBtn" aria-label="Saved items, 0"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span class="count" id="savedN" hidden>0</span></button>
+      <button class="cart-btn" type="button" id="cartBtn" aria-label="Open cart, 0 items"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="label" id="cartTotal">R0</span><span class="count" id="cartN">0</span></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="state" id="stLoading"><div class="spinner" aria-hidden="true"></div><span>Opening the store…</span></div>
+  <div class="state" id="stMissing" hidden><b id="stMissingT">Store not found</b><span id="stMissingS">This link doesn't match a store on Umzila.</span><a class="btn btn-ink" href="/">Browse Umzila</a></div>
+
+  <div id="storeView" hidden>
+    <div class="wrap">
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Umzila</a><span>/</span><span id="crumbCat">Stores</span><span>/</span><span id="crumbStore" aria-current="page">Store</span></nav>
+      <section class="hero" aria-labelledby="storeName">
+        <div class="banner" id="banner"></div>
+        <div class="identity">
+          <div class="logo" id="logo"></div>
+          <div class="id-main">
+            <div class="id-name">
+              <h1 class="display" id="storeName">Store</h1>
+              <span class="curated"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 21l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></svg>Curated on Umzila</span>
+            </div>
+            <p class="id-desc" id="storeDesc"></p>
+            <ul class="meta" id="storeMeta"></ul>
+          </div>
+          <div class="id-actions">
+            <button class="btn btn-line" type="button" id="followBtn" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span>Save store</span></button>
+            <button class="btn btn-line" type="button" id="shareBtn"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg><span>Share</span></button>
+          </div>
         </div>
-        <button class="icon-btn sidebar-toggle" id="sidebarToggleBtn" title="Toggle categories" style="display:none">☰</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Mobile Menu Overlay -->
-  <div class="mobile-menu-overlay" id="mobileMenuOverlay"></div>
-
-  <!-- Mobile Menu -->
-  <div class="mobile-menu" id="mobileMenu">
-    <div class="mobile-menu-header">
-      <h3>Menu</h3>
-      <button class="mobile-menu-close" id="mobileMenuClose">✕</button>
-    </div>
-    <div class="mobile-menu-nav">
-      <div class="mobile-menu-item"><a href="index.html">Shop</a></div>
-      <div class="mobile-menu-item"><a href="about.html">About</a></div>
-      <div class="mobile-menu-item"><a href="#" id="mobileSignIn">Sign In / Sign Up</a></div>
-    </div>
-  </div>
-
-  <!-- Back to Umzila bar -->
-  <div class="sh-back-bar">
-    <a class="sh-back-link" href="index.html">← Back to Umzila</a>
-  </div>
-
-  <!-- Notify Me modal (back-in-stock) -->
-  <div id="shNotifyModal" class="um-modal-overlay" role="dialog" aria-modal="true">
-    <div class="um-modal-card">
-      <button id="shNotifyClose" class="um-modal-close" aria-label="Close">&times;</button>
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="26" height="26" style="margin-bottom:8px"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-      <h3 style="margin:0 0 6px;font-size:16px;font-family:var(--font-display);font-weight:700;color:var(--color-ink-navy)" id="shNotifyTitle">Back in stock alert</h3>
-      <p style="font-size:13px;color:#6b7280;margin:0 0 14px">Enter your email and we'll notify you the moment this is available again.</p>
-      <input type="email" id="shNotifyEmail" placeholder="your@email.com" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-bottom:10px">
-      <div id="shNotifyError" style="display:none;color:#dc2626;font-size:12px;margin-bottom:8px"></div>
-      <button id="shNotifySubmit" style="width:100%;background:#0a2f66;color:#fff;border:none;padding:11px;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer">Notify Me</button>
-      <div id="shNotifySuccess" style="display:none;color:#059669;font-size:13px;margin-top:10px;text-align:center">✓ You're on the list! We'll email you when it's back.</div>
-    </div>
-  </div>
-
-  <!-- Product detail modal — same structure as index.html -->
-  <div class="product-modal-overlay" id="shProdModal" role="dialog" aria-modal="true">
-    <div class="product-modal">
-      <div class="product-modal-close" id="shModalClose">&times;</div>
-      <div class="product-modal-content" id="shModalContent">
-        <!-- populated by openProductModal() -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════════════════════════════════
-       SHOP CONTENT
-  ════════════════════════════════════════════ -->
-  <div class="sh-main" id="shMain">
-
-    <!-- Loading state -->
-    <div class="sh-state" id="shLoading">
-      <div class="sh-state-icon">⏳</div>
-      <div>Loading shop...</div>
+        <div class="closed-note" id="closedNote" hidden><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span id="closedNoteT"></span></div>
+      </section>
     </div>
 
-    <!-- Not found state -->
-    <div class="sh-state" id="shNotFound" style="display:none">
-      <div class="sh-state-icon">🔍</div>
-      <div><strong>Shop not found.</strong></div>
-      <div style="margin-top:8px;font-size:14px"><a href="index.html">← Back to Umzila</a></div>
-    </div>
-
-    <!-- Hero — hidden until loaded -->
-    <div id="shHero" style="display:none">
-      <!-- Banner with overlapping logo + floating actions -->
-      <div class="sh-banner" id="shBanner">
-        <div class="sh-banner-overlay"></div>
-        <div class="sh-logo-wrap" id="shLogo"></div>
-        <div class="sh-hero-actions">
-          <div class="sh-fav-pill" id="shFavPill" style="display:none">❤️ <span id="shFavCount">0</span></div>
-          <a class="sh-wa-btn" id="shWaBtn" href="#" target="_blank" rel="noopener noreferrer">
-            💬 <span class="wa-label">WhatsApp Us</span>
-          </a>
+    <div class="shopbar">
+      <div class="wrap">
+        <div class="cats" id="cats" role="group" aria-label="Sections"></div>
+        <div class="tools">
+          <details class="facet" id="facet">
+            <summary><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filter<span class="dotn" id="facetN" hidden>0</span></summary>
+            <div class="pop">
+              <label class="row">Available only<input type="checkbox" id="fStock"></label>
+              <label class="row">On sale<input type="checkbox" id="fSale"></label>
+              <label class="row">Saved items<input type="checkbox" id="fSaved"></label>
+              <div>
+                <span style="display:block;margin-bottom:8px;font-weight:600">Price (R)</span>
+                <div class="range"><input id="fMin" type="number" inputmode="numeric" min="0" placeholder="Min" aria-label="Minimum price"><span>to</span><input id="fMax" type="number" inputmode="numeric" min="0" placeholder="Max" aria-label="Maximum price"></div>
+              </div>
+              <button class="reset" type="button" id="fReset">Clear filters</button>
+            </div>
+          </details>
+          <label class="sr" for="sort">Sort products</label>
+          <select class="sort" id="sort">
+            <option value="featured">Featured</option>
+            <option value="low">Price: low to high</option>
+            <option value="high">Price: high to low</option>
+            <option value="az">Name: A to Z</option>
+          </select>
+          <span class="result-n" id="resultN" aria-live="polite"></span>
         </div>
       </div>
-      <!-- Shop info -->
-      <div class="sh-info">
-        <h1 class="sh-shop-name" id="shShopName"></h1>
-        <p class="sh-shop-desc" id="shShopDesc"></p>
-        <div class="sh-shop-meta" id="shShopMeta"></div>
-      </div>
-      <!-- Tabs -->
-      <div class="sh-tabs">
-        <button class="sh-tab active" data-tab="items">Items <span id="shItemCount" style="font-weight:400;color:var(--muted)"></span></button>
-        <button class="sh-tab" data-tab="about">About</button>
-      </div>
     </div>
 
-    <!-- Items tab -->
-    <div id="shItemsContent" style="display:none">
-      <div class="sh-controls">
-        <input class="sh-search" id="shSearch" type="search" placeholder="Search this shop..." />
-        <select class="sh-cat-select" id="shCatSelect">
-          <option value="">All categories</option>
-        </select>
-      </div>
-      <div class="sh-products-grid" id="shGrid"></div>
-      <div class="sh-state" id="shNoProducts" style="display:none">
-        <div class="sh-state-icon">📦</div>
-        <div>No products match your search.</div>
-      </div>
-    </div>
+    <div class="wrap catalog" id="catalog"></div>
 
-    <!-- About tab -->
-    <div id="shAboutContent" style="display:none">
-      <div class="sh-about" id="shAbout"></div>
+    <div class="wrap">
+      <section class="about" id="about" aria-labelledby="aboutH"></section>
     </div>
-
   </div>
+</main>
 
-  <!-- Cart toast -->
-  <div class="cart-toast" id="cartToast">Added to cart ✓</div>
+<footer class="foot">
+  <div class="wrap">
+    <div><img src="/umzila.webp" width="360" height="132" alt="Umzila"><p>A curated network of Durban stores and services. Only vetted businesses get in, and every order is delivered by Umzila.</p></div>
+    <div><h3>Shop</h3><ul><li><a href="/">All stores</a></li><li><a href="/#savedStoresSection">Your saved stores</a></li><li><a href="/cart.html">Your full cart</a></li></ul></div>
+    <div><h3>Help</h3><ul><li><a href="/track.html">Track an order</a></li><li><a href="/about.html">About Umzila</a></li><li><a id="footWa" href="https://wa.me/27797662768" target="_blank" rel="noopener">WhatsApp support</a></li></ul></div>
+    <div><h3>Sell</h3><ul><li><a href="/enroll-seller.html">Apply to sell on Umzila</a></li><li><a href="/about.html">How curation works</a></li></ul></div>
+  </div>
+  <div class="wrap fine">© 2026 Umzila · Secure payments by PayFast</div>
+</footer>
 
-  <!-- ═══════════════════════════════════════════
-       FOOTER — exact copy from index.html
-  ════════════════════════════════════════════ -->
-  <footer>
-    <div class="footer-grid">
-      <div class="footer-col">
-        <img id="footerLogo" src="umzila.webp" alt="Umzila">
-        <p class="footer-tagline">Durban's best local businesses,<br>delivered to your door.</p>
-        <div class="footer-newsletter">
-          <input id="newsEmail" type="email" placeholder="Your email" aria-label="Subscribe to newsletter">
-          <button id="subscribeBtn">Subscribe</button>
-        </div>
+<nav class="bnav" aria-label="Store shortcuts">
+  <button type="button" data-nav="top" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>Store</button>
+  <button type="button" data-nav="search" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search</button>
+  <button type="button" data-nav="saved" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>Saved</button>
+  <button type="button" data-nav="cart" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>Cart<span class="count" id="bnavN" hidden>0</span></button>
+</nav>
+
+<dialog class="sheet qv" id="qv" aria-labelledby="qvTitle">
+  <div class="qv-grid">
+    <div class="qv-media" id="qvMedia"></div>
+    <form class="qv-body" id="qvForm">
+      <div class="qv-head">
+        <div><span class="qv-store" id="qvStore"></span><h2 class="display" id="qvTitle"></h2></div>
+        <button class="x" type="button" data-close aria-label="Close">×</button>
       </div>
-      <div class="footer-col">
-        <h4>Quick Links</h4>
-        <a href="about.html">About</a>
-        <a href="mailto:umzilaecommerce@gmail.com">Contact</a>
-        <a href="#">Returns &amp; Exchanges</a>
-        <a href="#" id="sellOnUmzilaBtn">Sell on Umzila</a>
+      <div class="qv-price" id="qvPrice"></div>
+      <span class="qv-stock" id="qvStock" hidden></span>
+      <p id="qvDesc"></p>
+      <div id="qvOpts"></div>
+      <div class="buy" id="qvBuy">
+        <div class="stepper" role="group" aria-label="Quantity"><button type="button" id="qvMinus" aria-label="Less">−</button><output id="qvQty">1</output><button type="button" id="qvPlus" aria-label="More">+</button></div>
+        <button class="btn btn-accent" type="submit" id="qvAdd">Add to cart</button>
       </div>
-      <div class="footer-col">
-        <h4>Follow Us</h4>
-        <div class="socials" style="margin-bottom:12px">
-          <a href="#" aria-label="Instagram">📸</a>
-          <a href="#" aria-label="TikTok">🎵</a>
-          <a href="#" aria-label="Facebook">📘</a>
-        </div>
-        <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0">Secured by PayFast</p>
-        <p class="footer-copyright">&copy; 2025 Umzila. All rights reserved.</p>
-      </div>
+      <div class="notify" id="qvNotify" hidden><input type="email" id="qvNotifyEmail" placeholder="Your email" autocomplete="email" aria-label="Email for a back-in-stock alert"><button class="btn btn-ink" type="button" id="qvNotifyBtn">Notify me</button></div>
+      <ul class="assure" id="qvAssure"></ul>
+      <button class="qv-link" type="button" id="qvCopy">Copy link to this item</button>
+    </form>
+  </div>
+</dialog>
+
+<dialog class="sheet drawer" id="cart" aria-labelledby="cartH">
+  <div class="dr">
+    <div class="dr-head"><h2 class="display" id="cartH">Your cart</h2><button class="x" type="button" data-close aria-label="Close cart">×</button></div>
+    <div id="cartBody"></div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span class="tk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><div><b class="t1"></b><span class="t2"></span></div><button type="button" id="toastBtn">View cart</button></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Same as the rest of Umzila: R70, R129.99, R1 250
+const money = n => { const v = Math.round(Number(n || 0) * 100) / 100, [i, d] = v.toFixed(2).split('.'); return 'R' + i.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + (d === '00' ? '' : '.' + d); };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ICON = {
+  pin:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  clock:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  bike:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M6 17h4l3-6h3l2 6"/><path d="M13 11 11 7H8"/></svg>',
+  star:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z"/></svg>',
+  shield:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 9.5 4-1.2 7-5 7-9.5V6z"/><path d="m9 12 2 2 4-4"/></svg>',
+  plus:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  heart:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  cal:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>',
+  chat:'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.7 7.1L4 20l.9-4.3A8 8 0 1 1 20 12z"/></svg>'
+};
+const UMZILA_WA = '27797662768';
+// Site pages someone might type without ".html" — never store slugs
+// (the sellers_assign_slug trigger reserves these names).
+const KNOWN_PAGES = ['index', 'cart', 'checkout', 'about', 'profile', 'track', 'seller-dashboard',
+  'seller-terms', 'enroll-seller', 'enroll-seller-free', 'reset-password', 'logistics', 'admin', 'login-admin'];
+const DEFAULT_SIZES = ['S', 'M', 'L', 'XL'];
+
+/* ================= STATE ================= */
+let sb = null, user = null;
+const S = {seller: null, products: [], hours: null, cat: 'all', q: '', sort: 'featured', stock: false, sale: false, saved: false, min: null, max: null};
+const favs = new Set();
+let followed = false, sponsored = new Set();
+
+/* ================= THEME ================= */
+function inkFor(hex){
+  const h = hex.replace('#', ''); const n = parseInt(h, 16);
+  const lin = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  const L = .2126 * lin(n >> 16 & 255) + .7152 * lin(n >> 8 & 255) + .0722 * lin(n & 255);
+  return (L + .05) / .05 > 1.05 / (L + .05) ? '#15171A' : '#FFFFFF';
+}
+function applyTheme(c){
+  if (!/^#[0-9a-f]{6}$/i.test(c || '')) return;
+  document.documentElement.style.setProperty('--accent', c);
+  document.documentElement.style.setProperty('--accent-ink', inkFor(c));
+}
+
+/* ================= PRODUCTS ================= */
+// A product's place in this store: the seller's own section name
+// (metadata.store_section, set in the dashboard — e.g. "Plates with wings"),
+// else its Umzila category. Main-site categories stay untouched.
+function mapProduct(row){
+  const imgs = (row.product_images || []).slice().sort((a, b) => (a.image_order || 0) - (b.image_order || 0)).map(i => i.url).filter(Boolean);
+  if (!imgs.length && row.image) imgs.push(row.image);
+  const meta = row.metadata || {};
+  const price = Number(row.price) || 0, salePrice = Number(row.sale_price) || 0;
+  const onSale = !!row.sale && salePrice > 0 && (!price || salePrice < price);
+  const sizes = (row.sizes || []).filter(Boolean);
+  // "One Size" (or no sizes) isn't a choice worth asking about.
+  const choosable = sizes.length > 1 || (sizes.length === 1 && !/^one size$/i.test(sizes[0]));
+  return {
+    id: row.id, title: row.name || 'Item', desc: row.description || '',
+    price, salePrice, sale: onSale, displayPrice: onSale ? salePrice : price,
+    section: String(meta.store_section || '').trim() || row.category || 'More',
+    badge: row.badge || '', stock: row.stock, sizes: choosable ? sizes : [], defaultSize: sizes[0] || 'One Size',
+    images: imgs, primary_image: imgs[0] || '',
+    favourite_count: Number(row.favourite_count || 0),
+    seller_id: row.seller_id, listing_type: row.listing_type || 'product',
+    booking_mode: row.booking_mode || null, fulfillment_type: row.fulfillment_type || null,
+    delivery_class: row.delivery_class || 'small', free_delivery: row.free_delivery === true,
+    units_per_trip: row.units_per_trip || null,
+    delivery_price: Number.isFinite(Number(meta.delivery_price)) && meta.delivery_price !== null && meta.delivery_price !== '' ? Number(meta.delivery_price) : null,
+    is_voucher: meta.voucher === true
+  };
+}
+const isService = p => p.listing_type === 'service';
+const priceOf = p => p.displayPrice;
+const inStock = p => isService(p) || (p.stock != null && p.stock > 0);
+const unpriced = p => !isService(p) && !(p.displayPrice > 0);
+const initials = s => String(s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+function media(p){
+  if (p.primary_image) return `<img src="${esc(p.primary_image)}" alt="${esc(p.title)}" loading="lazy" decoding="async">`;
+  return `<div class="ph"><span class="mono">${esc(S.seller.shop_name)}</span><b>${esc(p.title)}</b></div>`;
+}
+
+/* ================= HOURS (SAST, from get_store_hours_status) ================= */
+const sastFmt = (iso, opts) => new Intl.DateTimeFormat('en-ZA', Object.assign({timeZone: 'Africa/Johannesburg'}, opts)).format(new Date(iso));
+function sastDayKey(d){ return sastFmt(d, {year: 'numeric', month: '2-digit', day: '2-digit'}); }
+function whenLabel(iso){
+  const t = sastFmt(iso, {hour: '2-digit', minute: '2-digit', hour12: false});
+  const now = new Date(), tomorrow = new Date(now.getTime() + 86400000);
+  if (sastDayKey(iso) === sastDayKey(now)) return `today at ${t}`;
+  if (sastDayKey(iso) === sastDayKey(tomorrow)) return `tomorrow at ${t}`;
+  return `${sastFmt(iso, {weekday: 'long'})} at ${t}`;
+}
+const isClosed = () => !!(S.hours && S.hours.has_hours && !S.hours.open_now);
+// sellers.delivery_method is an internal code (always 'self_dropoff' from the
+// dashboard) — buyers see who brings the order instead.
+const deliveryLine = s => Number(s.self_arranged_radius_km) > 0 ? 'Delivered by the store' : 'Delivered by Umzila';
+
+/* ================= RENDER: HERO ================= */
+function renderHero(){
+  const s = S.seller;
+  document.title = `${s.shop_name} · Umzila`;
+  $('#crumbStore').textContent = s.shop_name;
+  $('#q').placeholder = `Search ${s.shop_name}`;
+  const banner = $('#banner');
+  if (s.banner_url) { banner.className = 'banner'; banner.innerHTML = `<img src="${esc(s.banner_url)}" alt="">`; }
+  else {
+    banner.className = 'banner fallback';
+    const d = String(s.description || '').trim();
+    banner.innerHTML = d && d.length <= 70 ? `<h2 class="display tagline">${esc(d)}</h2>` : '';
+  }
+  $('#logo').innerHTML = s.logo_url ? `<img src="${esc(s.logo_url)}" alt="${esc(s.shop_name)} logo">` : `<span class="init" aria-hidden="true">${esc(initials(s.shop_name))}</span>`;
+  $('#storeName').textContent = s.shop_name;
+  $('#storeDesc').textContent = s.description || '';
+  $('#footWa').href = 'https://wa.me/' + UMZILA_WA + '?text=' + encodeURIComponent(`Hi Umzila! I came from ${s.shop_name} and I'd like some help.`);
+  renderMeta();
+  syncFollow();
+}
+function renderMeta(){
+  const s = S.seller, h = S.hours, meta = [];
+  if (h && h.has_hours) {
+    if (h.open_now) meta.push(`<li class="open">Open now${h.closes_at ? ' · until ' + esc(sastFmt(h.closes_at, {hour: '2-digit', minute: '2-digit', hour12: false})) : ''}</li>`);
+    else meta.push(`<li class="closed">Closed now${h.next_open_at ? ' · opens ' + esc(whenLabel(h.next_open_at)) : ''}</li>`);
+  }
+  if (s.location) meta.push(`<li>${ICON.pin}${esc(s.location)}</li>`);
+  if (s.turnaround_time) meta.push(`<li>${ICON.clock}${esc(s.turnaround_time)}</li>`);
+  meta.push(`<li>${ICON.bike}${esc(deliveryLine(s))}</li>`);
+  if (s.years_operating) meta.push(`<li>${ICON.star}${esc(s.years_operating)} year${Number(s.years_operating) === 1 ? '' : 's'} in business</li>`);
+  $('#storeMeta').innerHTML = meta.join('');
+  const closed = isClosed();
+  $('#closedNote').hidden = !closed;
+  if (closed) $('#closedNoteT').textContent = `${s.shop_name} is closed right now${h.next_open_at ? ' and opens ' + whenLabel(h.next_open_at) : ''}. You can still order — it's prepared when they open.`;
+}
+
+/* ================= RENDER: CATALOG ================= */
+function filtered(){
+  const q = S.q.trim().toLowerCase();
+  let list = S.products.filter(p =>
+    (S.cat === 'all' || p.section === S.cat) &&
+    (!q || `${p.title} ${p.section} ${p.desc}`.toLowerCase().includes(q)) &&
+    (!S.stock || inStock(p)) &&
+    (!S.sale || p.sale) &&
+    (!S.saved || favs.has(p.id)) &&
+    (S.min == null || priceOf(p) >= S.min) &&
+    (S.max == null || priceOf(p) <= S.max));
+  const by = {low: (a, b) => priceOf(a) - priceOf(b), high: (a, b) => priceOf(b) - priceOf(a), az: (a, b) => a.title.localeCompare(b.title)}[S.sort];
+  // Featured: paid sponsored placements first, then in-stock before sold out.
+  list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (priceOf(a) - priceOf(b))));
+  return list;
+}
+// Sections read like a menu: cheapest section first.
+function sections(){
+  const min = {};
+  S.products.forEach(p => { min[p.section] = Math.min(min[p.section] ?? Infinity, priceOf(p) || Infinity); });
+  return Object.keys(min).sort((a, b) => min[a] - min[b] || a.localeCompare(b));
+}
+function renderCats(){
+  const ps = S.products, cats = sections();
+  if (cats.length < 2) { $('#cats').innerHTML = `<span class="cat" aria-pressed="true" style="cursor:default">All<span class="n">${ps.length}</span></span>`; return; }
+  const all = [['all', 'All', ps.length], ...cats.map(c => [c, c, ps.filter(p => p.section === c).length])];
+  $('#cats').innerHTML = all.map(([v, l, n]) => `<button class="cat" type="button" data-cat="${esc(v)}" aria-pressed="${S.cat === v}">${esc(l)}<span class="n">${n}</span></button>`).join('');
+}
+function card(p, i){
+  const out = !inStock(p), svc = isService(p);
+  const needsChoice = p.sizes.length > 0;
+  const btnLabel = out ? 'Notify me' : svc ? (p.booking_mode === 'scheduled' ? 'Book' : 'Set up') : needsChoice ? 'Choose' : 'Add';
+  const badge = out ? '<span class="badge out">Sold out</span>' : p.sale ? `<span class="badge sale">Save ${money(p.price - p.salePrice)}</span>` : p.badge ? `<span class="badge">${esc(p.badge)}</span>` : '';
+  const sub = svc ? (p.booking_mode === 'scheduled' ? 'Pick your day and time' : p.is_voucher ? 'Sent by email' : 'Service') : needsChoice ? esc(p.sizes.join(', ')) : esc(p.section);
+  return `<article class="card${out ? ' is-out' : ''}" style="--i:${Math.min(i, 12)}" data-id="${esc(p.id)}">
+    <div class="media" data-open="${esc(p.id)}">${media(p)}${badge}${sponsored.has(p.id) ? '<span class="badge spons">Sponsored</span>' : ''}
+      <button class="fav" type="button" data-fav="${esc(p.id)}" aria-pressed="${favs.has(p.id)}" aria-label="Save ${esc(p.title)}">${ICON.heart}</button>
+      ${unpriced(p) ? '' : `<button class="qadd" type="button" data-add="${esc(p.id)}" aria-label="${btnLabel} ${esc(p.title)}">${out ? '' : ICON.plus}<span class="label">${btnLabel}</span></button>`}
     </div>
-  </footer>
+    <h3><button type="button" data-open="${esc(p.id)}">${esc(p.title)}</button></h3>
+    <p class="sub">${sub}</p>
+    <div class="price-row"><span class="price">${unpriced(p) ? 'Ask in store' : money(priceOf(p))}</span>${p.sale ? `<span class="was">${money(p.price)}</span>` : ''}${p.free_delivery ? '<span class="free">No delivery fee</span>' : ''}</div>
+  </article>`;
+}
+function renderCatalog(){
+  const list = filtered(), box = $('#catalog');
+  $('#resultN').textContent = `${list.length} item${list.length === 1 ? '' : 's'}`;
+  const nf = [S.stock, S.sale, S.saved, S.min != null, S.max != null].filter(Boolean).length;
+  $('#facetN').hidden = !nf; $('#facetN').textContent = nf;
+  if (!S.products.length) { box.innerHTML = `<div class="empty"><b>Nothing listed yet</b><span>${esc(S.seller.shop_name)} is still setting up. Save the store to find it again.</span></div>`; return; }
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><b>${S.q ? `No matches for “${esc(S.q)}”` : S.saved ? 'No saved items here yet' : 'Nothing matches these filters'}</b><span>${S.saved ? 'Tap the heart on anything you like.' : 'Try a different word, or clear your filters.'}</span><button class="btn btn-ink" type="button" id="clearAll">Show everything</button></div>`;
+    return;
+  }
+  if (S.cat === 'all' && !S.q && S.sort === 'featured' && sections().length > 1) {
+    let i = 0;
+    box.innerHTML = sections().map(c => {
+      const ps = list.filter(p => p.section === c);
+      if (!ps.length) return '';
+      return `<section aria-label="${esc(c)}"><div class="group-title"><h2 class="display">${esc(c)}</h2><span class="mono">${ps.length} item${ps.length === 1 ? '' : 's'}</span></div><div class="grid" style="margin-bottom:40px">${ps.map(p => card(p, i++)).join('')}</div></section>`;
+    }).join('');
+  } else {
+    box.innerHTML = `<div class="grid">${list.map(card).join('')}</div>`;
+  }
+}
+function renderAbout(){
+  const s = S.seller, h = S.hours;
+  const facts = [
+    s.location && [ICON.pin, 'Where', s.location],
+    h && h.has_hours && [ICON.clock, 'Hours', h.open_now ? `Open now${h.closes_at ? ', until ' + sastFmt(h.closes_at, {hour: '2-digit', minute: '2-digit', hour12: false}) : ''}` : `Closed now${h.next_open_at ? ', opens ' + whenLabel(h.next_open_at) : ''}`],
+    s.turnaround_time && [ICON.clock, 'Timing', s.turnaround_time],
+    [ICON.bike, 'Delivery', deliveryLine(s)],
+    s.return_policy && [ICON.chat, 'If something goes wrong', s.return_policy],
+    [ICON.shield, 'Paying', 'Secure checkout on Umzila, with payments by PayFast.']
+  ].filter(Boolean);
+  const story = [s.about_story, s.owner_story].filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('') || `<p>${esc(s.description || '')}</p>`;
+  $('#about').innerHTML = `<div><span class="mono" style="color:var(--ink-2)">About the store</span><h2 class="display" id="aboutH">${esc(s.shop_name)}</h2>${story}<button class="btn btn-accent" type="button" id="aboutShop">Shop ${esc(String(s.shop_name).split(' ')[0])}</button></div>
+    <ul class="facts">${facts.map(([ic, t, v]) => `<li><span class="ico">${ic}</span><div><b>${t}</b><span>${esc(v)}</span></div></li>`).join('')}</ul>`;
+}
 
-  <!-- ═══════════════════════════════════════════
-       INLINE SCRIPT
-  ════════════════════════════════════════════ -->
-  <script>
-  (function () {
-    'use strict';
+/* ================= EVENTS: browse ================= */
+$('#cats').addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; S.cat = b.dataset.cat; renderCats(); renderCatalog(); });
+let qT;
+function syncSearch(){ const has = !!$('#q').value; $('#qClear').hidden = !has; $('#kbd').hidden = has; }
+$('#q').addEventListener('input', e => { syncSearch(); clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; renderCatalog(); }, 120); });
+$('#qClear').addEventListener('click', () => { $('#q').value = ''; S.q = ''; syncSearch(); renderCatalog(); $('#q').focus(); });
+document.addEventListener('keydown', e => { if (e.key === '/' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); } });
+$('#sort').addEventListener('change', e => { S.sort = e.target.value; renderCatalog(); });
+$('#fStock').addEventListener('change', e => { S.stock = e.target.checked; renderCatalog(); });
+$('#fSale').addEventListener('change', e => { S.sale = e.target.checked; renderCatalog(); });
+$('#fSaved').addEventListener('change', e => { setSavedFilter(e.target.checked); });
+const num = v => v === '' ? null : Math.max(0, +v);
+$('#fMin').addEventListener('input', e => { S.min = num(e.target.value); renderCatalog(); });
+$('#fMax').addEventListener('input', e => { S.max = num(e.target.value); renderCatalog(); });
+function resetFilters(){
+  Object.assign(S, {stock: false, sale: false, saved: false, min: null, max: null, q: '', cat: 'all'});
+  ['fStock','fSale','fSaved'].forEach(id => { $('#' + id).checked = false; }); $('#fMin').value = ''; $('#fMax').value = ''; $('#q').value = ''; syncSearch();
+  $('[data-nav="saved"]').setAttribute('aria-pressed', 'false');
+  renderCats(); renderCatalog();
+}
+$('#fReset').addEventListener('click', resetFilters);
+document.addEventListener('click', e => {
+  const fac = $('#facet'); if (fac.open && !fac.contains(e.target)) fac.open = false;
+  if (e.target.closest('#clearAll')) resetFilters();
+  if (e.target.closest('#aboutShop')) $('.shopbar').scrollIntoView({behavior: reduce ? 'auto' : 'smooth'});
+});
+function setSavedFilter(on){
+  S.saved = on; $('#fSaved').checked = on;
+  $('[data-nav="saved"]').setAttribute('aria-pressed', String(on));
+  renderCatalog();
+}
 
-    /* ─────────────────────────────────────────
-       CENTRAL UMZILA WHATSAPP — update this number
-    ───────────────────────────────────────── */
-    var UMZILA_WA = '27797662768';
-
-    /* ─────────────────────────────────────────
-       1. Supabase init — same pattern as script.js
-    ───────────────────────────────────────── */
-    (async function initSupabaseClient() {
-      try {
-        var res = await fetch('/.netlify/functions/get-client-config');
-        if (!res.ok) { console.error('Failed to load Supabase config', res.status); return; }
-        var cfg = await res.json();
-        var supabaseUrl     = cfg.supabaseUrl     || cfg.SUPABASE_URL     || cfg.supabase_url     || '';
-        var supabaseAnonKey = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.supabase_anon_key || '';
-        if (!supabaseUrl || !supabaseAnonKey) { console.error('Missing Supabase config'); return; }
-        var client = supabase.createClient(supabaseUrl, supabaseAnonKey);
-        window.supabase = client;
-        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } }));
-      } catch (err) { console.error('Supabase init error', err); }
-    })();
-
-    /* ─────────────────────────────────────────
-       2. Helpers
-    ───────────────────────────────────────── */
-    var fmt = function(n) { return 'R' + Number(n).toFixed(2); };
-
-    function escHtml(str) {
-      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+/* ================= SAVED STORES =================
+   Signed in: public.saved_stores (own rows only). Guests: a local list that
+   is copied into the table the next time they're signed in on a store page
+   or the homepage. The homepage shows the list ("Your saved stores"). */
+const LOCAL_SAVED = 'ss_saved_stores';
+function localSaved(){ try { const v = JSON.parse(localStorage.getItem(LOCAL_SAVED) || '[]'); return Array.isArray(v) ? v : []; } catch (_) { return []; } }
+function setLocalSaved(ids){ try { if (ids.length) localStorage.setItem(LOCAL_SAVED, JSON.stringify(ids)); else localStorage.removeItem(LOCAL_SAVED); } catch (_) {} }
+async function loadFollow(){
+  const id = S.seller.id;
+  if (!user) { followed = localSaved().includes(id); syncFollow(); return; }
+  const pending = localSaved();
+  if (pending.length) {
+    const {error} = await sb.from('saved_stores').upsert(pending.map(sid => ({user_id: user.id, seller_id: sid})), {onConflict: 'user_id,seller_id', ignoreDuplicates: true});
+    if (!error) setLocalSaved([]);
+  }
+  const {data} = await sb.from('saved_stores').select('seller_id').eq('user_id', user.id).eq('seller_id', id).maybeSingle();
+  followed = !!data; syncFollow();
+}
+function syncFollow(){
+  const b = $('#followBtn');
+  b.setAttribute('aria-pressed', String(followed));
+  $('span', b).textContent = followed ? 'Saved' : 'Save store';
+}
+$('#followBtn').addEventListener('click', async () => {
+  const id = S.seller.id, next = !followed;
+  followed = next; syncFollow();
+  try {
+    if (user) {
+      const {error} = next
+        ? await sb.from('saved_stores').upsert({user_id: user.id, seller_id: id}, {onConflict: 'user_id,seller_id', ignoreDuplicates: true})
+        : await sb.from('saved_stores').delete().eq('user_id', user.id).eq('seller_id', id);
+      if (error) throw error;
+    } else {
+      const ids = localSaved().filter(x => x !== id);
+      if (next) ids.unshift(id);
+      setLocalSaved(ids);
     }
+    toast(next ? 'Store saved' : 'Removed from saved stores', next ? 'Find it on the Umzila homepage under Your saved stores' : '');
+  } catch (_) {
+    followed = !next; syncFollow();
+    toast('Couldn’t save that', 'Check your connection and try again');
+  }
+});
+$('#shareBtn').addEventListener('click', async () => {
+  const url = location.origin + '/' + S.seller.slug;
+  if (navigator.share) { try { await navigator.share({title: S.seller.shop_name, url}); return; } catch (_) { /* cancelled → copy instead */ } }
+  try { await navigator.clipboard.writeText(url); toast('Link copied', url); } catch (_) { toast('Store link', url); }
+});
+$('#savedBtn').addEventListener('click', () => { setSavedFilter(!S.saved); $('.shopbar').scrollIntoView({behavior: reduce ? 'auto' : 'smooth'}); });
 
-    // Clean store link (umzila.store/<slug>); legacy name link as a fallback.
-    function storeUrl(seller) {
-      if (!seller) return '/';
-      return seller.slug ? '/' + seller.slug : '/shop.html?shop=' + encodeURIComponent(seller.shop_name || '');
+/* ================= ITEM FAVOURITES (existing toggle-favourite function) ================= */
+function anonId(){
+  let id = null;
+  try { id = localStorage.getItem('ss_anon_id'); if (!id) { id = 'anon-' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('ss_anon_id', id); } } catch (_) {}
+  return id;
+}
+async function loadFavs(){
+  const ids = S.products.map(p => p.id);
+  if (!ids.length) return;
+  let q = sb.from('product_favourites').select('product_id').in('product_id', ids);
+  q = user ? q.eq('user_id', user.id) : q.eq('anonymous_id', anonId());
+  const {data} = await q;
+  (data || []).forEach(r => favs.add(r.product_id));
+  syncSaved();
+  if (favs.size) renderCatalog();
+}
+function syncSaved(){
+  const n = favs.size;
+  $('#savedN').hidden = !n; $('#savedN').textContent = n;
+  $('#savedBtn').setAttribute('aria-label', `Saved items, ${n}`);
+}
+async function toggleFav(id, btn){
+  if (btn.dataset.pending) return;
+  btn.dataset.pending = '1';
+  const was = favs.has(id);
+  was ? favs.delete(id) : favs.add(id);
+  btn.setAttribute('aria-pressed', String(!was)); syncSaved();
+  try {
+    const headers = {'Content-Type': 'application/json'};
+    const {data} = await sb.auth.getSession();
+    if (data && data.session) headers.Authorization = 'Bearer ' + data.session.access_token;
+    const res = await fetch('/.netlify/functions/toggle-favourite', {method: 'POST', headers, body: JSON.stringify({product_id: id, anonymous_id: anonId()})});
+    const out = await res.json();
+    if (!out.success) throw new Error('fav');
+    const on = out.action === 'added';
+    on ? favs.add(id) : favs.delete(id);
+    btn.setAttribute('aria-pressed', String(on));
+  } catch (_) {
+    was ? favs.add(id) : favs.delete(id);
+    btn.setAttribute('aria-pressed', String(was));
+  }
+  delete btn.dataset.pending;
+  syncSaved();
+  if (S.saved) renderCatalog();
+}
+
+/* card clicks */
+$('#catalog').addEventListener('click', e => {
+  const fav = e.target.closest('[data-fav]');
+  if (fav) { e.stopPropagation(); toggleFav(fav.dataset.fav, fav); return; }
+  const add = e.target.closest('[data-add]');
+  if (add) { e.stopPropagation(); quickAdd(add.dataset.add, add); return; }
+  const open = e.target.closest('[data-open]');
+  if (open) openQV(open.dataset.open);
+});
+const byId = id => S.products.find(p => p.id === id);
+function quickAdd(id, btn){
+  const p = byId(id);
+  if (!p) return;
+  if (!inStock(p) || p.sizes.length) { openQV(id); return; }
+  if (isService(p)) { serviceSetup(p); return; }
+  addToCart(p, p.defaultSize, 1, btn);
+}
+// Services need setup this page doesn't carry (a booked time, intake
+// answers, collection/return choices) — the homepage product modal does it.
+function serviceSetup(p){ location.href = '/?product=' + encodeURIComponent(p.id); }
+
+/* ================= QUICK VIEW ================= */
+const qv = $('#qv');
+let qvP = null, qvQty = 1;
+function showQvImage(i){
+  const p = qvP, src = p.images[i];
+  const main = $('#qvMain');
+  if (main && src) main.src = src;
+  $$('#qvThumbs button').forEach((b, bi) => b.setAttribute('aria-pressed', String(bi === i)));
+}
+function openQV(id){
+  const p = byId(id); if (!p) return;
+  qvP = p; qvQty = 1;
+  const s = S.seller, svc = isService(p), out = !inStock(p);
+  $('#qvMedia').innerHTML = p.primary_image
+    ? `<img id="qvMain" src="${esc(p.primary_image)}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="qv-thumbs" id="qvThumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(u)}" alt=""></button>`).join('')}</div>` : '')
+    : `<div class="ph"><span class="mono">${esc(s.shop_name)}</span><b style="font-size:clamp(1.6rem,4vw,2.6rem)">${esc(p.title)}</b></div>`;
+  $('#qvStore').textContent = s.shop_name;
+  $('#qvTitle').textContent = p.title;
+  $('#qvPrice').innerHTML = unpriced(p) ? '<span class="sub">Price on request — message Umzila support</span>' : `<span class="price">${money(priceOf(p))}</span>${p.sale ? `<span class="was">${money(p.price)}</span>` : ''}`;
+  const stk = $('#qvStock');
+  stk.hidden = svc || out || !(p.stock > 0 && p.stock < 5);
+  if (!stk.hidden) stk.textContent = `Only ${p.stock} left`;
+  $('#qvDesc').textContent = p.desc;
+  $('#qvOpts').innerHTML = p.sizes.length ? `<fieldset class="opt-group"><legend>Size</legend><div class="opts">${p.sizes.map((o, oi) => `<label class="opt"><input type="radio" name="size" value="${esc(o)}"${oi === 0 ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div></fieldset>` : '';
+  $('#qvBuy').hidden = out || unpriced(p);
+  $('#qvNotify').hidden = !out;
+  $('#qvNotifyEmail').value = '';
+  $('.stepper', qv).hidden = svc;
+  $('#qvAdd').textContent = svc ? (p.booking_mode === 'scheduled' ? 'Choose a time' : 'Set it up') : 'Add to cart';
+  const closedLine = isClosed() && !(svc && p.booking_mode === 'scheduled') && !p.is_voucher
+    ? `${ICON.clock}<span>Closed right now — orders are prepared when the store opens${S.hours.next_open_at ? ' (' + esc(whenLabel(S.hours.next_open_at)) + ')' : ''}</span>` : '';
+  $('#qvAssure').innerHTML = [
+    closedLine,
+    svc ? (p.booking_mode === 'scheduled' ? `${ICON.cal}<span>Pick a day and time from the live calendar</span>` : p.is_voucher ? `${ICON.chat}<span>Sent by email after checkout</span>` : `${ICON.chat}<span>You'll add the details next</span>`)
+        : p.free_delivery ? `${ICON.bike}<span>No delivery fee on this one</span>` : `${ICON.bike}<span>Delivered by Umzila. Fee depends on distance.</span>`,
+    `${ICON.shield}<span>Secure checkout with PayFast</span>`,
+    `${ICON.pin}<span>Sold by ${esc(s.shop_name)}${s.location ? ', ' + esc(s.location) : ''}</span>`
+  ].filter(Boolean).map(x => `<li>${x}</li>`).join('');
+  syncQty();
+  if (!qv.open) qv.showModal();
+}
+$('#qvMedia').addEventListener('click', e => { const b = e.target.closest('[data-img]'); if (b) showQvImage(+b.dataset.img); });
+function maxQty(){ return qvP && qvP.stock > 0 ? Math.min(qvP.stock, 99) : 1; }
+function syncQty(){ $('#qvQty').textContent = qvQty; $('#qvMinus').disabled = qvQty <= 1; $('#qvPlus').disabled = qvQty >= maxQty(); }
+$('#qvMinus').addEventListener('click', () => { qvQty = Math.max(1, qvQty - 1); syncQty(); });
+$('#qvPlus').addEventListener('click', () => { qvQty = Math.min(maxQty(), qvQty + 1); syncQty(); });
+$('#qvForm').addEventListener('submit', e => {
+  e.preventDefault();
+  if (!qvP || !inStock(qvP) || unpriced(qvP)) return;
+  if (isService(qvP)) { serviceSetup(qvP); return; }
+  const c = $('input[name="size"]:checked', qv);
+  addToCart(qvP, c ? c.value : qvP.defaultSize, qvQty, $('#qvAdd'));
+  qv.close();
+});
+$('#qvNotifyBtn').addEventListener('click', async () => {
+  const email = $('#qvNotifyEmail').value.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('#qvNotifyEmail').focus(); toast('Enter your email', 'So we can tell you when it’s back'); return; }
+  const btn = $('#qvNotifyBtn'); btn.disabled = true;
+  const {error} = await sb.from('stock_alerts').insert({product_id: qvP.id, email});
+  btn.disabled = false;
+  if (error) { toast('Couldn’t save that', 'Please try again'); return; }
+  qv.close(); toast('We’ll let you know', `When ${qvP.title} is back`);
+});
+$('#qvCopy').addEventListener('click', async () => {
+  const url = location.origin + '/' + S.seller.slug + '?product=' + qvP.id;
+  try { await navigator.clipboard.writeText(url); toast('Link copied', qvP.title); } catch (_) { toast('Item link', url); }
+});
+
+/* ================= CART =================
+   One cart for all of Umzila (localStorage ss_cart, same item shape as
+   script.js addToCart, + the signed-in carts row). This page only shows and
+   checks out this store's lines; everything else stays in the cart. */
+const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
+  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+function getCart(){ try { const c = JSON.parse(localStorage.getItem('ss_cart') || '[]'); return Array.isArray(c) ? c : []; } catch (_) { return []; } }
+const qtyOf = l => Number(l.qty || l.quantity || 1);
+async function saveCart(cart){
+  try { localStorage.setItem('ss_cart', JSON.stringify(cart)); } catch (_) {}
+  // Signed in: the homepage and checkout read the carts row first, so it
+  // must match (otherwise a removal here comes back on the next page).
+  if (!user) return;
+  const items = cart.map(i => {
+    const out = {product_id: i.id || i.product_id, name: i.title || i.name, price: i.price, quantity: qtyOf(i), size: i.size,
+      image: i.img || i.image, variant_id: i.variantId || i.variant_id || null, stock: i.stock || 0, max_quantity: i.maxQuantity || qtyOf(i)};
+    CART_EXTRA_FIELDS.forEach(k => { if (i[k] !== undefined) out[k] = i[k]; });
+    return out;
+  }).filter(i => i.product_id);
+  const {error} = await sb.from('carts').upsert({user_id: user.id, items, updated_at: new Date().toISOString(), expires_at: new Date(Date.now() + 30 * 86400000).toISOString()}, {onConflict: 'user_id'});
+  if (error) console.warn('cart sync failed', error.message);
+}
+// Same shape as the old shop page's buildCartItem() / script.js addToCart —
+// checkout re-prices every line from the DB anyway.
+function buildCartItem(p, size, qty){
+  return {
+    id: p.id, title: p.title, price: priceOf(p), qty, size,
+    img: p.primary_image || '', stock: p.stock || 0, maxQuantity: p.stock || 0, preferred_delivery: '',
+    seller_id: p.seller_id, listing_type: p.listing_type, delivery_class: p.delivery_class,
+    free_delivery: p.free_delivery, units_per_trip: p.units_per_trip, delivery_price: p.delivery_price
+  };
+}
+function addToCart(p, size, qty, from){
+  const cart = getCart();
+  const hit = cart.find(l => (l.id || l.product_id) === p.id && l.size === size && !l.booking_id);
+  const cap = p.stock > 0 ? p.stock : 99;
+  if (hit) { hit.qty = Math.min(qtyOf(hit) + qty, cap); delete hit.quantity; }
+  else cart.push(buildCartItem(p, size, Math.min(qty, cap)));
+  saveCart(cart);
+  fly(from).then(() => syncCart(true));
+  toast(`${qty} × ${p.title}`, size && p.sizes.length ? `Size ${size}` : 'Added to your cart', true);
+}
+const storeLines = () => getCart().filter(l => l.seller_id === S.seller.id);
+const otherLines = () => getCart().filter(l => l.seller_id !== S.seller.id);
+function syncCart(bump){
+  if (!S.seller) return;
+  const ls = storeLines(), n = ls.reduce((a, l) => a + qtyOf(l), 0), sum = ls.reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
+  $('#cartN').textContent = n; $('#cartTotal').textContent = money(sum);
+  $('#cartBtn').setAttribute('aria-label', `Open cart, ${n} item${n === 1 ? '' : 's'}`);
+  $('#bnavN').hidden = !n; $('#bnavN').textContent = n;
+  if (bump) [$('#cartN'), $('#bnavN')].forEach(el => { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); });
+  if (cartDlg.open) renderCart();
+}
+const cartDlg = $('#cart');
+function renderCart(){
+  const s = S.seller, body = $('#cartBody'), ls = storeLines(), others = otherLines();
+  const otherN = others.reduce((a, l) => a + qtyOf(l), 0);
+  const otherStores = new Set(others.map(l => l.seller_id || 'x')).size;
+  const othersLine = otherN ? `<p class="others">You also have ${otherN} item${otherN === 1 ? '' : 's'} from ${otherStores === 1 ? 'another store' : otherStores + ' other stores'} in your cart. <a href="/cart.html">Want to check out everything together?</a></p>` : '';
+  if (!ls.length) {
+    body.innerHTML = `<div class="cart-empty"><b style="color:var(--ink);font-size:1.1rem">Nothing from ${esc(s.shop_name)} yet</b><span>Add something to get started.</span><button class="btn btn-ink" type="button" data-close>Keep shopping</button></div>${othersLine}`;
+    return;
+  }
+  const sum = ls.reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
+  const closed = isClosed() && ls.some(l => !l.booking_id);
+  body.innerHTML = `<div class="store-line"><span class="mini-logo">${s.logo_url ? `<img src="${esc(s.logo_url)}" alt="">` : `<span style="font:800 .75rem var(--font-display)">${esc(initials(s.shop_name))}</span>`}</span>${esc(s.shop_name)}</div>
+    <ul class="lines">${ls.map(l => {
+      const key = esc((l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || ''));
+      const img = l.img || l.image, title = l.title || l.name || 'Item';
+      const when = l.booking_start_at ? sastFmt(l.booking_start_at, {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false}) + ' · ' : '';
+      const showSize = l.size && !/^one size$/i.test(l.size) && l.listing_type !== 'service';
+      const control = l.booking_id || l.listing_type === 'service'
+        ? `<button class="rm" type="button" data-rm="${key}" aria-label="Remove ${esc(title)}">×</button>`
+        : `<div class="stepper" role="group" aria-label="Quantity of ${esc(title)}"><button type="button" data-dec="${key}" aria-label="One less">−</button><output>${qtyOf(l)}</output><button type="button" data-inc="${key}" aria-label="One more">+</button></div>`;
+      return `<li class="line"><span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
+        <div><b>${esc(title)}</b><span>${showSize ? 'Size ' + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
+    }).join('')}</ul>
+    ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; it's prepared when they open.</p>` : ''}
+    <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>
+    <a class="btn btn-accent btn-block" href="/checkout.html?store=${encodeURIComponent(s.id)}" style="margin-top:6px;padding-block:1rem">Check out ${esc(s.shop_name)} · ${money(sum)}</a>
+    ${othersLine || '<p class="note">Secure checkout with PayFast. Delivery fee depends on your distance.</p>'}</div>`;
+}
+$('#cartBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-inc],[data-dec],[data-rm]');
+  if (!b) return;
+  const key = b.dataset.inc || b.dataset.dec || b.dataset.rm;
+  const cart = getCart();
+  const i = cart.findIndex(l => ((l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || '')) === key);
+  if (i < 0) return;
+  const l = cart[i], p = byId(l.id || l.product_id);
+  if (b.dataset.inc) { const cap = p && p.stock > 0 ? p.stock : 99; if (qtyOf(l) < cap) { l.qty = qtyOf(l) + 1; delete l.quantity; } }
+  else if (b.dataset.dec && qtyOf(l) > 1) { l.qty = qtyOf(l) - 1; delete l.quantity; }
+  else cart.splice(i, 1);
+  saveCart(cart); renderCart(); syncCart(false);
+});
+function openCart(){ renderCart(); if (!cartDlg.open) cartDlg.showModal(); }
+$('#cartBtn').addEventListener('click', openCart);
+$('#toastBtn').addEventListener('click', openCart);
+$$('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d || e.target.closest('[data-close]')) d.close(); }));
+// Another tab (or the homepage) changed the cart.
+window.addEventListener('storage', e => { if (e.key === 'ss_cart') syncCart(false); });
+window.addEventListener('pageshow', () => syncCart(false));
+
+/* bottom nav */
+$$('.bnav button').forEach(b => b.addEventListener('click', () => {
+  const k = b.dataset.nav;
+  if (k === 'top') window.scrollTo({top: 0, behavior: reduce ? 'auto' : 'smooth'});
+  if (k === 'search') { window.scrollTo({top: 0, behavior: 'auto'}); $('#q').focus(); }
+  if (k === 'saved') { setSavedFilter(!S.saved); $('.shopbar').scrollIntoView({behavior: reduce ? 'auto' : 'smooth'}); return; }
+  if (k === 'cart') openCart();
+}));
+
+/* fx */
+function fly(from){
+  const target = window.matchMedia('(max-width:760px)').matches ? $('[data-nav="cart"]') : $('#cartBtn');
+  if (reduce || !from || !Element.prototype.animate) return Promise.resolve();
+  const a = from.getBoundingClientRect(), b = target.getBoundingClientRect();
+  const f = document.createElement('div'); f.className = 'flyer'; document.body.appendChild(f);
+  const x0 = a.left + a.width / 2 - 7, y0 = a.top + a.height / 2 - 7, x1 = b.left + b.width / 2 - 7, y1 = b.top + b.height / 2 - 7;
+  return f.animate([
+    {transform: `translate(${x0}px,${y0}px) scale(1)`},
+    {transform: `translate(${x0 + (x1 - x0) * .4}px,${Math.min(y0, y1) - 60}px) scale(1.4)`, offset: .5},
+    {transform: `translate(${x1}px,${y1}px) scale(.4)`}
+  ], {duration: 650, easing: 'cubic-bezier(.3,.7,.4,1)'}).finished.then(() => f.remove(), () => f.remove());
+}
+let toastT;
+function toast(t1, t2, withBtn){
+  const t = $('#toast');
+  $('.t1', t).textContent = t1; $('.t2', t).textContent = t2 || ''; $('#toastBtn').hidden = !withBtn;
+  t.hidden = false; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3600);
+}
+
+/* ================= LOAD ================= */
+function missing(title, sub){
+  $('#stLoading').hidden = true;
+  $('#stMissingT').textContent = title; $('#stMissingS').textContent = sub;
+  $('#stMissing').hidden = false;
+}
+async function boot(){
+  try {
+    const res = await fetch('/.netlify/functions/get-client-config');
+    const cfg = await res.json();
+    const url = cfg.supabaseUrl || cfg.SUPABASE_URL, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY;
+    if (!url || !key) throw new Error('config');
+    sb = supabase.createClient(url, key);
+  } catch (_) { missing('Couldn’t open the store', 'Check your connection and refresh the page.'); return; }
+
+  // Two ways in: the clean URL umzila.store/<slug> (rewritten here by
+  // netlify.toml, so the slug is the path), or the legacy
+  // shop.html?shop=<shop name> link, swapped for the clean URL once found.
+  let pathSlug = location.pathname.replace(/^\/+|\/+$/g, '');
+  if (pathSlug === 'shop.html' || pathSlug === 'shop') pathSlug = '';
+  const params = new URLSearchParams(location.search);
+  const nameParam = params.get('shop');
+  const sessionP = sb.auth.getSession();
+  let sellerRes;
+  if (pathSlug) {
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(pathSlug)) { location.replace('/'); return; }
+    sellerRes = await sb.from('sellers').select('*').eq('slug', pathSlug.toLowerCase()).limit(1);
+    if (!sellerRes.error && !(sellerRes.data || []).length && KNOWN_PAGES.includes(pathSlug.toLowerCase())) {
+      location.replace('/' + pathSlug.toLowerCase() + '.html' + location.search); return;
     }
-
-    function timeOnUmzila(createdAt) {
-      if (!createdAt) return '';
-      var ms = Date.now() - new Date(createdAt).getTime();
-      var months = Math.floor(ms / (1000 * 60 * 60 * 24 * 30.44));
-      if (months < 1) return 'New on Umzila';
-      if (months < 12) return months + ' month' + (months === 1 ? '' : 's') + ' on Umzila';
-      var years = Math.floor(months / 12);
-      return years + ' year' + (years === 1 ? '' : 's') + ' on Umzila';
-    }
-
-    function svgPlaceholder(text, w, h, bg, fg) {
-      w = w||400; h = h||400; bg = bg||'#ddd'; fg = fg||'#222';
-      var svg = "<svg xmlns='http://www.w3.org/2000/svg' width='" + w + "' height='" + h + "' viewBox='0 0 " + w + " " + h + "'>" +
-        "<rect width='100%' height='100%' fill='" + bg + "'/>" +
-        "<text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='" + fg + "' font-family='Arial' font-weight='700' font-size='" + Math.round(Math.min(w,h)/10) + "'>" + escHtml(text) + "</text>" +
-        "</svg>";
-      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-    }
-
-    /* ─────────────────────────────────────────
-       3. Cart helpers (shared localStorage key with index.html)
-    ───────────────────────────────────────── */
-    function getCart()      { return JSON.parse(localStorage.getItem('ss_cart') || '[]'); }
-    function saveCart(cart) { localStorage.setItem('ss_cart', JSON.stringify(cart)); }
-
-    function updateCartCount() {
-      var cart = getCart();
-      var total = cart.reduce(function(s, i) { return s + (i.qty || 1); }, 0);
-      var el = document.getElementById('cartCount');
-      if (el) el.textContent = total;
-      var mbnBadge = document.getElementById('mbnCartBadge');
-      if (mbnBadge) { mbnBadge.textContent = total; mbnBadge.style.display = total > 0 ? 'flex' : 'none'; }
-    }
-
-    // Shared by addToCart() and buyNow() so both buttons build the exact
-    // same item shape — a prior version of this file duplicated this object
-    // literal in both functions and let them drift, silently dropping
-    // delivery_class/listing_type/free_delivery/units_per_trip from every
-    // shop-page cart item (checkout.html's own DB re-fetch masked most of
-    // it, but not all — e.g. a sale-priced or custom-delivery-priced item
-    // could still reach payment with a wrong fee or, if price resolved to
-    // 0, an invalid charge).
-    function buildCartItem(product, size, qty, preferred_delivery) {
-      var price = product.displayPrice || (product.sale && product.salePrice ? product.salePrice : product.price);
-      return {
-        id:                product.id,
-        title:             product.title,
-        price:             price,
-        qty:               qty,
-        size:              size,
-        img:               product.primary_image || '',
-        stock:             product.stock || 0,
-        maxQuantity:       product.stock || 0,
-        preferred_delivery: preferred_delivery || '',
-        seller_id:         product.seller_id || (product.seller && product.seller.id) || null,
-        listing_type:      product.listing_type || 'product',
-        delivery_class:    product.delivery_class || 'small',
-        free_delivery:     product.free_delivery === true,
-        units_per_trip:    product.units_per_trip || null,
-        delivery_price:    Number.isFinite(product.delivery_price) ? product.delivery_price : null
-      };
-    }
-
-    // Services need setup this page doesn't have (a booked time, intake
-    // answers, collection/return choices) — hand them to the homepage's full
-    // product modal instead of adding a half-configured cart line that
-    // checkout would then block.
-    function openServiceSetup(product) {
-      window.location.href = '/?product=' + encodeURIComponent(product.id);
-    }
-
-    function addToCart(product, size, qty, preferred_delivery) {
-      if (product && product.listing_type === 'service') { openServiceSetup(product); return; }
-      var cart = getCart();
-      var existing = cart.find(function(i) { return i.id === product.id && i.size === size; });
-      if (existing) {
-        existing.qty = Math.min(existing.qty + qty, existing.stock || 99);
-      } else {
-        cart.push(buildCartItem(product, size, qty, preferred_delivery));
-      }
-      saveCart(cart);
-      updateCartCount();
-      showCartToast();
-    }
-
-    // "Buy Now" — jumps straight into checkout.html with just this one
-    // item, entirely independent of whatever's already in ss_cart (never
-    // merged into it, so a buyer's real cart is untouched either way).
-    // Same item shape as addToCart() above so checkout.html's existing
-    // cart-loading logic needs no new format to understand.
-    function buyNow(product, size, qty, preferred_delivery) {
-      if (product && product.listing_type === 'service') { openServiceSetup(product); return; }
-      var item = buildCartItem(product, size, qty, preferred_delivery);
-      localStorage.setItem('ss_buynow', JSON.stringify([item]));
-      window.location.href = 'checkout.html?buynow=1';
-    }
-
-    function showCartToast() {
-      var t = document.getElementById('cartToast');
-      t.classList.add('show');
-      setTimeout(function() { t.classList.remove('show'); }, 2000);
-    }
-
-    /* ─────────────────────────────────────────
-       4. Product card renderer — simplified Etsy-style
-    ───────────────────────────────────────── */
-    function makeShopCard(p) {
-      var isOnSale     = p.sale || false;
-      var displayPrice = isOnSale ? (p.salePrice || p.price) : p.price;
-      p.displayPrice   = displayPrice;
-      var primaryImg   = p.primary_image || svgPlaceholder(p.title, 400, 400);
-      var sizes        = (p.size && p.size.length) ? p.size : ['S','M','L','XL'];
-      var sizeOpts     = sizes.map(function(s) { return '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('');
-      var isSponsored  = (window._sponsoredIds || new Set()).has(p.id);
-      var badgeHtml    = (isSponsored ? '<div class="sh-card-badge" style="background:#ea580c">Sponsored</div>' : '') +
-                         ((isOnSale || p.badge) ? '<div class="sh-card-badge">' + escHtml(p.badge || 'Sale') + '</div>' : '');
-      var priceHtml    = (isOnSale && p.price)
-        ? '<span class="orig">' + fmt(p.price) + '</span><span class="sale">' + fmt(displayPrice) + '</span>'
-        : fmt(displayPrice);
-      var productData  = JSON.stringify({
-        id: p.id, title: p.title, price: p.price,
-        salePrice: p.salePrice || 0, sale: p.sale || false,
-        primary_image: primaryImg, stock: p.stock || 0, displayPrice: displayPrice
-      }).replace(/'/g, "&#39;");
-
-      return '<div class="sh-card" data-category="' + escHtml(p.category) + '" data-product=\'' + productData + '\'>' +
-        '<div class="sh-card-media">' +
-          '<img src="' + svgPlaceholder(p.title,400,400,'#f0f0f0','#999') + '" data-src="' + primaryImg + '" loading="lazy" alt="' + escHtml(p.title) + '">' +
-          badgeHtml +
-          '<button class="sh-card-fav fav-btn" data-product-id="' + p.id + '" data-fav-count="' + Number(p.favourite_count||0) + '" aria-label="Favourite"><svg class="fav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.1c0-3-2.4-5.4-5.4-5.4-1.8 0-3.4.9-4.4 2.3-1-1.4-2.6-2.3-4.4-2.3-3 0-5.4 2.4-5.4 5.4 0 5.5 9.8 11.5 9.8 11.5s9.8-6 9.8-11.5z"/></svg></button>' +
-        '</div>' +
-        '<div class="sh-card-body">' +
-          '<div class="sh-card-name">' + escHtml(p.title) + '</div>' +
-          '<div class="sh-card-price">' + priceHtml + '</div>' +
-          '<div class="sh-card-actions">' +
-            '<select class="sh-size-sel shop-size-sel">' + sizeOpts + '</select>' +
-            '<button class="sh-add-btn shop-add-btn"' + (p.stock < 1 ? ' disabled' : '') + '>+ Add</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-    }
-
-    /* ─────────────────────────────────────────
-       4b. Favourites helpers
-    ───────────────────────────────────────── */
-    function getShopAnonId() {
-      var id = localStorage.getItem('ss_anon_id');
-      if (!id) {
-        id = 'anon-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-        localStorage.setItem('ss_anon_id', id);
-      }
-      return id;
-    }
-
-    async function shopToggleFav(btn) {
-      if (!btn || btn.dataset.pending === 'true') return;
-      btn.dataset.pending = 'true';
-      var productId = btn.dataset.productId;
-      var isFaved   = btn.classList.contains('active');
-      // The SVG heart's filled/unfilled state is driven purely by .active in CSS.
-      btn.classList.toggle('active', !isFaved);
-      try {
-        var headers = { 'Content-Type': 'application/json' };
-        if (window.supabase) {
-          var sess = await window.supabase.auth.getSession().catch(function() { return { data: {} }; });
-          if (sess && sess.data && sess.data.session && sess.data.session.access_token) {
-            headers['Authorization'] = 'Bearer ' + sess.data.session.access_token;
-          }
-        }
-        var res = await fetch('/.netlify/functions/toggle-favourite', {
-          method: 'POST', headers: headers,
-          body: JSON.stringify({ product_id: productId, anonymous_id: getShopAnonId() })
-        });
-        var data = await res.json();
-        if (data.success) {
-          btn.classList.toggle('active', data.action === 'added');
-        } else {
-          btn.classList.toggle('active', isFaved);
-        }
-      } catch(_) {
-        btn.classList.toggle('active', isFaved);
-      }
-      btn.dataset.pending = 'false';
-    }
-
-    /* ─────────────────────────────────────────
-       5. Product detail modal — matches index.html style
-    ───────────────────────────────────────── */
-    var _modalProduct = null;
-
-    function isVideoUrl(url) {
-      return url && /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
-    }
-
-    function openProductModal(product) {
-      var full = allProducts.find(function(p){ return p.id === product.id; }) || product;
-      _modalProduct = full;
-
-      var images = full.all_images && full.all_images.length ? full.all_images : (full.primary_image ? [full.primary_image] : []);
-      if (!images.length) images = [svgPlaceholder(full.title, 400, 400)];
-
-      var isOnSale     = full.sale || false;
-      var displayPrice = isOnSale && full.salePrice ? full.salePrice : (full.price || 0);
-      var originalPrice = isOnSale && full.price ? full.price : null;
-      full.displayPrice = displayPrice;
-      // A physical product with no resolvable price must never reach
-      // checkout/payment — treat it the same as out-of-stock.
-      var isUnpriced = !(displayPrice > 0);
-
-      var sizes = full.size && full.size.length ? full.size : ['One Size'];
-      var sizeOptionsHtml = sizes.map(function(s) {
-        return '<div class="size-option" data-size="' + escHtml(s) + '">' + escHtml(s) + '</div>';
-      }).join('');
-
-      var thumbnailsHtml = images.map(function(img, i) {
-        return '<div class="product-thumbnail' + (i === 0 ? ' active' : '') + '" data-image="' + escHtml(img) + '">' +
-          '<img src="' + escHtml(img) + '" alt="' + escHtml(full.title) + ' ' + (i+1) + '" loading="lazy">' +
-          '</div>';
-      }).join('');
-
-      var mainMediaHtml = isVideoUrl(images[0])
-        ? '<video src="' + escHtml(images[0]) + '" autoplay muted loop playsinline id="sh-main-img" style="width:100%;height:100%;object-fit:contain;border-radius:8px"></video>'
-        : '<img src="' + escHtml(images[0]) + '" alt="' + escHtml(full.title) + '" id="sh-main-img" loading="lazy">';
-
-      var sellerHtml = '';
-      if (full.seller && full.seller.shop_name) {
-        var delivInfo = '';
-        if (full.seller.delivery_method || full.seller.turnaround_time) {
-          delivInfo = '<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;background:#f0f4ff;border-radius:8px;padding:6px 10px;flex-wrap:wrap">' +
-            '🚚 <span><strong>Delivery:</strong> ' + escHtml(full.seller.delivery_method || '') +
-            (full.seller.turnaround_time ? ' · ' + escHtml(full.seller.turnaround_time) : '') + '</span></div>';
-        }
-        sellerHtml = '<div class="product-modal-seller" style="display:flex;flex-direction:column;gap:6px;margin:6px 0 10px">' +
-          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
-            '<span style="font-size:13px;color:#6b7280">Sold by</span>' +
-            '<a href="' + escHtml(storeUrl(full.seller)) + '" style="font-size:13px;font-weight:700;color:#0a2f66;text-decoration:none">' + escHtml(full.seller.shop_name) + ' ↗</a>' +
-          '</div>' + delivInfo +
-        '</div>';
-      }
-
-      var words = full.desc ? full.desc.split(' ') : [];
-      var shortDesc = words.slice(0, 10).join(' ') + (words.length > 10 ? '...' : '');
-      var hasLongDesc = words.length > 10;
-
-      var content = document.getElementById('shModalContent');
-      content.innerHTML =
-        '<div class="product-modal-images">' +
-          '<div class="product-modal-main-image" id="sh-main-img-wrap">' + mainMediaHtml + '</div>' +
-          '<div class="product-modal-thumbnails">' + thumbnailsHtml + '</div>' +
-        '</div>' +
-        '<div class="product-modal-details">' +
-          '<h1 class="product-modal-title">' + escHtml(full.title) + '</h1>' +
-          sellerHtml +
-          '<div class="product-modal-price">' +
-            'R' + displayPrice.toFixed(2) +
-            (isOnSale && originalPrice ? '<span class="product-modal-original-price">R' + originalPrice.toFixed(2) + '</span>' : '') +
-          '</div>' +
-          '<div class="product-modal-sizes"><h3>Size</h3><div class="size-options">' + sizeOptionsHtml + '</div></div>' +
-          '<div class="product-modal-delivery-pref" style="margin:12px 0">' +
-            '<h3 style="font-size:14px;font-weight:700;margin-bottom:6px">Preferred Delivery <span style="font-size:11px;font-weight:400;color:#6b7280">(optional)</span></h3>' +
-            '<select id="sh-delivery-pref" style="width:100%;padding:9px 12px;border:1px solid #d9d9df;border-radius:8px;font-size:14px;color:#1a1a2e;background:#fff">' +
-              '<option value="">No preference</option>' +
-              '<option value="Delivery to address">Delivery to address</option>' +
-              '<option value="Hostel delivery">Hostel delivery</option>' +
-            '</select>' +
-          '</div>' +
-          '<div class="product-modal-quantity"><h3>Quantity</h3><div class="quantity-selector">' +
-            '<button class="quantity-btn" id="sh-qty-dec">-</button>' +
-            '<span class="quantity-value" id="sh-qty-val">1</span>' +
-            '<button class="quantity-btn" id="sh-qty-inc">+</button>' +
-          '</div></div>' +
-          (full.stock < 1 ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Out of stock</div>' :
-            (full.stock < 5 ? '<div style="color:#f59e0b;font-size:13px;margin:8px 0">Only ' + full.stock + ' left</div>' : '')) +
-          (isUnpriced ? '<div style="color:#dc2626;font-size:13px;margin:8px 0">Price unavailable — contact seller</div>' : '') +
-          (full.stock < 1 ? '<button class="notify-me-btn" data-id="' + full.id + '" data-title="' + escHtml(full.title) + '" style="margin-bottom:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notify Me</button>' : '') +
-          '<button id="sh-share-btn" style="width:100%;padding:10px;border:1px solid var(--color-border);border-radius:999px;background:#fff;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.5-1.5"/></svg> Copy Link</button>' +
-          '<button id="sh-modal-buynow-btn" style="width:100%;padding:13px;border:none;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px' + ((full.stock < 1 || isUnpriced) ? ';opacity:.5;cursor:not-allowed' : '') + '"' + ((full.stock < 1 || isUnpriced) ? ' disabled' : '') + '>Buy Now</button>' +
-          '<button class="product-modal-add-to-cart" id="sh-modal-add-btn" style="width:100%;padding:12px;border:1px solid var(--accent,#0a2f66);border-radius:999px;background:#fff;color:var(--accent,#0a2f66);font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px' + ((full.stock < 1 || isUnpriced) ? ';opacity:.5;cursor:not-allowed' : '') + '"' + ((full.stock < 1 || isUnpriced) ? ' disabled' : '') + '>Add to Cart</button>' +
-          (full.desc ? '<div class="product-modal-description"><h3>Description</h3>' +
-            '<div class="description-text' + (hasLongDesc ? ' collapsed' : '') + '" id="sh-desc-text">' + escHtml(hasLongDesc ? shortDesc : full.desc) + '</div>' +
-            (hasLongDesc ? '<button class="see-more-btn" id="sh-see-more">See More</button>' : '') +
-          '</div>' : '') +
-        '</div>';
-
-      // Size: select first by default
-      var firstSize = content.querySelector('.size-option');
-      if (firstSize) firstSize.classList.add('selected');
-
-      // Thumbnail clicks
-      content.querySelectorAll('.product-thumbnail').forEach(function(thumb) {
-        thumb.addEventListener('click', function() {
-          var url = this.dataset.image;
-          var wrap = document.getElementById('sh-main-img-wrap');
-          if (wrap) {
-            wrap.innerHTML = isVideoUrl(url)
-              ? '<video src="' + url + '" autoplay muted loop playsinline id="sh-main-img" style="width:100%;height:100%;object-fit:contain;border-radius:8px"></video>'
-              : '<img src="' + url + '" alt="product" id="sh-main-img" loading="lazy">';
-          }
-          content.querySelectorAll('.product-thumbnail').forEach(function(t){ t.classList.remove('active'); });
-          this.classList.add('active');
-        });
-      });
-
-      // Size selection
-      content.querySelectorAll('.size-option').forEach(function(opt) {
-        opt.addEventListener('click', function() {
-          content.querySelectorAll('.size-option').forEach(function(o){ o.classList.remove('selected'); });
-          this.classList.add('selected');
-        });
-      });
-
-      // Quantity
-      document.getElementById('sh-qty-inc').addEventListener('click', function() {
-        var el = document.getElementById('sh-qty-val');
-        el.textContent = Math.min(parseInt(el.textContent) + 1, full.stock || 99);
-      });
-      document.getElementById('sh-qty-dec').addEventListener('click', function() {
-        var el = document.getElementById('sh-qty-val');
-        var v = parseInt(el.textContent);
-        if (v > 1) el.textContent = v - 1;
-      });
-
-      // See more/less
-      var seeMoreBtn = document.getElementById('sh-see-more');
-      if (seeMoreBtn) {
-        seeMoreBtn.addEventListener('click', function() {
-          var descEl = document.getElementById('sh-desc-text');
-          if (descEl.classList.contains('collapsed')) {
-            descEl.textContent = full.desc;
-            descEl.classList.remove('collapsed');
-            this.textContent = 'See Less';
-          } else {
-            descEl.textContent = shortDesc;
-            descEl.classList.add('collapsed');
-            this.textContent = 'See More';
-          }
-        });
-      }
-
-      // Add to cart
-      document.getElementById('sh-modal-add-btn').addEventListener('click', function() {
-        if (!_modalProduct || isUnpriced) return;
-        var selectedSize = (content.querySelector('.size-option.selected') || {}).dataset || {};
-        var size = selectedSize.size || sizes[0] || 'M';
-        var qty  = parseInt(document.getElementById('sh-qty-val').textContent) || 1;
-        var prefDelivery = (document.getElementById('sh-delivery-pref') || {}).value || '';
-        if (prefDelivery) localStorage.setItem('ss_preferred_delivery', prefDelivery);
-        addToCart(_modalProduct, size, qty, prefDelivery);
-        closeProductModal();
-      });
-
-      document.getElementById('sh-modal-buynow-btn').addEventListener('click', function() {
-        if (!_modalProduct || isUnpriced) return;
-        var selectedSize = (content.querySelector('.size-option.selected') || {}).dataset || {};
-        var size = selectedSize.size || sizes[0] || 'M';
-        var qty  = parseInt(document.getElementById('sh-qty-val').textContent) || 1;
-        var prefDelivery = (document.getElementById('sh-delivery-pref') || {}).value || '';
-        if (prefDelivery) localStorage.setItem('ss_preferred_delivery', prefDelivery);
-        buyNow(_modalProduct, size, qty, prefDelivery);
-      });
-
-      // Share / Copy Link
-      var shareBtn = document.getElementById('sh-share-btn');
-      if (shareBtn) {
-        shareBtn.addEventListener('click', function() {
-          var base = full.seller && (full.seller.slug || full.seller.shop_name) ? storeUrl(full.seller) : '/';
-          var url = window.location.origin + base + (base.indexOf('?') === -1 ? '?' : '&') + 'product=' + full.id;
-          navigator.clipboard.writeText(url).then(function() {
-            var originalHTML = shareBtn.innerHTML;
-            shareBtn.textContent = '✓ Copied!';
-            setTimeout(function(){ shareBtn.innerHTML = originalHTML; }, 2000);
-          }).catch(function() { prompt('Copy this link:', url); });
-        });
-      }
-
-      document.getElementById('shProdModal').classList.add('active');
-      document.body.style.overflow = 'hidden';
-    }
-
-    function closeProductModal() {
-      document.getElementById('shProdModal').classList.remove('active');
-      document.body.style.overflow = '';
-      _modalProduct = null;
-    }
-
-    document.addEventListener('DOMContentLoaded', function() {
-      var overlay = document.getElementById('shProdModal');
-      document.getElementById('shModalClose').addEventListener('click', closeProductModal);
-      overlay.addEventListener('click', function(e) { if (e.target === overlay) closeProductModal(); });
-
-      /* ── Notify Me modal (shop page) ── */
-      var shNotifyModal   = document.getElementById('shNotifyModal');
-      var shNotifyClose   = document.getElementById('shNotifyClose');
-      var shNotifySubmit  = document.getElementById('shNotifySubmit');
-      var shNotifyProdId  = null;
-
-      function openShNotify(productId, title) {
-        shNotifyProdId = productId;
-        var titleEl = document.getElementById('shNotifyTitle');
-        if (titleEl) titleEl.textContent = title ? 'Notify me when "' + title + '" is back' : 'Back in stock alert';
-        document.getElementById('shNotifyEmail').value = '';
-        document.getElementById('shNotifyError').style.display = 'none';
-        document.getElementById('shNotifySuccess').style.display = 'none';
-        shNotifyModal.classList.add('active');
-      }
-      function closeShNotify() { shNotifyModal.classList.remove('active'); shNotifyProdId = null; }
-      if (shNotifyClose) shNotifyClose.addEventListener('click', closeShNotify);
-      shNotifyModal.addEventListener('click', function(e){ if (e.target === shNotifyModal) closeShNotify(); });
-
-      // Escape key closes whichever modal is open — matches index.html's behavior.
-      document.addEventListener('keydown', function(e) {
-        if (e.key !== 'Escape') return;
-        if (overlay.classList.contains('active')) closeProductModal();
-        else if (shNotifyModal.classList.contains('active')) closeShNotify();
-      });
-
-      if (shNotifySubmit) {
-        shNotifySubmit.addEventListener('click', async function() {
-          var email = document.getElementById('shNotifyEmail').value.trim();
-          var errEl = document.getElementById('shNotifyError');
-          if (!email || !email.includes('@')) {
-            errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; return;
-          }
-          shNotifySubmit.disabled = true; shNotifySubmit.textContent = '…';
-          try {
-            if (window.supabase && shNotifyProdId) {
-              await window.supabase.from('stock_alerts').insert({ product_id: shNotifyProdId, email: email.toLowerCase() });
-            }
-            document.getElementById('shNotifySuccess').style.display = 'block';
-            errEl.style.display = 'none';
-            setTimeout(closeShNotify, 2000);
-          } catch(e) { errEl.textContent = 'Something went wrong. Try again.'; errEl.style.display = 'block'; }
-          finally { shNotifySubmit.disabled = false; shNotifySubmit.textContent = 'Notify Me'; }
-        });
-      }
-
-      // Delegate clicks on notify-me-btn inside the product modal content
-      document.getElementById('shModalContent').addEventListener('click', function(e) {
-        var btn = e.target.closest('.notify-me-btn');
-        if (btn) openShNotify(btn.dataset.id, btn.dataset.title);
-      });
-    });
-
-    /* ─────────────────────────────────────────
-       6. Attach card interactions
-    ───────────────────────────────────────── */
-    function attachCardListeners() {
-      document.querySelectorAll('.sh-card').forEach(function(card) {
-        if (card._shopBound) return;
-        card._shopBound = true;
-
-        card.querySelectorAll('img[data-src]').forEach(function(img) {
-          img.src = img.dataset.src;
-          img.removeAttribute('data-src');
-        });
-
-        var favBtn = card.querySelector('.fav-btn');
-        if (favBtn) {
-          favBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            shopToggleFav(favBtn);
-          });
-        }
-
-        var addBtn  = card.querySelector('.shop-add-btn');
-        var sizeEl  = card.querySelector('.shop-size-sel');
-        var rawData = card.dataset.product;
-        if (!rawData) return;
-        var product;
-        try { product = JSON.parse(rawData); } catch(e) { return; }
-
-        // Click on card body (not fav/add buttons) → open modal
-        var cardBody = card.querySelector('.sh-card-body');
-        var cardMedia = card.querySelector('.sh-card-media');
-        [cardBody, cardMedia].forEach(function(zone) {
-          if (!zone) return;
-          zone.addEventListener('click', function(e) {
-            if (e.target.closest('.sh-card-fav') || e.target.closest('.shop-add-btn') || e.target.closest('.shop-size-sel')) return;
-            openProductModal(product);
-          });
-        });
-
-        if (addBtn) {
-          addBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            // card.dataset.product is a minimal snapshot (id/price/stock —
-            // see makeShopCard) for cheap rendering of 100+ cards; it never
-            // carried delivery_class/listing_type/seller_id. Resolve the
-            // full record from allProducts, same as openProductModal() does,
-            // so the quick "+ Add" button builds an identical cart item to
-            // the modal's Add to Cart instead of a stripped-down one.
-            var full = allProducts.find(function(fp) { return fp.id === product.id; }) || product;
-            if (!(full.price > 0) && !(full.sale && full.salePrice > 0)) return;
-            var size = sizeEl ? sizeEl.value : 'M';
-            addToCart(full, size, 1);
-          });
-        }
-      });
-    }
-
-    /* ─────────────────────────────────────────
-       6. Map Supabase product row → card-ready object
-    ───────────────────────────────────────── */
-    function mapProduct(row, sellerData) {
-      var images = [];
-      if (row.product_images && row.product_images.length) {
-        images = row.product_images.slice().sort(function(a,b){ return (a.image_order||0)-(b.image_order||0); }).map(function(i){ return i.url; });
-      } else if (row.image) {
-        images = [row.image];
-      } else {
-        var seed = encodeURIComponent((row.name||'product') + '_' + row.id);
-        images = ['https://picsum.photos/seed/' + seed + '/400/400'];
-      }
-      var sizes = row.sizes && row.sizes.length ? row.sizes : ['S','M','L','XL'];
-      return {
-        id:              row.id,
-        title:           row.name || 'Product',
-        price:           Number(row.price) || 0,
-        sale:            row.sale || false,
-        salePrice:       Number(row.sale_price) || 0,
-        category:        row.category || 'Other',
-        badge:           row.badge || (row.sale ? 'Sale' : ''),
-        stock:           row.stock || 0,
-        size:            sizes,
-        all_images:      images,
-        primary_image:   images[0] || null,
-        secondary_image: images[1] || null,
-        desc:            row.description || '',
-        color:           (row.metadata && row.metadata.color) || '',
-        favourite_count: Number(row.favourite_count || 0),
-        seller:          sellerData || null,
-        seller_id:       row.seller_id || (sellerData && sellerData.id) || null,
-        listing_type:    row.listing_type || 'product',
-        delivery_class:  row.delivery_class || 'small',
-        free_delivery:   row.free_delivery === true,
-        units_per_trip:  row.units_per_trip || null,
-        delivery_price:  (row.metadata && Number.isFinite(Number(row.metadata.delivery_price))) ? Number(row.metadata.delivery_price) : null
-      };
-    }
-
-    /* ─────────────────────────────────────────
-       7. About tab renderer
-    ───────────────────────────────────────── */
-    function renderAbout(seller) {
-      var html = '';
-
-      if (seller.about_story) {
-        html += '<div class="sh-about-section">' +
-          '<h3>About This Shop</h3>' +
-          '<p>' + escHtml(seller.about_story) + '</p>' +
-        '</div>';
-      }
-
-      if (seller.owner_story) {
-        html += '<div class="sh-about-section">' +
-          '<h3>Meet the Maker</h3>' +
-          '<p>' + escHtml(seller.owner_story) + '</p>' +
-        '</div>';
-      }
-
-      var details = [];
-      if (seller.delivery_method) details.push({ label: 'Delivery', value: seller.delivery_method });
-      if (seller.turnaround_time) details.push({ label: 'Turnaround', value: seller.turnaround_time });
-      if (seller.return_policy)   details.push({ label: 'Returns', value: seller.return_policy });
-      if (seller.location)        details.push({ label: 'Location', value: seller.location });
-      if (seller.years_operating) details.push({ label: 'Years operating', value: seller.years_operating });
-
-      if (details.length) {
-        html += '<div class="sh-about-section"><h3>Shop Details</h3>' +
-          '<div class="sh-about-grid">' +
-          details.map(function(d) {
-            return '<div class="sh-about-item">' +
-              '<div class="label">' + escHtml(d.label) + '</div>' +
-              '<div class="value">' + escHtml(String(d.value)) + '</div>' +
-            '</div>';
-          }).join('') +
-          '</div></div>';
-      }
-
-      if (!html) {
-        html = '<p style="color:var(--muted);font-size:14px">This seller hasn\'t added their story yet.</p>';
-      }
-
-      document.getElementById('shAbout').innerHTML = html;
-    }
-
-    /* ─────────────────────────────────────────
-       8. Filter + render products
-    ───────────────────────────────────────── */
-    var allProducts = [];
-
-    // Category aliases: maps display/filter value → array of DB values that should match
-    var CATEGORY_ALIASES = {
-      'food':   ['food','snack','snacks','Food','Snack','Snacks'],
-      'snacks': ['food','snack','snacks','Food','Snack','Snacks'],
-      'snack':  ['food','snack','snacks','Food','Snack','Snacks']
-    };
-
-    function catMatches(productCat, filterCat) {
-      if (!filterCat) return true;
-      var aliases = CATEGORY_ALIASES[filterCat.toLowerCase()];
-      if (aliases) return aliases.some(function(a) { return a.toLowerCase() === (productCat||'').toLowerCase(); });
-      return (productCat||'').toLowerCase() === filterCat.toLowerCase();
-    }
-
-    function filterAndRender() {
-      var q   = (document.getElementById('shSearch').value || '').trim().toLowerCase();
-      var cat = document.getElementById('shCatSelect').value;
-      var filtered = allProducts.filter(function(p) {
-        var matchQ   = !q   || p.title.toLowerCase().includes(q) || (p.category||'').toLowerCase().includes(q);
-        var matchCat = catMatches(p.category, cat);
-        return matchQ && matchCat;
-      });
-      var grid    = document.getElementById('shGrid');
-      var noProds = document.getElementById('shNoProducts');
-      if (!filtered.length) {
-        grid.innerHTML = '';
-        noProds.style.display = '';
-      } else {
-        noProds.style.display = 'none';
-        var sponsoredIds = window._sponsoredIds || new Set();
-        var sponsored = filtered.filter(function(p){ return sponsoredIds.has(p.id); });
-        var rest      = filtered.filter(function(p){ return !sponsoredIds.has(p.id); });
-        grid.innerHTML = sponsored.concat(rest).map(makeShopCard).join('');
-        attachCardListeners();
-      }
-    }
-
-    /* ─────────────────────────────────────────
-       9. Main data fetch (runs after supabase-ready)
-    ───────────────────────────────────────── */
-    // Site pages someone might type without ".html" — never store slugs
-    // (the sellers_assign_slug trigger reserves these names).
-    var KNOWN_PAGES = ['index', 'cart', 'checkout', 'about', 'profile', 'track', 'seller-dashboard',
-      'seller-terms', 'enroll-seller', 'enroll-seller-free', 'reset-password', 'logistics', 'admin', 'login-admin'];
-
-    async function loadShop(sb) {
-      function showNotFound() {
-        document.getElementById('shLoading').style.display = 'none';
-        document.getElementById('shNotFound').style.display = '';
-      }
-
-      // Two ways in: the clean URL umzila.store/<slug> (rewritten here by
-      // netlify.toml, so the slug is the path), or the legacy
-      // shop.html?shop=<shop name> link, which still works and is swapped
-      // for the clean URL once the store is found.
-      var pathSlug = window.location.pathname.replace(/^\/+|\/+$/g, '');
-      if (pathSlug === 'shop.html' || pathSlug === 'shop') pathSlug = '';
-      var nameParam = new URLSearchParams(window.location.search).get('shop');
-
-      var sellerRes = null;
-      if (pathSlug) {
-        // An unknown single-segment path also lands here (the rewrite catches
-        // everything a real file doesn't). Anything that can't be a slug, or
-        // a page name typed without ".html", goes where it was meant to.
-        if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(pathSlug)) { location.replace('/'); return; }
-        sellerRes = await sb.from('sellers').select('*').eq('slug', pathSlug.toLowerCase()).limit(1);
-        if (!sellerRes.error && (!sellerRes.data || !sellerRes.data.length)) {
-          if (KNOWN_PAGES.indexOf(pathSlug.toLowerCase()) !== -1) { location.replace('/' + pathSlug.toLowerCase() + '.html' + location.search); return; }
-          showNotFound();
-          return;
-        }
-      } else if (nameParam) {
-        sellerRes = await sb.from('sellers').select('*').ilike('shop_name', nameParam).limit(1);
-      } else {
-        showNotFound();
-        return;
-      }
-      if (sellerRes.error || !sellerRes.data || !sellerRes.data.length) {
-        showNotFound();
-        return;
-      }
-      var seller = sellerRes.data[0];
-
-      // Legacy link (or /Sweet-Corner) → canonical clean URL, keeping any
-      // other params (?product=, ?q=).
-      if (seller.slug && pathSlug !== seller.slug && window.history && history.replaceState) {
-        var keep = new URLSearchParams(window.location.search);
-        keep.delete('shop');
-        var qs = keep.toString();
-        history.replaceState(null, '', '/' + seller.slug + (qs ? '?' + qs : '') + location.hash);
-      }
-
-      // Block disabled shops
-      if (seller.status !== 'active') {
-        document.getElementById('shLoading').style.display = 'none';
-        var notFound = document.getElementById('shNotFound');
-        notFound.innerHTML = '<div style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:12px">🚫</div><h2 style="margin:0 0 8px">Shop Unavailable</h2><p style="color:#6b7280;margin:0">This shop is temporarily unavailable. Check back later.</p></div>';
-        notFound.style.display = '';
-        return;
-      }
-
-      document.title = seller.shop_name + ' — Umzila';
-
-      /* Banner */
-      var banner = document.getElementById('shBanner');
-      if (seller.banner_url) {
-        banner.style.backgroundImage = 'url(' + seller.banner_url + ')';
-      }
-
-      /* Logo */
-      var logoWrap = document.getElementById('shLogo');
-      var initials = (seller.shop_name || 'S').split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
-      if (seller.logo_url) {
-        logoWrap.innerHTML = '<img src="' + seller.logo_url + '" alt="' + escHtml(seller.shop_name) + ' logo">';
-      } else {
-        logoWrap.innerHTML = '<div class="sh-logo-initials">' + escHtml(initials) + '</div>';
-      }
-
-      /* Central Umzila WA button (no seller personal number) */
-      var waMsg = 'Hi Umzila! I came from ' + seller.shop_name + ' and I\'d like to know more.';
-      document.getElementById('shWaBtn').href = 'https://wa.me/' + UMZILA_WA + '?text=' + encodeURIComponent(waMsg);
-
-      /* Fav count — sum of product favourite_counts for this seller */
-      var favRes = await sb.from('products').select('favourite_count').eq('seller_id', seller.id).eq('visible', true);
-      if (!favRes.error && favRes.data && favRes.data.length) {
-        var totalFavs = favRes.data.reduce(function(s, p) { return s + Number(p.favourite_count || 0); }, 0);
-        if (totalFavs > 0) {
-          document.getElementById('shFavCount').textContent = totalFavs;
-          document.getElementById('shFavPill').style.display = '';
-        }
-      }
-
-      /* Shop info */
-      document.getElementById('shShopName').textContent = seller.shop_name;
-      document.getElementById('shShopDesc').textContent = seller.description || '';
-      var metaParts = [];
-      if (seller.location) metaParts.push('📍 ' + seller.location);
-      var timeStr = timeOnUmzila(seller.created_at);
-      if (timeStr) metaParts.push('🗓 ' + timeStr);
-      document.getElementById('shShopMeta').innerHTML = metaParts.map(function(m) {
-        return '<span>' + escHtml(m) + '</span>';
-      }).join('');
-
-      /* Show hero */
-      document.getElementById('shLoading').style.display = 'none';
-      document.getElementById('shHero').style.display = '';
-
-      /* Tabs */
-      var tabs         = document.querySelectorAll('.sh-tab');
-      var itemsContent = document.getElementById('shItemsContent');
-      var aboutContent = document.getElementById('shAboutContent');
-      itemsContent.style.display = '';
-      aboutContent.style.display = 'none';
-
-      tabs.forEach(function(tab) {
-        tab.addEventListener('click', function() {
-          tabs.forEach(function(t) { t.classList.remove('active'); });
-          tab.classList.add('active');
-          if (tab.dataset.tab === 'items') {
-            itemsContent.style.display = '';
-            aboutContent.style.display = 'none';
-          } else {
-            itemsContent.style.display = 'none';
-            aboutContent.style.display = '';
-            renderAbout(seller);
-          }
-        });
-      });
-
-      /* Fetch products */
-      var prodRes = await sb
-        .from('products')
-        .select('*, product_images!fk_product_images_product(*)')
-        .eq('seller_id', seller.id)
-        .eq('visible', true)
-        .order('created_at', { ascending: false });
-
-      if (prodRes.error || !prodRes.data || !prodRes.data.length) {
-        document.getElementById('shNoProducts').style.display = '';
-        return;
-      }
-
-      allProducts = prodRes.data.map(function(row){ return mapProduct(row, seller); });
-      document.getElementById('shItemCount').textContent = '(' + allProducts.length + ')';
-
-      /* Load sponsored product IDs for boosting */
-      sb.from('ad_campaigns')
-        .select('product_id')
-        .eq('type', 'sponsored_product').eq('status', 'active')
-        .gt('ends_at', new Date().toISOString())
-        .then(function(res) { window._sponsoredIds = new Set((res.data || []).map(function(c){ return c.product_id; })); filterAndRender(); });
-
-      /* Category dropdown */
-      var cats = [];
-      allProducts.forEach(function(p) { if (p.category && !cats.includes(p.category)) cats.push(p.category); });
-      cats.sort();
-      var catSel = document.getElementById('shCatSelect');
-      cats.forEach(function(c) {
-        var opt = document.createElement('option');
-        opt.value = c; opt.textContent = c;
-        catSel.appendChild(opt);
-      });
-
-      /* Wire search + filter */
-      document.getElementById('shSearch').addEventListener('input', filterAndRender);
-      document.getElementById('shCatSelect').addEventListener('change', filterAndRender);
-
-      /* Initial render */
-      filterAndRender();
-
-      /* Auto-search from URL ?q= param (e.g. from hero banner click) */
-      var qParam = new URLSearchParams(window.location.search).get('q');
-      if (qParam) {
-        var searchEl = document.getElementById('shSearch');
-        if (searchEl) { searchEl.value = qParam; filterAndRender(); }
-      }
-
-      /* Auto-open product modal from URL ?product= param */
-      var productParam = new URLSearchParams(window.location.search).get('product');
-      if (productParam) {
-        var targetProduct = allProducts.find(function(p){ return p.id === productParam; });
-        if (targetProduct) openProductModal(targetProduct);
-      }
-    }
-
-    /* ─────────────────────────────────────────
-       10. Header interactions (mobile menu, cart, search)
-    ───────────────────────────────────────── */
-    document.addEventListener('DOMContentLoaded', function() {
-      updateCartCount();
-
-      var mobileMenuIcon    = document.getElementById('mobileMenuIcon');
-      var mobileMenuClose   = document.getElementById('mobileMenuClose');
-      var mobileMenuOverlay = document.getElementById('mobileMenuOverlay');
-      var mobileMenu        = document.getElementById('mobileMenu');
-
-      function openMobileMenu()  { mobileMenu && mobileMenu.classList.add('active');    mobileMenuOverlay && mobileMenuOverlay.classList.add('active'); }
-      function closeMobileMenu() { mobileMenu && mobileMenu.classList.remove('active'); mobileMenuOverlay && mobileMenuOverlay.classList.remove('active'); }
-
-      if (mobileMenuIcon)    mobileMenuIcon.addEventListener('click', openMobileMenu);
-      if (mobileMenuClose)   mobileMenuClose.addEventListener('click', closeMobileMenu);
-      if (mobileMenuOverlay) mobileMenuOverlay.addEventListener('click', closeMobileMenu);
-
-      if (window.innerWidth <= 768) {
-        var mmi = document.getElementById('mobileMenuIcon');
-        if (mmi) mmi.style.display = 'block';
-      }
-
-      var cartBtn = document.getElementById('cartBtn');
-      if (cartBtn) cartBtn.addEventListener('click', function() { window.location.href = 'cart.html'; });
-
-      var signBtn = document.getElementById('signBtn');
-      if (signBtn) signBtn.addEventListener('click', function() { window.location.href = 'index.html'; });
-
-      var searchInput = document.getElementById('searchInput');
-      var searchClear = document.getElementById('searchClear');
-      if (searchInput) {
-        searchInput.addEventListener('keydown', function(e) {
-          if (e.key === 'Enter' && searchInput.value.trim()) {
-            window.location.href = 'index.html?q=' + encodeURIComponent(searchInput.value.trim());
-          }
-          searchClear && (searchClear.style.display = searchInput.value ? 'block' : 'none');
-        });
-        searchInput.addEventListener('input', function() {
-          searchClear && (searchClear.style.display = searchInput.value ? 'block' : 'none');
-        });
-      }
-      if (searchClear) searchClear.addEventListener('click', function() { searchInput.value = ''; searchClear.style.display = 'none'; });
-
-      var mobileSearchIcon  = document.getElementById('mobileSearchIcon');
-      var mobileSearchClose = document.getElementById('mobileSearchClose');
-      var mainSearchBar     = document.getElementById('mainSearchBar');
-      if (mobileSearchIcon) mobileSearchIcon.addEventListener('click', function() {
-        mainSearchBar && mainSearchBar.classList.add('mobile-active');
-        mobileSearchClose && (mobileSearchClose.style.display = 'block');
-      });
-      if (mobileSearchClose) mobileSearchClose.addEventListener('click', function() {
-        mainSearchBar && mainSearchBar.classList.remove('mobile-active');
-        mobileSearchClose.style.display = 'none';
-      });
-
-      document.addEventListener('supabase-ready', async function(ev) {
-        var sb = ev.detail && ev.detail.supabase;
-        if (!sb) return;
-        var session = await sb.auth.getSession();
-        var user = session && session.data && session.data.session && session.data.session.user;
-        if (user) {
-          var signBtnEl  = document.getElementById('signBtn');
-          var profileBtn = document.getElementById('profileBtnHeader');
-          if (signBtnEl)  signBtnEl.style.display = 'none';
-          if (profileBtn) { profileBtn.style.display = ''; profileBtn.addEventListener('click', function() { window.location.href = 'index.html#profile'; }); }
-        }
-      });
-    });
-
-    /* ─────────────────────────────────────────
-       11. Kick off shop data load on supabase-ready
-    ───────────────────────────────────────── */
-    document.addEventListener('supabase-ready', function(ev) {
-      var sb = ev.detail && ev.detail.supabase;
-      if (sb) loadShop(sb);
-    });
-
-  })();
-  </script>
-
-  <!-- Mobile app-style bottom navigation (Home / Search / Cart / Profile) —
-       kept in sync with index.html's markup/CSS so it persists across pages. -->
-  <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Primary">
-    <button class="mbn-item" id="mbnHome" data-mbn="home" aria-label="Home">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      <span>Home</span>
-    </button>
-    <button class="mbn-item active" id="mbnSearch" data-mbn="search" aria-label="Search">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <span>Search</span>
-    </button>
-    <button class="mbn-item" id="mbnCart" data-mbn="cart" aria-label="Cart">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-      <span class="mbn-badge cart-count" id="mbnCartBadge" style="display:none">0</span>
-      <span>Cart</span>
-    </button>
-    <button class="mbn-item" id="mbnProfile" data-mbn="profile" aria-label="Profile">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span>Profile</span>
-    </button>
-  </nav>
-  <script>
-    document.getElementById('mbnHome')?.addEventListener('click', function() { window.location.href = 'index.html'; });
-    document.getElementById('mbnSearch')?.addEventListener('click', function() { document.getElementById('mobileSearchIcon')?.click(); });
-    document.getElementById('mbnCart')?.addEventListener('click', function() { window.location.href = 'cart.html'; });
-    document.getElementById('mbnProfile')?.addEventListener('click', function() {
-      var profileBtn = document.getElementById('profileBtnHeader');
-      var signBtnEl  = document.getElementById('signBtn');
-      if (profileBtn && profileBtn.style.display !== 'none') profileBtn.click();
-      else signBtnEl?.click();
-    });
-  </script>
+  } else if (nameParam) {
+    sellerRes = await sb.from('sellers').select('*').eq('shop_name', nameParam).limit(1);
+    if (!sellerRes.error && !(sellerRes.data || []).length) sellerRes = await sb.from('sellers').select('*').ilike('shop_name', nameParam.replace(/[%_\\]/g, '\\$&')).limit(1);
+  } else { missing('Store not found', 'This link doesn’t match a store on Umzila.'); return; }
+  if (sellerRes.error) { missing('Couldn’t open the store', 'Check your connection and refresh the page.'); return; }
+  const seller = (sellerRes.data || [])[0];
+  if (!seller) { missing('Store not found', 'This link doesn’t match a store on Umzila.'); return; }
+  if (seller.slug && pathSlug !== seller.slug && history.replaceState) {
+    params.delete('shop');
+    const qs = params.toString();
+    history.replaceState(null, '', '/' + seller.slug + (qs ? '?' + qs : '') + location.hash);
+  }
+  if (seller.status !== 'active') { missing('Store unavailable', 'This store isn’t taking orders right now. Check back later.'); return; }
+  S.seller = seller;
+  applyTheme(seller.theme_color);
+
+  const [prodRes, hoursRes, sessRes, sponsRes] = await Promise.all([
+    sb.from('products').select('*, product_images!fk_product_images_product(*)').eq('seller_id', seller.id).eq('visible', true).order('created_at', {ascending: false}),
+    sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]}),
+    sessionP,
+    sb.from('ad_campaigns').select('product_id').eq('type', 'sponsored_product').eq('status', 'active').gt('ends_at', new Date().toISOString())
+  ]);
+  user = (sessRes && sessRes.data && sessRes.data.session && sessRes.data.session.user) || null;
+  S.products = (prodRes.data || []).map(mapProduct);
+  S.hours = (hoursRes.data || [])[0] || null;
+  sponsored = new Set(((sponsRes && sponsRes.data) || []).map(c => c.product_id));
+  const mainCat = S.products.length ? Object.entries(S.products.reduce((m, p) => { m[p.section] = (m[p.section] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1])[0][0] : 'Stores';
+  $('#crumbCat').textContent = mainCat;
+
+  $('#stLoading').hidden = true;
+  $('#storeView').hidden = false;
+  renderHero(); renderCats(); renderCatalog(); renderAbout(); syncCart(false); syncSaved();
+  if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
+
+  const qp = params.get('q');
+  if (qp) { $('#q').value = qp; S.q = qp; syncSearch(); renderCatalog(); }
+  const pp = params.get('product');
+  if (pp && byId(pp)) openQV(pp);
+
+  loadFollow().catch(() => {});
+  loadFavs().catch(() => {});
+  // Open/closed flips while the page is open.
+  setInterval(async () => {
+    const {data} = await sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]});
+    if (data && data[0]) { S.hours = data[0]; renderMeta(); renderAbout(); }
+  }, 5 * 60000);
+}
+boot();
+})();
+</script>
 
 </body>
 </html>
