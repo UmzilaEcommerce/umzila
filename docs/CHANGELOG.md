@@ -4,6 +4,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Rider pay follows the delivery price
+
+**Asked for (founder):** change rider pay to reflect the new R34–R45 delivery price.
+
+**Was:** R4 + R4/km (min R20) + R10 per extra stop + R1.50/min over 30 min (`formula_v1_2026_09_17`) — e.g. the 16 km test route paid R49.92.
+
+**Now:** per delivery on the route, the same band as the customer price — R34 for the first 3 road-km + R0.40/km (the quote's road distance), +R3 per extra store, max R45; R39 if the distance is unknown; paid even when the customer got free delivery. `compute_driver_payout_on_route_completion` (authoritative, method `delivery_price_band_2026_10_04`, per-delivery lines in `calculation_basis`) and `lib/payout-formula.js` (offer estimate, now built on `lib/delivery-price.js`). Verified in a rolled-back re-run of the founder's completed test route: R39.22 (was R49.92); JS estimate 16 km → R39.22, 2 km → R34. Existing payout rows unchanged. Admin pricing text updated.
+
+**Files:** `netlify/functions/lib/{payout-formula,delivery-price}.js`, `netlify/functions/get-delivery-quote.js`, `admin.html`; migration `rider_payout_matches_delivery_price`.
+
+---
+
 ## 2026-10-04 — Delivery price R34–R45 by distance; saved address priced on load
 
 **Reported (founder):** signed in with a saved address, checkout showed the flat R42.50 (and no delivery target / time saved) until the address was re-picked. Price too high to compete (~R68 to Reservoir Hills) — wanted R34 minimum, R45 maximum, around R39 for the Umgudulu direction.

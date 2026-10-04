@@ -4956,9 +4956,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // only -- the real computation always runs server-side in
   // get-delivery-quote.js / the compute_driver_payout_on_route_completion
   // trigger. Keep numerically identical to that file if it ever changes.
-  const PAYOUT_FORMULA_BASE = 4;
-  const PAYOUT_FORMULA_PER_KM = 4;
-  const PAYOUT_FORMULA_MIN = 20;
+  // Rider pay = the delivery price per delivery (2026-10-04) — see lib/payout-formula.js.
 
   let deliveryPricingCache = [];
   let deliveryPricingEditing = false;
@@ -5014,7 +5012,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <h3 style="font-size:15px;font-weight:800;margin:0">Active Pricing — v${escapeHtml(String(active.version))}</h3>
           <button class="small-btn" id="editPricingBtn">✏️ Edit (creates new version)</button>
         </div>
-        <p style="font-size:12px;color:#6b7280;margin:0 0 12px"><strong>Customer delivery price (since 4 Oct 2026):</strong> R34 for the first 3 road-km, +R0.40 per km after, never more than R45 (R39 when the distance can't be worked out) — set in code (netlify/functions/lib/delivery-price.js). The margin below no longer changes what customers pay; driver payout is R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km (min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}).</p>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px"><strong>Customer delivery price (since 4 Oct 2026):</strong> R34 for the first 3 road-km, +R0.40 per km after, never more than R45 (R39 when the distance can't be worked out) — set in code (netlify/functions/lib/delivery-price.js). Riders are paid the same amount per delivery (+R3 per extra store, max R45), even on free-delivery orders. The margin below is no longer used.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:13px">
           <div><strong>Margin on driver pay</strong><div style="color:#6b7280">${escapeHtml(String(active.margin_percent))}%</div></div>
           <div><strong>Max service distance</strong><div style="color:#6b7280">${escapeHtml(String(active.max_service_distance_km))}km</div></div>
@@ -5048,7 +5046,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         </div>
 
         <div style="background:#eff6ff;color:#1e3a8a;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:14px">
-          Base fee = driver payout (R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km, min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}) × (1 + margin%). Leave margin at 0 while you're driving deliveries yourselves; raise it once you hire real drivers — that's the whole "turn on profit" step.
+          Customer price and rider pay both follow the R34–R45 distance band (netlify/functions/lib/delivery-price.js). The margin field is kept for history but no longer changes any price.
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px">

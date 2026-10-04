@@ -1,38 +1,25 @@
 // netlify/functions/lib/payout-formula.js
 //
-// Real driver payout formula, founder-confirmed 2026-09-17 (see
-// docs/systems/delivery-network-spec.md §C item 6):
-//   payout = max(minimum, base + per_km*route_km + per_extra_drop*(drops-1)
-//                + per_extra_pickup*(pickups-1) + per_min_over*max(route_minutes-free_minutes,0))
+// Rider payout (founder 2026-10-04): the rider is paid the delivery price of
+// each delivery on the route — lib/delivery-price.js: R34 for the first 3
+// road-km + R0.40/km after (the quote's road distance, what the customer was
+// priced on), +R3 per extra store, never more than R45 per delivery; R39 when
+// the distance is unknown. Paid even when the customer got free delivery.
 //
 // The AUTHORITATIVE computation is the compute_driver_payout_on_route_completion
-// Postgres trigger, which uses the route's real final distance/duration/stop
-// counts once it's actually done. This JS copy is ONLY for showing a driver a
-// pre-acceptance ESTIMATE on a new driver_offers row -- the real route hasn't
-// happened yet, so it estimates using the delivery_quotes row's own
-// distance_km/duration_min (already computed via OpenRouteService at quote time)
-// as a stand-in for what the trip will look like. Keep the constants here
-// numerically identical to the trigger's -- if the founder changes the
-// formula, update both places.
-const PAYOUT_FORMULA = {
-  base: 4,
-  perKm: 4,
-  perExtraDrop: 10,
-  perExtraPickup: 10,
-  minimum: 20,
-  freeMinutes: 30,
-  perMinOver: 1.5
-};
+// Postgres trigger (driver_payouts row when the route completes). This JS copy
+// only shows a rider a pre-acceptance ESTIMATE on a driver_offers row — keep
+// the two identical. (Was: R4 + R4/km, min R20, +R10 per extra stop,
+// +R1.50/min over 30 min — formula_v1_2026_09_17.)
+const { feeForRoadKm, clampFee, DELIVERY_FEE_MIN } = require('./delivery-price');
 
-function estimatePayout({ distanceKm, durationMin, extraDrops = 0, extraPickups = 0 }) {
-  const km = Number.isFinite(distanceKm) ? distanceKm : 0;
-  const minutes = Number.isFinite(durationMin) ? durationMin : 0;
-  const raw = PAYOUT_FORMULA.base
-    + PAYOUT_FORMULA.perKm * km
-    + PAYOUT_FORMULA.perExtraDrop * Math.max(extraDrops, 0)
-    + PAYOUT_FORMULA.perExtraPickup * Math.max(extraPickups, 0)
-    + PAYOUT_FORMULA.perMinOver * Math.max(minutes - PAYOUT_FORMULA.freeMinutes, 0);
-  return Math.round(Math.max(PAYOUT_FORMULA.minimum, raw) * 100) / 100;
+const PER_EXTRA_STORE = 3;
+
+function estimatePayout({ distanceKm, extraDrops = 0, extraPickups = 0 }) {
+  const perDelivery = clampFee(feeForRoadKm(distanceKm) + PER_EXTRA_STORE * Math.max(extraPickups, 0));
+  // Each extra customer is its own delivery (batching is off today — see
+  // lib/batch-dispatch.js); its distance isn't known here, so count the minimum.
+  return Math.round((perDelivery + DELIVERY_FEE_MIN * Math.max(extraDrops, 0)) * 100) / 100;
 }
 
-module.exports = { PAYOUT_FORMULA, estimatePayout };
+module.exports = { estimatePayout, PER_EXTRA_STORE };

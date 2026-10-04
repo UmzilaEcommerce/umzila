@@ -389,7 +389,7 @@ exports.handler = async function (event, context) {
     // file header — this replaces the old independent distance-tier table). ----
     // Customer price (founder 2026-10-04): R34 for the first 3 road-km,
     // +R0.40/km after, never above R45 — lib/delivery-price.js. Priced to win
-    // on volume; the rider's pay (payout-formula.js) is separate and unchanged.
+    // on volume; riders are paid the same band per delivery (payout-formula.js).
     // (Was: rider payout estimate × (1 + margin_percent), uncapped — ~R68 at 16 km.)
     const distanceBaseFee = feeForRoadKm(distanceKm);
 

@@ -8,7 +8,8 @@
 // When the road distance can't be worked out (routing down, store without a
 // pickup pin) the flat fallback is R39.
 //
-// The rider's pay is separate (lib/payout-formula.js) and unchanged.
+// Riders are paid this same price per delivery (lib/payout-formula.js + the
+// compute_driver_payout_on_route_completion trigger).
 // checkout.html mirrors these numbers for its on-screen preview — change both.
 const DELIVERY_FEE_MIN = 34;
 const DELIVERY_FEE_MAX = 45;
