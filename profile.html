@@ -1778,7 +1778,7 @@
   document.getElementById('sendReset')?.addEventListener('click', async () => {
     const email = (document.getElementById('emailForReset').value||'').trim();
     if (!email) { setStatus('resetStatus', 'Enter your email address', false); return; }
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/' });
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password.html' });
     if (error) setStatus('resetStatus', error.message, false);
     else setStatus('resetStatus', 'Reset link sent — check your inbox ✓', true);
   });

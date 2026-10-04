@@ -1842,7 +1842,9 @@ if (modalForgotPasswordSubmit) {
       if (error) {
         console.error('Password reset error:', error);
         if (errorElement) {
-          errorElement.textContent = error.message || 'Failed to send reset email.';
+          errorElement.textContent = /rate limit|only request this after|too many/i.test(error.message || '')
+            ? 'Too many reset emails were requested just now — please wait a few minutes and try again.'
+            : (error.message || 'Failed to send reset email.');
           errorElement.style.display = 'block';
         }
         return;

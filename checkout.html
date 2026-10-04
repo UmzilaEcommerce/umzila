@@ -3778,6 +3778,26 @@ async function loadBuyNowItem() {
       }
     }
 
+    // Every "Forgot password?" on this page goes through here. Supabase
+    // returns errors instead of throwing, so check them — the old handlers
+    // said "sent" even when nothing was (e.g. rate-limited).
+    async function sendPasswordReset(email, errEl) {
+      if (!email || !isValidEmail(email)) { showError(errEl, 'Enter your email address first.'); return; }
+      if (!supabaseClient) { showError(errEl, 'Please try again in a moment.'); return; }
+      try {
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${CONFIG.siteUrl}/reset-password.html` });
+        if (error) {
+          showError(errEl, /rate limit|only request this after|too many/i.test(error.message || '')
+            ? 'Too many reset emails were requested just now — please wait a few minutes and try again.'
+            : (error.message || 'Couldn’t send the reset email — please try again.'));
+          return;
+        }
+        showError(errEl, `Reset link sent to ${email} — check your inbox (and spam), set a new password, then come back and sign in.`);
+      } catch (_) {
+        showError(errEl, 'Couldn’t send the reset email — please try again.');
+      }
+    }
+
     // One place that signs a buyer in or creates their account (used by the
     // step-1 password card and the promo-code panel).
     // → { ok, message?, switchToReturning? }
@@ -5360,12 +5380,8 @@ async function submitToPayFast(cartItems, orderId, total) {
       elements.applyPromoCode.addEventListener('click', applyPromoCode);
       document.getElementById('promoSigninBtn')?.addEventListener('click', submitPromoSignin);
       document.getElementById('promoSigninPassword')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitPromoSignin(); } });
-      document.getElementById('promoSigninForgot')?.addEventListener('click', async () => {
-        const email = elements.customerEmail.value.trim();
-        const err = document.getElementById('promoSigninError');
-        try { await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${CONFIG.siteUrl}/reset-password.html` }); showError(err, 'Password reset email sent — check your inbox, then come back and sign in.'); }
-        catch (_) { showError(err, 'Couldn’t send the reset email — please try again.'); }
-      });
+      document.getElementById('promoSigninForgot')?.addEventListener('click', () =>
+        sendPasswordReset(elements.customerEmail.value.trim(), document.getElementById('promoSigninError')));
       // A code restored from the cart page (or applied before the email was
       // typed) gets its account panel once the email is there.
       elements.customerEmail?.addEventListener('change', () => renderPromoSignin());
@@ -5440,18 +5456,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         }
       });
 
-      elements.inlineForgotPassword.addEventListener('click', () => {
-        const email = elements.inlineSigninEmail.value.trim();
-        if (email && isValidEmail(email) && supabaseClient) {
-          supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: `${CONFIG.siteUrl}/reset-password.html`
-          }).then(() => {
-            showError(elements.inlineSigninError, 'Password reset email sent — check your inbox.');
-          });
-        } else {
-          showError(elements.inlineSigninError, 'Enter your email address first.');
-        }
-      });
+      elements.inlineForgotPassword.addEventListener('click', () =>
+        sendPasswordReset(elements.inlineSigninEmail.value.trim(), elements.inlineSigninError));
 
       elements.signOutInline.addEventListener('click', async () => {
         if (supabaseClient) await supabaseClient.auth.signOut();
@@ -5491,16 +5497,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         }
       });
 
-      elements.accountPasswordForgot.addEventListener('click', () => {
-        const email = elements.customerEmail.value.trim();
-        if (email && isValidEmail(email) && supabaseClient) {
-          supabaseClient.auth.resetPasswordForEmail(email, {
-            redirectTo: `${CONFIG.siteUrl}/reset-password.html`
-          }).then(() => {
-            showError(elements.accountPasswordError, 'Password reset email sent — check your inbox.');
-          });
-        }
-      });
+      elements.accountPasswordForgot.addEventListener('click', () =>
+        sendPasswordReset(elements.customerEmail.value.trim(), elements.accountPasswordError));
 
       elements.changeAddressBtn?.addEventListener('click', () => {
         // If the confirm nudge happens to be up when "Change" is clicked,

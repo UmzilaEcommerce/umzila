@@ -4,6 +4,27 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Forgot password: fixed end to end
+
+**Tested every entry point** (homepage sign-in modal + Mystery Gift sign-in, checkout quick sign-in, checkout "welcome back" card, checkout code-box panel, profile → Security) and the landing page.
+
+**Real bugs found and fixed:**
+- `reset-password.html` redirected to `/login.html` after a successful reset — a page that doesn't exist (it only reached the homepage by accident via the store-link fallback). Its "failed to load" fallback could never fire (`window.supabase` is always the library). Expired/used links just said "Invalid or expired" with no way forward.
+- `profile.html`'s reset link pointed at the **homepage**, which never handled recovery links — the buyer was silently signed in and never asked for a new password.
+- Two checkout handlers (and the new code-box one) said "reset email sent" even when sending failed — `resetPasswordForEmail` returns `{error}`, it doesn't throw (e.g. Supabase's email rate limit).
+
+**What changed:**
+- `reset-password.html` rebuilt (site-styled, mobile): checks the link (implicit `#access_token…type=recovery` and PKCE `?code=`), new + confirm password with show/hide, ≥6 chars, "must differ from old" message, then "Password updated ✓ — you're signed in" with Continue / Profile buttons. Expired, used or broken links — or opening the page directly — show a "send me a new link" form right there (neutral wording, doesn't reveal whether an account exists). Tokens are cleared from the address bar.
+- Homepage (`index.html` head): any `type=recovery` link that lands on it is forwarded to `/reset-password.html` before anything consumes the token — covers Supabase falling back to the Site URL if the reset URL isn't allow-listed.
+- `profile.html` now redirects to `/reset-password.html`.
+- `checkout.html`: one `sendPasswordReset()` for all three "Forgot password?" buttons, checks the error, plain-language rate-limit message. `script.js` homepage modal: same rate-limit wording.
+
+**Verified locally:** reset page opened directly → request form; expired-link hash → "This reset link has expired" + form; fake token → "doesn't work any more" + form; homepage with a recovery hash → forwarded to the reset page; "send me a new link", homepage modal and checkout inline forgot all succeed (non-existent test addresses, so no emails sent) and validate empty email. **Not run:** a real reset email → new password, because that needs a real account and inbox.
+
+**Files:** `reset-password.html`, `index.html`, `profile.html`, `checkout.html`, `script.js`.
+
+---
+
 ## 2026-10-04 — Once-per-person codes: create the account right at the code box
 
 **Asked for:** a guest typing a code that needs an account (reusable, once-per-person promo codes) shouldn't be sent away — explain, show a password field, create the profile, apply the code, carry on paying.

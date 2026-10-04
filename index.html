@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <script>
+    // A password-reset link that lands here (Supabase falls back to the Site
+    // URL when a redirect isn't allow-listed) goes to the reset page before
+    // anything else can consume the token.
+    (function () { var h = location.hash || ''; if (/(^|[#&])type=recovery(&|$)/.test(h)) location.replace('/reset-password.html' + h); })();
+  </script>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Umzila | Durban's Best Local Businesses, Delivered</title>
   <meta name="description" content="Shop Durban's best local businesses in one place. Food, products and services from vetted local stores, delivered to your door. Found on Umzila.">
