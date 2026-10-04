@@ -57,8 +57,16 @@ function serverError(msg, details) {
   if (details) console.error('get-delivery-quote:', msg, details);
   return { statusCode: 500, headers, body: JSON.stringify({ error: msg }) };
 }
-function ineligible(reason) {
-  return { statusCode: 200, headers, body: JSON.stringify({ eligible: false, reason }) };
+// code: 'outside_area' (outside every zone, or past the road-distance
+// cutoff — checkout blocks and offers "notify me"), 'multi_seller',
+// 'self_arranged'.
+function ineligible(reason, code) {
+  return { statusCode: 200, headers, body: JSON.stringify({ eligible: false, reason, code: code || null }) };
+}
+// The address IS inside a zone but the routing provider failed — checkout may
+// still sell at the standard (fallback) fee. Never used before the zone check.
+function routingDown() {
+  return { statusCode: 503, headers, body: JSON.stringify({ error: 'Delivery pricing is temporarily unavailable.', inArea: true }) };
 }
 
 function toFiniteNumber(v) {
@@ -165,7 +173,7 @@ exports.handler = async function (event, context) {
 
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, price, sale, sale_price, seller_id, delivery_class, visible, listing_type, free_delivery, units_per_trip, metadata')
+      .select('id, price, sale, sale_price, seller_id, delivery_class, visible, listing_type, free_delivery, units_per_trip, metadata, sellers(free_delivery)')
       .in('id', productIds)
       .eq('visible', true);
     if (productsError) {
@@ -220,7 +228,7 @@ exports.handler = async function (event, context) {
         price: Number(itemPrice) || 0,
         quantity: qty,
         delivery_class: (product.delivery_class || 'small').toLowerCase(),
-        free_delivery: !!product.free_delivery,
+        free_delivery: !!product.free_delivery || !!(product.sellers && product.sellers.free_delivery), // product or whole-store switch
         units_per_trip: product.units_per_trip || null,
         delivery_price: deliveryPrice
       });
@@ -238,7 +246,7 @@ exports.handler = async function (event, context) {
     // and why).
     const pickupSellerIds = [...new Set(productItems.map(i => i.seller_id))];
     if (pickupSellerIds.length > MAX_BUNDLE_SELLERS) {
-      return ineligible(MULTI_SELLER_REASON);
+      return ineligible(MULTI_SELLER_REASON, 'multi_seller');
     }
 
     // ---- Self-arranged sellers (admin-set, founder ask 2026-09-17): a
@@ -265,7 +273,7 @@ exports.handler = async function (event, context) {
         if (selfArrangedPoint) {
           const distanceToSellerKm = haversineKm(selfArrangedPoint.lat, selfArrangedPoint.lon, destinationLat, destinationLon);
           if (distanceToSellerKm <= Number(selfArrangedSeller.self_arranged_radius_km)) {
-            return ineligible('self_arranged');
+            return ineligible('self_arranged', 'self_arranged');
           }
         }
       }
@@ -281,7 +289,7 @@ exports.handler = async function (event, context) {
     }
     const zone = Array.isArray(zoneData) ? zoneData[0] : zoneData;
     if (!zone || zone.zone_type === 'restricted') {
-      return ineligible(OUTSIDE_ZONE_REASON);
+      return ineligible(OUTSIDE_ZONE_REASON, 'outside_area');
     }
 
 
@@ -312,11 +320,11 @@ exports.handler = async function (event, context) {
     for (const id of pickupSellerIds) {
       const row = (sellersData || []).find(s => s.id === id);
       if (!row || !row.pickup_geo) {
-        return serverError('Seller pickup location is not yet configured; delivery quotes cannot be generated for this store.');
+        return routingDown(); // store has no pickup address yet — buyer is in the area, standard fee applies
       }
       const pt = parseGeographyPoint(row.pickup_geo);
       if (!pt) {
-        return serverError('Failed to read seller pickup location.');
+        return routingDown();
       }
       pickupPointBySellerId[id] = pt;
     }
@@ -337,7 +345,7 @@ exports.handler = async function (event, context) {
 
     if (pickupSellerIds.length === 1) {
       const leg = await getRoadLeg(supabase, pickupPointBySellerId[pickupSellerIds[0]], { lat: destinationLat, lon: destinationLon });
-      if (!leg) return serverError('Failed to compute delivery route (routing unavailable).');
+      if (!leg) return routingDown();
       farthestLeg = leg;
       distanceKm = leg.distanceKm;
       durationMin = leg.durationMin;
@@ -351,13 +359,13 @@ exports.handler = async function (event, context) {
       const optionAB = ab && bD ? { totalDistanceKm: ab.distanceKm + bD.distanceKm, totalDurationMin: (ab.durationMin || 0) + (bD.durationMin || 0), interStoreLegKm: ab.distanceKm } : null;
       const optionBA = ba && aD ? { totalDistanceKm: ba.distanceKm + aD.distanceKm, totalDurationMin: (ba.durationMin || 0) + (aD.durationMin || 0), interStoreLegKm: ba.distanceKm } : null;
       if (!optionAB && !optionBA) {
-        return serverError('Failed to compute delivery route (routing unavailable).');
+        return routingDown();
       }
       const winner = (!optionBA || (optionAB && optionAB.totalDistanceKm <= optionBA.totalDistanceKm)) ? optionAB : optionBA;
       orderedSellerIds = (winner === optionAB) ? [a, b] : [b, a];
       const maxBundleLegKm = Number(pricingConfig.max_bundle_leg_km);
       if (Number.isFinite(maxBundleLegKm) && winner.interStoreLegKm > maxBundleLegKm) {
-        return ineligible(MULTI_SELLER_REASON);
+        return ineligible(MULTI_SELLER_REASON, 'multi_seller');
       }
       distanceKm = winner.totalDistanceKm;
       durationMin = winner.totalDurationMin;
@@ -370,7 +378,7 @@ exports.handler = async function (event, context) {
     // path (200 + eligible:false, never a 500).
     const maxServiceDistanceKm = Number(pricingConfig.max_service_distance_km);
     if (Number.isFinite(maxServiceDistanceKm) && distanceKm > maxServiceDistanceKm) {
-      return ineligible(OUTSIDE_ZONE_REASON);
+      return ineligible(OUTSIDE_ZONE_REASON, 'outside_area');
     }
 
     // ---- Base fee: real driver-payout estimate + admin-set margin (see the
@@ -380,7 +388,8 @@ exports.handler = async function (event, context) {
     const distanceBaseFee = Math.round(payoutEstimate * (1 + MARGIN_PERCENT / 100) * 100) / 100;
 
     const PER_SELLER_FEE = Number(pricingConfig.per_seller_fee) || 0;
-    const FREE_DELIVERY_THRESHOLD = Number(pricingConfig.free_delivery_threshold) || 0;
+    // null = "free over R…" switched off (the default since 2026-10-04).
+    const FREE_DELIVERY_THRESHOLD = pricingConfig.free_delivery_threshold == null ? null : Number(pricingConfig.free_delivery_threshold);
     const DEFAULT_UNITS_PER_TRIP = pricingConfig.default_units_per_trip || { small: 8, medium: 4, large: 2 };
     const LARGE_OVERFLOW_FEE = Number(pricingConfig.large_overflow_fee) || 0;
     const PRIORITY_FEE = Number(pricingConfig.priority_fee) || 0;
@@ -398,7 +407,7 @@ exports.handler = async function (event, context) {
 
     if (!feeItems.length) {
       // allFreeDelivery — every item in the cart is delivery-fee-exempt.
-    } else if (subtotal >= FREE_DELIVERY_THRESHOLD) {
+    } else if (FREE_DELIVERY_THRESHOLD != null && Number.isFinite(FREE_DELIVERY_THRESHOLD) && subtotal >= FREE_DELIVERY_THRESHOLD) {
       // free — still counts free_delivery items toward the threshold, matching validate-cart.js.
     } else {
       const customItems = feeItems.filter(i => Number.isFinite(i.delivery_price));

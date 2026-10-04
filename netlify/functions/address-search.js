@@ -113,5 +113,32 @@ exports.handler = async function (event) {
     }
   }
 
+  // A typed address (no suggestion picked) → coordinates, so checkout can
+  // still check it against the delivery zones. Searches all of South Africa
+  // on purpose: a Cape Town address must land in Cape Town (and be refused),
+  // not snap to a similar Durban street.
+  if (p.action === 'geocode') {
+    const q = String(p.q || '').trim().slice(0, 300);
+    if (q.length < 5) return fail(400, 'Address required');
+    try {
+      const g = await hereGet('geocode.search.hereapi.com', 'geocode', { q, in: 'countryCode:ZAF', limit: '1', lang: 'en', apiKey: KEY });
+      const it = g && g.items && g.items[0];
+      if (!it || !it.position) return ok({ found: false }, 86400);
+      const a = it.address || {};
+      const score = it.scoring && Number(it.scoring.queryScore);
+      return ok({
+        found: true,
+        lat: it.position.lat,
+        lon: it.position.lng,
+        label: a.label || it.title || '',
+        resultType: it.resultType || '',
+        score: Number.isFinite(score) ? score : null
+      }, 604800);
+    } catch (e) {
+      console.warn('address-search geocode failed', e.message);
+      return fail(502, 'Address lookup failed');
+    }
+  }
+
   return fail(400, 'Unknown action');
 };

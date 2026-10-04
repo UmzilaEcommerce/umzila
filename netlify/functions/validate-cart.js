@@ -8,7 +8,9 @@ const { validateCode, computeDiscount } = require('./lib/discounts');
 // same factor (×1.93).
 const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
 const PER_SELLER_FEE          = 3;
-const FREE_DELIVERY_THRESHOLD = 600;
+// "Free delivery over R…" — off since 2026-10-04 (null = off). Free delivery
+// comes only from the product or store switch in admin.
+const FREE_DELIVERY_THRESHOLD = null;
 const SERVICE_COLLECT_FEE     = 15; // rep collects buyer's item from their address
 const SERVICE_RETURN_FEE      = 15; // finished item delivered to an address
 // Quantity-aware fee stepping — must match checkout.html exactly.
@@ -43,7 +45,7 @@ function computeFees(validatedCart) {
         // service-only cart — no product delivery fee
     } else if (!feeItems.length) {
         allFreeDelivery = true;
-    } else if (subtotal >= FREE_DELIVERY_THRESHOLD) {
+    } else if (FREE_DELIVERY_THRESHOLD != null && subtotal >= FREE_DELIVERY_THRESHOLD) {
         // free — still counts free_delivery items toward the threshold
     } else {
         // A per-product "Custom Delivery Price" (admin.html, stored at
@@ -107,7 +109,7 @@ exports.handler = async function(event, context) {
     }
 
     try {
-        const { cartItems, couponCode, customerEmail, quoteId, persistCart } = JSON.parse(event.body);
+        const { cartItems, couponCode, customerEmail, quoteId, persistCart, finalCheck, destination } = JSON.parse(event.body);
 
         if (!cartItems || !Array.isArray(cartItems)) {
             return {
@@ -164,7 +166,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, service_location, slot_duration_minutes, metadata')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, service_location, slot_duration_minutes, metadata, sellers(free_delivery)')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -336,7 +338,7 @@ variants.forEach(v => {
     fulfillment_type: product.fulfillment_type || null,
     service_turnaround: product.service_turnaround || null,
     acceptance_deadline_hours: product.acceptance_deadline_hours || 24,
-    free_delivery: !!product.free_delivery,
+    free_delivery: !!product.free_delivery || !!(product.sellers && product.sellers.free_delivery), // product or whole-store switch
     units_per_trip: product.units_per_trip || null,
     // Carried through from the client cart item — previously dropped here,
     // which silently discarded intake answers and left paid scheduled-service
@@ -491,6 +493,26 @@ variants.forEach(v => {
         // behavior (unchanged) whenever no quoteId is given, or the quote doesn't
         // check out -- fully backward compatible with every caller that predates
         // quotes entirely.
+        // Final pre-payment check (checkout sends finalCheck + the address's
+        // coordinates): physical items are only delivered inside an active
+        // delivery zone (admin → Service Areas). Outside every zone there is
+        // no delivery — checkout offers "notify me when you deliver here"
+        // instead (founder decision 2026-10-04: never a default fee there).
+        if (finalCheck && validatedCart.some(i => (i.listing_type || 'product') !== 'service')) {
+            const dLat = destination ? Number(destination.lat) : NaN, dLon = destination ? Number(destination.lon) : NaN;
+            if (!Number.isFinite(dLat) || !Number.isFinite(dLon)) {
+                return { statusCode: 400, body: JSON.stringify({ error: 'Pick your delivery address from the suggestions so we can check we deliver there.', code: 'ADDRESS_REQUIRED' }) };
+            }
+            const { data: zoneRows, error: zoneErr } = await supabase.rpc('find_service_zone_for_point', { p_lat: dLat, p_lon: dLon });
+            const zone = Array.isArray(zoneRows) ? zoneRows[0] : zoneRows;
+            if (zoneErr) {
+                return { statusCode: 503, body: JSON.stringify({ error: 'We couldn’t check delivery to your address — please try again.', code: 'AREA_CHECK_FAILED' }) };
+            }
+            if (!zone || zone.zone_type === 'restricted') {
+                return { statusCode: 400, body: JSON.stringify({ error: 'We don’t deliver to this address yet.', code: 'OUTSIDE_AREA' }) };
+            }
+        }
+
         let fees = computeFees(validatedCart);
         let quoteApplied = false;
         if (quoteId) {

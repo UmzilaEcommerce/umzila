@@ -1388,16 +1388,17 @@
               <div class="form-group">
                 <label class="form-label">Province <span class="required">*</span></label>
                 <select id="provinceSelect" class="form-control" required>
-                  <option value="">Select a province</option>
-                  <option value="KwaZulu-Natal">KwaZulu-Natal</option>
-                  <option value="Gauteng">Gauteng</option>
-                  <option value="Western Cape">Western Cape</option>
-                  <option value="Eastern Cape">Eastern Cape</option>
-                  <option value="Free State">Free State</option>
-                  <option value="Limpopo">Limpopo</option>
-                  <option value="Mpumalanga">Mpumalanga</option>
-                  <option value="North West">North West</option>
-                  <option value="Northern Cape">Northern Cape</option>
+                  <!-- Umzila delivers in KwaZulu-Natal (Durban) only for now — the
+                       others stay listed so a buyer there can ask us to come. -->
+                  <option value="KwaZulu-Natal" selected>KwaZulu-Natal</option>
+                  <option value="Gauteng">Gauteng — coming soon</option>
+                  <option value="Western Cape">Western Cape — coming soon</option>
+                  <option value="Eastern Cape">Eastern Cape — coming soon</option>
+                  <option value="Free State">Free State — coming soon</option>
+                  <option value="Limpopo">Limpopo — coming soon</option>
+                  <option value="Mpumalanga">Mpumalanga — coming soon</option>
+                  <option value="North West">North West — coming soon</option>
+                  <option value="Northern Cape">Northern Cape — coming soon</option>
                 </select>
                 <input type="hidden" id="shippingCost" value="0">
               </div>
@@ -1695,7 +1696,10 @@
     // same factor (×1.93).
     const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
     const PER_SELLER_FEE          = 3;
-    const FREE_DELIVERY_THRESHOLD = 600; // subtotal >= this → delivery free
+    // "Free delivery over R…" — switched off (founder 2026-10-04). null = off;
+    // free delivery now comes only from the product or store switch in admin.
+    // Must match validate-cart.js (and delivery_pricing_config for quotes).
+    const FREE_DELIVERY_THRESHOLD = null;
     // Quantity-aware fee stepping — must match validate-cart.js exactly.
     // "How many fit in one delivery trip before it needs a bigger bag" —
     // most sellers never override units_per_trip, these are the platform
@@ -1854,7 +1858,7 @@
         return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true, allFreeDelivery: true };
       // Free-delivery items still count toward the R600 threshold — the
       // threshold is a subtotal-size signal, unrelated to who ships what.
-      if (subtotal >= FREE_DELIVERY_THRESHOLD)
+      if (FREE_DELIVERY_THRESHOLD != null && subtotal >= FREE_DELIVERY_THRESHOLD)
         return { fee: 0, maxClass: 'small', uniqueSellers: 0, isFree: true };
 
       // A per-product "Custom Delivery Price" (admin.html, stored at
@@ -1965,7 +1969,8 @@
                                    // delivery-network Stage 2, see applyAddressSuggestion()
       addressValidatedAt: null,
       quote: null,                 // live road-distance quote { id, fee, expiresAt, roadKm, driveMin, cartKey } — see fetchDeliveryQuote()
-      quoteNotice: null,           // why an address couldn't be live-priced (shown under the address)
+      quoteNotice: null,           // info line under the address (e.g. "this store delivers itself")
+      deliveryBlock: null,         // { kind: 'outside'|'multi'|'unknown'|'unfound', reason } — can't deliver; Pay is blocked
       deliveryQuoteId: null,       // Stage 3 — see fetchDeliveryQuote(). Null until a quote
                                     // succeeds (won't yet, until ORS_API_KEY (routing) is
                                     // added in Netlify) -- validateCheckout() only sends it
@@ -2377,8 +2382,13 @@
       fill(elements.city, state.profile.city);
       fill(elements.postalCode, state.profile.postal_code);
       if (state.profile.province) {
-        elements.provinceSelect.value = state.profile.province;
-        selectProvince(state.profile.province);
+        // Saved spellings vary ("Kwazulu Natal", "KZN"…) — match letters only;
+        // anything unrecognised keeps the KwaZulu-Natal default.
+        const normP = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+        const saved = normP(state.profile.province);
+        const opt = Array.from(elements.provinceSelect.options).find(o => normP(o.value) === saved || (saved === 'kzn' && o.value === 'KwaZulu-Natal'));
+        if (opt) elements.provinceSelect.value = opt.value;
+        selectProvince(elements.provinceSelect.value);
       }
 
       renderAddressCard();
@@ -3132,8 +3142,10 @@ async function saveCartToServer() {
       if (props.city) elements.city.value = props.city;
       if (props.postcode) elements.postalCode.value = props.postcode;
       if (props.state) {
+        // "Kwazulu Natal" (HERE) ↔ "KwaZulu-Natal" (dropdown): letters only.
+        const norm = s => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
         const match = Array.from(elements.provinceSelect.options).find(o =>
-          o.value && (props.state.includes(o.value) || o.value.includes(props.state))
+          o.value && (norm(props.state).includes(norm(o.value)) || norm(o.value).includes(norm(props.state)))
         );
         if (match) { elements.provinceSelect.value = match.value; selectProvince(match.value); }
       }
@@ -3151,6 +3163,7 @@ async function saveCartToServer() {
         state.deliveryQuoteId = null;
         state.quote = null;
         state.quoteNotice = null;
+        state.deliveryBlock = null;
         renderQuoteNotice();
         updateTimeSavedEstimate();
       }
@@ -3246,7 +3259,9 @@ async function saveCartToServer() {
       state.deliveryQuoteId = null;
       state.quote = null;
       state.quoteNotice = null;
-      if (!state.destinationGeo || !state.cart.length) { renderQuoteNotice(); return; }
+      const provinceBlock = state.deliveryBlock && state.deliveryBlock.byProvince ? state.deliveryBlock : null;
+      state.deliveryBlock = provinceBlock;
+      if (provinceBlock || !state.destinationGeo || !state.cart.length || !cartHasProducts(state.cart)) { renderQuoteNotice(); updateOrderSummary(); return; }
       const cartKey = cartQuoteKey();
       try {
         const res = await fetch('/.netlify/functions/get-delivery-quote', {
@@ -3264,15 +3279,20 @@ async function saveCartToServer() {
           state.quote = { id: data.quoteId, fee: Number(data.totalDeliveryFee), expiresAt: data.expiresAt, roadKm: data.roadKm, driveMin: data.driveMin, cartKey };
           state.deliveryQuoteId = data.quoteId;
         } else if (res.ok && data && data.eligible === false) {
-          state.quoteNotice = data.reason === 'self_arranged'
-            ? 'This store delivers to you itself.'
-            : /outside Umzila's delivery area/i.test(data.reason || '')
-              ? 'This address is outside our live-priced delivery area (about 20 km around Durban), so the standard delivery fee applies.'
-              : `${data.reason || 'This address can\'t be live-priced.'} The standard delivery fee applies.`;
+          // Outside every delivery zone (or past the road-distance cutoff):
+          // no delivery — the buyer can ask us to come to their area instead.
+          if (data.code === 'self_arranged' || data.reason === 'self_arranged') state.quoteNotice = 'This store delivers to you itself.';
+          else if (data.code === 'multi_seller') state.deliveryBlock = { kind: 'multi', reason: data.reason };
+          else state.deliveryBlock = { kind: 'outside', reason: data.reason };
+        } else if (res.status === 503 && data && data.inArea) {
+          // In a delivery zone, but the price couldn't be worked out right
+          // now (routing down / store has no pickup address) — standard fee.
+        } else {
+          state.deliveryBlock = { kind: 'unknown' };
         }
-        // Routing unavailable (5xx) → standard fee, no notice needed.
       } catch (e) {
-        console.warn('Delivery quote unavailable, using standard pricing:', e);
+        console.warn('Delivery check failed:', e);
+        state.deliveryBlock = { kind: 'unknown' };
       }
       renderQuoteNotice();
       updateTimeSavedEstimate();
@@ -3281,8 +3301,89 @@ async function saveCartToServer() {
     function renderQuoteNotice() {
       const el = document.getElementById('quoteNoticeBlock');
       if (!el) return;
-      el.textContent = state.quoteNotice || '';
-      el.classList.toggle('hidden', !state.quoteNotice);
+      const b = state.deliveryBlock;
+      if (!b) {
+        el.textContent = state.quoteNotice || '';
+        el.style.cssText = 'margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px;font-size:13px;color:#1e3a8a';
+        el.classList.toggle('hidden', !state.quoteNotice);
+        return;
+      }
+      el.style.cssText = 'margin-bottom:16px;padding:14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;font-size:14px;color:#7c2d12;line-height:1.5';
+      el.classList.remove('hidden');
+      if (b.kind === 'outside') {
+        el.innerHTML = '<strong style="display:block;margin-bottom:4px">We don\'t deliver to this address yet</strong>' +
+          'Umzila only delivers inside our current delivery areas. Tell us you\'d like us here — we use these requests to decide where to go next.' +
+          (b.sent ? '<div style="margin-top:10px;font-weight:700;color:#166534">✓ Thanks — we\'ve noted your area and will email you if we start delivering there.</div>'
+            : '<button type="button" id="notifyAreaBtn" style="display:block;width:100%;margin-top:10px;padding:12px;border:0;border-radius:999px;background:#0a2f66;color:#fff;font-weight:700;font-size:14px;cursor:pointer">Notify me when you deliver here</button><div id="notifyAreaErr" style="margin-top:6px;color:#b91c1c;font-size:13px"></div>');
+        document.getElementById('notifyAreaBtn')?.addEventListener('click', requestDeliveryArea);
+      } else if (b.kind === 'multi') {
+        el.innerHTML = '<strong style="display:block;margin-bottom:4px">These stores are too far apart for one delivery</strong>' +
+          escapeHtmlLite(b.reason || '') + ' Please check out each store separately (open the store and use its cart).';
+      } else if (b.kind === 'unfound') {
+        el.innerHTML = '<strong style="display:block;margin-bottom:4px">We couldn\'t find that address</strong>Start typing your street address above and pick it from the suggestions, so we can check we deliver there.';
+      } else {
+        el.innerHTML = '<strong style="display:block;margin-bottom:4px">We couldn\'t check delivery to this address</strong>Please check your connection and try again. <button type="button" id="retryAreaBtn" style="margin-left:6px;padding:6px 14px;border:1px solid #fdba74;border-radius:999px;background:#fff;color:#7c2d12;font-weight:600;cursor:pointer">Try again</button>';
+        document.getElementById('retryAreaBtn')?.addEventListener('click', () => fetchDeliveryQuote());
+      }
+    }
+
+    // "Notify me when you deliver here": saves who/where/what for the founder
+    // (request-delivery-area.js → delivery_area_requests + an email).
+    async function requestDeliveryArea() {
+      const btn = document.getElementById('notifyAreaBtn');
+      const err = document.getElementById('notifyAreaErr');
+      const email = (elements.customerEmail?.value || state.user?.email || '').trim();
+      if (!isValidEmail(email)) { if (err) err.textContent = 'Add your email in your details first, so we can let you know.'; return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        const res = await fetch('/.netlify/functions/request-delivery-area', {
+          method: 'POST',
+          headers: await validateCartHeaders(),
+          body: JSON.stringify({
+            name: `${elements.firstName?.value || ''} ${elements.lastName?.value || ''}`.trim(),
+            email,
+            phone: elements.phoneNumber?.value || '',
+            address: elements.shippingAddress?.value || '',
+            city: elements.city?.value || '',
+            postal_code: elements.postalCode?.value || '',
+            province: elements.provinceSelect?.value || '',
+            lat: state.destinationGeo?.lat, lon: state.destinationGeo?.lon,
+            reason: state.deliveryBlock?.reason || '',
+            cart: (state.cart || []).map(i => ({ id: i.id || i.product_id, qty: i.quantity || i.qty || 1, size: i.size || null }))
+          })
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(out.error || 'failed');
+        if (state.deliveryBlock) state.deliveryBlock.sent = true;
+        renderQuoteNotice();
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Notify me when you deliver here'; }
+        if (err) err.textContent = (e && e.message && e.message !== 'failed') ? e.message : 'Couldn\'t send that — please try again.';
+      }
+    }
+
+    // A typed address (no suggestion picked) still has to be checked against
+    // the delivery areas: look it up (address-search.js → HERE geocode).
+    async function ensureDestination() {
+      if (state.destinationGeo || !cartHasProducts(state.cart)) return true;
+      const q = [elements.shippingAddress?.value, elements.city?.value, elements.postalCode?.value, elements.provinceSelect?.value, 'South Africa']
+        .map(v => (v || '').trim()).filter(Boolean).join(', ');
+      try {
+        const res = await fetch(`/.netlify/functions/address-search?action=geocode&q=${encodeURIComponent(q)}`);
+        const g = await res.json().catch(() => ({}));
+        if (res.ok && g.found && Number.isFinite(g.lat) && Number.isFinite(g.lon)) {
+          state.destinationGeo = { lat: g.lat, lon: g.lon };
+          state.addressValidatedAt = new Date().toISOString();
+          await fetchDeliveryQuote();
+          return true;
+        }
+        state.deliveryBlock = res.ok ? { kind: 'unfound' } : { kind: 'unknown' };
+      } catch (_) {
+        state.deliveryBlock = { kind: 'unknown' };
+      }
+      renderQuoteNotice();
+      updateOrderSummary();
+      return false;
     }
 
     /********************
@@ -3454,7 +3555,7 @@ async function refreshCartItemsFromProducts(items) {
     const productIds = items.map(item => item.id);
     const { data: products, error } = await supabaseClient
         .from('products')
-        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, listing_type, free_delivery, units_per_trip, metadata, fulfillment_type, booking_mode, item_returned, instant_confirm, service_location')
+        .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, listing_type, free_delivery, units_per_trip, metadata, fulfillment_type, booking_mode, item_returned, instant_confirm, service_location, sellers(free_delivery)')
         .in('id', productIds);
     // A failed re-fetch must not silently fall back to whatever the client
     // cart item already had — a shop.html-sourced item may never have
@@ -3480,7 +3581,8 @@ async function refreshCartItemsFromProducts(items) {
             seller_id: product.seller_id || item.seller_id || null,
             delivery_class: product.delivery_class || 'small',
             listing_type: product.listing_type || 'product',
-            free_delivery: product.free_delivery === true,
+            // Free delivery: the product's own switch, or the whole store's (admin).
+            free_delivery: product.free_delivery === true || !!(product.sellers && product.sellers.free_delivery),
             units_per_trip: product.units_per_trip || null,
             delivery_price: deliveryPrice,
             // Service shape, from the listing — drives the per-kind summary
@@ -3851,7 +3953,11 @@ async function validateCheckout() {
                 quoteId: state.deliveryQuoteId || undefined,
                 // A one-store checkout or Buy Now prices only part of the
                 // cart — the saved cart must keep everything else.
-                persistCart: !(state.isBuyNow || state.storeScope)
+                persistCart: !(state.isBuyNow || state.storeScope),
+                // Final pre-payment check: validate-cart refuses delivery to
+                // an address outside every delivery zone.
+                finalCheck: true,
+                destination: state.destinationGeo || null
             })
         });
 
@@ -4035,7 +4141,9 @@ async function validateCheckout() {
       let { fee, maxClass, uniqueSellers, isFree, allFreeDelivery } = calculateDeliveryFee(cartForFee, subtotal);
       // A live road-distance quote for this exact cart is the real price.
       const liveQuote = activeQuote();
-      if (liveQuote && cartHasProducts(cartForFee)) {
+      const deliveryBlocked = !!state.deliveryBlock && cartHasProducts(cartForFee);
+      if (deliveryBlocked) { fee = 0; isFree = false; } // no delivery here — no fee of any kind in the total
+      else if (liveQuote && cartHasProducts(cartForFee)) {
         fee = liveQuote.fee;
         isFree = fee <= 0;
       } else if (state.quote && state.destinationGeo && cartHasProducts(cartForFee)) {
@@ -4090,6 +4198,9 @@ async function validateCheckout() {
       if (cartForFee.length === 0) {
         shippingEl.textContent = '—';
         if (breakdownEl) breakdownEl.style.display = 'none';
+      } else if (deliveryBlocked) {
+        shippingEl.textContent = 'Not available';
+        if (breakdownEl) { breakdownEl.textContent = 'See the note under your address'; breakdownEl.style.display = 'block'; }
       } else if (isFree) {
         const cartNow = state.validatedCart || state.cart;
         const svcOnly = cartHasServices(cartNow) && !cartHasProducts(cartNow);
@@ -4247,9 +4358,21 @@ async function validateCheckout() {
      ********************/
     
     // Select province — retained for address; no longer drives delivery cost
+    // Delivery is KwaZulu-Natal only for now: any other province gets the
+    // "we don't deliver there yet — notify me" note straight away (the
+    // address/zone check still runs for KZN addresses).
+    const DELIVERY_PROVINCE = 'KwaZulu-Natal';
     function selectProvince(province) {
       state.selectedProvince = province;
       elements.shippingCost.value = 0; // cost is cart-based, not province-based
+      const outsideProvince = !!province && province !== DELIVERY_PROVINCE && cartHasProducts(state.cart);
+      if (outsideProvince) {
+        state.deliveryBlock = { kind: 'outside', reason: `We only deliver in KwaZulu-Natal (Durban) for now — not yet in ${province}.`, byProvince: true };
+      } else if (state.deliveryBlock && state.deliveryBlock.byProvince) {
+        state.deliveryBlock = null;
+        if (state.destinationGeo) fetchDeliveryQuote();
+      }
+      if (typeof renderQuoteNotice === 'function') { renderQuoteNotice(); updateOrderSummary(); }
     }
     
     /********************
@@ -4877,9 +5000,22 @@ async function submitToPayFast(cartItems, orderId, total) {
         triggerBtn.classList.add('is-processing');
         if (mobileBtn) { mobileBtn.disabled = true; mobileBtn.classList.add('is-processing'); }
 
-        // Price on a live quote for exactly this cart (re-quotes if the cart
+        // The address must be inside a delivery area: look up a typed address,
+        // price on a live quote for exactly this cart (re-quotes if the cart
         // changed or the quote expired), then validate server-side.
-        await ensureFreshQuote();
+        if (cartHasProducts(state.cart)) {
+          await ensureDestination();
+          await ensureFreshQuote();
+          if (state.deliveryBlock) {
+            renderQuoteNotice();
+            document.getElementById('quoteNoticeBlock')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            showError(elements.paymentError, state.deliveryBlock.kind === 'outside' ? 'We don\'t deliver to this address yet — see the note under your address.' : 'Please sort out the delivery note under your address first.');
+            triggerBtn.disabled = false;
+            triggerBtn.classList.remove('is-processing');
+            if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
+            return null;
+          }
+        }
         const validatedCart = await validateCheckout();
 
         if (validatedCart.length === 0) {
@@ -5283,6 +5419,21 @@ async function submitToPayFast(cartItems, orderId, total) {
     function setupEventListeners() {
       // Live address autocomplete (free, no key — OpenStreetMap Photon)
       wireAddressAutocomplete(elements.shippingAddress, applyAddressSuggestion);
+      // Typing in the address box means the old coordinates no longer apply
+      // (picking a suggestion sets new ones; a typed address is looked up
+      // before paying — see ensureDestination()).
+      elements.shippingAddress?.addEventListener('input', () => {
+        if (!state.destinationGeo && !state.deliveryBlock) return;
+        state.destinationGeo = null;
+        state.addressValidatedAt = null;
+        state.quote = null;
+        state.deliveryQuoteId = null;
+        state.deliveryBlock = null;
+        state.quoteNotice = null;
+        renderQuoteNotice();
+        updateTimeSavedEstimate();
+        updateOrderSummary();
+      });
       // Manually editing the street field after picking a suggestion means
       // the previously-captured coordinates may no longer match what's
       // typed — invalidate them rather than silently sending a stale

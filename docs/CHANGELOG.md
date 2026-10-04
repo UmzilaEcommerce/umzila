@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — No delivery outside the zones ("notify me" instead), KZN-only province, free-over-R600 off, store-level free delivery
+
+**Asked for (founder):** addresses outside the zones we draw must not be deliverable — no default R42.50 (e.g. a Cape Town order) — with a button that tells us their name, address and cart so we expand from real demand; the province dropdown should reflect that only KwaZulu-Natal works; turn off free delivery by cart value; free delivery toggleable per store and per product in admin.
+
+**Why the founder still saw R42.50 on the live site:** the previous commit's production deploy was **skipped by Netlify — "account credit usage exceeded"** — so umzila.store was still serving the version without the live-quote display. (Every push to `main` is a production deploy and costs credits; changes are now batched into one push.)
+
+**What changed:**
+- **Outside coverage = not deliverable.** `get-delivery-quote.js` returns reason codes (`outside_area` for outside every zone or past the 20 km road cutoff, `multi_seller`, `self_arranged`); a routing outage or a store without a pickup address *after* the zone check returns 503 `inArea:true` (standard fee still allowed). Checkout: outside → "We don't deliver to this address yet" + **Notify me when you deliver here**, delivery "Not available", nothing added to the total, Pay blocked; stores too far apart → asked to check out each store separately; a typed address (no suggestion picked) is geocoded (new `address-search.js?action=geocode`, all of ZA so Cape Town lands in Cape Town) before paying; any failed check blocks rather than guessing. Editing the address clears stale coordinates.
+- **Server enforcement:** `validate-cart.js` final pre-payment check (`finalCheck` + `destination`) refuses physical delivery outside every active zone (`OUTSIDE_AREA`) or without coordinates (`ADDRESS_REQUIRED`).
+- **Notify me:** new `request-delivery-area.js` → new `delivery_area_requests` table (name, email, phone, address, coordinates, reason, cart re-priced from the real listings, status). Same email+address within 24 h isn't saved twice; email to `ADMIN_NOTIFY_EMAIL` (falls back to the Umzila inbox) with a map link and reply-to the buyer. Admin → Service Areas → **Delivery requests**: top areas + list with status (new/contacted/covered/dismissed).
+- **Province:** checkout defaults to KwaZulu-Natal; others show "— coming soon" and choosing one immediately shows the notify-me note. HERE's "Kwazulu Natal" now matches the dropdown (it silently didn't); saved profile spellings are matched loosely.
+- **Free delivery by cart value is off** (was "free over R600") in checkout, `validate-cart.js` and quotes (`delivery_pricing_config.free_delivery_threshold` now nullable, set to null = off; admin's pricing field blank = off).
+- **Store-level free delivery:** new `sellers.free_delivery` (admin-only — added to `sellers_guard_admin_columns`), toggle in admin → Manage Shops; applied with OR alongside the existing product switch in checkout, `validate-cart.js` and quotes.
+
+**Verified (local, real functions + DB; HERE answers and the notify endpoint simulated in headless Chrome):** Cape Town picked → blocked, notify works, Pay refused; Cape Town typed → geocoded at Pay → blocked; Western Cape province → blocked; Durban → R20.61 and through every area check to order creation (an earlier run reached PayFast — that pending order was deleted, unpaid; it carried `delivery_quote_id`, confirming the dispatch link). Server: Cape Town → `OUTSIDE_AREA`, Durban → ok, no address → `ADDRESS_REQUIRED`. Notify function (email off): saved with re-priced cart, repeat ignored, bad email refused, test row deleted. R899.67 cart now pays R42.50 delivery; store free delivery on → R0 (switched back off).
+
+**Files:** `checkout.html`, `admin.html`, `netlify/functions/{request-delivery-area,address-search,get-delivery-quote,validate-cart}.js`; migrations `delivery_area_requests`, `store_free_delivery_and_threshold_off`.
+
+---
+
 ## 2026-10-04 — Delivery price now actually follows road distance; orders enter dispatch/tracking; time saved uses the road route
 
 **Reported:** delivery always showed R42.50 instead of varying with distance/zones; "time saved" changed but it was unclear whether it used straight-line or road distance; does tracking now work.

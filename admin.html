@@ -970,6 +970,21 @@ const supabaseClient = supabase.createClient(
             </table>
           </div>
         </div>
+
+        <!-- Buyers outside every zone who tapped "Notify me when you deliver
+             here" at checkout (delivery_area_requests, request-delivery-area.js).
+             Use these to decide where to add or grow a zone. -->
+        <div class="panel-form" style="margin-top:18px">
+          <div style="flex:1;min-width:0">
+            <h3 style="font-size:15px;font-weight:800;margin-bottom:4px">📍 Delivery requests from outside your zones</h3>
+            <p style="font-size:12px;color:var(--muted);margin:0 0 10px">People who couldn't check out because their address is outside every zone. Grouped by area so you can see where demand is.</p>
+            <div id="areaRequestsSummary" style="font-size:13px;margin-bottom:10px"></div>
+            <table id="areaRequestsTable">
+              <thead><tr><th>When</th><th>Who</th><th>Address</th><th>Cart</th><th>Status</th></tr></thead>
+              <tbody><tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- Delivery Ops: live map of active drivers/routes + riders roster.
@@ -2702,6 +2717,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Lazy-load service areas when that tab is first clicked
   document.querySelector('[data-section="service-areas"]')?.addEventListener('click', loadServiceZones);
+  document.querySelector('[data-section="service-areas"]')?.addEventListener('click', () => window.loadAreaRequests?.());
 
   // Lazy-load Stage 16 delivery-network admin sections when first clicked
   // (functions defined further down, same window.foo?.() deferred pattern
@@ -3361,7 +3377,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('sellers')
-        .select('id, shop_name, slug, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo')
+        .select('id, shop_name, slug, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo, free_delivery')
         .order('created_at', { ascending: false });
       if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
       shopsCache = data || [];
@@ -3420,6 +3436,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           ${slugRow}
           ${radiusRow}
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--muted)">Free delivery for this whole store:</span>
+            <strong style="font-size:12px;color:${s.free_delivery ? '#16a34a' : '#6b7280'}">${s.free_delivery ? 'On' : 'Off'}</strong>
+            <button onclick="setSellerFreeDelivery('${escapeHtml(s.id)}', ${s.free_delivery ? 'false' : 'true'})" style="padding:4px 10px;border-radius:6px;border:none;background:${s.free_delivery ? '#6b7280' : '#16a34a'};color:#fff;font-size:12px;font-weight:600;cursor:pointer">${s.free_delivery ? 'Turn off' : 'Turn on'}</button>
+          </div>
           <div style="margin-top:8px">
             <button onclick="toggleShopOwners('${escapeHtml(s.id)}')" style="padding:4px 10px;border-radius:6px;border:1px solid #dde1ea;background:#fff;color:#0a2f66;font-size:12px;font-weight:600;cursor:pointer">👥 Owners</button>
             <div id="owners-${escapeHtml(s.id)}" style="display:none;margin-top:8px"></div>
@@ -3452,6 +3473,17 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // Direct .update() -- permitted by the sellers_admin_all RLS policy
   // (2026-09-17), not an RPC, since this is just one of possibly several
   // admin-only seller fields going forward.
+  // Free delivery for every product in a store (admin-only — sellers can't
+  // change sellers.free_delivery; see sellers_guard_admin_columns). Per-product
+  // switches still work on their own.
+  window.setSellerFreeDelivery = async function(sellerId, on) {
+    if (!supabaseClient) return;
+    if (on && !confirm('Make delivery free for every product in this store? Umzila pays the delivery cost.')) return;
+    const { error } = await supabaseClient.from('sellers').update({ free_delivery: !!on }).eq('id', sellerId);
+    if (error) { showToast('Failed: ' + error.message); return; }
+    showToast(on ? 'Free delivery on for this store' : 'Free delivery off for this store');
+    await loadManageShops();
+  };
   window.setSellerSelfArrangedRadius = async function(sellerId) {
     if (!supabaseClient) return;
     const input = document.getElementById('sar-' + sellerId);
@@ -4054,6 +4086,39 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
      values, since the table only stores the resulting polygon (see spec). */
 
   let serviceZonesCache = [];
+
+  // Delivery requests from outside the zones (newest first, top areas summarised).
+  window.loadAreaRequests = async function(){
+    const tbody = document.querySelector('#areaRequestsTable tbody');
+    const summary = document.getElementById('areaRequestsSummary');
+    if(!tbody || !supabaseClient) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr>';
+    const { data, error } = await supabaseClient.from('delivery_area_requests')
+      .select('id, created_at, name, email, phone, address, city, province, lat, lon, cart, cart_total, status')
+      .order('created_at', { ascending: false }).limit(200);
+    if(error){ tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load requests</td></tr>'; return; }
+    const rows = data || [];
+    if(!rows.length){ tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">No requests yet.</td></tr>'; summary.textContent = ''; return; }
+    const byArea = {};
+    rows.forEach(r => { const k = (r.city || r.province || 'Unknown').trim(); byArea[k] = (byArea[k] || 0) + 1; });
+    summary.innerHTML = '<strong>Top areas:</strong> ' + Object.entries(byArea).sort((a,b)=>b[1]-a[1]).slice(0,8)
+      .map(([k,n]) => escapeHtml(k) + ' <span style="color:var(--muted)">(' + n + ')</span>').join(' · ');
+    tbody.innerHTML = rows.map(r => {
+      const map = Number.isFinite(r.lat) && Number.isFinite(r.lon) ? ' <a href="https://www.openstreetmap.org/?mlat=' + r.lat + '&mlon=' + r.lon + '#map=13/' + r.lat + '/' + r.lon + '" target="_blank" rel="noopener">map</a>' : '';
+      const cart = (r.cart || []).map(c => escapeHtml(c.qty + '× ' + c.name)).join('<br>') || '—';
+      return '<tr>' +
+        '<td style="white-space:nowrap">' + escapeHtml(new Date(r.created_at).toLocaleString('en-ZA', { dateStyle: 'medium', timeStyle: 'short' })) + '</td>' +
+        '<td>' + escapeHtml(r.name || '—') + '<br><a href="mailto:' + escapeHtml(r.email) + '">' + escapeHtml(r.email) + '</a>' + (r.phone ? '<br>' + escapeHtml(r.phone) : '') + '</td>' +
+        '<td>' + escapeHtml([r.address, r.city, r.province].filter(Boolean).join(', ')) + map + '</td>' +
+        '<td style="font-size:12px">' + cart + (r.cart_total ? '<br><strong>R' + Number(r.cart_total).toFixed(2) + '</strong>' : '') + '</td>' +
+        '<td><select data-area-req="' + r.id + '">' + ['new','contacted','covered','dismissed'].map(s => '<option' + (s === r.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></td>' +
+      '</tr>';
+    }).join('');
+    tbody.querySelectorAll('[data-area-req]').forEach(sel => sel.addEventListener('change', async () => {
+      const { error: upErr } = await supabaseClient.from('delivery_area_requests').update({ status: sel.value }).eq('id', sel.dataset.areaReq);
+      if (upErr) alert('Could not update: ' + upErr.message);
+    }));
+  };
 
   async function loadServiceZones(){
     const tbody = document.querySelector('#serviceZonesTable tbody');
@@ -4821,7 +4886,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <div><strong>Max service distance</strong><div style="color:#6b7280">${escapeHtml(String(active.max_service_distance_km))}km</div></div>
           <div><strong>Per-seller fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.per_seller_fee))}</div></div>
           <div><strong>Priority fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.priority_fee))}</div></div>
-          <div><strong>Free delivery over</strong><div style="color:#6b7280">R${escapeHtml(String(active.free_delivery_threshold))}</div></div>
+          <div><strong>Free delivery over</strong><div style="color:#6b7280">${active.free_delivery_threshold == null ? 'Off' : 'R' + escapeHtml(String(active.free_delivery_threshold))}</div></div>
           <div><strong>Large overflow fee</strong><div style="color:#6b7280">R${escapeHtml(String(active.large_overflow_fee))}</div></div>
           <div><strong>Units/trip (S/M/L)</strong><div style="color:#6b7280">${escapeHtml(String(units.small ?? '—'))} / ${escapeHtml(String(units.medium ?? '—'))} / ${escapeHtml(String(units.large ?? '—'))}</div></div>
         </div>
@@ -4857,7 +4922,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <div><label style="font-size:11px">Max service distance (km)</label><input type="number" step="0.1" min="0" id="pcMaxServiceDistance" value="${escapeHtml(String(active.max_service_distance_km))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Per-seller fee (R)</label><input type="number" step="0.01" id="pcPerSellerFee" value="${escapeHtml(String(active.per_seller_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Priority fee (R)</label><input type="number" step="0.01" id="pcPriorityFee" value="${escapeHtml(String(active.priority_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
-          <div><label style="font-size:11px">Free delivery over (R)</label><input type="number" step="0.01" id="pcFreeThreshold" value="${escapeHtml(String(active.free_delivery_threshold))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
+          <div><label style="font-size:11px">Free delivery over (R)</label><input type="number" step="0.01" id="pcFreeThreshold" placeholder="Off — leave blank" value="${active.free_delivery_threshold == null ? '' : escapeHtml(String(active.free_delivery_threshold))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Large overflow fee (R)</label><input type="number" step="0.01" id="pcOverflowFee" value="${escapeHtml(String(active.large_overflow_fee))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Units/trip — small</label><input type="number" id="pcUnitsSmall" value="${escapeHtml(String(units.small ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
           <div><label style="font-size:11px">Units/trip — medium</label><input type="number" id="pcUnitsMedium" value="${escapeHtml(String(units.medium ?? 0))}" style="width:100%;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:6px"></div>
@@ -4886,7 +4951,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         max_service_distance_km: parseFloat(document.getElementById('pcMaxServiceDistance').value),
         per_seller_fee: parseFloat(document.getElementById('pcPerSellerFee').value),
         priority_fee: parseFloat(document.getElementById('pcPriorityFee').value),
-        free_delivery_threshold: parseFloat(document.getElementById('pcFreeThreshold').value),
+        free_delivery_threshold: document.getElementById('pcFreeThreshold').value.trim() === '' ? null : parseFloat(document.getElementById('pcFreeThreshold').value), // blank = off
         large_overflow_fee: parseFloat(document.getElementById('pcOverflowFee').value)
       };
       for(const [k, v] of Object.entries(numFields)){
