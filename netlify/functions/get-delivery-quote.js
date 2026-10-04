@@ -13,7 +13,11 @@
 // custom per-product delivery_price override, the FREE_DELIVERY_THRESHOLD
 // full-waiver).
 //
-// Base-fee model (founder decision 2026-09-26, §AA): the base fee is no
+// CUSTOMER PRICE (founder 2026-10-04, supersedes the model below): a flat
+// R34–R45 band by road distance — see lib/delivery-price.js. margin_percent
+// and the payout estimate no longer set the customer price.
+//
+// Previous base-fee model (founder decision 2026-09-26, §AA): the base fee was no
 // longer an independent distance-tier lookup — it IS the real driver payout
 // estimate (lib/payout-formula.js), plus an admin-set margin_percent on top
 // (0 for now, since the founder/partner are driving deliveries themselves;
@@ -30,7 +34,7 @@
 // Does not touch validate-cart.js, checkout.html, or any PayFast file.
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
-const { estimatePayout } = require('./lib/payout-formula');
+const { feeForRoadKm, clampFee } = require('./lib/delivery-price');
 
 const QUOTE_TTL_MINUTES = 15; // no existing convention in this repo for quote TTLs — 15 min is a reasonable default for a checkout session.
 
@@ -383,9 +387,11 @@ exports.handler = async function (event, context) {
 
     // ---- Base fee: real driver-payout estimate + admin-set margin (see the
     // file header — this replaces the old independent distance-tier table). ----
-    const MARGIN_PERCENT = Number(pricingConfig.margin_percent) || 0;
-    const payoutEstimate = estimatePayout({ distanceKm, durationMin });
-    const distanceBaseFee = Math.round(payoutEstimate * (1 + MARGIN_PERCENT / 100) * 100) / 100;
+    // Customer price (founder 2026-10-04): R34 for the first 3 road-km,
+    // +R0.40/km after, never above R45 — lib/delivery-price.js. Priced to win
+    // on volume; the rider's pay (payout-formula.js) is separate and unchanged.
+    // (Was: rider payout estimate × (1 + margin_percent), uncapped — ~R68 at 16 km.)
+    const distanceBaseFee = feeForRoadKm(distanceKm);
 
     const PER_SELLER_FEE = Number(pricingConfig.per_seller_fee) || 0;
     // null = "free over R…" switched off (the default since 2026-10-04).
@@ -435,7 +441,7 @@ exports.handler = async function (event, context) {
       perSellerFeeTotal = (pickupSellerIds.length - 1) * PER_SELLER_FEE; // Stage 4: +PER_SELLER_FEE for a genuinely bundled 2-seller cart, 0 otherwise
       overflowSurcharge = extraTrips * LARGE_OVERFLOW_FEE;
       baseFeeUsed = baseFee;
-      productDelivery = Math.max(0, baseFee + perSellerFeeTotal + overflowSurcharge);
+      productDelivery = clampFee(baseFee + perSellerFeeTotal + overflowSurcharge); // R34–R45, bundles included
 
       // ---- Launch promo cap (admin-set per zone, §AA) -- deliberately
       // allows pricing BELOW real driver cost for a launch window; that's

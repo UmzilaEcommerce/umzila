@@ -5014,7 +5014,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <h3 style="font-size:15px;font-weight:800;margin:0">Active Pricing — v${escapeHtml(String(active.version))}</h3>
           <button class="small-btn" id="editPricingBtn">✏️ Edit (creates new version)</button>
         </div>
-        <p style="font-size:12px;color:#6b7280;margin:0 0 12px">Base delivery fee = real driver payout (base R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km, min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}) plus the margin below. Margin at 0% means you're charging exactly what the driver is paid — no profit yet, by design, while deliveries are done in-house.</p>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px"><strong>Customer delivery price (since 4 Oct 2026):</strong> R34 for the first 3 road-km, +R0.40 per km after, never more than R45 (R39 when the distance can't be worked out) — set in code (netlify/functions/lib/delivery-price.js). The margin below no longer changes what customers pay; driver payout is R${escapeHtml(String(PAYOUT_FORMULA_BASE))} + R${escapeHtml(String(PAYOUT_FORMULA_PER_KM))}/km (min R${escapeHtml(String(PAYOUT_FORMULA_MIN))}).</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;font-size:13px">
           <div><strong>Margin on driver pay</strong><div style="color:#6b7280">${escapeHtml(String(active.margin_percent))}%</div></div>
           <div><strong>Max service distance</strong><div style="color:#6b7280">${escapeHtml(String(active.max_service_distance_km))}km</div></div>

@@ -1,12 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
 const { validateCode, computeDiscount } = require('./lib/discounts');
+const { FALLBACK_FEE, DELIVERY_FEE_MIN, DELIVERY_FEE_MAX } = require('./lib/delivery-price');
 
 // Must match checkout.html's client-side copies — this server copy is authoritative.
-// Fallback class prices — used whenever there's no live distance quote
-// (no address coordinates, routing unavailable). Re-based 2026-10-04 on the
-// founder's R42.50 average (medium); small/large and the cap scaled by the
-// same factor (×1.93).
-const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
+// Fallback when there's no live distance quote (routing down, store without
+// a pickup pin): flat R39 for every size, within the R34–R45 band
+// (lib/delivery-price.js — founder 2026-10-04).
+const DELIVERY_CLASS_PRICES   = { small: FALLBACK_FEE, medium: FALLBACK_FEE, large: FALLBACK_FEE };
 const PER_SELLER_FEE          = 3;
 // "Free delivery over R…" — off since 2026-10-04 (null = off). Free delivery
 // comes only from the product or store switch in admin.
@@ -16,7 +16,7 @@ const SERVICE_RETURN_FEE      = 15; // finished item delivered to an address
 // Quantity-aware fee stepping — must match checkout.html exactly.
 const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
 const LARGE_OVERFLOW_FEE      = 10;
-const MAX_DELIVERY_FEE        = 155;
+const MAX_DELIVERY_FEE        = DELIVERY_FEE_MAX; // R45
 
 // A client-supplied slot is only trusted if it parses to a real, future
 // instant — anything else (missing, malformed, already past) is treated as
@@ -75,7 +75,7 @@ function computeFees(validatedCart) {
         const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[deliveryClass] : 0;
         const customBaseFee = customItems.length ? Math.max(...customItems.map(i => i.delivery_price)) : 0;
         const baseFee = Math.max(classBaseFee, customBaseFee);
-        productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(0, baseFee + (sellerCount - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
+        productDelivery = Math.min(MAX_DELIVERY_FEE, Math.max(DELIVERY_FEE_MIN, baseFee + (sellerCount - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
     }
 
     // Service collection/return fees are flat, per line, and never waived by

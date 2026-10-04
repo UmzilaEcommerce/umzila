@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Delivery price R34–R45 by distance; saved address priced on load
+
+**Reported (founder):** signed in with a saved address, checkout showed the flat R42.50 (and no delivery target / time saved) until the address was re-picked. Price too high to compete (~R68 to Reservoir Hills) — wanted R34 minimum, R45 maximum, around R39 for the Umgudulu direction.
+
+**Root causes:**
+- The saved address filled the form as text only — no coordinates — so no live quote was requested until the buyer re-picked a suggestion. Profiles have `saved_address_geo` but nothing ever wrote it (0 of 19 profiles).
+- The quote price was the rider-payout estimate × (1 + margin), uncapped.
+
+**Changes:**
+- Checkout locates the saved address on load (`useSavedAddressLocation`, single-flight, runs once both cart and profile are known): the saved pin if present (EWKB hex decoded in the browser), else a geocode of the text → live quote → price, delivery target and time saved show immediately. Each order now stores the picked location on the buyer's profile (`saved_address_geo`) for next time.
+- New `netlify/functions/lib/delivery-price.js`: **R34 for the first 3 road-km, +R0.40/km after, max R45** (bundles/overflow included); fallback without a distance **R39** for every size. Used by `get-delivery-quote.js` (live price) and `validate-cart.js` (fallback + clamp); `checkout.html` mirrors the fallback. Examples: 2 km R34 · 10 km R36.80 · 16 km R39.22 · 20 km R40.80. Rider payout unchanged; admin's pricing panel explains that `margin_percent` no longer sets the customer price.
+
+**Verified:** headless Chrome, fake signed-in buyer with saved "34 Umgudulu Rd": with a saved pin → R39.22, "Delivery target: about 57 min", time saved shown, only the quote call; text only → geocode + quote → same. Guest Berea → R34.46. No page errors.
+
+**Files:** `checkout.html`, `admin.html`, `netlify/functions/{get-delivery-quote,validate-cart}.js`, `netlify/functions/lib/delivery-price.js` (new).
+
+---
+
 ## 2026-10-04 — Log out on phones, hamburger "Profile" goes to the profile, delivery target from road distance
 
 **Reported (founder):** no way to log out once signed in; the hamburger menu's "Profile" opened the login popup even when signed in; where does "estimated delivery 2–4 hrs" come from? — wanted: road distance × 2 min/km + 25 min, worded as a target, not a guarantee.

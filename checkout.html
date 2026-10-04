@@ -1673,11 +1673,11 @@
      ********************/
     
     // ── Delivery pricing constants (edit here to update rates) ──────────────
-    // Fallback class prices — used whenever there's no live distance quote
-    // (no address coordinates, routing unavailable). Re-based 2026-10-04 on the
-    // founder's R42.50 average (medium); small/large and the cap scaled by the
-    // same factor (×1.93).
-    const DELIVERY_CLASS_PRICES   = { small: 23, medium: 42.5, large: 96.5 };
+    // Fallback when there's no live distance quote: flat R39, all sizes,
+    // inside the R34–R45 band. Mirrors netlify/functions/lib/delivery-price.js
+    // (the live quote itself is priced server-side by distance).
+    const DELIVERY_FEE_MIN        = 34;
+    const DELIVERY_CLASS_PRICES   = { small: 39, medium: 39, large: 39 };
     const PER_SELLER_FEE          = 3;
     // "Free delivery over R…" — switched off (founder 2026-10-04). null = off;
     // free delivery now comes only from the product or store switch in admin.
@@ -1690,7 +1690,7 @@
     // bulky quantities do.
     const DEFAULT_UNITS_PER_TRIP  = { small: 8, medium: 4, large: 2 };
     const LARGE_OVERFLOW_FEE      = 10; // per extra trip once already at 'large'
-    const MAX_DELIVERY_FEE        = 155;
+    const MAX_DELIVERY_FEE        = 45;
 
     // ── Delivery zones — edit this list to add/remove areas ─────────────────
     const DELIVERY_ZONES = [
@@ -1877,7 +1877,7 @@
       const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[maxClass] : 0;
       const customBaseFee = customItems.length ? Math.max(...customItems.map(i => i.delivery_price)) : 0;
       const baseFee = Math.max(classBaseFee, customBaseFee);
-      const fee = Math.min(MAX_DELIVERY_FEE, baseFee + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE);
+      const fee = Math.min(MAX_DELIVERY_FEE, Math.max(DELIVERY_FEE_MIN, baseFee + (uniqueSellers - 1) * PER_SELLER_FEE + extraTrips * LARGE_OVERFLOW_FEE));
       return { fee: Math.max(0, fee), maxClass, uniqueSellers, extraTrips, isFree: false };
     }
 
@@ -2380,6 +2380,11 @@
 
       renderPayChoices();
 
+      // Saved address → locate it right away so the live distance price,
+      // delivery target and time saved show without retyping (it used to
+      // stay on the flat fallback fee until the buyer re-picked the address).
+      useSavedAddressLocation();
+
       // Signed-in buyer: don't re-ask for consent already on file.
       // Terms/privacy acceptance is remembered via profiles.terms_accepted_at;
       // marketing opt-in is looked up from the subscribers table. Both are
@@ -2388,6 +2393,37 @@
         applyTermsConsentUI();
         checkMarketingOptInVisibility();
       }
+    }
+
+    // A geography column comes back from PostgREST as EWKB hex
+    // (0101000020E6100000 + lon + lat as little-endian doubles).
+    function pointFromEwkbHex(hex) {
+      if (typeof hex !== 'string' || !/^0101000020E6100000[0-9A-Fa-f]{32}$/.test(hex)) return null;
+      const bytes = new Uint8Array(hex.match(/../g).map(h => parseInt(h, 16)));
+      const v = new DataView(bytes.buffer);
+      const lon = v.getFloat64(9, true), lat = v.getFloat64(17, true);
+      return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null;
+    }
+    let savedAddrInFlight = null;
+    function useSavedAddressLocation() {
+      if (!savedAddrInFlight) savedAddrInFlight = useSavedAddressLocationNow().finally(() => { savedAddrInFlight = null; });
+      return savedAddrInFlight;
+    }
+    async function useSavedAddressLocationNow() {
+      if (state.destinationGeo || !cartHasProducts(state.cart || [])) return;
+      const typed = (elements.shippingAddress?.value || '').trim();
+      if (!typed) return;
+      // Exact saved pin when this is still the saved address; otherwise look the text up.
+      const saved = state.profile && typed === (state.profile.address || '').trim() ? pointFromEwkbHex(state.profile.saved_address_geo) : null;
+      if (saved) {
+        state.destinationGeo = saved;
+        state.addressValidatedAt = new Date().toISOString();
+        await fetchDeliveryQuote();
+        updateTimeSavedEstimate();
+        return;
+      }
+      await ensureDestination();
+      updateTimeSavedEstimate();
     }
 
     // ── Pay panel: which card, save switch, one matching button ──
@@ -5191,6 +5227,14 @@ async function submitToPayFast(cartItems, orderId, total) {
             }
 
             state.orderId = newOrderId;
+
+            // Remember this address's exact location on the buyer's profile so
+            // the next checkout prices it straight away (best-effort).
+            if (state.user && state.profile?.id && state.destinationGeo && state.shippingInfo?.address) {
+                supabaseClient.from('profiles').update({
+                    saved_address_geo: `SRID=4326;POINT(${state.destinationGeo.lon} ${state.destinationGeo.lat})`
+                }).eq('id', state.profile.id).then(() => {}, () => {});
+            }
         }
 
         // Marketing opt-in survives the redirect to PayFast and back via
@@ -5378,6 +5422,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         // before merging the saved cart, so neither overwrites the other.
         state.cartReady = loadCart();
         await Promise.all([state.cartReady, checkAuth()]);
+        useSavedAddressLocation(); // cart + profile both known now (either may have loaded first)
 
         // The saved-coupon re-check inside loadCart() (above) ran before
         // state.user was known — checkAuth() hasn't resolved at that point
