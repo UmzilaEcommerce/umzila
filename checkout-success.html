@@ -229,6 +229,20 @@
                   document.getElementById('trackBtn').href = order.trackPath;
                   document.getElementById('trackBox').style.display = '';
                   document.getElementById('shipNote').textContent = 'The store is preparing your order — track it live below.';
+                  // Remember the private link on this device (ss_track_links) so
+                  // the homepage widget, profile and track page find it later.
+                  try {
+                    const tq = new URLSearchParams(order.trackPath.split('?')[1] || '');
+                    const o = tq.get('order'), t = tq.get('t');
+                    if (o && t) {
+                      let links = [];
+                      try { links = JSON.parse(localStorage.getItem('ss_track_links') || '[]') || []; } catch (_) {}
+                      links = (Array.isArray(links) ? links : []).filter(l => l && l.o !== o);
+                      localStorage.setItem('ss_track_links', JSON.stringify([{ o, t, at: Date.now() }].concat(links).slice(0, 5)));
+                      // Signed in with the order's email → link the order to the account.
+                      sb.rpc('claim_order_with_token', { p_order_id: o, p_token: t }).then(() => {}, () => {});
+                    }
+                  } catch (_) {}
                 }
                 // Nothing ships in a service-only order (a booking, a voucher…)
                 if (!order.hasPhysical) {

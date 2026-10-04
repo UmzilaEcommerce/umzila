@@ -1093,15 +1093,40 @@
       try {
         var sessionRes = await sb.auth.getSession();
         var user = sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.user;
-        if (!user) return;
 
-        var res = await sb.from('deliveries')
-          .select('id, order_id, status, delivered_at')
-          .eq('customer_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        var d = res && res.data;
+        // Private tracking links this device received (ss_track_links, written
+        // by checkout-success.html / track.html) — guests have no account to
+        // look deliveries up by.
+        var links = [];
+        try { links = JSON.parse(localStorage.getItem('ss_track_links') || '[]') || []; } catch (e) {}
+        if (!Array.isArray(links)) links = [];
+        links = links.filter(function(l) { return l && l.o && l.t && (!l.at || Date.now() - l.at < 14 * 86400000); });
+
+        var d = null, href = null;
+        if (user) {
+          // Link any guest order from this device to the account (only works
+          // when the token matches and the account email is the order email).
+          for (var i = 0; i < links.length; i++) {
+            try { await sb.rpc('claim_order_with_token', { p_order_id: links[i].o, p_token: links[i].t }); } catch (e) {}
+          }
+          var res = await sb.from('deliveries')
+            .select('id, order_id, status, delivered_at')
+            .eq('customer_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          d = res && res.data;
+        }
+        if (!d) {
+          for (var j = 0; j < links.length && !d; j++) {
+            var tr = await sb.rpc('get_delivery_tracking', { p_order_id: links[j].o, p_token: links[j].t });
+            var row = tr && Array.isArray(tr.data) ? tr.data[0] : (tr && tr.data);
+            if (row && row.delivery_id && row.status !== 'DELIVERED') {
+              d = { order_id: links[j].o, status: row.status, delivered_at: null };
+              href = 'track.html?order=' + encodeURIComponent(links[j].o) + '&t=' + encodeURIComponent(links[j].t);
+            }
+          }
+        }
         if (!d) return;
 
         var TERMINAL_HIDE = ['CANCELLED', 'FAILED', 'RETURNED']; // not part of §50's widget states
@@ -1138,7 +1163,7 @@
           return; // unrecognized status -- fail safe by staying hidden
         }
 
-        widget.href = 'track.html?order=' + encodeURIComponent(d.order_id);
+        widget.href = href || ('track.html?order=' + encodeURIComponent(d.order_id));
         widget.style.display = '';
       } catch (e) {
         console.warn('active delivery widget failed to load', e);

@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Guest orders: profile "Track delivery" and the homepage widget now work
+
+**Reported:** after ordering, the homepage "your order is on the way" widget never appeared, and profile → Track delivery said "No live tracking for this order on your account" (signed in on a phone), while the email link worked on another device.
+
+**Root cause:** the test order was placed as a guest, so `orders.user_id` and `deliveries.customer_id` are null. The profile lists it anyway (the orders RLS also matches on account email), but the widget looks deliveries up by `customer_id` and `get_delivery_tracking` only accepts the owner or the token — and the profile link carries no token. Matching tracking on email alone is not safe: sign-ups are auto-confirmed (every `auth.users` row is confirmed within a second of creation, no confirmation email), so anyone could register someone else's email and get their live location + PIN.
+
+**Fix:** a guest order is linked to an account only with proof:
+- New RPC `claim_order_with_token(p_order_id, p_token)` (authenticated only): sets `orders.user_id` / `deliveries.customer_id` when the private tracking token matches **and** the signed-in email equals the order email, and only if not owned by someone else.
+- It runs whenever a signed-in buyer opens the tracking link (`track.html`), lands on the payment-success page, or opens the homepage with a link saved on that device. After that, profile and widget work everywhere.
+- Device memory: `ss_track_links` (localStorage, last 5, 14 days) is written by the success page and track page. The homepage widget shows guests' active deliveries from it (via `get_delivery_tracking` with the token, link includes `&t=`); `track.html` without `?t=` uses a saved token for that order.
+- `track.html`'s signed-in "not linked" message now says to open the email link once to link the order.
+
+**Verified:** RPC — wrong email → false, wrong token → false, matching email + token → linked (in a rolled-back transaction). Headless Chrome locally: widget hidden with no links, shows "Your order is on the way" with the token link for a saved link, hidden for a bad token; track page without `?t=` but with a saved link shows live tracking. No page errors.
+
+**Known gap (not changed):** the existing orders RLS policy still shows orders whose `customer_email` matches the account email — with auto-confirmed sign-ups that exposes a guest's order details (address, phone) to whoever registers that email. Fix = turn on email confirmation in Supabase Auth, or drop the email clause (guest orders then appear only after claiming).
+
+**Files:** `track.html`, `checkout-success.html`, `index.html`; migration `claim_guest_order_with_tracking_token`.
+
+---
+
 ## 2026-10-04 — First live delivery test: "Mark Ready" did nothing, guests couldn't track, duplicate orders
 
 **Reported (founder's live test, R5 free-delivery item → 34 Umgudulu Rd):** the order went through, but the rider app showed nothing when online; "Mark Ready for Pickup" appeared to do nothing; a buyer who isn't signed in can't track and isn't told where to; after creating an account, tracking said "No live tracking".
