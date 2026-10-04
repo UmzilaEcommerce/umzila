@@ -607,14 +607,26 @@ function initMobileMenu() {
       });
     }
 
-    // Mobile sign in
+    // Mobile sign in — signed in, this is "My profile" (it used to always
+    // open the login popup, even for someone already signed in).
     if (mobileSignIn) {
       mobileSignIn.addEventListener('click', (e) => {
         e.preventDefault();
         mobileMenu.classList.remove('active');
         mobileMenuOverlay.classList.remove('active');
         document.body.style.overflow = '';
+        if (currentUser) { window.location.href = 'profile.html'; return; }
         showModal(document.getElementById('loginModal'));
+      });
+    }
+    const mobileLogout = document.getElementById('mobileLogout');
+    if (mobileLogout) {
+      mobileLogout.addEventListener('click', async (e) => {
+        e.preventDefault();
+        mobileMenu.classList.remove('active');
+        mobileMenuOverlay.classList.remove('active');
+        document.body.style.overflow = '';
+        await signOutEverywhere();
       });
     }
   }
@@ -1403,9 +1415,11 @@ function updateAuthUI(user) {
   const profileBtnHeader = document.getElementById('profileBtnHeader');
   const mobileSignIn = document.getElementById('mobileSignIn');
   
+  const mobileLogoutItem = document.getElementById('mobileLogoutItem');
+  if (mobileLogoutItem) mobileLogoutItem.style.display = user ? '' : 'none';
   if (user) {
     if (signBtn) signBtn.style.display = 'none';
-    if (mobileSignIn) mobileSignIn.textContent = 'Profile';
+    if (mobileSignIn) mobileSignIn.textContent = 'My profile';
     if (profileBtnHeader) {
       profileBtnHeader.style.display = 'inline-flex';
       profileBtnHeader.onclick = function() {
@@ -1427,6 +1441,15 @@ function updateAuthUI(user) {
     state.userFavourites = new Set();
     markFavourites();
   }
+}
+
+// Sign out here and in every other open Umzila tab (profile.html listens
+// for the same ss_signout key).
+async function signOutEverywhere() {
+  try { if (supabaseClient && supabaseClient.auth) await supabaseClient.auth.signOut(); } catch (e) {}
+  try { localStorage.setItem('ss_signout', String(Date.now())); } catch (e) {}
+  updateAuthUI(null);
+  if (typeof showToast === 'function') showToast('You\'re signed out');
 }
 
 // Update referral banner

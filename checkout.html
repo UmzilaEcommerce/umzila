@@ -796,7 +796,9 @@
     .eta-strip-active {
       background: #eef2f8;
       color: var(--accent);
+      border-radius: 14px;
     }
+    .eta-strip .eta-sub { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 1px; }
     .eta-dot {
       flex: 0 0 auto;
       width: 8px;
@@ -1375,7 +1377,7 @@
                below — unchanged data, just one place to look). No delivery
                zone is involved — deliveries aren't restricted by area. -->
           <div id="estimatedDeliveryTime" class="eta-strip eta-strip-empty">
-            📍 Delivery: usually within 1–3 days
+            📍 Add your address to see your delivery time
           </div>
 
           <div id="addressNudgeText" class="hidden" style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">One more thing — add your delivery address to finish</div>
@@ -3196,6 +3198,7 @@ async function saveCartToServer() {
     const WAIT_MIN_PER_STORE_HIGH = 30;
 
     function updateTimeSavedEstimate() {
+      refreshEstimatedTime(); // same live quote drives the delivery target
       const block = document.getElementById('timeSavedBlock');
       const line = document.getElementById('timeSavedLine');
       if (!block || !line) return;
@@ -4313,39 +4316,36 @@ async function validateCheckout() {
     // that data is known, then the real seller-turnaround estimate once it
     // arrives. No delivery zone involved (deliveries aren't restricted by
     // area), so this is purely a function of state.sellerTurnarounds.
+    // Delivery target (founder 2026-10-04): road distance × 2 min/km + 25 min
+    // — the quickest it can realistically take. Uses the live quote's road
+    // route (store → this address, the same distance the price uses); it is
+    // a target we aim for, never a guarantee. Was: the store's free-text
+    // "ready within" setting mapped to "~2–4 hours" etc., no distance at all.
+    const ETA_MIN_PER_KM = 2;
+    const ETA_BASE_MIN = 25;
+    function formatEtaMinutes(m) {
+      m = Math.round(m);
+      if (m < 60) return `about ${m} min`;
+      const h = Math.floor(m / 60), r = m % 60;
+      return `about ${h} hr${r ? ' ' + r + ' min' : ''}`;
+    }
     function refreshEstimatedTime() {
       const el = document.getElementById('estimatedDeliveryTime');
       if (!el) return;
+      if (!cartHasProducts(state.cart || [])) { el.classList.add('hidden'); return; } // services only — nothing to deliver
+      el.classList.remove('hidden');
 
-      let label = null;
-      if (state.sellerTurnarounds?.length) {
-        const toMins = t => {
-          if (!t) return 0;
-          if (t.includes('1 hour'))        return 60;
-          if (t.includes('2 hour'))        return 120;
-          if (t.includes('4 hour'))        return 240;
-          if (t.includes('Same day'))      return 480;
-          if (t.includes('Next business')) return 1440;
-          if (t.includes('2'))             return 4320; // "2–3 days"
-          return 0;
-        };
-        const maxMins = Math.max(...state.sellerTurnarounds.map(s => toMins(s.turnaround_time)));
-        if (maxMins <= 60)        label = '~2–4 hours';
-        else if (maxMins <= 120)  label = '~3–5 hours';
-        else if (maxMins <= 240)  label = 'today';
-        else if (maxMins <= 480)  label = 'today';
-        else if (maxMins <= 1440) label = 'next business day';
-        else                      label = '2–3 days';
-      }
-
-      if (!label) {
-        el.className = 'eta-strip eta-strip-empty';
-        el.innerHTML = '📍 Delivery: usually within 1–3 days';
+      const q = typeof activeQuote === 'function' ? activeQuote() : null;
+      if (q && q.roadKm > 0) {
+        const mins = q.roadKm * ETA_MIN_PER_KM + ETA_BASE_MIN;
+        el.className = 'eta-strip eta-strip-active';
+        el.innerHTML = `<span class="eta-dot" aria-hidden="true"></span><span><strong>Delivery target: ${formatEtaMinutes(mins)}</strong><small class="eta-sub">We aim to get it to you in this time or sooner — a target, not a guarantee.</small></span>`;
         return;
       }
-
-      el.className = 'eta-strip eta-strip-active';
-      el.innerHTML = `<span class="eta-dot" aria-hidden="true"></span>Estimated delivery: ${label}`;
+      el.className = 'eta-strip eta-strip-empty';
+      el.innerHTML = state.destinationGeo
+        ? '⏱ Working out your delivery time…'
+        : '📍 Add your address to see your delivery time';
     }
 
     // Lightweight single-seller branding touch — only ever called (from
