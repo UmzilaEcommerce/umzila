@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Email confirmation on: signing in now proves you own the email
+
+**Asked for (founder):** a buyer signed in with the order's email should be able to track from their profile without hunting for the email link; turn on "Confirm email" so future accounts confirm, and past accounts go through confirmation the next time they sign in.
+
+**Root cause of the gap:** Supabase "Confirm email" was off — every account was auto-confirmed within a second of creation (no email ever sent), so an account's email proved nothing. Anything matched by email was therefore readable by whoever registered that address first: guest orders (orders RLS matched `auth.email()`), discount codes / gift vouchers (matched `profiles.email`, which users can edit themselves) and newsletter subscriptions.
+
+**What changed:**
+- **Supabase Auth → "Confirm email" turned ON** (by the founder in the dashboard). Past accounts: `email_confirmed_at` reset so they confirm on their next sign-in (existing sessions keep working).
+- New `public.my_verified_email()`: the caller's email only if it was confirmed by a link (confirmed > 10 s after the account was created — auto-confirmed and admin-created accounts don't count).
+- RLS now uses it: `orders` ("by uid or verified email"), `discount_codes` (own codes by verified email or profile id), `subscribers`.
+- New `claim_my_email_orders()`: a verified buyer's guest orders (same email) get `orders.user_id` / `deliveries.customer_id` set to them. Called by profile, the homepage widget and `track.html` — so profile tracking and the widget work on any device once the email is confirmed. (`claim_order_with_token` still links via the private link without waiting for confirmation.)
+- `handle_new_user` fills `profiles.email/first_name/last_name` from the sign-up (there's no session yet when confirmation is on, so the browser can't).
+- Every sign-up passes `emailRedirectTo` = the current page (checkout comes back signed in; the saved code re-applies on load) and, without a session, shows "we sent a confirmation link to …" instead of closing. Every sign-in that fails with "Email not confirmed" re-sends the link and says so: main modal (`script.js`), checkout (code-box panel, account card, inline sign-in), mystery gift (`index.html`), `login-admin.html`. Fixed `script.js` passing sign-up options as a second argument (the name was silently dropped).
+
+**Needs in Supabase (dashboard):** Auth → URL Configuration → Redirect URLs must allow `https://umzila.store/**` (otherwise links land on the Site URL); Auth emails must go through a real SMTP (e.g. Resend) — Supabase's built-in mailer only reaches team addresses and a few emails per hour.
+
+**Files:** `script.js`, `checkout.html`, `index.html`, `login-admin.html`, `profile.html`, `track.html`; migrations `verified_email_ownership`, `reset_past_accounts_email_confirmation`.
+
+---
+
 ## 2026-10-04 — Guest orders: profile "Track delivery" and the homepage widget now work
 
 **Reported:** after ordering, the homepage "your order is on the way" widget never appeared, and profile → Track delivery said "No live tracking for this order on your account" (signed in on a phone), while the email link worked on another device.

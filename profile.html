@@ -1091,6 +1091,9 @@
     try { deviceLinks = JSON.parse(localStorage.getItem('ss_track_links') || '[]') || []; } catch (e) {}
     if (!Array.isArray(deviceLinks)) deviceLinks = [];
     window.__trackTokens = {};
+    // Confirmed email → this account's guest orders (same email) are linked
+    // to it (claim_my_email_orders does nothing for an unconfirmed email).
+    try { await sb.rpc('claim_my_email_orders'); } catch (e) {}
     for (const l of deviceLinks) {
       if (!l || !l.o || !l.t) continue;
       window.__trackTokens[l.o] = l.t;

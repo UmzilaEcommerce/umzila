@@ -205,10 +205,14 @@ async function checkUserPermission(email, password, selectedRole) {
       password
     });
     
+    if (authError && (authError.code === 'email_not_confirmed' || /not confirmed/i.test(authError.message || ''))) {
+      await window.supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
+      return { success: false, error: 'Please confirm your email first — we’ve sent a new link to ' + email + '. Open it, then sign in here.' };
+    }
     if (authError) {
       return {
         success: false,
-        error: authError.message.includes('Invalid') 
+        error: authError.message.includes('Invalid')  
           ? 'Invalid email or password' 
           : 'Authentication failed'
       };

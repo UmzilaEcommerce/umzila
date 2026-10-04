@@ -206,6 +206,11 @@
       sb.rpc('claim_order_with_token', { p_order_id: qsOrder, p_token: trackToken }).then(() => {}, () => {});
     }
   }
+  // Signed in with a confirmed email → their guest orders (same email) are
+  // linked to the account first, so "your own orders" tracking finds them.
+  if (session && session.user && !trackToken) {
+    try { await sb.rpc('claim_my_email_orders'); } catch (e) {}
+  }
   if ((!session || !session.user) && !trackToken) {
     content.innerHTML = emptyCard('🔗', 'Open the “Track my delivery” link from your order confirmation email (or the page you saw after paying) to follow your order — no account needed. If you have an Umzila account, sign in and open your orders.')
       + '<a class="t-back-link" href="index.html">&larr; Back to Umzila</a>';

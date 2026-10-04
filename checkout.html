@@ -3044,7 +3044,7 @@ async function saveCartToServer() {
       if (password) {
         const res = await signInOrCreateAccount(email, password, false);
         if (res.switchToReturning) { showError(elements.accountPasswordError, res.message); return false; }
-        if (res.created) showNotification('Account created — check your email to verify it. Your order will still go through as normal.', 'success');
+        if (res.created) showNotification('Account created — open the confirmation link we emailed you. Your order still goes through as normal.', 'success');
         // Any other signup error fails open — continue as guest.
       }
       return true;
@@ -3781,8 +3781,9 @@ async function loadBuyNowItem() {
     // Reusable promo codes (multi_use) are tracked per account, so a guest
     // can only preview them. Instead of sending the buyer away, this panel
     // under the code box asks for just a password (new email) or their
-    // password (existing account), using the email from step 1. Sign-ups
-    // confirm instantly on this project, so the code applies straight away.
+    // password (existing account), using the email from step 1. New accounts
+    // must confirm their email first; the link returns here and the saved
+    // code re-applies on load (applyCoupon(state.couponCode) in init).
     let promoSigninMode = null; // 'new' | 'returning'
     async function emailHasAccount(email) {
       if (email === emailCheckedValue) return !!state.emailExists;
@@ -3886,19 +3887,31 @@ async function loadBuyNowItem() {
     // One place that signs a buyer in or creates their account (used by the
     // step-1 password card and the promo-code panel).
     // → { ok, message?, switchToReturning? }
+    // "Confirm email" is on: a new account is signed in only after the buyer
+    // opens the link we email. The link comes back to this checkout (cart and
+    // code are kept), signed in. Signing in before confirming re-sends it.
+    function authReturnUrl() { return window.location.origin + window.location.pathname + window.location.search; }
+    async function unconfirmedEmailMessage(email, error) {
+      if (!error || !(error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || ''))) return null;
+      const { error: rErr } = await supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: authReturnUrl() } });
+      return rErr
+        ? `Please confirm your email first — open the link we sent to ${email}. (Couldn’t send a new one just now: ${rErr.message})`
+        : `Please confirm your email first — we’ve just sent a new link to ${email}. Open it and you’ll come back here signed in.`;
+    }
+
     async function signInOrCreateAccount(email, password, exists) {
       if (!supabaseClient) return { ok: false, message: 'Please try again in a moment.' };
       try {
         if (exists) {
           const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-          if (error) return { ok: false, message: error.message || 'Wrong email or password.' };
+          if (error) return { ok: false, message: (await unconfirmedEmailMessage(email, error)) || error.message || 'Wrong email or password.' };
           state.user = data.user;
           await verifyUserProfile(data.user.id);
           updateAuthUI(data.user);
           return { ok: true };
         }
         const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
-        const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+        const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: authReturnUrl() } });
         if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
           // Race: became registered between the live check and submit.
           state.emailExists = true;
@@ -3912,7 +3925,7 @@ async function loadBuyNowItem() {
           updateAuthUI(data.user);
           return { ok: true };
         }
-        return { ok: false, created: true, message: 'Account created — check your email to verify it, then sign in to use the code.' };
+        return { ok: false, created: true, message: `Almost done — we sent a confirmation link to ${email}. Open it and this page comes back signed in with your code applied (your cart is kept).` };
       } catch (e) {
         return { ok: false, message: 'Something went wrong — please try again.' };
       }
@@ -5605,7 +5618,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         try {
           if (supabaseClient) {
             const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-            if (error) throw error;
+            if (error) { const m = await unconfirmedEmailMessage(email, error); if (m) { showError(elements.inlineSigninError, m); return; } throw error; }
 
             state.user = data.user;
             await verifyUserProfile(data.user.id);
@@ -5645,7 +5658,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         elements.accountPasswordSigninBtn.disabled = true;
         try {
           const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-          if (error) throw error;
+          if (error) { const m = await unconfirmedEmailMessage(email, error); if (m) { showError(elements.accountPasswordError, m); return; } throw error; }
           state.user = data.user;
           await verifyUserProfile(data.user.id);
           updateAuthUI(data.user);

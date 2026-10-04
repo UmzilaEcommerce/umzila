@@ -1104,8 +1104,9 @@
 
         var d = null, href = null;
         if (user) {
-          // Link any guest order from this device to the account (only works
-          // when the token matches and the account email is the order email).
+          // Link this account's guest orders: by confirmed email, and any
+          // tracking link saved on this device (token + same email).
+          try { await sb.rpc('claim_my_email_orders'); } catch (e) {}
           for (var i = 0; i < links.length; i++) {
             try { await sb.rpc('claim_order_with_token', { p_order_id: links[i].o, p_token: links[i].t }); } catch (e) {}
           }
@@ -1732,7 +1733,7 @@
       try {
         var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
         if (client && client.auth) {
-          var res = await client.auth.signUp({ email: currentEmail, password: pw });
+          var res = await client.auth.signUp({ email: currentEmail, password: pw, options: { emailRedirectTo: window.location.origin + '/' } });
           if (!res.error && res.data && res.data.user && res.data.user.id && client.from) {
             try {
               await client.from('profiles').upsert([{
@@ -1772,6 +1773,12 @@
         var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
         if (!client || !client.auth) throw new Error('Auth client not available.');
         var res = await client.auth.signInWithPassword({ email: currentEmail, password: pw });
+        if (res.error && (res.error.code === 'email_not_confirmed' || /not confirmed/i.test(res.error.message || ''))) {
+          await client.auth.resend({ type: 'signup', email: currentEmail, options: { emailRedirectTo: window.location.origin + '/' } });
+          mySigninErr.textContent = 'Please confirm your email first — we’ve sent a link to ' + currentEmail + '. Open it, then come back to claim your gift.';
+          mySigninErr.style.display = 'block';
+          return;
+        }
         if (res.error) {
           mySigninErr.textContent = res.error.message || 'Wrong password. Please try again.';
           mySigninErr.style.display = 'block';

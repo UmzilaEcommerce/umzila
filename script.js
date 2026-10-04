@@ -1279,6 +1279,10 @@ async function loadProducts() {
  ********************/
 
 // Generate a random referral code
+function escapeAuthHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function generateReferralCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
   let code = '';
@@ -1592,16 +1596,17 @@ if (modalSignupSubmit) {
     signupSubmit.textContent = 'Creating account...';
     
     try {
-      const options = { 
-        data: { 
-          full_name: name 
-        } 
-      };
-      
-      const { data, error } = await client.auth.signUp({ 
-        email, 
-        password 
-      }, options);
+      // "Confirm email" is on: the account works once they open the emailed
+      // link, which brings them back to this page signed in. (options must be
+      // inside the first argument — the name used to be silently dropped.)
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: window.location.origin + window.location.pathname + window.location.search
+        }
+      });
       
       if (error) {
         console.error('Signup error:', error);
@@ -1663,7 +1668,9 @@ if (modalSignupSubmit) {
 
       // Show success message
       if (successElement) {
-        successElement.innerHTML = 'Account created! Check your email to verify your address.' + referralMsg;
+        successElement.innerHTML = data?.session
+          ? 'Account created!' + referralMsg
+          : 'Almost done — we sent a confirmation link to <strong>' + escapeAuthHtml(email) + '</strong>. Open it to finish and you’ll come back here signed in. (Check spam too. Already have an account? Sign in instead.)' + referralMsg;
         successElement.style.display = 'block';
       }
 
@@ -1679,12 +1686,13 @@ if (modalSignupSubmit) {
       }
       
       // Close modal after success
-      setTimeout(() => {
-        hideModal(signupModal);
-        if (data?.session) {
+      // Without a session they must read the "check your email" note — leave it open.
+      if (data?.session) {
+        setTimeout(() => {
+          hideModal(signupModal);
           updateAuthUI(data.user);
-        }
-      }, 2000);
+        }, 2000);
+      }
       
     } catch (err) {
       console.error('Unexpected signup error:', err);
@@ -1746,6 +1754,16 @@ if (modalLoginSubmit) {
       
       if (error) {
         console.error('Login error:', error);
+        if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {
+          const { error: rErr } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname + window.location.search } });
+          if (errorElement) {
+            errorElement.textContent = rErr
+              ? 'Please confirm your email first — open the link we sent to ' + email + '.'
+              : 'Please confirm your email first — we’ve just sent a new link to ' + email + '. Open it and you’ll be signed in.';
+            errorElement.style.display = 'block';
+          }
+          return;
+        }
         if (errorElement) {
           errorElement.textContent = error.message || 'Wrong credentials or email not registered.';
           errorElement.style.display = 'block';
