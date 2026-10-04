@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-04 — Every paid delivery order now reaches a rider; seller "Fulfillment" dropdown removed
+
+**Reported (founder's 2nd live test, signed in, R5 free-delivery item):** paid, showed on the seller dashboard with a Pending/Packaging/Fulfilled/Delivered/Returned dropdown (makes no sense for a seller), never appeared in logistics, and stayed "Pending" in the buyer's profile.
+
+**Root cause:** the order was saved with `delivery_quote_id = null` although a valid quote for the same buyer existed 24 s earlier. In a signed-in checkout the saved cart can finish loading while the quote request is in flight; `ensureFreshQuote()` then saw a quote that no longer matched the cart, didn't ask again, and sent no quote. `create_delivery_on_payment` only created a delivery when `delivery_quote_id` was set → no delivery → nothing for logistics/riders, and the seller dashboard fell back to the legacy dropdown (it shows "Mark ready" only for orders with a delivery). Choosing in that dropdown then wrote `order_status = 'Pending'` over `'paid'` — why the profile said Pending. Same hole for any order without a live quote (e.g. stores without a pickup pin).
+
+**Fixes:**
+- `create_delivery_on_payment`: a paid order with a delivery address and physical items **always** gets a delivery. With no quote attached, it creates a stand-in quote (`destination_snapshot.source = 'payment_fallback'`, fee = what was charged, distance = straight line ×1.3 from the first store's pickup pin, used only for rider ranking/payout) and links it. Stores delivering themselves within `self_arranged_radius_km` are skipped (same rule as `get-delivery-quote.js`).
+- Checkout: `ensureFreshQuote()` asks once more for exactly this cart when the in-flight quote no longer matches.
+- Seller dashboard: no dropdown. A seller sees **Mark Ready for Pickup**, then "✓ Ready for Pickup" + the delivery stage ("Finding a rider", "Rider on the way to you", "Out for delivery", "Delivered to customer"…). Never writes `orders.order_status`.
+- The test order was repaired: status back to `paid` (payment confirmed by PayFast) → delivery created (PENDING, waiting for the store).
+
+**Verified:** rolled-back DB test on the real order → quote linked, delivery PENDING with tracking token, 1 order item. Headless checkout (picked and typed address) → order insert carries `delivery_quote_id` in both (the typed case previously never reached the insert).
+
+**Still to do (ops):** only Sweet Corner and Velaphi have a pickup pin; deliveries from other stores are created but can't be offered to a rider until the store's pickup location is set — they show on the logistics Today board as "No rider".
+
+**Files:** `checkout.html`, `seller-dashboard.html`; migrations `every_paid_delivery_order_gets_a_delivery` (+ `_fix_status`, `_skip_self_arranged`).
+
+---
+
 ## 2026-10-04 — Admin revamp: grouped menu, "Live now" strip, phone layout
 
 **Asked for (founder):** admin needs the same revamp as logistics (faster, more accurate, better on mobile).

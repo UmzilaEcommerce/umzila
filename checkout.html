@@ -3248,6 +3248,14 @@ async function saveCartToServer() {
     // puts the order into rider dispatch and live tracking).
     async function ensureFreshQuote() {
       if (state.destinationGeo && !activeQuote()) await fetchDeliveryQuote();
+      // A request that was already in flight may have been for the cart as it
+      // was a moment ago (e.g. a signed-in buyer's saved cart finished loading
+      // meanwhile) — then it doesn't match and used to be silently dropped,
+      // so the order was saved without its quote and never reached a rider.
+      // Ask once more for exactly this cart. (The database also creates a
+      // delivery for any paid delivery order without one — see
+      // create_delivery_on_payment — this just keeps the live price.)
+      if (state.destinationGeo && !activeQuote() && !state.deliveryBlock) await fetchDeliveryQuoteNow();
       state.deliveryQuoteId = activeQuote() ? activeQuote().id : null;
     }
     let quoteInFlight = null;

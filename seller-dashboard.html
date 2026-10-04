@@ -3577,21 +3577,28 @@
     // able to jump straight to 'Fulfilled'/'Delivered', which wrote a
     // premature 'delivered' status that leaked into the customer's profile
     // page before the order had even left the store (fixed there too).
+    // A seller's only job on an order is to get it ready — Umzila's rider
+    // collects and delivers it. (The old Pending/Packaging/Fulfilled/
+    // Delivered/Returned dropdown made no sense to sellers and wrote over
+    // orders.order_status = 'paid'.) Every paid delivery order now has a
+    // deliveries row (create_delivery_on_payment), so the delivery state is
+    // shown once the seller is done.
+    var SELLER_DELIVERY_LABEL = {
+      READY_FOR_DISPATCH: 'Finding a rider', OFFERED: 'Finding a rider', REASSIGNING: 'Finding a rider',
+      ASSIGNED: 'Rider on the way to you', DRIVER_AT_PICKUP: 'Rider at your store', PARTIALLY_PICKED_UP: 'Rider at your store',
+      PICKED_UP: 'Collected', IN_ROUTE: 'Out for delivery', NEXT_STOP: 'Out for delivery', ARRIVING: 'Out for delivery',
+      PIN_REQUIRED: 'Out for delivery', DELIVERED: 'Delivered to customer', CANCELLED: 'Cancelled', FAILED: 'Delivery failed', RETURNED: 'Returned'
+    };
     function renderFulfillmentControl(order, fulfillStatus) {
-      if (order._deliveryStatus === null) {
-        return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Fulfillment:</span>' +
-          '<select class="fulfillment-select" data-order-id="' + order.id + '" onchange="updateOrderFulfillment(this)">' +
-            ['Pending','Packaging','Fulfilled','Delivered','Returned'].map(function(s) {
-              return '<option' + (s === fulfillStatus ? ' selected' : '') + '>' + s + '</option>';
-            }).join('') +
-          '</select>';
+      var label = '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>';
+      if (fulfillStatus === 'Returned') return label + '<span class="payment-pill cancelled">Returned</span>';
+      var iAmReady = fulfillStatus === 'Fulfilled' || fulfillStatus === 'Delivered';
+      if (!iAmReady && (order._deliveryStatus === null || order._deliveryStatus === 'PENDING')) {
+        return label + '<button class="btn primary sm" data-order-id="' + order.id + '" onclick="markOrderReady(this)">Mark Ready for Pickup</button>';
       }
-      if (order._deliveryStatus === 'PENDING') {
-        return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>' +
-          '<button class="btn primary sm" data-order-id="' + order.id + '" onclick="markOrderReady(this)">Mark Ready for Pickup</button>';
-      }
-      return '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>' +
-        '<span class="payment-pill paid">✓ Ready for Pickup</span>';
+      var st = order._deliveryStatus && order._deliveryStatus !== 'PENDING' ? SELLER_DELIVERY_LABEL[order._deliveryStatus] : null;
+      return label + '<span class="payment-pill paid">✓ Ready for Pickup</span>' +
+        (st ? ' <span style="font-size:12px;color:var(--muted);margin-left:6px">' + escapeHtmlLite(st) + '</span>' : '');
     }
 
     // Binary "not ready -> ready" toggle for delivery-network orders (plan
