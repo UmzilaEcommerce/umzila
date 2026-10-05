@@ -4,6 +4,30 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Curated home page: Velaphi plates are the star, Nceks the experience
+
+**Asked for (founder):** Velaphi items rank higher and other stores lower (except Nceks); the home page looked cluttered (hair, then noodles, then a R100 plate). Plates should be the star; rename rows to highlight "Workshop Shisanyama" and "Xperience of a lifetime with Nceks"; "Under R100" should be items that complement the store (e.g. Milky Pie), not a random tub of oats. Fewer, curated rows.
+
+**Changes (`script.js` `HOME_CURATION`, `index.html`, `style.css`):**
+- **Home rows**, down from 11 generic rows to 3 curated ones:
+  - **🔥 Workshop Shisanyama** (Velaphi, cheapest plate first, "Order from Velaphi →");
+  - **🏍️ Xperience of a lifetime with Nceks** (rides, then gift vouchers, "Book a ride →");
+  - **🥤 Under R100 — goes with your plate** (Velaphi's under-R100 plates, then desserts, drinks, snacks).
+- The other rows (Hot Deals, Trending, New Drops, Back to School, Best Sellers, Clothing, Food, Services, Accessories, Beauty) are hidden; their code is kept. Other stores are reached through Featured Shops / All Shops, the category bubbles and search.
+- **Ranking everywhere:** `computeScore()` adds `storeBoost()` (Velaphi +1000, Nceks +600), so they lead in search, categories, "See all" and the default "popular" sort. Featured Shops lists Velaphi, then Nceks, first.
+- **Hero carousel:** trimmed to the Velaphi and Nceks slides. The laundry slide linked to "FreshFold", which isn't on Umzila. The Hot Deals bubble now opens the full Hot Deals list (its row is hidden).
+- **Bug avoided:** `showFilteredView()` hides home rows by a fixed list, so the new rows were added to it (otherwise they'd sit above search/category results).
+
+**Verified (headless, local, real products):**
+- Phone and desktop show the 3 rows in order, Featured Shops leads with Velaphi and Nceks, and "goes with your plate" starts with the R70 plate, then Milky Pie.
+- Food category lists all Velaphi plates first; the rows hide in results and return on Back. No page errors.
+
+**Note:** the "BEEF & WORS + 4 wings" plate is hidden as sold out — its product stock is 50 but its "One Size" option stock is 0 (sold-out rule uses the option). Left as the seller set it.
+
+**Files:** `script.js`, `index.html`, `style.css`.
+
+---
+
 ## 2026-10-05 — Multi-drop edge cases tested; orders offered to an on-trip rider when nobody else is free
 
 **Asked for (founder):** test edge cases:

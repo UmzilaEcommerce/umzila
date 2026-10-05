@@ -187,8 +187,7 @@
         <div class="slides" id="slides">
           <div class="slide" data-slide="hotDeals" data-href="/velaphishisanyama" data-filter=""></div>
           <div class="slide" data-slide="nceks" data-href="/ncekeniquads" aria-label="Nceks Quad Biking — book a ride"></div>
-          <div class="slide" data-slide="clothing" data-href="shop.html?shop=FreshFold"></div>
-          <div class="slide" data-slide="food" data-href="" data-filter-cat="Food"></div>
+          <!-- Curated (2026-10-05): only the star + the experience. The laundry slide linked to a store that isn't on Umzila. -->
         </div>
 
         <div class="nav">
@@ -238,7 +237,7 @@
           </div>
           <div class="cat-bubble-label">Home & Gifts</div>
         </a>
-        <a class="cat-bubble" href="#hotSection" data-color="deals">
+        <a class="cat-bubble" href="#section=hot" data-color="deals">
           <div class="cat-bubble-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
           </div>
@@ -349,6 +348,25 @@
         </div>
       </div>
 
+      <!-- CURATED HOME (2026-10-05): the star (Velaphi plates), the experience
+           (Nceks), what goes with a plate, then one row for everything else.
+           Store links + boosts live in script.js HOME_CURATION. -->
+      <section class="fade-up curated-hero" id="shisanyamaSection" style="display:none">
+        <div class="section-header">
+          <div><h2>🔥 Workshop Shisanyama</h2><div class="section-sub">Flame-grilled plates from Velaphi — free sides on every plate</div></div>
+          <a class="section-see-more" id="shisanyamaLink" href="/velaphishisanyama">Order from Velaphi →</a>
+        </div>
+        <div class="hscroll" id="shisanyamaScroll"></div>
+      </section>
+
+      <section class="fade-up curated-xp" id="experienceSection" style="display:none">
+        <div class="section-header">
+          <div><h2>🏍️ Xperience of a lifetime with Nceks</h2><div class="section-sub">Quad biking at Inanda Dam — book a ride or gift one</div></div>
+          <a class="section-see-more" id="experienceLink" href="/ncekeniquads">Book a ride →</a>
+        </div>
+        <div class="hscroll" id="experienceScroll"></div>
+      </section>
+
       <!-- HOT DEALS -->
       <section class="fade-up" id="hotSection">
         <div class="section-header">
@@ -388,7 +406,7 @@
       <!-- UNDER R100 -->
       <section class="fade-up" id="underR100Section">
         <div class="section-header">
-          <h2>💸 Under R100</h2>
+          <div><h2>🥤 Under R100 — goes with your plate</h2><div class="section-sub">Drinks, desserts and snacks to complete the meal</div></div>
           <button class="section-see-more" data-section="underR100">See more →</button>
         </div>
         <div class="hscroll" id="underR100Scroll"></div>
@@ -1210,7 +1228,11 @@
           .select('seller_id').eq('type', 'featured_shop').eq('status', 'active').gt('ends_at', now);
         var featuredIds = new Set(((featuredAdsRes.data) || []).map(function(a){ return a.seller_id; }));
 
+        // Curated stores first (script.js HOME_CURATION), then paid features, then size.
+        var curatedRank = function(s) { var c = (typeof HOME_CURATION !== 'undefined') ? HOME_CURATION : null; return !c ? 9 : s.slug === c.starStore ? 0 : s.slug === c.experienceStore ? 1 : 9; };
         sellers.sort(function(a, b) {
+          var ca = curatedRank(a), cb = curatedRank(b);
+          if (ca !== cb) return ca - cb;
           var aF = featuredIds.has(a.id) ? 1 : 0;
           var bF = featuredIds.has(b.id) ? 1 : 0;
           if (bF !== aF) return bF - aF;

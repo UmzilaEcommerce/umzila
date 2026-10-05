@@ -2195,6 +2195,14 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
   text-decoration: none; transition: color .15s ease-out;
 }
 .section-see-more:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* Curated home rows (2026-10-05) */
+.section-sub { font-size: 13px; color: var(--muted); margin-top: 3px; line-height: 1.35; }
+.curated-hero, .curated-xp { border-radius: 18px; padding: 14px 14px 6px; margin-bottom: 14px; }
+.curated-hero { background: linear-gradient(135deg, #fff4ea 0%, #ffffff 70%); border: 1px solid #ffd9b8; }
+.curated-xp { background: linear-gradient(135deg, #eef6ff 0%, #ffffff 70%); border: 1px solid #cfe3ff; }
+.curated-hero .section-header h2 { font-size: 24px; }
+@media (max-width: 768px) { .curated-hero .section-header h2 { font-size: 21px; } .curated-hero, .curated-xp { padding: 12px 10px 4px; margin-left: -4px; margin-right: -4px; } }
+
 
 /* ── Search suggestion categories ── */
 .suggestions-cat {

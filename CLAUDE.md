@@ -175,4 +175,6 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 🔔 BACK-IN-STOCK (added 2026-10-04): "Notify me" inserts stock_alerts (one pending row per product+email; 23505 = already on the list; signed-in buyers use their account email, no typing). send-stock-alerts.js (scheduled every 15 min in netlify.toml) emails once the product is visible + in stock and stamps notified_at.
 
+🏠 HOME CURATION (added 2026-10-05): script.js HOME_CURATION (store slugs) decides the home page's star row (Velaphi "Workshop Shisanyama"), experience row (Nceks) and the "Under R100 — goes with your plate" complement categories, and storeBoost() lifts those stores in every ranking. The older generic home rows are hidden, not deleted. Any new home row must also be added to showFilteredView()'s hide list.
+
 🎨 BESPOKE STOREFRONTS — see docs/systems/bespoke-storefronts.md. A folder named after a store's slug (e.g. /ncekeniquads/) overrides the generic shop page; it is a skin over Umzila data/cart/checkout, never its own payment flow.

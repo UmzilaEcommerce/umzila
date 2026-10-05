@@ -2348,7 +2348,7 @@ function applyFilters(){
     return priceB - priceA;
   });
   else if(f.sort==='new') out.sort((a,b)=>b.id - a.id);
-  else out.sort((a,b)=> (b.popularity||0) - (a.popularity||0));
+  else out.sort((a,b)=> (storeBoost(b) + (b.popularity||0)) - (storeBoost(a) + (a.popularity||0))); // curated stores first (HOME_CURATION)
   if (searching) out = out.filter(p => !soldOut(p)).concat(out.filter(soldOut));
 
   // Decide: active search OR non-All category → show filtered grid view
@@ -2389,8 +2389,8 @@ function showFilteredView(products, label){
   if(!fv || !grid) return;
 
   // Hide homepage sections
-  ['hotSection','trendingSection','newDropsSection','studentSection','underR100Section',
-   'bestSellersSection','popularClothingSection','popularFoodSection','featuredShopsSection']
+  ['shisanyamaSection','experienceSection','hotSection','trendingSection','newDropsSection','studentSection','underR100Section',
+   'bestSellersSection','popularClothingSection','popularFoodSection','servicesSection','accessoriesSection','beautySection','featuredShopsSection']
     .forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
 
   fv.classList.add('active');
@@ -2683,6 +2683,36 @@ function getUserPreferenceCategories() {
  * New products blend toward the neutral prior (pop×0.5) until they have
  * enough volume to be trusted at full weight.
  ********************/
+// ── Home curation (founder 2026-10-05) — what Umzila is pushing right now.
+// Stores are identified by their permanent link name (sellers.slug — never
+// changes on rename). storeBoost is added to EVERY ranking (home rows, search,
+// categories, "See all"), so these stores lead and everything else sits lower.
+// Change the line-up here; the home page's star/experience rows follow it.
+const HOME_CURATION = {
+  starStore: 'velaphishisanyama',     // 🔥 Workshop Shisanyama — the star
+  experienceStore: 'ncekeniquads',    // 🏍️ Xperience of a lifetime with Nceks
+  boost: { velaphishisanyama: 1000, ncekeniquads: 600 },
+  // "Under R100 — goes with your plate": only things that complement a meal.
+  complementCategories: ['Drinks', 'Desserts', 'Snacks'],
+  complementOrder: { Desserts: 0, Drinks: 1, Snacks: 2 }
+};
+function storeSlugOf(p) { return (p && p.seller && p.seller.slug) || ''; }
+function storeBoost(p) { return HOME_CURATION.boost[storeSlugOf(p)] || 0; }
+function effectivePrice(p) { return p.sale && p.salePrice ? p.salePrice : p.price; }
+// Under R100 that complements a plate: the star store's own items first, then
+// desserts, drinks, snacks (best-performing first within each).
+function complementUnderR100(prods) {
+  const star = HOME_CURATION.starStore;
+  return prods.filter(p => effectivePrice(p) < 100 && (storeSlugOf(p) === star || HOME_CURATION.complementCategories.indexOf(p.category) !== -1))
+    .sort((a, b) => {
+      const ga = storeSlugOf(a) === star ? -1 : (HOME_CURATION.complementOrder[a.category] ?? 9);
+      const gb = storeSlugOf(b) === star ? -1 : (HOME_CURATION.complementOrder[b.category] ?? 9);
+      if (ga !== gb) return ga - gb;
+      if (ga === -1) return effectivePrice(a) - effectivePrice(b); // the star's cheapest plate first
+      return computeScore(b, { boostAfford: true }) - computeScore(a, { boostAfford: true });
+    });
+}
+
 function computeScore(p, opts) {
   opts = opts || {};
 
@@ -2731,7 +2761,8 @@ function computeScore(p, opts) {
     if (opts.userCategories.indexOf(p.category) !== -1) score += 15;
   }
 
-  return score;
+  // Curated stores lead every ranking (HOME_CURATION).
+  return score + storeBoost(p);
 }
 
 /********************
@@ -2985,6 +3016,42 @@ function renderAll(products){
 
   // Helper: sum of a numeric field across an array of products
   function sumField(arr, field){ return arr.reduce(function(acc, p){ return acc + (Number(p[field]) || 0); }, 0); }
+
+  // ── CURATED HOME (2026-10-05) ─────────────────────────────────────────────
+  // Fewer, complementary rows: the star store, the experience, and what goes
+  // with a plate (under R100). Other stores are reached through Featured Shops
+  // / All Shops, the category bubbles and search (where they rank below the
+  // curated stores). The older generic rows below are hidden (code kept).
+  {
+    const star = HOME_CURATION.starStore, xp = HOME_CURATION.experienceStore;
+    // Star: cheapest plate first, so the R70 plate leads.
+    const starItems = visible.filter(p => storeSlugOf(p) === star).sort((a, b) => effectivePrice(a) - effectivePrice(b));
+    const shEl = document.getElementById('shisanyamaScroll');
+    if (shEl) shEl.innerHTML = cards(starItems, 180);
+    showSection('shisanyamaSection', starItems.length);
+    // Experience: rides before gift vouchers, shortest first.
+    const xpItems = visible.filter(p => storeSlugOf(p) === xp)
+      .sort((a, b) => (/voucher/i.test(a.title || a.name || '') ? 1 : 0) - (/voucher/i.test(b.title || b.name || '') ? 1 : 0) || effectivePrice(a) - effectivePrice(b));
+    const xpEl = document.getElementById('experienceScroll');
+    if (xpEl) xpEl.innerHTML = cards(xpItems, 180);
+    showSection('experienceSection', xpItems.length);
+
+    const withPlate = complementUnderR100(visible).slice(0, 14);
+    const urEl = document.getElementById('underR100Scroll');
+    if (urEl) urEl.innerHTML = cards(withPlate, 170);
+    showSection('underR100Section', withPlate.length);
+
+    // Order on the page: star, experience, with-your-plate.
+    const parent = document.getElementById('shisanyamaSection')?.parentNode;
+    if (parent) ['shisanyamaSection', 'experienceSection', 'underR100Section'].forEach(id => {
+      const el = document.getElementById(id); if (el) parent.insertBefore(el, document.getElementById('hotSection'));
+    });
+    ['hotSection', 'trendingSection', 'newDropsSection', 'studentSection', 'bestSellersSection', 'popularClothingSection',
+     'popularFoodSection', 'servicesSection', 'accessoriesSection', 'beautySection'].forEach(id => showSection(id, false));
+    attachProductListeners();
+    runReveal();
+    return;
+  }
 
   // ── HOT DEALS ──────────────────────────────────────────────────────────────
   // Goal: surface sale items that are actually engaging. Reduce order dominance so a
@@ -4188,7 +4255,7 @@ function openSectionView(key){
   else if(key.type==='trending') items=sc(prods,{userCategories:getUserPreferenceCategories()});
   else if(key.type==='newDrops') items=prods.slice().sort(function(a,b){ var da=a.created_at?new Date(a.created_at).getTime():Number(a.id)||0; var db=b.created_at?new Date(b.created_at).getTime():Number(b.id)||0; return db-da; });
   else if(key.type==='student'){ const sg=getSchoolCategorySubs(); items=sc(prods.filter(function(p){ return sg.indexOf(p.category)!==-1; })); }
-  else if(key.type==='underR100') items=sc(prods.filter(function(p){ const pr=p.sale&&p.salePrice?p.salePrice:p.price; return pr<100; }),{boostAfford:true});
+  else if(key.type==='underR100') items=complementUnderR100(prods);
   else if(key.type==='bestSellers') items=sc(prods);
   else if(key.type==='clothing'){ const cs=getCategoryGroupSubs('Clothing'); items=sc(prods.filter(function(p){ return cs.indexOf(p.category)!==-1; })); }
   else if(key.type==='food'){ const fs=getCategoryGroupSubs('Food'); items=sc(prods.filter(function(p){ return fs.indexOf(p.category)!==-1; })); }
@@ -4206,7 +4273,7 @@ const SECTION_KEY_MAP = {
   trending:   { type:'trending',   title:'Trending on Umzila' },
   newDrops:   { type:'newDrops',   title:'New Drops' },
   student:    { type:'student',    title:'Back to School' },
-  underR100:  { type:'underR100',  title:'Under R100' },
+  underR100:  { type:'underR100',  title:'Under R100 — goes with your plate' },
   bestSellers:{ type:'bestSellers',title:'Best Sellers' },
   clothing:   { type:'clothing',   title:'Popular in Clothing' },
   food:       { type:'food',       title:'Popular in Food' },
