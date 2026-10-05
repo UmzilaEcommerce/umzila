@@ -202,7 +202,7 @@ async function getCategoryIntelligence(admin) {
 // ── Seller intelligence ───────────────────────────────────────────────────────
 async function getSellerIntelligence(admin) {
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-  const [{ data: sellers }, { data: products }, { data: orders }, { data: clickEvents }] = await Promise.all([
+  const [{ data: sellers }, { data: products }, { data: orders }, { data: clickEvents }, { data: visitEvents }] = await Promise.all([
     admin.from('sellers').select('id, shop_name, status').eq('status', 'active').limit(100),
     admin.from('products').select('id, seller_id, favourite_count, name').limit(2000),
     admin.from('orders').select('items, total, payment_status').eq('payment_status', 'paid').limit(1000),
@@ -211,12 +211,29 @@ async function getSellerIntelligence(admin) {
       .eq('event_type', 'product_click')
       .gte('created_at', since)
       .not('product_id', 'is', null)
-      .limit(5000)
+      .limit(5000),
+    // Store page visits (shop.html + bespoke storefronts, presence.js umzilaTrack)
+    admin.from('user_events')
+      .select('seller_id, anonymous_id, user_id')
+      .eq('event_type', 'store_view')
+      .gte('created_at', since)
+      .not('seller_id', 'is', null)
+      .limit(20000)
   ]);
 
   const sellerMap = {};
   (sellers || []).forEach(s => {
-    sellerMap[s.id] = { id: s.id, shop_name: s.shop_name, productCount: 0, totalFavourites: 0, totalClicks: 0, revenue: 0 };
+    sellerMap[s.id] = { id: s.id, shop_name: s.shop_name, productCount: 0, totalFavourites: 0, totalClicks: 0, revenue: 0, storeVisits: 0, storeVisitors: 0 };
+  });
+
+  // Store visits (30 d) and distinct visitors (signed-in user, else browser id)
+  const seen = {};
+  (visitEvents || []).forEach(e => {
+    const s = sellerMap[e.seller_id]; if (!s) return;
+    s.storeVisits++;
+    const who = e.user_id || e.anonymous_id; if (!who) return;
+    seen[e.seller_id] = seen[e.seller_id] || new Set();
+    if (!seen[e.seller_id].has(who)) { seen[e.seller_id].add(who); s.storeVisitors++; }
   });
 
   // Build product→seller map for click attribution

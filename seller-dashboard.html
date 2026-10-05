@@ -1164,6 +1164,15 @@
           <div class="stat-card green"><div class="stat-value" id="statFavourites">—</div><div class="stat-label">Total Favourites</div></div>
         </div>
 
+        <!-- Store page traffic (get_my_store_traffic) -->
+        <div class="analytics-section-title">Store visitors</div>
+        <div class="analytics-grid">
+          <div class="stat-card green"><div class="stat-value" id="statLiveNow">—</div><div class="stat-label">On your store now</div></div>
+          <div class="stat-card"><div class="stat-value" id="statVisitors7">—</div><div class="stat-label">Visitors (7 days)</div></div>
+          <div class="stat-card"><div class="stat-value" id="statVisitors30">—</div><div class="stat-label">Visitors (30 days)</div></div>
+          <div class="stat-card"><div class="stat-value" id="statVisits30">—</div><div class="stat-label">Store visits (30 days)</div></div>
+        </div>
+
         <!-- Payment status breakdown -->
         <div class="analytics-section-title">Orders by Payment Status</div>
         <div class="status-breakdown">
@@ -4195,7 +4204,18 @@
     /* ─────────────────────────────────────────
        TAB 5 — ANALYTICS
     ───────────────────────────────────────── */
+    // Store page traffic — own store only (RPC checks ownership). Never blocks analytics.
+    async function loadStoreTraffic() {
+      if (!SD.seller) return;
+      var res = await SD.sb.rpc('get_my_store_traffic', { p_seller_id: SD.seller.id });
+      var t = res && !res.error ? res.data : null;
+      [['statLiveNow', 'live_now'], ['statVisitors7', 'visitors_7d'], ['statVisitors30', 'visitors_30d'], ['statVisits30', 'visits_30d']].forEach(function(k) {
+        var el = document.getElementById(k[0]); if (el) el.textContent = t ? (t[k[1]] || 0) : '—';
+      });
+    }
+
     async function loadAnalytics() {
+      loadStoreTraffic().catch(function() {});
       // Ensure products loaded — shared loader, see loadProgressBar's comment.
       await loadProducts();
       var myProductIds = SD.products.map(function(p) { return p.id; });

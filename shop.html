@@ -892,6 +892,7 @@ function showQvImage(i){
 function openQV(id){
   const p = byId(id); if (!p) return;
   qvP = p; qvQty = 1;
+  if (window.umzilaTrack) umzilaTrack('product_click', { product_id: p.id, seller_id: S.seller.id, category: p.section, metadata: { via: 'store_page' } });
   const s = S.seller, svc = isService(p), out = !inStock(p);
   $('#qvMedia').innerHTML = p.primary_image
     ? `<img id="qvMain" src="${esc(p.primary_image)}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="qv-thumbs" id="qvThumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(thumbUrl(u))}" data-full="${esc(u)}" alt="" onerror="thumbFallback(this)"></button>`).join('')}</div>` : '')
@@ -993,6 +994,7 @@ function addToCart(p, size, qty, from){
   if (hit) { hit.qty = Math.min(qtyOf(hit) + qty, cap); delete hit.quantity; }
   else cart.push(buildCartItem(p, size, Math.min(qty, cap)));
   saveCart(cart);
+  if (window.umzilaTrack) umzilaTrack('add_to_cart', { product_id: p.id, seller_id: S.seller.id, category: p.section });
   fly(from).then(() => syncCart(true));
   toast(`${qty} × ${p.title}`, size && p.sizes.length ? `Size ${size}` : 'Added to your cart', true);
 }
@@ -1093,6 +1095,13 @@ function missing(title, sub){
   $('#stMissingT').textContent = title; $('#stMissingS').textContent = sub;
   $('#stMissing').hidden = false;
 }
+// The store's data comes CDN-cached from get-store.js (docs/systems/site-speed.md).
+// It needs no Supabase client, so the download starts now, in parallel with the
+// config + client set-up; boot() falls back to direct queries if it fails.
+const storeSlug = (() => { const p = location.pathname.replace(/^\/+|\/+$/g, ''); return /^[a-z0-9]+(-[a-z0-9]+)*$/i.test(p) && p !== 'shop' ? p.toLowerCase() : ''; })();
+const storePromise = storeSlug
+  ? fetch('/.netlify/functions/get-store?slug=' + encodeURIComponent(storeSlug)).then(r => r.ok ? r.json() : null).catch(() => null)
+  : Promise.resolve(null);
 async function boot(){
   try {
     const res = await fetch('/.netlify/functions/get-client-config');
@@ -1114,7 +1123,9 @@ async function boot(){
   let sellerRes;
   if (pathSlug) {
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/i.test(pathSlug)) { location.replace('/'); return; }
-    sellerRes = await sb.from('sellers').select('*').eq('slug', pathSlug.toLowerCase()).limit(1);
+    const stFirst = await storePromise;
+    sellerRes = stFirst && 'seller' in stFirst ? { data: stFirst.seller ? [stFirst.seller] : [], error: null }
+      : await sb.from('sellers').select('*').eq('slug', pathSlug.toLowerCase()).limit(1);
     if (!sellerRes.error && !(sellerRes.data || []).length && KNOWN_PAGES.includes(pathSlug.toLowerCase())) {
       location.replace('/' + pathSlug.toLowerCase() + '.html' + location.search); return;
     }
@@ -1134,7 +1145,14 @@ async function boot(){
   S.seller = seller;
   applyTheme(seller.theme_color);
 
-  const [prodRes, hoursRes, sessRes, sponsRes] = await Promise.all([
+  const st = await storePromise;
+  const cachedStore = st && st.seller && st.seller.id === seller.id ? st : null;
+  const [prodRes, hoursRes, sessRes, sponsRes] = cachedStore ? await Promise.all([
+    { data: cachedStore.products || [] },
+    { data: cachedStore.hours ? [cachedStore.hours] : [] },
+    sessionP,
+    { data: (cachedStore.sponsored || []).map(id => ({ product_id: id })) }
+  ]) : await Promise.all([
     sb.from('products').select('*, product_images!fk_product_images_product(*)').eq('seller_id', seller.id).eq('visible', true).order('created_at', {ascending: false}),
     sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]}),
     sessionP,
@@ -1159,6 +1177,11 @@ async function boot(){
 
   loadFollow().catch(() => {});
   loadFavs().catch(() => {});
+  if (window.umzilaTrack) umzilaTrack('store_view', { seller_id: seller.id, metadata: { slug: seller.slug || '', page: 'template' } });
+  // Open/closed came from the (up to a minute old) cached copy: confirm it live.
+  if (cachedStore) sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]}).then(({data}) => {
+    if (data && data[0] && JSON.stringify(data[0]) !== JSON.stringify(S.hours)) { S.hours = data[0]; renderMeta(); renderAbout(); }
+  });
   // Open/closed flips while the page is open.
   setInterval(async () => {
     const {data} = await sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]});

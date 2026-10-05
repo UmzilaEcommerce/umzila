@@ -2664,10 +2664,14 @@ function trackEvent(eventType, data) {
       metadata:     data.metadata     || {}
     };
     if (typeof currentUser !== 'undefined' && currentUser) payload.user_id = currentUser.id;
-    window.supabase.from('user_events').insert(payload).then(function(){}).catch(function(){});
+    // Counter events are logged to user_events by track-engagement.js (below);
+    // inserting them here too counted every click/add twice (fixed 2026-10-05).
+    var counterEvents = ['product_click', 'product_view', 'add_to_cart'];
+    if (counterEvents.indexOf(eventType) === -1 || !data.product_id) {
+      window.supabase.from('user_events').insert(payload).then(function(){}).catch(function(){});
+    }
 
     // Update product engagement counters on the backend (also updates local state)
-    var counterEvents = ['product_click', 'product_view', 'add_to_cart'];
     if (counterEvents.indexOf(eventType) !== -1 && data && data.product_id) {
       var engPayload = {
         product_id:   data.product_id,

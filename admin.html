@@ -725,7 +725,7 @@ const supabaseClient = supabase.createClient(
             <h4 style="margin:0 0 10px">Seller Rankings</h4>
             <div style="overflow-x:auto">
               <table>
-                <thead><tr><th>Shop</th><th>Products</th><th>Total Favourites</th><th>Total Clicks</th><th>Est. Revenue</th></tr></thead>
+                <thead><tr><th>Shop</th><th title="Store page visits in the last 30 days (distinct visitors)">Store visits (30d)</th><th>Products</th><th>Total Favourites</th><th>Total Clicks</th><th>Est. Revenue</th></tr></thead>
                 <tbody id="intelSellersTable"></tbody>
               </table>
             </div>
@@ -2291,7 +2291,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       body.innerHTML = `
         ${v ? `<div class="live-visitors" title="People with Umzila open in the last ~2 minutes (one per browser)">
           <span><b>${v.total}</b> on the site now</span><span>${v.signed_in} signed in · ${v.guests} guest${v.guests === 1 ? '' : 's'}</span>
-          ${(v.pages || []).length ? `<span class="lv-pages">${v.pages.map(p => esc2(pageName(p.page)) + ' ' + p.n).join(' · ')}</span>` : ''}
+          ${(v.pages || []).length ? `<span class="lv-pages">${v.pages.map(p => esc2(p.label || pageName(p.page)) + ' ' + p.n).join(' · ')}</span>` : ''}
         </div>` : ''}
         <div class="live-kpis">
           <div><b>${open.length}</b><span>open deliveries</span></div>
@@ -3148,6 +3148,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (tableEl) tableEl.innerHTML = sellers.map(s =>
       `<tr style="border-bottom:1px solid #f3f4f6">
         <td style="padding:8px 12px;font-weight:600">${escapeHtml(s.shop_name||'')}</td>
+        <td style="padding:8px 12px">🚶 ${s.storeVisits||0} <span style="color:#6b7280;font-size:12px">(${s.storeVisitors||0} people)</span></td>
         <td style="padding:8px 12px">${s.productCount}</td>
         <td style="padding:8px 12px">❤️ ${s.totalFavourites}</td>
         <td style="padding:8px 12px">👁 ${s.totalClicks}</td>

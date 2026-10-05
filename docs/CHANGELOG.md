@@ -4,6 +4,40 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Store pages served from the CDN; store visitor tracking (Nceks included); double-counted clicks fixed
+
+**Asked for (founder):** cache the store pages next. They also couldn't see users on Nceks's custom store.
+
+**Root causes:**
+- **No tracking on store pages.** The live counter already worked on Nceks, but store pages (`shop.html` and bespoke storefronts) don't load `script.js`, so they never recorded a store visit, a product open or an add-to-cart. Admin and the store owner had no way to see who visited a store.
+- **Every click and add was counted twice.** `script.js` `trackEvent` inserted every `product_click` / `add_to_cart` into `user_events` itself AND through `track-engagement.js`. 110 of the last 114 such events were pairs.
+
+**Changes** (details in [docs/systems/site-speed.md](systems/site-speed.md)):
+- New `netlify/functions/get-store.js`: one store's public profile, products, hours rows, open/closed status and sponsored ids, CDN-cached for 60 s per slug.
+  - `shop.html` and `ncekeniquads/index.html` fetch it in parallel with the config, keep their direct-query fallbacks, and re-check open/closed live.
+  - It returns only public seller columns. `shop.html` used to read `sellers.*`, which includes the owner's email and pickup pin.
+- `presence.js` `umzilaTrack()` records `store_view`, `product_click` and `add_to_cart` on both store pages. Counter events go only through `track-engagement`.
+- `script.js` no longer double-inserts counter events, and the historical duplicates were removed.
+- Where it shows:
+  - admin Sellers intelligence: "Store visits (30d)" with distinct people;
+  - admin Live now: store names instead of slugs;
+  - seller dashboard → Analytics → "Store visitors" (on your store now, 7- and 30-day visitors, 30-day visits) via the new `get_my_store_traffic()`, own stores only.
+
+**Verified (local, real data):**
+- Velaphi store: `get-store` loaded, then one `store_view` row, one `product_click` and one `add_to_cart`, each logged once.
+- Nceks loads its rides and records a `store_view`.
+- The legacy `?shop=` link uses the direct path.
+- An unknown slug shows "Store not found", and a malformed slug gets a 400.
+- `get_my_store_traffic` works for the Nceks owner and refuses another store.
+- No page errors.
+
+**Files:**
+- New: `netlify/functions/get-store.js`.
+- Changed: `shop.html`, `ncekeniquads/index.html`, `presence.js`, `script.js`, `admin.html`, `netlify/functions/admin-analytics.js`, `seller-dashboard.html`.
+- Migrations: `user_events_dedupe_double_logged_clicks`, `live_visitors_store_names`, `get_my_store_traffic`.
+
+---
+
 ## 2026-10-05 — Speed for 2,000+ visitors: WebP images, CDN catalogue, skeletons, live visitor counter
 
 **Asked for (founder):** could Umzila handle 2,000 people at once? Can admin see how many people are on the site right now, signed in or not? Make everything as fast as possible without breaking anything. (They thought the images were already WebP. Only the Velaphi/Nceks designed images were.)

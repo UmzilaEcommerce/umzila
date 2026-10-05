@@ -87,6 +87,43 @@ If the browser can't encode WebP (older Safari), the file is a video or GIF, or 
   The old generic home rows (Hot Deals, Trending…) now start hidden. The curated home always hid them, but their empty headings used to flash while loading.
 - **Repo images.** The hero images went from 3840 px to 1600 px: 257/470 KB → 92/134 KB. `umzila.webp` went from 1563 px to 480 px. `netlify.toml` gives them a 1-day cache plus a 1-week stale-while-revalidate, so **give a replaced image a new name.**
 
+## Store pages (added 2026-10-05, second pass)
+
+`netlify/functions/get-store.js?slug=<slug>` is the store-page twin of `get-catalog`. It is CDN-cached for 60 s per slug and read with the anon key. It returns:
+- the seller's **public columns only**: no `user_id`, `email`, `pickup_geo` or `application_id` (see `SELLER_COLS`);
+- the listed products with their images;
+- `seller_availability` rows;
+- `get_store_hours_status()`;
+- sponsored product ids for this store.
+
+`shop.html` and `/ncekeniquads/` both start the fetch at script parse (`storePromise`), in parallel with the config. A store visit now makes about 3 small live calls instead of about 6:
+- the presence ping;
+- a live open/closed re-check, because the cached hours can be a minute old;
+- favourites when signed in, and the booking load on Nceks.
+
+Fallbacks:
+- If the function fails, each page runs its old direct queries.
+- The legacy `shop.html?shop=<name>` link always uses the direct path.
+- An unknown slug is cached as `{seller:null}` and shows "Store not found".
+
+**New store page or bespoke storefront?** Read from `get-store` and keep a fallback. If you need a seller column that isn't in `SELLER_COLS`, add it there, and only if it's public.
+
+## Store visitor tracking
+
+Store pages don't load `script.js`, so until 2026-10-05 they recorded nothing: no store visits, product opens or add-to-carts. That covers the template `shop.html` and the bespoke Nceks page.
+
+`presence.js` now also provides `umzilaTrack(event, data)`, using the same `user_events` rows and the same `ss_anon_id` as `script.js` `trackEvent`. It records:
+- `store_view`: once per store page load, with `metadata.page` = template or bespoke;
+- `product_click`: quick view opened, or a ride picked;
+- `add_to_cart`: an item added, a ride held or a voucher added.
+
+**Counter events (click, view, add-to-cart) go only through `track-engagement.js`.** It logs the `user_events` row and bumps the product counters. `script.js` used to *also* insert them itself, so every home click and add was stored twice. That's fixed, and the historical pairs were deleted (migration `user_events_dedupe_double_logged_clicks`).
+
+Where people see it:
+- **Admin** → Intelligence → Sellers has a "Store visits (30d)" column with distinct people.
+- **Admin** → Live now names the store (`get_live_visitors` joins the slug to `shop_name`).
+- **Sellers** → Analytics has "Store visitors": on your store now, visitors over 7 and 30 days, and visits over 30 days. This uses `get_my_store_traffic(seller_id)`, which only works for a store you own.
+
 ## Live visitor counter ("On the site now" in admin)
 
 `presence.js` is loaded on the buyer pages: home, store pages, the Nceks page, cart, checkout, the success page, profile and track. It keeps one random id per browser in localStorage (`umz_presence_id`) and calls `touch_presence(id, page)` when the page's Supabase client is ready, then about once a minute while the tab is visible.

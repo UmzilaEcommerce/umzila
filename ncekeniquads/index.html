@@ -901,22 +901,30 @@ let RIDES = [], RD = {}, BEST = null;
 const perHour = r => Math.round(r.price / (r.mins / 60));
 let sb = null;
 
+// Store + rides + hours come CDN-cached from get-store.js (started now, in
+// parallel with the config); booking load stays live (get_booking_load).
+const storePromise = fetch('/.netlify/functions/get-store?slug=' + STORE_SLUG).then(r => r.ok ? r.json() : null).catch(() => null);
 async function loadStore(){
   const cfgRes = await fetch('/.netlify/functions/get-client-config');
   const cfg = await cfgRes.json();
   const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey;
   sb = supabase.createClient(url, key);
   if (window.umzilaPresence) umzilaPresence.start(sb, 'store:ncekeniquads');
-  const {data: seller} = await sb.from('sellers').select('id, shop_name, slug, status, booking_capacity, booking_start_interval_minutes').eq('slug', STORE_SLUG).maybeSingle();
+  const cached = await storePromise;
+  const fromCache = !!(cached && cached.seller && Array.isArray(cached.products) && Array.isArray(cached.availability));
+  const {data: seller} = fromCache ? {data: cached.seller}
+    : await sb.from('sellers').select('id, shop_name, slug, status, booking_capacity, booking_start_interval_minutes').eq('slug', STORE_SLUG).maybeSingle();
   if (!seller || seller.status !== 'active') throw new Error('Store unavailable');
   store.seller = seller;
   store.capacity = seller.booking_capacity || 1;
-  const [prodRes, availRes] = await Promise.all([
-    sb.from('products').select('id, name, price, sale, sale_price, image, slot_duration_minutes, metadata, visible, listing_type, fulfillment_type, booking_mode').eq('seller_id', seller.id).eq('visible', true),
+  if (window.umzilaTrack) umzilaTrack('store_view', {seller_id: seller.id, metadata: {slug: STORE_SLUG, page: 'bespoke'}});
+  const [prodRes, availRes] = fromCache ? [{data: cached.products}, {data: cached.availability}] : await Promise.all([
+    sb.from('products').select('id, name, category, price, sale, sale_price, image, slot_duration_minutes, metadata, visible, listing_type, fulfillment_type, booking_mode').eq('seller_id', seller.id).eq('visible', true),
     sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', seller.id)
   ]);
   store.windows = availRes.data || [];
   const prods = prodRes.data || [];
+  store.cat = Object.fromEntries(prods.map(p => [p.id, p.category || null])); // for analytics events
   const priceOf = p => Number(p.sale && p.sale_price ? p.sale_price : p.price);
   RIDES = prods.filter(p => p.metadata && p.metadata.storefront_role === 'ride' && p.booking_mode === 'scheduled')
     .map(p => {
@@ -1073,6 +1081,7 @@ $('#qMinus').addEventListener('click', () => { st.qty--; renderQty(); });
 $('#qPlus').addEventListener('click', () => { st.qty++; renderQty(); });
 function pickRide(id){
   if (!RD[id]) return;
+  if (window.umzilaTrack && store.seller) umzilaTrack('product_click', {product_id: id, seller_id: store.seller.id, category: store.cat[id], metadata: {via: 'bespoke_store'}});
   st.ride = id; ensureSel();
   const r = form.querySelector(`input[name="ride"][value="${id}"]`); if (r) r.checked = true;
   renderDates(); renderTimes(); renderQty();
@@ -1139,6 +1148,7 @@ $('#payLink').addEventListener('click', async e => {
     next.push(cartItem({id: pending.r.id, name: `${pending.r.label} quad ride`, price: pending.r.price, image: pending.r.image}, json.units,
       {fulfillment_type: 'in_person', booking_id: json.bookingId, booking_start_at: json.startAt}));
     setCart(next);
+    if (window.umzilaTrack) umzilaTrack('add_to_cart', {product_id: pending.r.id, seller_id: store.seller.id, category: store.cat[pending.r.id]});
     pay.innerHTML = 'Going to checkout…';
     window.location.href = checkoutUrl();
   } catch (ex) {
@@ -1206,6 +1216,7 @@ $('#vAdd').addEventListener('click', e => {
   if (existing) { existing.qty = (existing.qty || 1) + vs.qty; existing.quantity = existing.qty; }
   else cart.push(cartItem(v, vs.qty, {fulfillment_type: 'digital'}));
   setCart(cart);
+  if (window.umzilaTrack) umzilaTrack('add_to_cart', {product_id: v.id, seller_id: store.seller.id, category: store.cat[v.id]});
   const label = btn.innerHTML;
   btn.textContent = 'Added ✓';
   setTimeout(() => { btn.innerHTML = label; }, 1200);
