@@ -4,6 +4,42 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Buttons never look dead: instant Pay feedback, instant cart updates, page-switch bar
+
+**Reported (founder):** in checkout the Pay button (and others) sometimes takes very long, with nothing visible happening, so they tap again and again. They want it faster, or at least a loading state, and the same for switching between stores and the home page.
+
+**Root causes:**
+- **Pay looked dead for the first steps.** The Pay button only showed its spinner *after* the account check, the store-hours check (2 queries) and saving the shipping details. Before that the button looked unchanged.
+- **Extra taps could re-run the flow.** Only the order step was guarded, so extra taps re-ran the account step.
+- **Cold starts landed on the Pay tap.** The first call to `generate-payfast-signature` after a quiet spell pays a cold start of about 1–2 s.
+- **Back from PayFast left the button stuck.** Pressing back from PayFast restored the page with the button still disabled.
+- **Cart buttons waited on the server.** Every + / − / remove / size change on cart.html waited for the account cart save AND a `validate-cart` call before the screen changed.
+
+**Changes:**
+- **checkout.html Pay buttons** (new card and saved card, desktop and mobile):
+  - `setPayStage()` turns the button into a spinner with a label on the very first tap: "Checking your order…" → "Securing your order…" → "Opening secure payment…" (or "Charging your card…" → "Paid ✓");
+  - `payBusy` ignores every extra tap;
+  - `finally` restores the button unless the page is leaving;
+  - `pageshow` (back from PayFast) un-sticks it;
+  - the label sync no longer overwrites a stage label.
+- **Function warm-up:** checkout sends a no-op GET to the payment functions on load (`generate-payfast-signature`, `validate-cart`, `get-delivery-quote`, `charge-payfast-token`) to warm them up, so the Pay tap doesn't pay the cold start. The PayFast functions are untouched; a GET returns 405 before doing anything.
+- **cart.html:**
+  - quantity, size and remove update the screen and the local cart instantly (measured 70 ms);
+  - the account-cart save and the code re-check run in the background, collapsed for rapid taps;
+  - "Proceed to Checkout" shows "Opening checkout…" with a spinner while it finishes any pending save.
+- **presence.js:** a thin top progress bar appears the moment any link to another Umzila page is tapped (store ↔ home, back arrows, Check out). `umzilaNavigating()` shows the same bar for JS redirects (script.js, cart.html).
+
+**Verified (local):**
+- Pay reacts on the first tap with "Checking your order…".
+- 3 rapid taps ran the flow once, and the button restored after a failed validation.
+- The cart + updated in 70 ms, and the checkout button showed its busy state.
+- The nav bar appears on link taps.
+- No page errors.
+
+**Files:** `checkout.html`, `cart.html`, `presence.js`, `script.js`.
+
+---
+
 ## 2026-10-05 — Store pages served from the CDN; store visitor tracking (Nceks included); double-counted clicks fixed
 
 **Asked for (founder):** cache the store pages next. They also couldn't see users on Nceks's custom store.

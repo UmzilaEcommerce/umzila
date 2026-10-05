@@ -73,6 +73,9 @@
     .checkout-btn:hover{opacity:.9}
     .checkout-btn:active{transform:scale(0.98)}
     .checkout-btn:disabled{opacity:.5;cursor:not-allowed}
+    .checkout-btn.is-busy{pointer-events:none;display:flex;align-items:center;justify-content:center;gap:10px}
+    .checkout-btn.is-busy::before{content:'';width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:cbSpin .6s linear infinite}
+    @keyframes cbSpin{to{transform:rotate(360deg)}}
     .continue-link{display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--muted);padding:8px;min-height:36px}
     .continue-link:hover{color:var(--accent)}
 
@@ -550,19 +553,53 @@
     toast('Item removed');
   }
 
+  // Quantity/size/remove taps show at once: the local cart + screen update
+  // first, then the account cart save and the code re-check run in the
+  // background (they used to block the screen for a second or two per tap).
+  // Rapid taps are collapsed into one save (350 ms); Checkout flushes it first.
+  let pendingSync = null, syncTimer = null;
+  function flushSync(){
+    clearTimeout(syncTimer); syncTimer = null;
+    const snapshot = cart.slice();
+    pendingSync = (async () => {
+      if(sb && currentUser) await writeSupabaseCart(snapshot);
+      // Re-check the applied code — a scoped code's amount depends on which
+      // eligible items are still in the cart after a qty change/removal.
+      await refreshAppliedCoupon();
+      updateSummary();
+    })().catch(()=>{}).finally(()=>{ pendingSync = null; });
+    return pendingSync;
+  }
   async function syncAndRender(){
     writeLocalCart(cart);
-    if(sb && currentUser) await writeSupabaseCart(cart);
-    // Re-check the applied code — a scoped code's amount depends on which
-    // eligible items are still in the cart after a qty change/removal.
-    await refreshAppliedCoupon();
     await renderCart();
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(flushSync, 350);
   }
 
-  // Checkout button
-  document.getElementById('checkoutBtn')?.addEventListener('click', ()=>{
+  // Checkout button — finish any background save first (the checkout page
+  // reads the signed-in buyer's saved cart), with a spinner while it does.
+  document.getElementById('checkoutBtn')?.addEventListener('click', async (e)=>{
     if(!cart.length){ toast('Your cart is empty'); return; }
+    const btn = e.currentTarget;
+    if(btn.dataset.busy) return;
+    btn.dataset.busy = '1';
+    btn.classList.add('is-busy');
+    btn.setAttribute('aria-busy', 'true');
+    btn.dataset.label = btn.textContent;
+    btn.textContent = 'Opening checkout…';
+    try {
+      if(syncTimer) await flushSync();
+      else if(pendingSync) await pendingSync;
+    } catch(_) {}
+    if (window.umzilaNavigating) umzilaNavigating();
     window.location.href = 'checkout.html';
+  });
+  // Back from checkout (page restored from the browser cache): un-stick the button.
+  window.addEventListener('pageshow', (e)=>{
+    if(!e.persisted) return;
+    const btn = document.getElementById('checkoutBtn');
+    if(btn && btn.dataset.busy){ delete btn.dataset.busy; btn.classList.remove('is-busy'); btn.removeAttribute('aria-busy'); if(btn.dataset.label) btn.textContent = btn.dataset.label; }
   });
 
   document.getElementById('promoApplyBtn')?.addEventListener('click', ()=>{

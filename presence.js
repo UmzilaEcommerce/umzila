@@ -79,4 +79,43 @@
       }, function () {});
     } catch (e) { /* ignore */ }
   };
+
+  // ── Page-switch feedback ──────────────────────────────────────────────
+  // Tapping a link to another Umzila page (store ↔ home, back arrow, Check
+  // out…) shows a thin progress bar at the top straight away, so a slow
+  // connection never looks like a dead tap. Pages can also call
+  // umzilaNavigating() before a JS redirect. Cleared when the page comes
+  // back from the browser's back/forward cache.
+  var bar = null, barTimer = null;
+  function showBar() {
+    try {
+      if (!bar) {
+        var st = document.createElement('style');
+        st.textContent = '#umzNavBar{position:fixed;top:0;left:0;height:3px;width:0;z-index:2147483647;background:linear-gradient(90deg,#ff6b2c,#ffb347);box-shadow:0 0 8px rgba(255,107,44,.6);transition:width 2.5s cubic-bezier(.1,.7,.2,1),opacity .2s;pointer-events:none}';
+        document.head.appendChild(st);
+        bar = document.createElement('div'); bar.id = 'umzNavBar'; bar.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(bar);
+      }
+      bar.style.transition = 'none'; bar.style.width = '0'; bar.style.opacity = '1';
+      void bar.offsetWidth;
+      bar.style.transition = '';
+      bar.style.width = '85%';
+      clearTimeout(barTimer);
+      barTimer = setTimeout(hideBar, 15000); // never leave it up forever
+    } catch (e) { /* ignore */ }
+  }
+  function hideBar() { if (bar) { bar.style.opacity = '0'; bar.style.width = '0'; } }
+  window.umzilaNavigating = showBar;
+  document.addEventListener('click', function (e) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    var url;
+    try { url = new URL(a.href, location.href); } catch (err) { return; }
+    if (url.origin !== location.origin) return;
+    if (url.pathname === location.pathname && url.search === location.search) return; // same page / #hash
+    // Let the page's own handlers decide first (many links are intercepted).
+    setTimeout(function () { if (!e.defaultPrevented) showBar(); }, 0);
+  });
+  window.addEventListener('pageshow', function (e) { if (e.persisted) hideBar(); });
 })();

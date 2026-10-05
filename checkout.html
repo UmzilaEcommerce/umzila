@@ -1115,6 +1115,11 @@
     .btn.is-processing::after{content:'';position:absolute;inset:0;margin:auto;width:20px;height:20px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:btnSpin .6s linear infinite}
     .btn.is-success::after{content:'';position:absolute;inset:0;margin:auto;width:18px;height:11px;border-left:3px solid #fff;border-bottom:3px solid #fff;transform:rotate(-45deg) translateY(-2px)}
     @keyframes btnSpin{to{transform:rotate(360deg)}}
+    /* Pay in progress: spinner + what's happening, from the very first tap
+       (setPayStage). Wins over is-processing's hidden text. */
+    .btn.is-paying,.btn.is-paying.is-processing{color:#fff !important;pointer-events:none;display:inline-flex;align-items:center;justify-content:center;gap:10px;opacity:1}
+    .btn.is-paying::after,.btn.is-paying.is-processing::after{display:none !important}
+    .btn.is-paying::before{content:'';flex:0 0 auto;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:btnSpin .6s linear infinite}
 
     /* Discount code: collapsed "Have a code?" toggle instead of an
        always-visible input box */
@@ -2014,6 +2019,46 @@
       return btn ? document.getElementById(btn.id + 'Mobile') : null;
     }
 
+    // ── Pay button feedback (2026-10-05) ──────────────────────────────────
+    // Paying runs several server steps (account, store hours, delivery quote,
+    // validate-cart, saving the order, signing for PayFast, PayFast itself).
+    // The button used to look dead for the first ones, so buyers tapped again.
+    // Now it changes on the very first tap, says what's happening, and every
+    // extra tap is ignored (payBusy) until the attempt ends.
+    const PAY_STAGE = {
+      checking: 'Checking your order…',
+      securing: 'Securing your order…',
+      payfast: 'Opening secure payment…',
+      charging: 'Charging your card…',
+      done: 'Paid ✓'
+    };
+    let payBusy = false;
+    function setPayStage(btn, stage) {
+      [btn, mobilePairOf(btn)].filter(Boolean).forEach(b => {
+        if (!b.classList.contains('is-paying')) b.dataset.idleLabel = b.textContent;
+        b.classList.add('is-paying');
+        b.disabled = true;
+        b.setAttribute('aria-busy', 'true');
+        b.textContent = PAY_STAGE[stage] || stage;
+      });
+    }
+    function clearPayStage(btn) {
+      [btn, mobilePairOf(btn)].filter(Boolean).forEach(b => {
+        b.classList.remove('is-paying', 'is-processing', 'is-success');
+        b.removeAttribute('aria-busy');
+        b.disabled = false;
+        if (b.dataset.idleLabel) { b.textContent = b.dataset.idleLabel; delete b.dataset.idleLabel; }
+      });
+      if (typeof syncPayChoice === 'function') syncPayChoice();
+    }
+    // Back from PayFast (the browser restores this page from its cache): the
+    // buttons must not stay stuck on "Opening secure payment…".
+    window.addEventListener('pageshow', e => {
+      if (!e.persisted) return;
+      payBusy = false;
+      ['payNowBtn', 'payWithSavedCardBtn'].forEach(id => { const b = document.getElementById(id); if (b) clearPayStage(b); });
+    });
+
     // Discount code input is collapsed behind a "Have a code?" toggle by
     // default (order-summary sidebar) — opened explicitly by the buyer, or
     // automatically once a code is actually applied (see applyCoupon()).
@@ -2496,11 +2541,12 @@
       const savedGroup = document.getElementById('savedCardGroup');
       if (savedGroup) savedGroup.style.display = useSaved ? '' : 'none';
       document.querySelector('.pay-now-inline-wrapper')?.classList.toggle('hidden', useSaved);
-      const sBtn = document.getElementById('payWithSavedCardBtn'); if (sBtn && !sBtn.classList.contains('is-processing')) sBtn.textContent = savedLabel;
-      if (elements.payNowBtn && !elements.payNowBtn.classList.contains('is-processing')) elements.payNowBtn.textContent = newLabel;
+      const busy = b => b.classList.contains('is-processing') || b.classList.contains('is-paying');
+      const sBtn = document.getElementById('payWithSavedCardBtn'); if (sBtn && !busy(sBtn)) sBtn.textContent = savedLabel;
+      if (elements.payNowBtn && !busy(elements.payNowBtn)) elements.payNowBtn.textContent = newLabel;
       const sM = document.getElementById('payWithSavedCardBtnMobile'), nM = document.getElementById('payNowBtnMobile');
-      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!sM.classList.contains('is-processing')) sM.textContent = card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'; }
-      if (nM) { nM.classList.toggle('hidden', useSaved); if (!nM.classList.contains('is-processing')) nM.textContent = newLabel; }
+      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!busy(sM)) sM.textContent = card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'; }
+      if (nM) { nM.classList.toggle('hidden', useSaved); if (!busy(nM)) nM.textContent = newLabel; }
     }
     // Pressing Pay is the agreement to the Terms (the line sits right above
     // the button) — tick the kept checkbox so validation + terms_accepted_at
@@ -5194,6 +5240,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         const tip = clampTip(state.tip);
         const total = Math.max(0, subtotal - discount + shipping + tip);
 
+        setPayStage(triggerBtn, 'securing');
         // Save order to Supabase before payment.
         // Coupon is NOT marked used here — that happens in payfast-itn.js after confirmed payment.
         // Cart is NOT cleared here — cleared in payfast-itn.js (Supabase) and checkout-success.html (localStorage).
@@ -5366,6 +5413,10 @@ async function submitToPayFast(cartItems, orderId, total) {
     }
 
     async function processPayment() {
+    if (payBusy) return; // already paying — extra taps do nothing
+    payBusy = true;
+    let leaving = false;
+    setPayStage(elements.payNowBtn, 'checking');
     try {
         // Validate form
         if (!elements.termsAgreement.checked) {
@@ -5382,10 +5433,12 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         // Fully covered (e.g. a gift voucher worth the whole booking) —
         // PayFast can't take R0, so the server re-prices and completes it.
-        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); return; }
+        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); leaving = true; return; }
 
         // Generate PayFast parameters
+        setPayStage(elements.payNowBtn, 'payfast');
         await submitToPayFast(prepared.validatedCart, prepared.orderId, prepared.total);
+        leaving = true; // the browser is now loading PayFast — keep the button busy
 
     } catch (error) {
         console.error('Payment processing error:', error);
@@ -5394,6 +5447,9 @@ async function submitToPayFast(cartItems, orderId, total) {
         elements.payNowBtn.classList.remove('is-processing');
         const payNowMobile = mobilePairOf(elements.payNowBtn);
         if (payNowMobile) { payNowMobile.disabled = false; payNowMobile.classList.remove('is-processing'); }
+    } finally {
+        payBusy = false;
+        if (!leaving) clearPayStage(elements.payNowBtn);
     }
 }
 
@@ -5402,6 +5458,10 @@ async function submitToPayFast(cartItems, orderId, total) {
     // stored PayFast token server-side instead of redirecting.
     async function payWithSavedCard() {
     const btn = document.getElementById('payWithSavedCardBtn');
+    if (payBusy) return; // already paying — extra taps do nothing
+    payBusy = true;
+    let leaving = false;
+    setPayStage(btn, 'checking');
     try {
         if (!elements.termsAgreement.checked) {
             promptForTerms();
@@ -5410,8 +5470,9 @@ async function submitToPayFast(cartItems, orderId, total) {
 
         const prepared = await preparePendingOrder(btn, 'Pay with saved card');
         if (!prepared) return;
-        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); return; }
+        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); leaving = true; return; }
 
+        setPayStage(btn, 'charging');
         const { data: { session } } = await supabaseClient.auth.getSession();
         const res = await fetch('/.netlify/functions/charge-payfast-token', {
             method: 'POST',
@@ -5436,8 +5497,10 @@ async function submitToPayFast(cartItems, orderId, total) {
         btn.classList.remove('is-processing');
         btn.classList.add('is-success');
         if (savedCardMobile) { savedCardMobile.classList.remove('is-processing'); savedCardMobile.classList.add('is-success'); }
+        setPayStage(btn, 'done');
         await new Promise(resolve => setTimeout(resolve, 450));
 
+        leaving = true;
         window.location.href = `checkout-success.html?m_payment_id=${prepared.orderId}&order_id=${state.orderId || ''}`;
 
     } catch (error) {
@@ -5447,6 +5510,9 @@ async function submitToPayFast(cartItems, orderId, total) {
         btn.classList.remove('is-processing', 'is-success');
         const savedCardMobileErr = mobilePairOf(btn);
         if (savedCardMobileErr) { savedCardMobileErr.disabled = false; savedCardMobileErr.classList.remove('is-processing', 'is-success'); }
+    } finally {
+        payBusy = false;
+        if (!leaving) clearPayStage(btn);
     }
 }
     
@@ -5455,6 +5521,11 @@ async function submitToPayFast(cartItems, orderId, total) {
      ********************/
     
     async function continueInitialization() {
+      // Wake the payment functions now, while the buyer fills in the form: the
+      // first request after a quiet spell pays a cold start (~1–2 s), which
+      // used to land on the Pay tap. A GET does nothing (405) but loads them.
+      ['generate-payfast-signature', 'validate-cart', 'get-delivery-quote', 'charge-payfast-token']
+        .forEach(fn => fetch('/.netlify/functions/' + fn, { method: 'GET', cache: 'no-store' }).catch(() => {}));
       try {
         // Cart and sign-in load side by side (they used to run one after the
         // other — ~1s of extra waiting for a signed-in buyer). loadCart()

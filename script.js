@@ -626,7 +626,7 @@ function initMobileMenu() {
         mobileMenu.classList.remove('active');
         mobileMenuOverlay.classList.remove('active');
         document.body.style.overflow = '';
-        if (currentUser) { window.location.href = 'profile.html'; return; }
+        if (currentUser) { if (window.umzilaNavigating) umzilaNavigating(); window.location.href = 'profile.html'; return; }
         showModal(document.getElementById('loginModal'));
       });
     }
@@ -1119,6 +1119,7 @@ function redirectToCheckout() {
   }
   
   // Redirect to cart.html (cart page before checkout)
+  if (window.umzilaNavigating) umzilaNavigating();
   window.location.href = 'cart.html';
 }
 
@@ -1462,6 +1463,7 @@ function updateAuthUI(user) {
     if (profileBtnHeader) {
       profileBtnHeader.style.display = 'inline-flex';
       profileBtnHeader.onclick = function() {
+        if (window.umzilaNavigating) umzilaNavigating();
         window.location.href = 'profile.html';
       };
     }
@@ -2108,6 +2110,7 @@ Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
       const target = document.querySelector(section);
       if(target) target.scrollIntoView({ behavior:'smooth', block:'start' });
     } else if(section && !section.startsWith('#')){
+      if (window.umzilaNavigating) umzilaNavigating();
       window.location.href = section;
     }
   });
