@@ -4285,7 +4285,9 @@ const SECTION_KEY_MAP = {
 // Wire up section "See more" buttons (new section-see-more class)
 document.addEventListener('click', function(e){
   const btn = e.target.closest('.section-see-more');
-  if(!btn) return;
+  // Plain links styled like "See more" (e.g. "Book a ride →" to a store page)
+  // have no data-section — let them navigate normally.
+  if(!btn || !btn.dataset.section) return;
   e.preventDefault();
   const sec = btn.dataset.section;
   const sectionKey = SECTION_KEY_MAP[sec] || { type:'all', title:'All Items' };

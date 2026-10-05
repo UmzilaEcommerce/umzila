@@ -22,6 +22,8 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - Phone and desktop show the 3 rows in order, Featured Shops leads with Velaphi and Nceks, and "goes with your plate" starts with the R70 plate, then Milky Pie.
 - Food category lists all Velaphi plates first; the rows hide in results and return on Back. No page errors.
 
+**Fix (same day):** "Book a ride →" / "Order from Velaphi →" showed an "All items" list (plates) instead of the store page — the global `.section-see-more` click handler intercepted every link with that class. It now ignores links without `data-section`.
+
 **Note:** the "BEEF & WORS + 4 wings" plate is hidden as sold out — its product stock is 50 but its "One Size" option stock is 0 (sold-out rule uses the option). Left as the seller set it.
 
 **Files:** `script.js`, `index.html`, `style.css`.
