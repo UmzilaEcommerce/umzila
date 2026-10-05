@@ -48,6 +48,11 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - Storage policy: own store folder allowed, another store's folder refused.
 - `get_live_visitors` counted the test browsers by page; anon can't call it or read the table.
 
+**Follow-up fix after deploy:**
+- **Symptom:** live card photos stayed as placeholders.
+- **Cause:** with the config and catalogue preloaded, the first render now happens *before* DOMContentLoaded, where `setupLazyLoading()` wraps `renderAll`, so those images were never observed.
+- **Fix:** `setupLazyLoading()` now also observes the `img[data-src]` already on the page.
+
 **Files:**
 - New: `netlify/functions/get-catalog.js`, `presence.js`, `image-upload.js`, `docs/design/product-images/optimize-all.js`, `docs/systems/site-speed.md`.
 - Changed: `netlify/functions/get-client-config.js`, `script.js`, `index.html`, `style.css`, `shop.html`, `cart.html`, `checkout.html`, `checkout-success.html`, `profile.html`, `track.html`, `ncekeniquads/index.html`, `seller-dashboard.html`, `admin.html`, `netlify.toml`, every page's supabase-js tag, hero/logo images.

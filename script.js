@@ -2613,6 +2613,10 @@ function setupLazyLoading() {
       });
     }, 100);
   };
+
+  // The catalogue is preloaded (get-catalog), so the first render can happen
+  // BEFORE this runs at DOMContentLoaded — pick up the images it already drew.
+  document.querySelectorAll('img[data-src]').forEach(img => lazyLoadObserver.observe(img));
 }
 
 /********************
