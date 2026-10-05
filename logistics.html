@@ -646,7 +646,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   <!-- Baskets -->
   <section id="panel-baskets" class="panel">
     <div class="panel-title">
-      Active Baskets
+      Baskets &amp; unfinished payments
       <button class="btn btn-ghost btn-sm" id="refreshBaskets">Refresh</button>
     </div>
     <div id="baskets-list"><div class="orders-empty">Loading baskets…</div></div>
@@ -1137,7 +1137,8 @@ document.addEventListener('sb-ready', function(e){
     if(d.status==='FAILED') return 'Delivery failed' + (d.failure_reason ? ' — ' + d.failure_reason : '');
     if(['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return `No rider for ${agoLabel(d.since)}`;
     if(d.status==='OFFERED' && m >= 3) return `Offer unanswered for ${agoLabel(d.since)}`;
-    if(d.status==='PENDING' && m >= 45) return `Store hasn't marked ready (${agoLabel(d.since)})`;
+    // Ordered while the store was closed: it's made when the store opens (not a problem).
+    if(d.status==='PENDING' && m >= 45 && !d.store_closed) return `Store hasn't marked ready (${agoLabel(d.since)})`;
     if(['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return `Pickup taking long (${agoLabel(d.since)})`;
     if(['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return `On the road for ${agoLabel(d.since)}`;
     return null;
@@ -1161,7 +1162,9 @@ document.addEventListener('sb-ready', function(e){
   function stopOpsTimer(){ if(opsTimer){ clearInterval(opsTimer); opsTimer = null; } }
 
   function deliveryCard(d){
-    const st = DSTATE[d.status] || { label:d.status };
+    const st = d.status==='PENDING' && d.store_closed
+      ? { ...(DSTATE.PENDING||{}), label: 'Store closed · opens ' + (d.store_opens_at ? new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(d.store_opens_at)) : 'later') }
+      : (DSTATE[d.status] || { label:d.status });
     const why = attentionReason(d);
     return `<button class="ops-card ${why?'warn':''}" data-open-order="${esc(d.order_number || '')}" data-order-db="${esc(d.order_id)}">
       <div class="ops-card-top"><span class="ops-ref">${esc(shortRef(d.order_number))}</span><span class="ops-age">${esc(agoLabel(d.since))}</span></div>
@@ -2038,52 +2041,99 @@ document.addEventListener('sb-ready', function(e){
   /* ═══════════════════════════════════════════
      BASKETS
   ═══════════════════════════════════════════ */
+  // Baskets panel (2026-10-05): three kinds of people who didn't finish —
+  //  1. Unfinished payments: pressed Pay but never paid (orders still
+  //     pending_payment, guests included; hidden once that email pays).
+  //  2. Baskets with contact details: signed-in buyers (their carts row) and
+  //     guests who typed their details at checkout (carts.guest_*).
+  //  3. Anonymous baskets: guests with items but no details yet — shows what
+  //     people are adding; there's no one to contact.
   async function loadBaskets(force=false){
     if(_basketsLoaded&&!force) return;
     const el=document.getElementById('baskets-list');
     el.innerHTML='<div class="orders-empty">Loading baskets…</div>';
 
     try{
-      const {data:carts,error} = await sb.from('carts').select('id,user_id,items,created_at,updated_at').order('updated_at',{ascending:false}).limit(200);
-      if(error||!carts?.length){el.innerHTML='<div class="orders-empty">No active baskets found</div>';return;}
+      const since=new Date(Date.now()-14*86400000).toISOString();
+      const [cartsRes,unpaidRes,paidRes]=await Promise.all([
+        sb.from('carts').select('id,user_id,items,created_at,updated_at,anonymous_id,guest_email,guest_name,guest_phone').order('updated_at',{ascending:false}).limit(300),
+        sb.from('orders').select('id,order_number,customer_name,customer_email,customer_phone,items,total,created_at,user_id').eq('order_status','pending_payment').gte('created_at',since).order('created_at',{ascending:false}).limit(100),
+        sb.from('orders').select('customer_email,created_at').eq('payment_status','paid').gte('created_at',since).limit(1000)
+      ]);
+      if(cartsRes.error) throw cartsRes.error;
+      const carts=(cartsRes.data||[]).filter(c=>Array.isArray(c.items)&&c.items.length);
+      // An unfinished payment stops mattering once that person paid afterwards.
+      const paidAfter={};
+      (paidRes.data||[]).forEach(o=>{const e=(o.customer_email||'').toLowerCase(); if(e&&(!paidAfter[e]||o.created_at>paidAfter[e])) paidAfter[e]=o.created_at;});
+      const unpaid=(unpaidRes.data||[]).filter(o=>{const e=(o.customer_email||'').toLowerCase(); return !(e&&paidAfter[e]&&paidAfter[e]>o.created_at);});
 
       const uids=[...new Set(carts.map(c=>c.user_id).filter(Boolean))];
       let profMap={};
       if(uids.length){
-        const {data:profs}=await sb.from('profiles').select('user_id,email,first_name,last_name').in('user_id',uids);
+        const {data:profs}=await sb.from('profiles').select('user_id,email,first_name,last_name,phone').in('user_id',uids);
         (profs||[]).forEach(p=>{profMap[p.user_id]=p;});
       }
 
-      _basketsLoaded=true;
-      el.innerHTML=carts.map(cart=>{
-        const p=profMap[cart.user_id]||{};
-        const items=Array.isArray(cart.items)?cart.items:[];
-        const total=items.reduce((s,i)=>s+(parseFloat(i.price||0)*Number(i.quantity||i.qty||1)),0);
-        const count=items.reduce((s,i)=>s+Number(i.quantity||i.qty||1),0);
-        const email=p.email||'(no email)';
-        const name=[p.first_name,p.last_name].filter(Boolean).join(' ')||'Anonymous';
-        return `<div class="item-card">
+      const qtyOf=i=>Number(i.quantity||i.qty||1);
+      const lines=items=>`<div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;font-size:12px">
+          ${items.slice(0,4).map(it=>`<div style="padding:2px 0;color:var(--text2)">${esc(it.name||it.title||'Item')}${it.size&&!/^one size$/i.test(it.size)?` · ${esc(it.size)}`:''} ×${qtyOf(it)}${it.price!=null?` — ${fmt((it.price||0)*qtyOf(it))}`:''}</div>`).join('')}
+          ${items.length>4?`<div style="color:var(--muted)">+${items.length-4} more</div>`:''}
+        </div>`;
+      const contactLine=(email,phone)=>[
+          email?`<a href="mailto:${esc(email)}" style="color:inherit">${esc(email)}</a>`:'',
+          phone?`<a href="tel:${esc(phone)}" style="color:inherit">${esc(phone)}</a>`:''
+        ].filter(Boolean).join(' · ');
+      const tag=(t,bg,fg)=>`<span style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:${bg};color:${fg};margin-left:6px;vertical-align:middle">${t}</span>`;
+      const nudge=(email,uid,items)=>email?`<button class="btn btn-primary btn-sm" style="margin-top:8px" data-email="${esc(email)}" data-uid="${esc(uid||'')}" data-items="${esc(JSON.stringify(items))}">Send Nudge</button>`:'';
+      const card=(head,sub,when,items,total,count,action)=>`<div class="item-card">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-            <div>
-              <div style="font-weight:700;font-size:14px">${esc(name)}</div>
-              <div style="font-size:12px;color:var(--muted)">${esc(email)}</div>
-              <div style="font-size:12px;color:var(--muted);margin-top:4px">Last updated: ${fmtDate(cart.updated_at)}</div>
-              <div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;font-size:12px">
-                ${items.slice(0,4).map(it=>`<div style="padding:2px 0;color:var(--text2)">${esc(it.name||it.title||'Item')}${it.size?` · ${esc(it.size)}`:''} ×${it.quantity||it.qty||1} — ${fmt((it.price||0)*(it.quantity||it.qty||1))}</div>`).join('')}
-                ${items.length>4?`<div style="color:var(--muted)">+${items.length-4} more</div>`:''}
-              </div>
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:700;font-size:14px">${head}</div>
+              ${sub?`<div style="font-size:12px;color:var(--muted);word-break:break-word">${sub}</div>`:''}
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">${when}</div>
+              ${lines(items)}
             </div>
             <div style="text-align:right">
               <div style="font-weight:800;font-size:16px">${fmt(total)}</div>
-              <div style="font-size:12px;color:var(--muted)">${count} items</div>
-              <button class="btn btn-primary btn-sm" style="margin-top:8px"
-                data-email="${esc(email)}" data-uid="${esc(cart.user_id||'')}" data-items="${esc(JSON.stringify(items))}">
-                Send Nudge
-              </button>
+              <div style="font-size:12px;color:var(--muted)">${count} item${count===1?'':'s'}</div>
+              ${action}
             </div>
           </div>
         </div>`;
+      const section=(title,note,html)=>`<div style="margin:18px 0 8px"><div style="font-weight:800;font-size:15px">${title}</div><div style="font-size:12px;color:var(--muted)">${note}</div></div>${html}`;
+
+      const unpaidHtml=unpaid.map(o=>{
+        const items=Array.isArray(o.items)?o.items:[];
+        return card(esc(o.customer_name||'Customer')+(o.user_id?'':tag('Guest','#fef3c7','#92400e')),
+          contactLine(o.customer_email,o.customer_phone),
+          'Pressed Pay '+fmtDate(o.created_at)+(o.order_number?' · '+esc(o.order_number):''),
+          items,Number(o.total)||0,items.reduce((s,i)=>s+qtyOf(i),0),nudge(o.customer_email,o.user_id,items));
       }).join('');
+
+      const known=[],anon=[];
+      carts.forEach(c=>{
+        const p=profMap[c.user_id]||{};
+        const items=c.items;
+        const total=items.reduce((s,i)=>s+(parseFloat(i.price||0)*qtyOf(i)),0);
+        const count=items.reduce((s,i)=>s+qtyOf(i),0);
+        if(c.user_id){
+          const email=p.email||'';
+          known.push(card(esc([p.first_name,p.last_name].filter(Boolean).join(' ')||'Signed-in buyer')+tag('Account','#dbeafe','#1e40af'),
+            contactLine(email,p.phone),'Last updated '+fmtDate(c.updated_at),items,total,count,nudge(email,c.user_id,items)));
+        } else if(c.guest_email||c.guest_phone){
+          known.push(card(esc(c.guest_name||'Guest')+tag('Guest','#fef3c7','#92400e'),
+            contactLine(c.guest_email,c.guest_phone),'Last updated '+fmtDate(c.updated_at),items,total,count,nudge(c.guest_email,'',items)));
+        } else {
+          anon.push(card('Anonymous visitor'+tag('No details','#f3f4f6','#4b5563'),'',
+            'Last updated '+fmtDate(c.updated_at),items,total,count,''));
+        }
+      });
+
+      _basketsLoaded=true;
+      el.innerHTML=
+        section('💳 Unfinished payments ('+unpaid.length+')','Pressed Pay in the last 14 days but never paid (hidden once they pay).',unpaidHtml||'<div class="orders-empty">None 🎉</div>')+
+        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout.',known.join('')||'<div class="orders-empty">None right now</div>')+
+        section('👀 Anonymous baskets ('+anon.length+')','Guests who added items but haven\'t given details yet — what people are picking.',anon.join('')||'<div class="orders-empty">None right now</div>');
 
       el.querySelectorAll('button[data-email]').forEach(btn=>{
         btn.addEventListener('click',()=>{

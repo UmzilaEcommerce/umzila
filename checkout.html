@@ -1279,6 +1279,7 @@
           <div class="form-group">
             <label class="form-label">Email Address <span class="required">*</span></label>
             <input type="email" id="customerEmail" class="form-control" required autofocus>
+            <small id="basketSaveNote" style="display:block;margin-top:6px;color:#6b7280;font-size:12px">We keep your basket with these details so we can help if your order doesn't go through.</small>
           </div>
 
           <div class="form-row">
@@ -4404,10 +4405,17 @@ async function validateCheckout() {
       if (!sellerIds.length) return;
       if (!supabaseClient) return;
       try {
-        const { data: sellers } = await supabaseClient
-          .from('sellers')
-          .select('id, shop_name, logo_url, turnaround_time, pickup_geo')
-          .in('id', sellerIds);
+        // Opening hours ride along: a closed store changes the delivery
+        // target (goods are made when it opens — refreshEstimatedTime).
+        const goodsSellerIds = [...new Set(cart.filter(waitsForOpenStore).map(i => i.seller_id).filter(Boolean))];
+        const [{ data: sellers }, hoursRes] = await Promise.all([
+          supabaseClient
+            .from('sellers')
+            .select('id, shop_name, logo_url, turnaround_time, pickup_geo')
+            .in('id', sellerIds),
+          goodsSellerIds.length ? supabaseClient.rpc('get_store_hours_status', { p_seller_ids: goodsSellerIds }) : Promise.resolve({ data: [] })
+        ]);
+        if (hoursRes && !hoursRes.error) state.storeHours = hoursRes.data || [];
         if (sellers?.length) {
           state.sellerTurnarounds = sellers;
           refreshEstimatedTime();
@@ -4459,6 +4467,16 @@ async function validateCheckout() {
       el.classList.remove('hidden');
 
       const q = typeof activeQuote === 'function' ? activeQuote() : null;
+      // A closed store: no "about 35 min" promise — say when it's made instead.
+      const closedNow = (state.storeHours || []).filter(h => h.has_hours && !h.open_now);
+      if (closedNow.length) {
+        const nameOf = id => ((state.sellerTurnarounds || []).find(s => s.id === id) || {}).shop_name || 'The store';
+        const first = closedNow.slice().sort((a, b) => String(b.next_open_at || '').localeCompare(String(a.next_open_at || '')))[0];
+        const travel = q && q.roadKm > 0 ? ' Delivery takes about ' + formatEtaMinutes(q.roadKm * ETA_MIN_PER_KM + ETA_BASE_MIN).replace(/^about /, '') + ' once it\'s ready.' : '';
+        el.className = 'eta-strip eta-strip-active eta-strip-closed';
+        el.innerHTML = `<span class="eta-dot" aria-hidden="true" style="background:#f59e0b"></span><span><strong>${escapeHtmlLite(nameOf(first.seller_id))} is closed — your order is made when it opens${first.next_open_at ? ' ' + escapeHtmlLite(sastWhen(first.next_open_at)) : ''}.</strong><small class="eta-sub">You can still order now.${travel}</small></span>`;
+        return;
+      }
       if (q && q.roadKm > 0) {
         const mins = q.roadKm * ETA_MIN_PER_KM + ETA_BASE_MIN;
         el.className = 'eta-strip eta-strip-active';
@@ -5225,7 +5243,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         state.deliveryClass     = fees.deliveryClass;
         state.uniqueSellerCount = fees.sellerCount;
         if (state.shippingInfo) state.shippingInfo.shippingCost = computedFee;
-        await updateEstimatedDelivery();
+        updateEstimatedDelivery(); // display only — never hold up the Pay tap for it
 
         // Generate order ID
         const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -5366,7 +5384,10 @@ async function submitToPayFast(cartItems, orderId, total) {
         if (error || !data) return true; // hours are a courtesy notice — never block a sale on a failed lookup
         const closed = data.filter(h => h.has_hours && !h.open_now);
         if (!closed.length) return true;
-        const { data: sellers } = await supabaseClient.from('sellers').select('id, shop_name').in('id', closed.map(h => h.seller_id));
+        const known = state.sellerTurnarounds || [];
+        const { data: sellers } = closed.every(h => known.some(s => s.id === h.seller_id))
+            ? { data: known }
+            : await supabaseClient.from('sellers').select('id, shop_name').in('id', closed.map(h => h.seller_id));
         const nameOf = id => ((sellers || []).find(s => s.id === id) || {}).shop_name || 'This store';
         const hasServiceLines = state.cart.some(i => (i.listing_type || 'product') === 'service');
         const lines = closed.map(h => '<li style="margin:4px 0"><strong>' + escapeHtmlLite(nameOf(h.seller_id)) + '</strong> is closed' +
@@ -5386,7 +5407,15 @@ async function submitToPayFast(cartItems, orderId, total) {
                   '<button type="button" data-yes style="width:100%;padding:13px;border:0;border-radius:999px;background:var(--cta,#ff6b2c);color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px">Yes, order anyway</button>' +
                   '<button type="button" data-no style="width:100%;padding:12px;border:1px solid #d1d5db;border-radius:999px;background:#fff;color:#374151;font-weight:600;font-size:14px;cursor:pointer">Not now</button>' +
                 '</div>';
-            const done = ok => { wrap.remove(); document.removeEventListener('keydown', onKey); if (ok) state.closedStoresAck = true; resolve(ok); };
+            const done = ok => {
+                wrap.remove(); document.removeEventListener('keydown', onKey);
+                if (ok) {
+                    state.closedStoresAck = true;
+                    // checkout-success.html repeats the note after payment.
+                    try { localStorage.setItem('ss_closed_order_note', JSON.stringify({ at: Date.now(), stores: closed.map(h => ({ name: nameOf(h.seller_id), opensAt: h.next_open_at || null })) })); } catch (_) {}
+                }
+                resolve(ok);
+            };
             const onKey = e => { if (e.key === 'Escape') done(false); };
             wrap.addEventListener('click', e => {
                 if (e.target.closest('[data-yes]')) done(true);
@@ -5526,6 +5555,8 @@ async function submitToPayFast(cartItems, orderId, total) {
       // used to land on the Pay tap. A GET does nothing (405) but loads them.
       ['generate-payfast-signature', 'validate-cart', 'get-delivery-quote', 'charge-payfast-token']
         .forEach(fn => fetch('/.netlify/functions/' + fn, { method: 'GET', cache: 'no-store' }).catch(() => {}));
+      // A fresh checkout: forget an old after-hours note (set again if the buyer agrees to it).
+      try { localStorage.removeItem('ss_closed_order_note'); } catch (_) {}
       try {
         // Cart and sign-in load side by side (they used to run one after the
         // other — ~1s of extra waiting for a signed-in buyer). loadCart()
@@ -5612,6 +5643,18 @@ async function submitToPayFast(cartItems, orderId, total) {
      ********************/
     
     function setupEventListeners() {
+      // Guest basket contact (presence.js save_guest_cart): once a guest types
+      // their details, their saved basket carries them so Umzila can follow
+      // up if the order isn't finished. Ignored server-side when signed in.
+      ['customerEmail', 'firstName', 'lastName', 'phoneNumber'].forEach(id => {
+        document.getElementById(id)?.addEventListener('change', () => {
+          if (state.user || !window.umzilaGuestContact) return;
+          const v = x => (document.getElementById(x)?.value || '').trim();
+          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('customerEmail'))) return;
+          umzilaGuestContact({ email: v('customerEmail'), name: [v('firstName'), v('lastName')].filter(Boolean).join(' '), phone: v('phoneNumber') });
+        });
+      });
+
       // Live address autocomplete (free, no key — OpenStreetMap Photon)
       wireAddressAutocomplete(elements.shippingAddress, applyAddressSuggestion);
       // Typing in the address box means the old coordinates no longer apply

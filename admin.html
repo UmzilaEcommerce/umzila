@@ -2262,7 +2262,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (d.pin_locked) return 'PIN locked';
     if (['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return 'No rider for ' + m + ' min';
     if (d.status === 'OFFERED' && m >= 3) return 'Offer unanswered ' + m + ' min';
-    if (d.status === 'PENDING' && m >= 45) return 'Store not ready after ' + m + ' min';
+    if (d.status === 'PENDING' && m >= 45 && !d.store_closed) return 'Store not ready after ' + m + ' min'; // after-hours orders wait for opening time
     if (['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return 'Pickup taking ' + m + ' min';
     if (['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return 'On the road ' + m + ' min';
     return null;
@@ -2300,7 +2300,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           <div class="${online ? 'good' : 'bad'}"><b>${online}</b><span>riders online</span></div>
         </div>
         ${attention.length ? attention.slice(0, 4).map(d => `<div class="live-row bad"><b>${esc2(d.customer || 'Customer')}</b> · ${esc2(d.area || '')}<span>⚠ ${esc2(liveWhy(d))}</span></div>`).join('')
-          : open.length ? open.slice(0, 4).map(d => `<div class="live-row"><b>${esc2(d.customer || 'Customer')}</b> · ${esc2(d.area || '')}<span>${esc2(LIVE_LABEL[d.status] || d.status)}${d.rider ? ' · ' + esc2(d.rider) : ''}</span></div>`).join('')
+          : open.length ? open.slice(0, 4).map(d => `<div class="live-row"><b>${esc2(d.customer || 'Customer')}</b> · ${esc2(d.area || '')}<span>${esc2(d.status === 'PENDING' && d.store_closed ? 'Store closed · opens ' + (d.store_opens_at ? new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(d.store_opens_at)) : 'later') : (LIVE_LABEL[d.status] || d.status))}${d.rider ? ' · ' + esc2(d.rider) : ''}</span></div>`).join('')
           : '<div class="live-row">✓ No deliveries in progress right now.</div>'}`;
     } catch (e) {
       body.textContent = 'Live operations unavailable right now.';

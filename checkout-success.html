@@ -77,6 +77,25 @@
     
     <p id="shipNote">We're processing your order and will notify you when it ships.</p>
 
+    <!-- After-hours order: the buyer agreed at checkout that a closed store
+         makes it when it opens (checkout.html saves ss_closed_order_note). -->
+    <div id="closedNote" style="display:none;margin:14px 0;padding:14px 16px;border-radius:12px;background:#fff7e6;border:1px solid #f5d38a;color:#6b4a0e;text-align:left;font-size:14px;line-height:1.5"></div>
+    <script>
+    (function () {
+      try {
+        var n = JSON.parse(localStorage.getItem('ss_closed_order_note') || 'null');
+        localStorage.removeItem('ss_closed_order_note');
+        if (!n || !n.stores || !n.stores.length || Date.now() - n.at > 3 * 3600 * 1000) return;
+        var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        var when = function (iso) { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)); };
+        var el = document.getElementById('closedNote');
+        el.innerHTML = '🕘 ' + n.stores.map(function (s) { return '<strong>' + esc(s.name) + '</strong> is closed right now' + (s.opensAt ? ' and opens <strong>' + esc(when(s.opensAt)) + '</strong>' : ''); }).join('; ') +
+          '. Your order is made when the store opens, then a rider brings it to you. You can follow it on the tracking page.';
+        el.style.display = '';
+      } catch (e) { /* courtesy note only */ }
+    })();
+    </script>
+
     <!-- Live delivery tracking — the private link works without an account
          (guests) and is also in the delivery emails. Shown once paid. -->
     <div id="trackBox" style="display:none;margin:18px 0;padding:16px;border-radius:12px;background:#f0f6ff;text-align:left">

@@ -4,6 +4,62 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — After-hours orders explained end to end; guest baskets, anonymous baskets and unfinished payments for staff
+
+**Asked for (founder):** fix the after-hours gaps; show guest baskets (with contact details from checkout, and anonymous ones) plus unfinished payments to staff.
+
+**After-hours, root cause:** the only after-hours handling was checkout's "store is closed" popup when Pay is pressed. Everything else ignored it:
+- the checkout delivery target still promised "about 35 min";
+- the success page, confirmation email and tracking page said nothing about the wait;
+- admin/logistics flagged the overnight order as "Store not ready after 45 min".
+
+**After-hours changes:**
+- `checkout.html`:
+  - the delivery target becomes "<Store> is closed — your order is made when it opens tomorrow at 09:00. You can still order now. Delivery takes about N min once it's ready." Opening hours are fetched with the seller info in `updateEstimatedDelivery`, and only for goods; services never get closed messaging.
+  - The Pay path no longer waits on `updateEstimatedDelivery`, and the closed-store dialog reuses the store names already loaded (one less query on the Pay tap).
+  - Agreeing to the dialog saves `ss_closed_order_note` for the success page; a fresh checkout clears it.
+- `checkout-success.html` shows the note: "<Store> is closed right now and opens Tuesday 09:00. Your order is made when the store opens…".
+- The confirmation email (`lib/complete-order-payment.js`, email content only, in its own try/catch; nothing about payment changed) adds the same note when a goods store is closed at payment time.
+- New SQL helper `order_closed_store(order_id)` (internal) returns the closed goods store on an order that opens last. It feeds:
+  - `get_delivery_tracking`, which now also returns `store_closed_name` / `store_opens_at` while the delivery is still PENDING. `track.html` then says "<Store> is closed right now — your order is safe and paid. It's made when the store opens (Tuesday 09:00)…".
+  - `get_ops_board`, whose deliveries carry `store_closed` / `store_opens_at`. Admin Live now and the logistics Today board show "Store closed · opens Tue 09:00" and no longer count it as needing attention.
+
+**Baskets, root cause:**
+- guest carts only lived in the guest's browser;
+- logistics Baskets read only signed-in buyers' `carts` rows;
+- the Orders list hides `pending_payment` orders, so nobody saw people who pressed Pay and never paid.
+
+**Baskets changes** (existing `carts` table, no new table):
+- New columns `anonymous_id` (unique when set), `guest_email`, `guest_name` and `guest_phone`, plus a check that a row has a user or an anonymous id.
+- A guest basket is written only through `save_guest_cart()`:
+  - it is anon-callable and ignored when signed in;
+  - it validates the id, size, email and lengths, and converts browser-shape items to the server shape;
+  - an empty cart deletes the row.
+- `clear_guest_cart()` clears it, and trigger `clear_guest_carts_on_paid` removes that email's guest baskets when an order turns paid.
+- `presence.js` mirrors `ss_cart` for guests on every buyer page, only when it changed (`umz_cart_synced`; 5 s check plus storage events). For signed-in buyers it clears the guest row instead.
+- Checkout attaches the details as they're typed (`umzilaGuestContact`), with a line under the email field: "We keep your basket with these details so we can help if your order doesn't go through."
+- logistics → Baskets & unfinished payments, three lists:
+  - 💳 Unfinished payments: `pending_payment` orders from the last 14 days, guests included, hidden once that email has paid since;
+  - 🛒 Baskets with contact details: account or guest;
+  - 👀 Anonymous baskets.
+
+  Each item has a tap-to-email and tap-to-call link and Send Nudge where there's an email.
+
+**Verified (local, real data):**
+- Velaphi closed at night: the checkout strip showed "Velaphi Shisanyama is closed — your order is made when it opens tomorrow at 09:00".
+- The success note rendered.
+- `order_closed_store` returned Velaphi / 09:00 SAST for Velaphi orders.
+- `get_ops_board` returns the new keys.
+- A guest basket was saved within seconds and gained name, email and phone once typed. Invalid ids were ignored. Test rows were deleted.
+
+**Not yet tested in the browser:** the logistics Baskets screen itself (it needs a staff sign-in); its syntax and queries were checked.
+
+**Files:** `checkout.html`, `checkout-success.html`, `track.html`, `admin.html`, `logistics.html`, `presence.js`, `netlify/functions/lib/complete-order-payment.js` (email only).
+
+**Migrations:** `guest_baskets_in_carts`, `after_hours_tracking`, `ops_board_store_closed`.
+
+---
+
 ## 2026-10-05 — Buttons never look dead: instant Pay feedback, instant cart updates, page-switch bar
 
 **Reported (founder):** in checkout the Pay button (and others) sometimes takes very long, with nothing visible happening, so they tap again and again. They want it faster, or at least a loading state, and the same for switching between stores and the home page.

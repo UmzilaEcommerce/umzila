@@ -562,6 +562,12 @@
     let title = named(isProblem ? meta.label : atDoor ? 'Your rider is here!' : pickedUp ? 'Your order is picked up' : stage.title);
     let sub = named(isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.'
       : pickedUp ? (row.orders_ahead ? 'There is an order/s ahead of you.' : 'Your rider will be heading your way shortly.') : stage.sub);
+    // Ordered while the store was closed — it's made when the store opens.
+    if (row.status === 'PENDING' && row.store_closed_name) {
+      const opens = row.store_opens_at ? new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(row.store_opens_at)) : null;
+      title = row.store_closed_name + ' is closed right now';
+      sub = 'Your order is safe and paid. It\'s made when the store opens' + (opens ? ' (' + opens + ')' : '') + ', then a rider brings it to you.';
+    }
 
     // First render sets up the static shell once; subsequent polls only
     // patch the live bits (status pill, scene, steps, map marker) rather

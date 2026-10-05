@@ -210,6 +210,24 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                 const { data: dl } = await supabase.from('deliveries').select('tracking_token').eq('order_id', existingOrder.id).maybeSingle();
                 trackToken = (dl && dl.tracking_token) || null;
             } catch (_) { /* no delivery for this order */ }
+            // Goods from a store that is closed right now are made when it
+            // opens — say so in the email (2026-10-05). Courtesy only: any
+            // failure here just leaves the note out.
+            let closedStores = [];
+            try {
+                const goodsSellerIds = [...new Set((Array.isArray(existingOrder.items) ? existingOrder.items : [])
+                    .filter(i => (i.listing_type || 'product') !== 'service').map(i => i.seller_id).filter(Boolean))];
+                if (goodsSellerIds.length) {
+                    const [hrs, sl] = await Promise.all([
+                        supabase.rpc('get_store_hours_status', { p_seller_ids: goodsSellerIds }),
+                        supabase.from('sellers').select('id, shop_name').in('id', goodsSellerIds)
+                    ]);
+                    closedStores = ((hrs && hrs.data) || []).filter(h => h.has_hours && !h.open_now).map(h => ({
+                        name: (((sl && sl.data) || []).find(s => s.id === h.seller_id) || {}).shop_name || 'The store',
+                        opensAt: h.next_open_at || null
+                    }));
+                }
+            } catch (_) { closedStores = []; }
             try {
                 const emailRes = await fetch('https://api.resend.com/emails', {
                     method: 'POST',
@@ -218,7 +236,7 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                         from:    'Umzila <orders@umzila.store>',
                         to:      [existingOrder.customer_email],
                         subject: `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
-                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken)
+                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores)
                     })
                 });
                 if (!emailRes.ok) {
@@ -768,7 +786,7 @@ function buildSellerOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl) 
 }
 
 // ── Order confirmation email builder ─────────────────────────────────────────
-function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackToken) {
+function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackToken, closedStores) {
     const site      = siteUrl || '';
     const orderRef  = order.order_number || mPaymentId || 'N/A';
     const firstName = (order.customer_name || pfData.name_first || 'there').split(/\s+/)[0];
@@ -915,6 +933,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
     <p>${introText}</p>
+    ${(closedStores || []).length ? `<div style="background:#fff7e6;border:1px solid #f5d38a;border-radius:10px;padding:12px 14px;margin:0 0 16px;color:#6b4a0e;font-size:14px;line-height:1.5">🕘 ${closedStores.map(c => `<strong>${esc(c.name)}</strong> is closed right now${c.opensAt ? ' and opens ' + esc(sastWhen(c.opensAt)) : ''}`).join('; ')}. Your order is made when the store opens, and then delivered — we'll email you when it's on the way.</div>` : ''}
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>
 

@@ -80,6 +80,46 @@
     } catch (e) { /* ignore */ }
   };
 
+  // ── Guest baskets ─────────────────────────────────────────────────────
+  // A guest's cart (localStorage ss_cart) is mirrored to a carts row keyed by
+  // ss_anon_id (save_guest_cart RPC) so staff can see guest baskets in
+  // logistics → Baskets. Contact details are attached only once the guest
+  // types them at checkout (umzilaGuestContact). Signed-in buyers already
+  // have their own carts row, so for them the guest row is cleared instead.
+  // Only sends when the cart actually changed (remembered across pages).
+  var SYNC_KEY = 'umz_cart_synced', contact = null, syncing = false;
+  function noop() {}
+  function syncGuestCart(force) {
+    if (!client || syncing) return;
+    var raw, anon = anonId();
+    try { raw = localStorage.getItem('ss_cart') || '[]'; } catch (e) { return; }
+    if (!anon) return;
+    var sig = raw + '|' + (contact ? JSON.stringify(contact) : '');
+    var last = null; try { last = localStorage.getItem(SYNC_KEY); } catch (e) {}
+    if (!force && sig === last) return;
+    syncing = true;
+    client.auth.getSession().then(function (r) {
+      var session = r && r.data && r.data.session;
+      try { localStorage.setItem(SYNC_KEY, sig); } catch (e) {}
+      if (session) return client.rpc('clear_guest_cart', { p_anon: anon });
+      var items; try { items = JSON.parse(raw); } catch (e) { items = []; }
+      if (!Array.isArray(items)) items = [];
+      if (!items.length && last === null) return; // never saved anything: nothing to clear
+      return client.rpc('save_guest_cart', {
+        p_anon: anon, p_items: items,
+        p_email: contact && contact.email || null, p_name: contact && contact.name || null, p_phone: contact && contact.phone || null
+      });
+    }).then(noop, noop).then(function () { syncing = false; });
+  }
+  window.umzilaGuestContact = function (c) {
+    contact = { email: (c && c.email) || '', name: (c && c.name) || '', phone: (c && c.phone) || '' };
+    syncGuestCart(true);
+  };
+  setInterval(function () { syncGuestCart(false); }, 5000);
+  window.addEventListener('storage', function (e) { if (e.key === 'ss_cart') syncGuestCart(false); });
+  var startOrig = window.umzilaPresence.start;
+  window.umzilaPresence.start = function (sb, label) { startOrig(sb, label); syncGuestCart(false); };
+
   // ── Page-switch feedback ──────────────────────────────────────────────
   // Tapping a link to another Umzila page (store ↔ home, back arrow, Check
   // out…) shows a thin progress bar at the top straight away, so a slow
