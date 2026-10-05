@@ -15,7 +15,13 @@
   <meta property="og:description" content="Food, products and services from Durban's best local businesses, in one place and delivered. Only the best get in.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
   <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <!-- Start the slow things early, in parallel: the Supabase library, the
+       client config and the first hero slide (the biggest thing on screen). -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" as="script">
+  <link rel="preload" href="/.netlify/functions/get-client-config" as="fetch" crossorigin>
+  <link rel="preload" href="/.netlify/functions/get-catalog" as="fetch" crossorigin>
+  <link rel="preload" href="hero-velaphi-shisanyama.webp" as="image" fetchpriority="high">
 </head>
 <body>
 
@@ -351,24 +357,24 @@
       <!-- CURATED HOME (2026-10-05): the star (Velaphi plates), the experience
            (Nceks), what goes with a plate, then one row for everything else.
            Store links + boosts live in script.js HOME_CURATION. -->
-      <section class="fade-up curated-hero" id="shisanyamaSection" style="display:none">
+      <section class="fade-up show curated-hero" id="shisanyamaSection">
         <div class="section-header">
           <div><h2>🔥 Workshop Shisanyama</h2><div class="section-sub">Flame-grilled plates from Velaphi — free sides on every plate</div></div>
           <a class="section-see-more" id="shisanyamaLink" href="/velaphishisanyama">Order from Velaphi →</a>
         </div>
-        <div class="hscroll" id="shisanyamaScroll"></div>
+        <div class="hscroll" id="shisanyamaScroll" aria-busy="true"><!-- skeletons until script.js renders the row --><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div></div>
       </section>
 
-      <section class="fade-up curated-xp" id="experienceSection" style="display:none">
+      <section class="fade-up show curated-xp" id="experienceSection">
         <div class="section-header">
           <div><h2>🏍️ Xperience of a lifetime with Nceks</h2><div class="section-sub">Quad biking at Inanda Dam — book a ride or gift one</div></div>
           <a class="section-see-more" id="experienceLink" href="/ncekeniquads">Book a ride →</a>
         </div>
-        <div class="hscroll" id="experienceScroll"></div>
+        <div class="hscroll" id="experienceScroll" aria-busy="true"><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div></div>
       </section>
 
       <!-- HOT DEALS -->
-      <section class="fade-up" id="hotSection">
+      <section class="fade-up" id="hotSection" style="display:none">
         <div class="section-header">
           <h2>🔥 Hot Deals</h2>
           <button class="section-see-more" data-section="hot">See all →</button>
@@ -377,7 +383,7 @@
       </section>
 
       <!-- TRENDING ON UMZILA -->
-      <section class="fade-up" id="trendingSection">
+      <section class="fade-up" id="trendingSection" style="display:none">
         <div class="section-header">
           <h2>📈 Trending on Umzila</h2>
           <button class="section-see-more" data-section="trending">See more →</button>
@@ -386,7 +392,7 @@
       </section>
 
       <!-- NEW DROPS -->
-      <section class="fade-up" id="newDropsSection">
+      <section class="fade-up" id="newDropsSection" style="display:none">
         <div class="section-header">
           <h2>✨ New Drops</h2>
           <button class="section-see-more" data-section="newDrops">See more →</button>
@@ -395,7 +401,7 @@
       </section>
 
       <!-- BACK TO SCHOOL -->
-      <section class="fade-up" id="studentSection">
+      <section class="fade-up" id="studentSection" style="display:none">
         <div class="section-header">
           <h2>🎒 Back to School</h2>
           <button class="section-see-more" data-section="student">See more →</button>
@@ -404,16 +410,16 @@
       </section>
 
       <!-- UNDER R100 -->
-      <section class="fade-up" id="underR100Section">
+      <section class="fade-up show" id="underR100Section">
         <div class="section-header">
           <div><h2>🥤 Under R100 — goes with your plate</h2><div class="section-sub">Drinks, desserts and snacks to complete the meal</div></div>
           <button class="section-see-more" data-section="underR100">See more →</button>
         </div>
-        <div class="hscroll" id="underR100Scroll"></div>
+        <div class="hscroll" id="underR100Scroll" aria-busy="true"><div class="sk-wrap" style="min-width:170px;max-width:170px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:170px;max-width:170px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:170px;max-width:170px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:170px;max-width:170px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div></div>
       </section>
 
       <!-- BEST SELLERS -->
-      <section class="fade-up" id="bestSellersSection">
+      <section class="fade-up" id="bestSellersSection" style="display:none">
         <div class="section-header">
           <h2>⭐ Best Sellers</h2>
           <button class="section-see-more" data-section="bestSellers">See more →</button>
@@ -422,7 +428,7 @@
       </section>
 
       <!-- POPULAR IN CLOTHING -->
-      <section class="fade-up" id="popularClothingSection">
+      <section class="fade-up" id="popularClothingSection" style="display:none">
         <div class="section-header">
           <h2>👕 Popular in Clothing</h2>
           <button class="section-see-more" data-section="clothing">See more →</button>
@@ -431,7 +437,7 @@
       </section>
 
       <!-- POPULAR IN FOOD -->
-      <section class="fade-up" id="popularFoodSection">
+      <section class="fade-up" id="popularFoodSection" style="display:none">
         <div class="section-header">
           <h2>🍕 Popular in Food</h2>
           <button class="section-see-more" data-section="food">See more →</button>
@@ -1031,7 +1037,8 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+  <script src="presence.js"></script>
   <script src="script.js"></script>
   <script>
   (function() {
@@ -1210,12 +1217,21 @@
       var sb = ev.detail && ev.detail.supabase;
       if (!sb) return;
       try {
-        var sellersRes = await sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active');
+        // The three reads run together; product counts come from the catalogue
+        // script.js already downloaded (catalogPromise), else a direct query.
+        var now = new Date().toISOString();
+        var cat = (typeof catalogPromise !== 'undefined') ? await catalogPromise : null;
+        var catAds = cat && Array.isArray(cat.ads) ? cat.ads.filter(function(a){ return a.ends_at > now; }) : null;
+        var all = await Promise.all([
+          cat && Array.isArray(cat.stores) ? { data: cat.stores } : sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active'),
+          cat && Array.isArray(cat.products) ? { data: cat.products } : sb.from('products').select('seller_id').eq('visible', true),
+          catAds ? { data: catAds.filter(function(a){ return a.type === 'featured_shop'; }) } : sb.from('ad_campaigns').select('seller_id').eq('type', 'featured_shop').eq('status', 'active').gt('ends_at', now)
+        ]);
+        var sellersRes = all[0], prodsRes = all[1], featuredAdsRes = all[2];
         var sellers = sellersRes.data || [];
         if (!sellers.length) return;
 
         /* count visible products per seller */
-        var prodsRes = await sb.from('products').select('seller_id').eq('visible', true);
         var prods = prodsRes.data || [];
         var countMap = {};
         prods.forEach(function(p) {
@@ -1223,9 +1239,6 @@
         });
 
         /* Boost paid featured shop ads to front, then sort by product count */
-        var now = new Date().toISOString();
-        var featuredAdsRes = await sb.from('ad_campaigns')
-          .select('seller_id').eq('type', 'featured_shop').eq('status', 'active').gt('ends_at', now);
         var featuredIds = new Set(((featuredAdsRes.data) || []).map(function(a){ return a.seller_id; }));
 
         // Curated stores first (script.js HOME_CURATION), then paid features, then size.
@@ -1291,7 +1304,7 @@
 
         /* ── Hero banner ads ── */
         try {
-          var bannersRes = await sb.from('ad_campaigns')
+          var bannersRes = catAds ? { data: catAds.filter(function(a){ return a.type === 'hero_banner'; }).slice(0, 2) } : await sb.from('ad_campaigns')
             .select('image_url, link_url').eq('type', 'hero_banner').eq('status', 'active').gt('ends_at', now).limit(2);
           var banners = bannersRes.data || [];
           if (banners.length) {

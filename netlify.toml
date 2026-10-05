@@ -9,6 +9,30 @@
 [functions."send-stock-alerts"]
   schedule = "*/15 * * * *"
 
+# Site images: browsers reuse them for a day and keep showing the cached copy
+# while re-checking in the background for a week (instant repeat visits). When
+# replacing one of these files with a different picture, give it a new name.
+[[headers]]
+  for = "/hero-velaphi-shisanyama.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
+  for = "/hero-nceks-quad-biking.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
+  for = "/umzila.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
+  for = "/favicon.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
+  for = "/ncekeniquads/img/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
 # Clean store URLs: umzila.store/<slug> -> shop.html (URL stays clean).
 # Real files (cart.html, style.css, …) are always served first, so this only
 # catches single-segment paths that aren't files; shop.html resolves the

@@ -1148,7 +1148,7 @@
     }
   </style>
   <!-- Include Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
 </head>
 <body>
   <!-- Header -->
@@ -2256,6 +2256,7 @@
         
         // Create Supabase client
         supabaseClient = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey);
+        if (window.umzilaPresence) umzilaPresence.start(supabaseClient, 'checkout');
         console.log('Supabase initialized successfully');
         
         // Now we can proceed with the rest of initialization
@@ -4165,7 +4166,7 @@ async function validateCheckout() {
         return `
           <div class="order-item">
             <div class="item-image">
-              <img src="${escapeHtmlLite(image)}" alt="${escapeHtmlLite(name)}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
+              <img src="${escapeHtmlLite(String(image).replace(/\.w1280\.webp/i, '.w480.webp'))}" decoding="async" alt="${escapeHtmlLite(name)}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
             </div>
             <div class="item-details">
               <div class="item-title">${escapeHtmlLite(name)}</div>

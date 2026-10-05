@@ -168,7 +168,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
 <script>
 (async function(){
   // ── bootstrap (same pattern as profile.html / logistics.html: no shared
@@ -183,6 +183,7 @@
     return;
   }
   const sb = supabase.createClient(url, key);
+  if (window.umzilaPresence) umzilaPresence.start(sb, 'track');
 
   const { data: { session } } = await sb.auth.getSession();
   // The private tracking link (?order=…&t=<token>, from the payment-success

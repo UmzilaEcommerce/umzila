@@ -15,9 +15,14 @@ module.exports.handler = async function () {
       headers: {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
-        // Only public values (URL + anon key + flags) — let browsers reuse
-        // them for 10 minutes instead of a function round trip on every page.
-        "Cache-Control": "public, max-age=600"
+        // Only public values (URL + anon key + flags). Every page waits on
+        // this before it can load anything, so: browsers reuse it for an hour
+        // (and keep using it while refreshing in the background for a day),
+        // and Netlify's CDN answers it from the edge without running this
+        // function (a visitor never waits on a cold start; 2,000 visitors =
+        // a handful of invocations, not 2,000). A redeploy clears the CDN copy.
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+        "Netlify-CDN-Cache-Control": "public, durable, max-age=3600, stale-while-revalidate=86400"
       },
       body: JSON.stringify(payload)
     };

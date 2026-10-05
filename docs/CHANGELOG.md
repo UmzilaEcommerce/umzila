@@ -4,6 +4,57 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Speed for 2,000+ visitors: WebP images, CDN catalogue, skeletons, live visitor counter
+
+**Asked for (founder):** could Umzila handle 2,000 people at once? Can admin see how many people are on the site right now, signed in or not? Make everything as fast as possible without breaking anything. (They thought the images were already WebP. Only the Velaphi/Nceks designed images were.)
+
+**Root causes:**
+- **Images:** 361 of the store images were PNGs of 1–3 MB (about 590 KB on average), and cards loaded them full size. That's 8–10 MB of Supabase egress per home visit; the free plan allows 5 GB a month.
+- **Database calls:** about 14 Supabase calls per home visit, some sequential:
+  - the catalogue join and all variants;
+  - 6 filter queries, 2 of them always 400 (`products.type` / `color` don't exist);
+  - stores, a product count and 3 ad reads.
+- **Waiting before loading:**
+  - every page waited on an uncached Netlify function (`get-client-config`) before loading anything;
+  - index.html loaded supabase-js twice, once render-blocking in `<head>`, unpinned and so only briefly cached;
+  - the 3840 px hero images were up to 470 KB.
+
+**Changes** (full write-up: [docs/systems/site-speed.md](systems/site-speed.md)):
+- **Images:**
+  - all 444 referenced images converted to WebP (`<name>.w1280.webp`, plus a `.w480.webp` card thumbnail; banners `.w1600`, logos `.w512`): 214.7 MB → 16.6 MB, and 690 rows switched;
+  - originals kept, with the rollback map in `docs/design/product-images/optimize-map-2026-10-05.json`;
+  - cards, suggestions, small thumbnails, cart/checkout/profile thumbnails and store-page cards load the 480 px thumbnail (`thumbUrl`, with a fallback to the full image);
+  - new uploads (seller dashboard and admin) are shrunk in the browser by `image-upload.js`, with unique names and a 1-year cache.
+- **Security fix found on the way:** any signed-in user could overwrite any file in `shop-assets`. Writes are now only for that store's owners (`my_seller_ids()`) or admins.
+- **Catalogue:**
+  - new `get-catalog.js` is CDN-cached for 60 s and returns products, variants, stores and ads;
+  - the download starts as `script.js` parses, and it feeds `loadProducts`, the filters, the sponsored boost and Featured Shops, each with a fallback to its old query;
+  - a guest home visit now makes **1** Supabase call (the visitor heartbeat), down from about 14.
+- **Config:** `get-client-config` is CDN-cached, so there is no function cold start per page.
+- **index.html:** supabase-js is pinned to `@2.117.2` everywhere, so it's cached for a year. The `<head>` preloads supabase-js, the config, the catalogue and the first hero slide, and the blocking duplicate is gone.
+- **Skeletons:** the 3 curated rows show skeleton cards until the products arrive, and the always-hidden legacy rows no longer flash their headings.
+- **Hero images:** shrunk to 1600 px (92 KB / 134 KB); `umzila.webp` went to 480 px (8 KB). Hero slides after the first load after the page; `netlify.toml` caches the site images.
+- **Live visitor counter:**
+  - `presence.js` sends a heartbeat on every buyer page to `touch_presence`, which writes the UNLOGGED `site_presence` table;
+  - `get_live_visitors()` is staff-only;
+  - admin → Live now shows "N on the site now · X signed in · Y guests" plus the top pages.
+
+**Verified (local, real data, throttled phone):**
+- Home shows skeletons immediately and real cards next, with no page errors.
+- Cards request `.w480.webp` and the product modal the `.w1280.webp`.
+- The guest home made exactly one Supabase REST call.
+- The store page loads the thumbnails.
+- `image-upload.js` turned a 9.6 MB PNG into a 205 KB WebP plus a 6 KB thumbnail; a video was uploaded untouched.
+- Storage policy: own store folder allowed, another store's folder refused.
+- `get_live_visitors` counted the test browsers by page; anon can't call it or read the table.
+
+**Files:**
+- New: `netlify/functions/get-catalog.js`, `presence.js`, `image-upload.js`, `docs/design/product-images/optimize-all.js`, `docs/systems/site-speed.md`.
+- Changed: `netlify/functions/get-client-config.js`, `script.js`, `index.html`, `style.css`, `shop.html`, `cart.html`, `checkout.html`, `checkout-success.html`, `profile.html`, `track.html`, `ncekeniquads/index.html`, `seller-dashboard.html`, `admin.html`, `netlify.toml`, every page's supabase-js tag, hero/logo images.
+- Migrations: `site_presence_live_visitors`, `site_presence_revoke_anon_read`, `shop_assets_owner_only_writes`.
+
+---
+
 ## 2026-10-05 — Curated home page: Velaphi plates are the star, Nceks the experience
 
 **Asked for (founder):** Velaphi items rank higher and other stores lower (except Nceks); the home page looked cluttered (hair, then noodles, then a R100 plate). Plates should be the star; rename rows to highlight "Workshop Shisanyama" and "Xperience of a lifetime with Nceks"; "Under R100" should be items that complement the store (e.g. Milky Pie), not a random tub of oats. Fewer, curated rows.

@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
 <style>
 /* Layout: Umzila chrome (navy) frames each store; store areas take the store's own accent. Hero → sticky shop toolbar → product sections → about → footer. Quick view + cart are sheets. */
 :root{
@@ -579,8 +579,12 @@ const priceOf = p => p.displayPrice;
 const inStock = p => isService(p) || (p.stock != null && p.stock > 0);
 const unpriced = p => !isService(p) && !(p.displayPrice > 0);
 const initials = s => String(s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+// Optimised photos (<name>.w1280.webp) have a 480px twin for cards/thumbnails
+// (same rule as script.js thumbUrl); on error fall back to the full image once.
+const thumbUrl = u => typeof u === 'string' ? u.replace(/\.w1280\.webp(\?|$)/i, '.w480.webp$1') : u;
+function thumbFallback(img){ const f = img.getAttribute('data-full'); if (f && img.src.indexOf('.w480.webp') !== -1) { img.removeAttribute('data-full'); img.src = f; } else img.style.display = 'none'; }
 function media(p){
-  if (p.primary_image) return `<img src="${esc(p.primary_image)}" alt="${esc(p.title)}" loading="lazy" decoding="async">`;
+  if (p.primary_image) return `<img src="${esc(thumbUrl(p.primary_image))}" data-full="${esc(p.primary_image)}" alt="${esc(p.title)}" loading="lazy" decoding="async" onerror="thumbFallback(this)">`;
   return `<div class="ph"><span class="mono">${esc(S.seller.shop_name)}</span><b>${esc(p.title)}</b></div>`;
 }
 
@@ -890,7 +894,7 @@ function openQV(id){
   qvP = p; qvQty = 1;
   const s = S.seller, svc = isService(p), out = !inStock(p);
   $('#qvMedia').innerHTML = p.primary_image
-    ? `<img id="qvMain" src="${esc(p.primary_image)}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="qv-thumbs" id="qvThumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(u)}" alt=""></button>`).join('')}</div>` : '')
+    ? `<img id="qvMain" src="${esc(p.primary_image)}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="qv-thumbs" id="qvThumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(thumbUrl(u))}" data-full="${esc(u)}" alt="" onerror="thumbFallback(this)"></button>`).join('')}</div>` : '')
     : `<div class="ph"><span class="mono">${esc(s.shop_name)}</span><b style="font-size:clamp(1.6rem,4vw,2.6rem)">${esc(p.title)}</b></div>`;
   $('#qvStore').textContent = s.shop_name;
   $('#qvTitle').textContent = p.title;
@@ -1024,7 +1028,7 @@ function renderCart(){
       const control = l.booking_id || l.listing_type === 'service'
         ? `<button class="rm" type="button" data-rm="${key}" aria-label="Remove ${esc(title)}">×</button>`
         : `<div class="stepper" role="group" aria-label="Quantity of ${esc(title)}"><button type="button" data-dec="${key}" aria-label="One less">−</button><output>${qtyOf(l)}</output><button type="button" data-inc="${key}" aria-label="One more">+</button></div>`;
-      return `<li class="line"><span class="thumb">${img ? `<img src="${esc(img)}" alt="">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
+      return `<li class="line"><span class="thumb">${img ? `<img src="${esc(thumbUrl(img))}" data-full="${esc(img)}" alt="" onerror="thumbFallback(this)">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
         <div><b>${esc(title)}</b><span>${showSize ? 'Size ' + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
     }).join('')}</ul>
     ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
@@ -1096,6 +1100,7 @@ async function boot(){
     const url = cfg.supabaseUrl || cfg.SUPABASE_URL, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY;
     if (!url || !key) throw new Error('config');
     sb = supabase.createClient(url, key);
+    if (window.umzilaPresence) umzilaPresence.start(sb, 'store:' + (location.pathname.replace(/^\/+|\.html$/g, '') || 'shop'));
   } catch (_) { missing('Couldn’t open the store', 'Check your connection and refresh the page.'); return; }
 
   // Two ways in: the clean URL umzila.store/<slug> (rewritten here by

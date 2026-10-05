@@ -36,6 +36,16 @@ function sastParts(input) {
 }
 
 /********************
+ * Product catalogue — CDN-cached (netlify/functions/get-catalog.js). It needs
+ * no Supabase client, so the download starts right now, in parallel with the
+ * config + client set-up below, instead of after them. loadProducts() uses it
+ * and falls back to querying Supabase directly if it failed.
+ ********************/
+const catalogPromise = fetch('/.netlify/functions/get-catalog')
+  .then(r => r.ok ? r.json() : null)
+  .catch(() => null);
+
+/********************
  * Supabase initialization via Netlify function
  ********************/
 (async function initSupabaseClient(){
@@ -67,6 +77,7 @@ function sastParts(input) {
     // Initialize Supabase client
     const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
     window.supabase = supabaseClient; // global
+    if (window.umzilaPresence) window.umzilaPresence.start(supabaseClient, 'home');
 
     // Notify other scripts
     document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
@@ -880,6 +891,20 @@ function populateMobileMenuCategories() {
 /********************
  * Helper: create SVG placeholder dataURI
  ********************/
+// Card thumbnails: every optimised product photo (<name>.w1280.webp — see
+// docs/systems/site-speed.md) has a 480px twin <name>.w480.webp (~30 KB instead
+// of ~200 KB). Cards, suggestions and small thumbnails load the twin; the
+// product modal shows the full image. Any other URL is returned unchanged.
+function thumbUrl(url) {
+  return typeof url === 'string' ? url.replace(/\.w1280\.webp(\?|$)/i, '.w480.webp$1') : url;
+}
+// onerror for a thumbnail: try the full image once, then the placeholder.
+function thumbFallback(img, placeholder) {
+  var full = img.getAttribute('data-full');
+  if (full && img.src.indexOf('.w480.webp') !== -1) { img.removeAttribute('data-full'); img.src = full; return; }
+  if (placeholder) img.src = placeholder; else img.style.display = 'none';
+}
+
 function svgPlaceholder(text, w=400, h=300, bg='#ddd', fg='#222') {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'>
     <rect width='100%' height='100%' fill='${bg}' />
@@ -1100,6 +1125,18 @@ function redirectToCheckout() {
 /********************
  * Load product variants from Supabase
  ********************/
+// Group variants by product_id into state.productVariants.
+function setProductVariants(rows) {
+  const variantsByProduct = {};
+  (rows || []).forEach(variant => {
+    if (!variantsByProduct[variant.product_id]) {
+      variantsByProduct[variant.product_id] = [];
+    }
+    variantsByProduct[variant.product_id].push(variant);
+  });
+  state.productVariants = variantsByProduct;
+}
+
 async function loadProductVariants() {
   if (!supabaseClient) return;
   
@@ -1113,17 +1150,7 @@ async function loadProductVariants() {
       return;
     }
     
-    // Group variants by product_id
-    const variantsByProduct = {};
-    data.forEach(variant => {
-      if (!variantsByProduct[variant.product_id]) {
-        variantsByProduct[variant.product_id] = [];
-      }
-      variantsByProduct[variant.product_id].push(variant);
-    });
-    
-    state.productVariants = variantsByProduct;
-    console.info('Product variants loaded:', Object.keys(variantsByProduct).length);
+    setProductVariants(data);
   } catch (e) {
     console.error('Error loading variants:', e);
   }
@@ -1136,22 +1163,31 @@ async function loadProducts() {
   if(!supabaseClient) return;
   
   try {
-    // First load variants
-    await loadProductVariants();
-    
-    const { data, error } = await supabaseClient
-      .from('products')
-      .select(`
-        *,
-        product_images!fk_product_images_product(*),
-        sellers(id, shop_name, slug, logo_url, whatsapp_number, delivery_method, turnaround_time, status)
-      `)
-      .eq('visible', true)
-      .order('created_at', { ascending: false });
-    
-    if(error) {
-      console.warn('Error loading products:', error);
-      return;
+    let data = null;
+    const cat = await catalogPromise;
+    if (cat && Array.isArray(cat.products) && Array.isArray(cat.variants)) {
+      setProductVariants(cat.variants);
+      data = cat.products;
+    } else {
+      // Fallback: the same two reads, straight from Supabase (run together).
+      const [, res] = await Promise.all([
+        loadProductVariants(),
+        supabaseClient
+          .from('products')
+          .select(`
+            *,
+            product_images!fk_product_images_product(*),
+            sellers(id, shop_name, slug, logo_url, whatsapp_number, delivery_method, turnaround_time, status)
+          `)
+          .eq('visible', true)
+          .order('created_at', { ascending: false })
+      ]);
+      if (res.error) {
+        console.warn('Error loading products:', res.error);
+        clearHomeSkeletons();
+        return;
+      }
+      data = res.data;
     }
     
     const mapped = data.map((row) => {
@@ -1258,8 +1294,12 @@ async function loadProducts() {
       openSectionView(SECTION_KEY_MAP[sectionMatch[1]]);
     }
 
-    /* Load sponsored product IDs for boosting */
-    if (window.supabase) {
+    /* Load sponsored product IDs for boosting (from the catalogue when it has them) */
+    if (cat && Array.isArray(cat.ads)) {
+      const nowIso = new Date().toISOString();
+      window._sponsoredProductIds = new Set(cat.ads.filter(function(c){ return c.type === 'sponsored_product' && c.ends_at > nowIso; }).map(function(c){ return c.product_id; }));
+      if (window._sponsoredProductIds.size) applyFilters(); // re-render with sponsored boosting
+    } else if (window.supabase) {
       window.supabase.from('ad_campaigns')
         .select('product_id')
         .eq('type', 'sponsored_product')
@@ -1273,7 +1313,18 @@ async function loadProducts() {
     
   } catch (e) {
     console.warn('Error loading products:', e);
+    clearHomeSkeletons();
   }
+}
+
+// Products couldn't load: don't leave shimmering placeholder rows behind.
+function clearHomeSkeletons() {
+  document.querySelectorAll('.hscroll[aria-busy="true"]').forEach(function (row) {
+    if (!row.querySelector('.sk-wrap')) return;
+    row.innerHTML = '';
+    row.removeAttribute('aria-busy');
+    var sec = row.closest('section'); if (sec) sec.style.display = 'none';
+  });
 }
 
 /********************
@@ -2029,7 +2080,10 @@ const heroPlaceholders = [
   `thumbnail1.webp`  // 4th slide fallback
 ];
 Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
-  el.style.backgroundImage = `url("${heroPlaceholders[idx]}")`;
+  // First slide now (it's preloaded in index.html <head>); the rest once the
+  // page has loaded, so they don't compete with the products for bandwidth.
+  const setBg = () => { el.style.backgroundImage = `url("${heroPlaceholders[idx]}")`; };
+  if (idx === 0 || document.readyState === 'complete') setBg(); else window.addEventListener('load', setBg, { once: true });
   el.style.backgroundSize='cover';
   el.style.backgroundPosition='center';
   // Make slide clickable
@@ -2130,7 +2184,7 @@ function updateSuggestions(q){
     const img = p.primary_image || (p.imgs && p.imgs[0]) || '';
     const d = document.createElement('div');
     d.className = 'suggestions-prod';
-    d.innerHTML = `${img ? `<img class="suggestions-prod-img" src="${esc(img)}" alt="" onerror="this.style.display='none'">` : ''}
+    d.innerHTML = `${img ? `<img class="suggestions-prod-img" src="${esc(thumbUrl(img))}" data-full="${esc(img)}" alt="" onerror="thumbFallback(this)">` : ''}
       <span class="suggestions-prod-name">${esc(title)}</span>
       <span class="suggestions-prod-price">${p.listing_type !== 'service' && (p.stock || 0) <= 0 ? 'Sold out' : 'R' + Number(price).toFixed(2)}</span>`;
     d.addEventListener('click',()=>{
@@ -2573,7 +2627,7 @@ function mediaTagForCard(url, title) {
   if (isVideoUrl(url)) {
     return `<video src="${esc(url)}" autoplay muted loop playsinline style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0" aria-label="${esc(title)}"></video>`;
   }
-  return `<img src="${svgPlaceholder(title,400,300,'#f0f0f0','#999')}" data-src="${esc(url)}" loading="lazy" alt="${esc(title)}" onerror="this.src='${svgPlaceholder(title,400,300)}'; this.removeAttribute('data-src')">`;
+  return `<img src="${svgPlaceholder(title,400,300,'#f0f0f0','#999')}" data-src="${esc(thumbUrl(url))}" data-full="${esc(url)}" loading="lazy" decoding="async" alt="${esc(title)}" onerror="this.removeAttribute('data-src'); thumbFallback(this, '${svgPlaceholder(title,400,300)}')">`;
 }
 
 /********************
@@ -2946,7 +3000,7 @@ function makeCardHTML(p){
         ${outOfStock ? '<span class="badge badge-soldout">Sold out</span>' : ''}
       </div>
       ${mediaTagForCard(primaryImage, p.title)}
-      ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${esc(secondaryImage)}" loading="lazy" alt="${esc(p.title)} back" onerror="this.src='${svgPlaceholder(p.title,400,300)}'; this.removeAttribute('data-src')">` : ''}
+      ${secondaryImage && !isVideoUrl(primaryImage) ? `<img class="secondary" src="${svgPlaceholder(p.title,400,300,'#f0f0f0','#999')}" data-src="${esc(thumbUrl(secondaryImage))}" data-full="${esc(secondaryImage)}" loading="lazy" decoding="async" alt="${esc(p.title)} back" onerror="this.removeAttribute('data-src'); thumbFallback(this, '${svgPlaceholder(p.title,400,300)}')">` : ''}
       <button class="fav-btn" data-product-id="${p.id}" data-fav-count="${favCount}" aria-label="Add to favourites" onclick="event.stopPropagation();toggleFavourite(this)">
         <svg class="fav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.1c0-3-2.4-5.4-5.4-5.4-1.8 0-3.4.9-4.4 2.3-1-1.4-2.6-2.3-4.4-2.3-3 0-5.4 2.4-5.4 5.4 0 5.5 9.8 11.5 9.8 11.5s9.8-6 9.8-11.5z"/></svg>
       </button>
@@ -2995,6 +3049,7 @@ function renderAll(products){
     return sp.concat(rest);
   }
 
+  ['shisanyamaScroll', 'experienceScroll', 'underR100Scroll'].forEach(function (id) { var el = document.getElementById(id); if (el) el.removeAttribute('aria-busy'); });
   function cards(list, minW){ return pinSponsored(list).map(p=>`<div style="min-width:${minW||180}px;max-width:${minW||180}px">${makeCardHTML(p)}</div>`).join(''); }
   function showSection(id, has){ const el=document.getElementById(id); if(el) el.style.display = has ? '' : 'none'; }
 
@@ -3368,7 +3423,7 @@ async function openProductModal(id) {
     const images = currentModalProduct.all_images || currentModalProduct.imgs || [];
     const thumbnails = images.map((img, index) =>
       `<div class="product-thumbnail ${index === 0 ? 'active' : ''}" data-image="${esc(img)}">
-        <img src="${esc(img)}" alt="${esc(currentModalProduct.title)} thumbnail ${index + 1}" loading="lazy">
+        <img src="${esc(thumbUrl(img))}" data-full="${esc(img)}" alt="${esc(currentModalProduct.title)} thumbnail ${index + 1}" loading="lazy" decoding="async" onerror="thumbFallback(this)">
       </div>`
     ).join('');
     
@@ -3380,7 +3435,7 @@ async function openProductModal(id) {
         const bPrice = bp.sale && bp.salePrice ? bp.salePrice : bp.price;
         const sameSeller = bp.seller && currentModalProduct.seller && bp.seller.id === currentModalProduct.seller.id;
         return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f2f5">
-          <img src="${esc(bImg)}" alt="${esc(bp.title)}" loading="lazy" style="width:50px;height:50px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.style.display='none'">
+          <img src="${esc(thumbUrl(bImg))}" data-full="${esc(bImg)}" alt="${esc(bp.title)}" loading="lazy" style="width:50px;height:50px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="thumbFallback(this)">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(bp.title)}</div>
             <div style="font-size:12px;color:#6b7280">${sameSeller ? 'Same store' : esc(bp.seller && bp.seller.shop_name ? bp.seller.shop_name : '')} · R${Number(bPrice).toFixed(0)}</div>
@@ -4372,11 +4427,25 @@ async function loadFilterOptions() {
   }
 
   try {
+    // Every option below is derived from the catalogue the page already
+    // downloaded (get-catalog) — no extra database reads. Only if that failed
+    // does each one fall back to its own query (the old behaviour).
+    const cat = await catalogPromise;
+    const catProducts = cat && Array.isArray(cat.products) ? cat.products : null;
+    const catVariants = cat && Array.isArray(cat.variants) ? cat.variants : null;
+    // A column the catalogue doesn't have (e.g. type/color) behaves like the
+    // old failed query: the filter keeps its default.
+    const fromCatalog = (rows, col, query) => {
+      if (!rows) return query();
+      if (rows.length && !(col in rows[0])) return { data: null, error: null };
+      return { data: rows.filter(r => r[col] != null).map(r => ({ [col]: r[col] })), error: null };
+    };
+
     // Get unique categories from products table
-    const { data: categoriesData, error: categoriesError } = await supabaseClient
+    const { data: categoriesData, error: categoriesError } = await fromCatalog(catProducts, 'category', () => supabaseClient
       .from('products')
       .select('category')
-      .not('category', 'is', null);
+      .not('category', 'is', null));
 
     if (categoriesError) {
       console.error('Error loading categories:', categoriesError);
@@ -4498,7 +4567,9 @@ async function loadFilterOptions() {
     }
 
     // Get price range from actual products
-    const { data: priceData, error: priceError } = await supabaseClient
+    const { data: priceData, error: priceError } = catProducts
+      ? { data: catProducts.slice().sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0)).slice(0, 1), error: null }
+      : await supabaseClient
       .from('products')
       .select('price, sale_price')
       .order('price', { ascending: false })
@@ -4516,10 +4587,10 @@ async function loadFilterOptions() {
     }
 
     // Get unique sizes from product_variants table
-    const { data: variantsData, error: variantsError } = await supabaseClient
+    const { data: variantsData, error: variantsError } = await fromCatalog(catVariants, 'size', () => supabaseClient
       .from('product_variants')
       .select('size')
-      .not('size', 'is', null);
+      .not('size', 'is', null));
 
     if (variantsError) {
       console.error('Error loading variants:', variantsError);
@@ -4556,10 +4627,10 @@ async function loadFilterOptions() {
     }
 
     // Get unique types from metadata or products table
-    const { data: productsData, error: productsError } = await supabaseClient
+    const { data: productsData, error: productsError } = await fromCatalog(catProducts, 'type', () => supabaseClient
       .from('products')
       .select('type')
-      .not('type', 'is', null);
+      .not('type', 'is', null));
 
     if (productsError) {
       console.error('Error loading types:', productsError);
@@ -4595,10 +4666,10 @@ async function loadFilterOptions() {
     }
 
     // Get unique colors from metadata or products table
-    const { data: colorsData, error: colorsError } = await supabaseClient
+    const { data: colorsData, error: colorsError } = await fromCatalog(catProducts, 'color', () => supabaseClient
       .from('products')
       .select('color')
-      .not('color', 'is', null);
+      .not('color', 'is', null));
 
     if (colorsError) {
       console.error('Error loading colors:', colorsError);
@@ -4619,10 +4690,10 @@ async function loadFilterOptions() {
     }
 
     // Get unique tags from tags column
-    const { data: tagsData, error: tagsError } = await supabaseClient
+    const { data: tagsData, error: tagsError } = await fromCatalog(catProducts, 'tags', () => supabaseClient
       .from('products')
       .select('tags')
-      .not('tags', 'is', null);
+      .not('tags', 'is', null));
 
     if (tagsError) {
       console.error('Error loading tags:', tagsError);

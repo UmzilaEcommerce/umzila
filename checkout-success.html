@@ -95,7 +95,7 @@
   </div>
 
   <!-- Supabase for updating order notes with preferred delivery -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
   <script>
     const urlParams    = new URLSearchParams(window.location.search);
     const mPaymentId   = urlParams.get('m_payment_id') || '';
@@ -200,6 +200,7 @@
             if (!url || !key) { finishPaidCart(); return; }
 
             const sb = supabase.createClient(url, key);
+            if (window.umzilaPresence) umzilaPresence.start(sb, 'paid');
 
             // Update preferred delivery notes if present
             const preferredDelivery = localStorage.getItem('ss_preferred_delivery');

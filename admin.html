@@ -297,6 +297,9 @@
   .live-kpis span { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   .live-kpis .bad b { color: #dc2626; } .live-kpis .good b { color: #16a34a; }
   .live-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 8px 2px; border-top: 1px solid var(--border); font-size: 13px; }
+  .live-visitors { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; background: #eff6ff; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; color: #1e3a8a; }
+  .live-visitors b { font-size: 22px; font-weight: 900; line-height: 1.1; }
+  .live-visitors .lv-pages { width: 100%; font-size: 12px; color: #475569; font-weight: 600; }
   .live-row span { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 600; }
   .live-row.bad span { color: #dc2626; }
   .admin-bnav { display: none; }
@@ -370,7 +373,8 @@
 <!-- Leaflet v1.9.4 (Delivery Ops live map — same version/CDN as track.html) -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Supabase initialization via Netlify function -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="/image-upload.js"></script>
 
 <script>
 (async function initSupabaseClient(){
@@ -1215,16 +1219,12 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const blob = await res.blob();
     // create file path
     const ext = (blob.type && blob.type.split('/')[1]) || 'png';
-    const key = `${Date.now()}-${Math.random().toString(36).slice(2,9)}-${filenameHint}.${ext}`;
+    const base = `${Date.now()}-${Math.random().toString(36).slice(2,9)}-${filenameHint}`;
     const bucket = 'product-images'; // your bucket name
-    const uploadResult = await supabaseClient.storage.from(bucket).upload(key, blob, { upsert: false });
-    if(uploadResult.error){
-      console.warn('upload failed:', uploadResult.error);
-      return null;
-    }
-    // get public URL
-    const { data: urlData } = supabaseClient.storage.from(bucket).getPublicUrl(key);
-    return urlData?.publicUrl ?? null;
+    // Shrunk to WebP + card thumbnail before upload (image-upload.js; falls back to the original).
+    const file = new File([blob], base + '.' + ext, { type: blob.type || 'image/' + ext });
+    const up = await umzilaImages.upload(supabaseClient.storage, bucket, base, file, 'product');
+    return up.publicUrl ?? null;
   } catch (e) {
     console.warn('upload to bucket failed', e);
     return null;
@@ -2271,8 +2271,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const body = document.getElementById('liveOpsBody');
     if (!body || !supabaseClient) return;
     try {
-      const { data, error } = await supabaseClient.rpc('get_ops_board');
+      // Visitors on the site (presence.js heartbeats) load alongside; a failure there never blanks the ops strip.
+      const [{ data, error }, vis] = await Promise.all([
+        supabaseClient.rpc('get_ops_board'),
+        supabaseClient.rpc('get_live_visitors').then(r => r, () => ({ data: null }))
+      ]);
       if (error) throw error;
+      const v = vis && vis.data;
       const ds = data.deliveries || [];
       const open = ds.filter(d => !['DELIVERED','CANCELLED','FAILED','RETURNED'].includes(d.status));
       const t0 = new Date(); t0.setHours(0,0,0,0);
@@ -2282,7 +2287,12 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const so = document.getElementById('statOpenDeliveries'); if (so) so.textContent = open.length;
       const esc2 = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
       body.className = '';
+      const pageName = p => p === 'home' ? 'Home' : p === 'paid' ? 'Payment done' : p.startsWith('store:') ? p.slice(6) : p.charAt(0).toUpperCase() + p.slice(1);
       body.innerHTML = `
+        ${v ? `<div class="live-visitors" title="People with Umzila open in the last ~2 minutes (one per browser)">
+          <span><b>${v.total}</b> on the site now</span><span>${v.signed_in} signed in · ${v.guests} guest${v.guests === 1 ? '' : 's'}</span>
+          ${(v.pages || []).length ? `<span class="lv-pages">${v.pages.map(p => esc2(pageName(p.page)) + ' ' + p.n).join(' · ')}</span>` : ''}
+        </div>` : ''}
         <div class="live-kpis">
           <div><b>${open.length}</b><span>open deliveries</span></div>
           <div class="${attention.length ? 'bad' : ''}"><b>${attention.length}</b><span>need attention</span></div>

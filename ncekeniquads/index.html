@@ -793,7 +793,7 @@ section[id],footer[id]{scroll-margin-top:72px}
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden><span class="tk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><div><b class="t-title"></b><span class="t-sub"></span></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
 <script>
 (() => {
 'use strict';
@@ -906,6 +906,7 @@ async function loadStore(){
   const cfg = await cfgRes.json();
   const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey;
   sb = supabase.createClient(url, key);
+  if (window.umzilaPresence) umzilaPresence.start(sb, 'store:ncekeniquads');
   const {data: seller} = await sb.from('sellers').select('id, shop_name, slug, status, booking_capacity, booking_start_interval_minutes').eq('slug', STORE_SLUG).maybeSingle();
   if (!seller || seller.status !== 'active') throw new Error('Store unavailable');
   store.seller = seller;

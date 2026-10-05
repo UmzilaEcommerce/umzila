@@ -2450,3 +2450,11 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
   .cat-bubble-icon svg { width: 22px; height: 22px; }
   .cat-bubble-label { font-size: 11px; white-space: nowrap; }
 }
+
+/* ── Loading skeletons (home rows, until script.js renders real cards) ── */
+.sk{background:linear-gradient(90deg,#efede8 0%,#f7f6f2 40%,#efede8 80%);background-size:200% 100%;animation:skShimmer 1.3s ease-in-out infinite}
+.sk-card{pointer-events:none}
+.sk-card .product-media{background-color:#efede8}
+.sk-line{height:12px;border-radius:6px;margin:12px 4px 0}
+.sk-line.short{width:45%;margin-top:8px}
+@keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}

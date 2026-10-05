@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
   <title>Seller Dashboard — Umzila</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+  <script src="/image-upload.js"></script>
   <style>
     /* ── CSS Variables ── */
     :root {
@@ -1752,12 +1753,9 @@
     }
 
     async function uploadBannerImage(file) {
-      var ext  = file.name.split('.').pop();
-      var path = `banners/${SD.seller.id}-${Date.now()}.${ext}`;
-      var { data, error } = await SD.sb.storage.from('product-images').upload(path, file, { upsert: true });
-      if (error) throw error;
-      var { data: urlData } = SD.sb.storage.from('product-images').getPublicUrl(path);
-      return urlData.publicUrl;
+      // Shrunk to WebP before upload (image-upload.js).
+      var up = await umzilaImages.upload(SD.sb.storage, 'product-images', `banners/${SD.seller.id}-${Date.now()}`, file, 'banner');
+      return up.publicUrl;
     }
 
     async function initiateAdPayment(payload) {
@@ -2639,19 +2637,18 @@
     ───────────────────────────────────────── */
     var STORAGE_BUCKET = 'shop-assets';
 
-    async function uploadImage(file, storagePath, progressId, urlInputId, previewId) {
+    // storageBase = path without extension; kind = 'logo' | 'banner' (sizes in image-upload.js).
+    async function uploadImage(file, storageBase, progressId, urlInputId, previewId, kind) {
       var prog = document.getElementById(progressId);
       var urlInput = document.getElementById(urlInputId);
       var preview  = document.getElementById(previewId);
       if (prog) prog.style.display = 'block';
 
-      var { data, error } = await SD.sb.storage
-        .from(STORAGE_BUCKET).upload(storagePath, file, { upsert: true, contentType: file.type });
+      var up;
+      try { up = await umzilaImages.upload(SD.sb.storage, STORAGE_BUCKET, storageBase, file, kind); }
+      catch (error) { if (prog) prog.style.display = 'none'; toast('Upload failed: ' + error.message); return null; }
       if (prog) prog.style.display = 'none';
-      if (error) { toast('Upload failed: ' + error.message); return null; }
-
-      var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
-      var publicUrl = urlData && urlData.publicUrl;
+      var publicUrl = up.publicUrl;
       if (publicUrl) {
         if (urlInput) urlInput.value = publicUrl;
         if (preview)  { preview.src = publicUrl; preview.style.display = ''; }
@@ -2659,7 +2656,7 @@
       return publicUrl;
     }
 
-    function bindImageUpload(fileInputId, progressId, urlInputId, previewId, pathFn) {
+    function bindImageUpload(fileInputId, progressId, urlInputId, previewId, pathFn, kind) {
       var fileInput = document.getElementById(fileInputId);
       if (!fileInput) return;
       fileInput.addEventListener('change', async function() {
@@ -2667,16 +2664,17 @@
         if (!file) return;
         var preview = document.getElementById(previewId);
         if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = ''; }
-        await uploadImage(file, pathFn(file), progressId, urlInputId, previewId);
+        await uploadImage(file, pathFn(file), progressId, urlInputId, previewId, kind);
       });
     }
 
     function initUploadBindings() {
       var sid = SD.seller.id;
+      // Unique names: files are cached for a year, so a new logo never reuses an old URL.
       bindImageUpload('editLogoFile',  'editLogoProgress',  'editLogo',   'editLogoPreview',
-        function(f) { return 'sellers/' + sid + '/logo.'   + f.name.split('.').pop(); });
+        function() { return 'sellers/' + sid + '/logo-' + Date.now(); }, 'logo');
       bindImageUpload('editBannerFile','editBannerProgress','editBanner', 'editBannerPreview',
-        function(f) { return 'sellers/' + sid + '/banner.' + f.name.split('.').pop(); });
+        function() { return 'sellers/' + sid + '/banner-' + Date.now(); }, 'banner');
     }
 
     /* ─────────────────────────────────────────
@@ -2731,11 +2729,11 @@
       if (prog) prog.style.display = 'block';
       for (var fi = 0; fi < files.length; fi++) {
         var file = files[fi];
-        var ext = file.name.split('.').pop();
-        var path = 'sellers/' + SD.seller.id + '/products/new_' + Date.now() + '_' + fi + '.' + ext;
-        var { data, error } = await SD.sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
+        // Shrunk to WebP + card thumbnail before upload (image-upload.js).
+        var urlData = null, error = null;
+        try { urlData = await umzilaImages.upload(SD.sb.storage, STORAGE_BUCKET, 'sellers/' + SD.seller.id + '/products/new_' + Date.now() + '_' + fi, file, 'product'); }
+        catch (e) { error = e; }
         if (!error) {
-          var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(data.path);
           if (urlData && urlData.publicUrl) {
             var nextOrder = newProdPendingImages.length; // 0 = first = cover
             newProdPendingImages.push({ url: urlData.publicUrl, sort_order: nextOrder });
@@ -2825,12 +2823,9 @@
       var nextOrder = editProdImages.length;
       for (var fi = 0; fi < files.length; fi++) {
         var file = files[fi];
-        var ext = file.name.split('.').pop();
-        var path = 'sellers/' + SD.seller.id + '/products/' + productId + '_' + Date.now() + '_' + fi + '.' + ext;
-        var { data: upData, error: upErr } = await SD.sb.storage.from(STORAGE_BUCKET).upload(path, file, { upsert: true, contentType: file.type });
-        if (upErr) { toast('Upload failed: ' + upErr.message); continue; }
-        var { data: urlData } = SD.sb.storage.from(STORAGE_BUCKET).getPublicUrl(upData.path);
-        var publicUrl = urlData && urlData.publicUrl;
+        var publicUrl;
+        try { publicUrl = (await umzilaImages.upload(SD.sb.storage, STORAGE_BUCKET, 'sellers/' + SD.seller.id + '/products/' + productId + '_' + Date.now() + '_' + fi, file, 'product')).publicUrl; }
+        catch (upErr) { toast('Upload failed: ' + upErr.message); continue; }
         if (publicUrl) {
           var { data: insRow } = await SD.sb.from('product_images').insert({
             product_id:  productId,

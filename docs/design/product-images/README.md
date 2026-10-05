@@ -12,4 +12,5 @@ Files:
 - `thumb.html?k=ride|voucher|vel&ar=sq|card…` is the design. On squares, everything important sits in the central ~840px, so the 3:4 homepage crop and the 4:3 phone-modal crop keep it.
 - `render.js` renders each job with headless Chrome and writes WebP with `sharp` (`npm i sharp` next to it, and fix the paths at the top first). Velaphi source photos go in `vel/` and the logo in `vel/logo.png`.
 - `upload.js` runs via `npx netlify dev:exec node upload.js`. It uploads to `product-images/stores/<slug>/`, makes the design `product_images` order 0 and `products.image`, removes the previous design, and keeps the photos in the gallery.
+- `optimize-all.js` (2026-10-05) converts every referenced store image to `<name>.w1280.webp` + a `.w480.webp` card thumbnail (banners `.w1600`, logos `.w512`) and switches the DB rows; originals are kept. See docs/systems/site-speed.md.
 - **Bump the filename** (`-v2`, `-v3`…) when changing an image, because storage serves it with a 7-day cache.
