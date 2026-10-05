@@ -1108,7 +1108,7 @@
           <div class="orders-list" id="pastOrdersList"></div>
           <div class="empty-state" id="pastOrdersEmpty" style="display:none">
             <div class="empty-state-icon">📦</div>
-            <div>No past orders yet. Orders move here once the buyer confirms delivery.</div>
+            <div>No past orders yet. Orders move here once they're delivered.</div>
           </div>
         </div>
       </div>
@@ -3691,15 +3691,25 @@
       await loadOrders();
     };
 
+    // Active vs past (fixed 2026-10-05): an order is finished once Umzila's
+    // rider delivered it (PIN confirmed → deliveries.status DELIVERED) or the
+    // delivery was cancelled/returned. The old rule — this seller's item rows
+    // 'delivered' AND buyer-confirmed — never happens on delivery-network
+    // orders (the PIN updates the delivery, not those rows), so delivered
+    // orders sat in Active forever. Orders without a delivery row keep the
+    // old rule. One predicate for both lists so an order is never in both.
+    var DELIVERY_DONE = { DELIVERED: 'Delivered', CANCELLED: 'Cancelled', RETURNED: 'Returned' };
+    function isPastOrder(o) {
+      if (o._deliveryStatus && DELIVERY_DONE[o._deliveryStatus]) return true;
+      if (o.order_status === 'Returned') return true;
+      return o._mySellerStatus === 'Delivered' && !!o._buyerAllConfirmed;
+    }
+
     function renderOrders(orders, myProductIds) {
       var list  = document.getElementById('ordersList');
       var empty = document.getElementById('ordersEmpty');
 
-      // Split: past = Delivered orders where buyer confirmed all items
-      // Active = everything else
-      var activeOrders = orders.filter(function(o) {
-        return o._mySellerStatus !== 'Delivered' || !o._buyerAllConfirmed;
-      });
+      var activeOrders = orders.filter(function(o) { return !isPastOrder(o); });
 
       if (!activeOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
@@ -3772,12 +3782,12 @@
       }).join('');
     }
 
-    // Render past orders (Delivered with buyer confirmation)
+    // Render past orders (delivered / cancelled / returned — isPastOrder)
     function renderPastOrders() {
       var list  = document.getElementById('pastOrdersList');
       var empty = document.getElementById('pastOrdersEmpty');
       if (!list) return;
-      var pastOrders = (SD.orders || []).filter(function(o) { return o._mySellerStatus === 'Delivered'; });
+      var pastOrders = (SD.orders || []).filter(isPastOrder);
       if (!pastOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
       var myProductIds = SD.products.map(function(p) { return p.id; });
@@ -3794,7 +3804,10 @@
         return '<div class="order-row" style="opacity:0.85">' +
           '<div class="order-row-header">' +
             '<span class="order-row-id">#' + (order.order_number || order.id.slice(0,8)) + '</span>' +
-            '<span class="payment-pill paid">✓ Delivered</span>' +
+            (function() {
+              var lbl = (order._deliveryStatus && DELIVERY_DONE[order._deliveryStatus]) || (order.order_status === 'Returned' ? 'Returned' : 'Delivered');
+              return lbl === 'Delivered' ? '<span class="payment-pill paid">✓ Delivered</span>' : '<span class="payment-pill cancelled">' + lbl + '</span>';
+            })() +
             '<span class="order-row-date">' + formatDate(order.created_at) + '</span>' +
           '</div>' +
           '<div class="order-items-list">' + itemLines + '</div>' +

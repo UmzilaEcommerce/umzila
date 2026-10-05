@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-05 — Seller dashboard: delivered orders now move from Active to Past
+
+**Reported (founder):** completed orders never leave "Active orders" on the seller dashboard.
+
+**Root cause:** Past required this seller's `order_item_statuses` rows to be `delivered` **and** buyer-confirmed. On delivery-network orders the rider's PIN marks the *delivery* `DELIVERED` (`confirm-delivery-pin.js`) and never touches those rows, so no network order could ever become Past. The two lists also used different rules: Past checked only the item rows, while Active excluded an order only when both conditions held.
+
+**Fix (`seller-dashboard.html`):** a single `isPastOrder()` drives both lists. An order is past when:
+- its delivery is `DELIVERED`, `CANCELLED` or `RETURNED`; or
+- the order is `Returned`; or
+- it has no delivery row (e.g. self-arranged stores) and meets the old rule: delivered and buyer-confirmed.
+
+The Past list labels each order Delivered, Cancelled or Returned.
+
+**Parked on purpose (founder):** the service acceptance-window rework (about a 4 h window inside opening hours, reminders, alert staff instead of silently cancelling on expiry, instant confirm where possible). No accept-type services are expected for now. The `expire-overdue-service-acceptances` cron still cancels paid, unaccepted services after 24 h **without telling anyone or refunding**. Fix that before those services go live.
+
+---
+
 ## 2026-10-05 — After-hours orders explained end to end; guest baskets, anonymous baskets and unfinished payments for staff
 
 **Asked for (founder):** fix the after-hours gaps; show guest baskets (with contact details from checkout, and anonymous ones) plus unfinished payments to staff.
