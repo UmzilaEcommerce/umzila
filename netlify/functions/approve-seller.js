@@ -4,6 +4,7 @@
 //   2. Mark the seller_applications row as approved
 //   3. Send a congratulations + enrollment link email via Resend
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 module.exports.handler = async function (event) {
   const origin = process.env.ALLOWED_ORIGIN || '*';
@@ -144,7 +145,7 @@ module.exports.handler = async function (event) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'Umzila <noreply@umzila.store>',
+          ...mailFrom('Umzila', 'noreply'),
           to: [app.email],
           subject: freeSlotAvailable
             ? "You've been approved to sell on Umzila — for free!"

@@ -11,6 +11,7 @@
 // Uses service role key — never exposed to the browser.
 
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -199,7 +200,7 @@ async function issueMysteryCode(admin, email, funFact, SITE_BASE_URL, RESEND_KEY
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Umzila <noreply@umzila.store>',
+          ...mailFrom('Umzila', 'noreply'),
           to: [email],
           subject,
           html
@@ -241,7 +242,7 @@ async function reinstateCode(admin, row, SITE_BASE_URL, RESEND_KEY) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Umzila <noreply@umzila.store>',
+          ...mailFrom('Umzila', 'noreply'),
           to: [updated.email],
           subject: 'Your mystery code is back from the dead 🧟🎁',
           html: buildReinstateEmail(updated.code, updated.amount, expiryLabel, SITE_BASE_URL)

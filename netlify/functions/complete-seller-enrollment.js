@@ -7,6 +7,7 @@
 //   3. Mark the seller_applications row as 'completed'
 //   4. Send the welcome email
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const headers = {
   'Content-Type': 'application/json',
@@ -212,7 +213,7 @@ exports.handler = async function (event) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from: 'Umzila Sellers <sellers@umzila.store>',
+          ...mailFrom('Umzila Sellers', 'sellers'),
           to: [email],
           subject: "You're officially an Umzila seller!",
           html: buildWelcomeEmail(

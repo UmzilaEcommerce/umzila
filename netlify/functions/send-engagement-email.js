@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 exports.handler = async function(event) {
     if (event.httpMethod !== 'POST') {
@@ -140,7 +141,7 @@ exports.handler = async function(event) {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                from:    'Umzila <orders@umzila.store>',
+                ...mailFrom('Umzila', 'orders'),
                 to:      [customer_email],
                 subject,
                 html

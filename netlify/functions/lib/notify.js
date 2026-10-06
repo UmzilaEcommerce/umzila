@@ -1,3 +1,4 @@
+const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to @umzila.store
 // netlify/functions/lib/notify.js
 //
 // Delivery network Stage 14 (delivery-network-spec.md §O... see Stage 14
@@ -171,7 +172,7 @@ async function notify(supabase, deliveryId, eventType) {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: 'Umzila <orders@umzila.store>', to: [order.customer_email], subject: content.subject, html: content.html })
+        body: JSON.stringify({ ...mailFrom('Umzila', 'orders'), to: [order.customer_email], subject: content.subject, html: content.html })
       });
       if (!res.ok) {
         sendStatus = 'failed';

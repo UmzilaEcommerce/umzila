@@ -1,3 +1,4 @@
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 // netlify/functions/notify-seller-application.js
 // Called by the frontend after a successful seller_applications insert.
 // Sends a notification email to the admin (ADMIN_NOTIFY_EMAIL env var,
@@ -84,7 +85,7 @@ module.exports.handler = async function (event) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Umzila <noreply@umzila.store>',
+        ...mailFrom('Umzila', 'noreply'),
         to: [ADMIN_EMAIL],
         subject: `New seller application — ${shop_name || 'unknown shop'}`,
         html

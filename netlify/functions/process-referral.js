@@ -7,6 +7,7 @@
 // Uses service role key — never exposed to frontend.
 
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -152,7 +153,7 @@ exports.handler = async function (event) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from:    'Umzila <noreply@umzila.store>',
+          ...mailFrom('Umzila', 'noreply'),
           to:      [refereeEmail],
           subject: `Welcome to Umzila — your friend gave you 15% off 🎉`,
           html:    buildRefereeEmail(refereeCode, refereeExpiryLabel, refereeName, SITE_BASE_URL)
@@ -168,7 +169,7 @@ exports.handler = async function (event) {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            from:    'Umzila <noreply@umzila.store>',
+            ...mailFrom('Umzila', 'noreply'),
             to:      [referrer.email],
             subject: `${refereeName} joined Umzila with your link — here's your R40 🙌`,
             html:    buildReferrerEmail(referrerCode, referrerExpiryLabel, referrerFirstName, refereeName, referralCode, SITE_BASE_URL)

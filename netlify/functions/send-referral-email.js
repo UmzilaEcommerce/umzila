@@ -1,3 +1,4 @@
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 // netlify/functions/send-referral-email.js
 // Sends referee welcome email OR referrer reward email via Resend.
 // No auth required, no DB writes — caller already created the discount codes.
@@ -51,7 +52,7 @@ exports.handler = async function (event) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: 'Umzila <noreply@umzila.store>', to: [email], subject, html })
+      body: JSON.stringify({ ...mailFrom('Umzila', 'noreply'), to: [email], subject, html })
     });
     if (!res.ok) {
       const txt = await res.text();

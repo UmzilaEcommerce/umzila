@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — All emails send from mail.umzila.store
+
+**Asked for (founder):** use the new Resend sending domain `mail.umzila.store` (DNS set up; verified in Resend with DKIM + SPF).
+
+**Changes:**
+- **New `netlify/functions/lib/mail.js` `mailFrom(name, local)`:** returns `{ from: "Umzila <orders@mail.umzila.store>", reply_to: "orders@umzila.store" }`. The subdomain is only for sending; replies keep going to the same `@umzila.store` addresses as before. Netlify env `MAIL_DOMAIN` / `MAIL_REPLY_DOMAIN` can override both.
+- **All 21 senders in 16 functions use it.** `request-delivery-area` still sets its own reply-to (the buyer).
+- **The PayFast-linked files** (`payfast-itn.js`, `lib/complete-order-payment.js`) changed only on their sender lines.
+
+**Verified:**
+- Resend API: `mail.umzila.store` verified (DKIM, SPF).
+- A test email from `orders@mail.umzila.store` to the founder's inbox was delivered.
+- Every changed function passes a syntax check.
+
+**Rule from now on:** new emails use `mailFrom()`; never hardcode a from address.
+
+---
+
 ## 2026-10-06 — One product pop-up everywhere + a starch per plate (replaces the "Choose your starch" size option)
 
 **Asked for (founder):**

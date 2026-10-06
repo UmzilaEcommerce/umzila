@@ -3,6 +3,7 @@
 // Creates auth user + profile + links sellers row, then directly activates the seller.
 // Limited to the first 20 free enrollments (tracked via sellers.free_enrollment flag).
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const headers = {
   'Content-Type': 'application/json',
@@ -186,7 +187,7 @@ exports.handler = async function (event) {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from:    'Umzila Sellers <sellers@umzila.store>',
+          ...mailFrom('Umzila Sellers', 'sellers'),
           to:      [email],
           subject: "You're officially on Umzila — for free!",
           html:    buildFreeWelcomeEmail(firstName, email, resolvedShopName, SITE_BASE_URL, usedSlots + 1)

@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 const crypto = require('crypto');
 const { completeOrderPayment } = require('./lib/complete-order-payment');
 
@@ -167,7 +168,7 @@ async function activateSellerEnrollment(supabase, pfData) {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        from:    'Umzila Sellers <sellers@umzila.store>',
+                        ...mailFrom('Umzila Sellers', 'sellers'),
                         to:      [email],
                         subject: "You're officially an Umzila seller!",
                         html:    buildWelcomeEmail(firstName, email, shopName, SITE_BASE_URL)

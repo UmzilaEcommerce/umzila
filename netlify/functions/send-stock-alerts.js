@@ -11,6 +11,7 @@
 // Scheduled functions can't be called by URL in production, so nobody can
 // trigger sends from outside.
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const MAX_EMAILS_PER_RUN = 40;   // stays well inside Resend's rate limits
 const SEND_GAP_MS = 600;
@@ -109,7 +110,7 @@ exports.handler = async function () {
         method: 'POST',
         headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Umzila <orders@umzila.store>',
+          ...mailFrom('Umzila', 'orders'),
           to: [email],
           subject: items.length === 1 ? `Back in stock: ${items[0].name}` : `${items.length} items you wanted are back in stock`,
           html: renderEmail(items, SITE)

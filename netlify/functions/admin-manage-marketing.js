@@ -5,6 +5,7 @@
 // this codebase) or reject with a reason. Structural sibling of
 // admin-manage-ads.js.
 const crypto = require('crypto');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
 
@@ -141,7 +142,7 @@ exports.handler = async function (event) {
         shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
         siteUrl: SITE_BASE_URL, unsubscribeUrl
       });
-      return { from: 'Umzila <promos@umzila.store>', to: [email], subject: campaign.subject, html };
+      return { ...mailFrom('Umzila', 'promos'), to: [email], subject: campaign.subject, html };
     });
 
     const res = await fetch('https://api.resend.com/emails/batch', {

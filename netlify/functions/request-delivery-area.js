@@ -12,6 +12,7 @@
 // Cart lines are re-read from products (names/prices are never trusted from
 // the browser). The same email + address within 24 h isn't saved or emailed twice.
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const headers = { 'Content-Type': 'application/json' };
 const fail = (statusCode, error) => ({ statusCode, headers, body: JSON.stringify({ error }) });
@@ -109,7 +110,7 @@ exports.handler = async function (event) {
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: { Authorization: `Bearer ${RESEND}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from: 'Umzila <orders@umzila.store>', to: [to], reply_to: email, subject: `Delivery request: ${row.city || address}`.slice(0, 120), html })
+          body: JSON.stringify({ ...mailFrom('Umzila', 'orders'), to: [to], reply_to: email, subject: `Delivery request: ${row.city || address}`.slice(0, 120), html })
         });
         if (!res.ok) console.warn('request-delivery-area: email failed', res.status, await res.text());
       } catch (e) { console.warn('request-delivery-area: email error', e.message); }

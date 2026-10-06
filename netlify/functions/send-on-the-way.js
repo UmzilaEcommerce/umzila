@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 const { emailShell, esc } = require('./lib/notify');
 
 const RESEND_RATE_LIMIT_MS = 2 * 60 * 60 * 1000; // 2h — a rep shouldn't be able to spam "we're off" repeatedly
@@ -138,7 +139,7 @@ exports.handler = async function (event) {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                from: 'Umzila <orders@umzila.store>',
+                ...mailFrom('Umzila', 'orders'),
                 to: [order.customer_email],
                 subject,
                 html

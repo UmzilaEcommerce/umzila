@@ -5,6 +5,7 @@
 // sources/consent/history so the admin can see where the email came from
 // before sending — the whole point of tracking that in the first place.
 const crypto = require('crypto');
+const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
 
@@ -107,7 +108,7 @@ exports.handler = async function (event) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Umzila <promos@umzila.store>', to: [email], subject, html })
+    body: JSON.stringify({ ...mailFrom('Umzila', 'promos'), to: [email], subject, html })
   });
   if (!res.ok) {
     const errText = await res.text();

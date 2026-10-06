@@ -15,6 +15,7 @@
 // activation — none of those apply to a saved-card charge, which is only ever
 // used for a regular buyer product/service order.
 const { computeDiscount } = require('./discounts');
+const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 function esc(str) {
     return String(str || '')
@@ -233,7 +234,7 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        from:    'Umzila <orders@umzila.store>',
+                        ...mailFrom('Umzila', 'orders'),
                         to:      [existingOrder.customer_email],
                         subject: `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
                         html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores)
@@ -638,7 +639,7 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    from:    'Umzila Sellers <sellers@umzila.store>',
+                    ...mailFrom('Umzila Sellers', 'sellers'),
                     to:      recipients,
                     subject: emailSubject,
                     html:    emailHtml
@@ -1232,7 +1233,7 @@ async function sendAdminOrderNotification(supabase, order, mPaymentId, siteUrl) 
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                from:    'Umzila Orders <orders@umzila.store>',
+                ...mailFrom('Umzila Orders', 'orders'),
                 to:      adminEmails,
                 subject: `CHA-CHING! New order — ${fmt(total)} — ${orderRef}`,
                 html:    adminHtml
@@ -1314,7 +1315,7 @@ async function issueGiftVouchers(supabase, order, siteUrl) {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                from: 'Umzila <orders@umzila.store>',
+                ...mailFrom('Umzila', 'orders'),
                 to: [order.customer_email],
                 subject: `🎁 Your ${shopNames.join(' & ') || 'gift'} voucher${issued.length > 1 ? 's' : ''} — star this email`,
                 html: buildGiftVoucherEmail(order, issued, expires, siteUrl)
