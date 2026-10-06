@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Baskets tidy-up: 30-day window + nightly cleanup of expired guest baskets
+
+**Asked for (founder):** keep logistics → Baskets from filling up with long-abandoned carts.
+
+**Changes:**
+- **Logistics → Baskets** lists only baskets changed in the last 30 days (`logistics.html` loadBaskets).
+- **New pg_cron job** `delete-expired-guest-baskets` (daily 01:15 UTC) deletes guest baskets (`user_id` NULL) past `expires_at`. `save_guest_cart` sets that to 30 days after the last change.
+- Signed-in buyers' carts are never deleted.
+
+**Files:** `logistics.html`. **Migration:** `guest_baskets_cleanup_cron`.
+
+---
+
 ## 2026-10-05 — Seller dashboard: delivered orders now move from Active to Past
 
 **Reported (founder):** completed orders never leave "Active orders" on the seller dashboard.

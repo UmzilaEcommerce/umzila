@@ -2056,7 +2056,8 @@ document.addEventListener('sb-ready', function(e){
     try{
       const since=new Date(Date.now()-14*86400000).toISOString();
       const [cartsRes,unpaidRes,paidRes]=await Promise.all([
-        sb.from('carts').select('id,user_id,items,created_at,updated_at,anonymous_id,guest_email,guest_name,guest_phone').order('updated_at',{ascending:false}).limit(300),
+        // Only baskets changed in the last 30 days (guest ones are deleted nightly after that).
+        sb.from('carts').select('id,user_id,items,created_at,updated_at,anonymous_id,guest_email,guest_name,guest_phone').gte('updated_at',new Date(Date.now()-30*86400000).toISOString()).order('updated_at',{ascending:false}).limit(300),
         sb.from('orders').select('id,order_number,customer_name,customer_email,customer_phone,items,total,created_at,user_id').eq('order_status','pending_payment').gte('created_at',since).order('created_at',{ascending:false}).limit(100),
         sb.from('orders').select('customer_email,created_at').eq('payment_status','paid').gte('created_at',since).limit(1000)
       ]);
@@ -2132,8 +2133,8 @@ document.addEventListener('sb-ready', function(e){
       _basketsLoaded=true;
       el.innerHTML=
         section('💳 Unfinished payments ('+unpaid.length+')','Pressed Pay in the last 14 days but never paid (hidden once they pay).',unpaidHtml||'<div class="orders-empty">None 🎉</div>')+
-        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout.',known.join('')||'<div class="orders-empty">None right now</div>')+
-        section('👀 Anonymous baskets ('+anon.length+')','Guests who added items but haven\'t given details yet — what people are picking.',anon.join('')||'<div class="orders-empty">None right now</div>');
+        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout — changed in the last 30 days.',known.join('')||'<div class="orders-empty">None right now</div>')+
+        section('👀 Anonymous baskets ('+anon.length+')','Guests who added items but haven\'t given details yet — what people are picking (last 30 days).',anon.join('')||'<div class="orders-empty">None right now</div>');
 
       el.querySelectorAll('button[data-email]').forEach(btn=>{
         btn.addEventListener('click',()=>{
