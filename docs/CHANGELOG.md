@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — URGENT: guests could not pay ("Failed to obtain signed PayFast parameters")
+
+**Reported (founder, live customer):** a guest checkout failed at Pay three times (3 pending R109.28 orders).
+
+**Root cause:** the "Save this card" switch is on by default and was shown to guests too. Checkout then sent `subscription_type=2` (card token). `generate-payfast-signature.js` refuses any guest payment that asks for a token (401, by design: guest path rule "no card tokenization"), so every guest with the default switch on was blocked. The two were changed separately (pay-panel redesign vs. guest checkout) and never tested together for a guest.
+
+**Fix (`checkout.html` only; the PayFast function is untouched):**
+- The save-card switch and nickname show only to signed-in buyers.
+- `subscription_type` and `pending_card_name` are sent only when signed in.
+
+**Verified against the live signer with the customer's real order:** with `subscription_type`: 401; without it: 200.
+
+**Gotcha for later:** any guest-visible option that adds PayFast fields must be checked against the guest path in `generate-payfast-signature.js` (amount must equal the re-pricing; no tokenization).
+
+---
+
 ## 2026-10-06 — Mystery-gift email follows the guest's baskets
 
 **Asked for (founder):** many guests type their email into the mystery-gift popup. Remember them from that point, so any basket they start later shows with their details, before they reach checkout.
