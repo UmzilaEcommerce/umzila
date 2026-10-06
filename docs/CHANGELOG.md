@@ -24,6 +24,8 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
   - mode 1: 401; mode 2 + `recurring_amount`: 401; wrong amount: 401.
 - Claim tested in a rolled-back transaction: a paid guest order with a token and the email of a confirmed account → card added to that account with its nickname.
 
+**Safety net:** if signing ever fails while a card token is requested, `submitToPayFast` signs again without it, so the buyer pays and the card just isn't saved. A save-card problem can no longer cost a sale (the 2026-10-06 morning incident).
+
 **Not testable without a real card:** PayFast returning a token for a guest payment. Signed-in tokenization already works live, and the guest request is byte-for-byte the same request.
 
 **Files:** `netlify/functions/generate-payfast-signature.js` (guest guard only), `checkout.html`.

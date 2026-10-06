@@ -5123,11 +5123,21 @@ async function submitToPayFast(cartItems, orderId, total) {
 
   // Call your Netlify function to generate signature + final params
   const { data: { session: pfSession } } = await supabaseClient.auth.getSession().catch(() => ({ data: {} }));
-  const res = await fetch('/.netlify/functions/generate-payfast-signature', {
+  const signPayFast = () => fetch('/.netlify/functions/generate-payfast-signature', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pfSession?.access_token || ''}` },
     body: JSON.stringify({ payload, returnForm: false })
   });
+  let res = await signPayFast();
+
+  // Safety net (2026-10-06): saving the card is a nice-to-have, the sale is
+  // not. If signing fails while asking for a card token, sign again without
+  // it so the buyer still pays (the card just isn't saved this time).
+  if (!res.ok && payload.subscription_type) {
+    console.warn('generate-payfast-signature refused the save-card request — paying without saving the card', res.status);
+    delete payload.subscription_type;
+    res = await signPayFast();
+  }
 
   if (!res.ok) {
     // show server response text to help debugging (strip in production)
