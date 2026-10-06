@@ -9,13 +9,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 **Asked for (founder):** use the new Resend sending domain `mail.umzila.store` (DNS set up; verified in Resend with DKIM + SPF).
 
 **Changes:**
-- **New `netlify/functions/lib/mail.js` `mailFrom(name, local)`:** returns `{ from: "Umzila <orders@mail.umzila.store>", reply_to: "orders@umzila.store" }`. The subdomain is only for sending; replies keep going to the same `@umzila.store` addresses as before. Netlify env `MAIL_DOMAIN` / `MAIL_REPLY_DOMAIN` can override both.
+- **New `netlify/functions/lib/mail.js` `mailFrom(name, local)`:** returns `{ from: "Umzila <orders@mail.umzila.store>", reply_to: "umzilaecommerce@gmail.com" }`. The subdomain is only for sending (no inbox), so every reply goes to the inbox the founder reads (founder's choice). Netlify env `MAIL_DOMAIN` / `MAIL_REPLY_TO` can override both.
 - **All 21 senders in 16 functions use it.** `request-delivery-area` still sets its own reply-to (the buyer).
 - **The PayFast-linked files** (`payfast-itn.js`, `lib/complete-order-payment.js`) changed only on their sender lines.
 
 **Verified:**
 - Resend API: `mail.umzila.store` verified (DKIM, SPF).
-- A test email from `orders@mail.umzila.store` to the founder's inbox was delivered.
+- Test emails from `orders@mail.umzila.store` were delivered to the founder's inboxes (umzilaecommerce@ and ntandob38@).
 - Every changed function passes a syntax check.
 
 **Rule from now on:** new emails use `mailFrom()`; never hardcode a from address.
