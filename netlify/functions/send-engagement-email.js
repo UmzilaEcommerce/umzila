@@ -141,7 +141,7 @@ exports.handler = async function(event) {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                ...mailFrom('Umzila', 'orders'),
+                ...mailFrom('Umzila', 'hello', 'news'),
                 to:      [customer_email],
                 subject,
                 html

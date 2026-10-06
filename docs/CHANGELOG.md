@@ -18,6 +18,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - Test emails from `orders@mail.umzila.store` were delivered to the founder's inboxes (umzilaecommerce@ and ntandob38@).
 - Every changed function passes a syntax check.
 
+**Same day, follow-up:**
+- **Marketing domain:** `news.umzila.store` added in Resend via the API; its 4 DNS records (DKIM TXT, SPF MX + TXT, return-path CNAME) were added to Netlify DNS (zone umzila.store), and it is verified.
+- **Which domain sends what:** `mailFrom(name, local, 'news')` sends from news. It is used by `admin-manage-marketing` (campaigns), `admin-direct-email` (promos) and `send-engagement-email` (basket nudges, now `hello@news.umzila.store`). Everything transactional stays on mail.
+- **Tracking:** open and click tracking are on for both domains, through custom tracking subdomains `links.mail.umzila.store` / `links.news.umzila.store` (CNAME → links2.resend-dns.com, added in Netlify DNS). Resend's API ignores the tracking flags; this was set up in the Resend dashboard.
+- **Verified:** test emails from `orders@mail` and `hello@news` were delivered.
+
 **Rule from now on:** new emails use `mailFrom()`; never hardcode a from address.
 
 ---

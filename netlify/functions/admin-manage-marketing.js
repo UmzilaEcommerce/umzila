@@ -142,7 +142,7 @@ exports.handler = async function (event) {
         shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
         siteUrl: SITE_BASE_URL, unsubscribeUrl
       });
-      return { ...mailFrom('Umzila', 'promos'), to: [email], subject: campaign.subject, html };
+      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html };
     });
 
     const res = await fetch('https://api.resend.com/emails/batch', {
