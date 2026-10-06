@@ -159,7 +159,7 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 🔐 BUYER IDENTITY (added 2026-10-04): server functions identify the buyer from the Authorization Bearer token, never from a userId in the request body (validate-cart.js, get-delivery-quote.js, hold-service-booking.js). Server-to-server callers pass event.trustedUserId to validate-cart.
 
-🍽️ PRODUCT OPTIONS (added 2026-10-06): products.metadata.option_label renames the size choice (Velaphi plates: "Choose your starch" = Pap/Jeqe/Phuthu as product_variants sizes); option_required = never pre-selected, enforced in script.js, shop.html and validate-cart.js (OPTION_REQUIRED). Use this instead of building a separate options system.
+🍽️ PRODUCT OPTIONS (added 2026-10-06): products.metadata.option_label renames the size choice (Velaphi plates: "Choose your starch" = Pap/Jeqe/Phuthu as product_variants sizes); option_required = never pre-selected, enforced in script.js, shop.html and validate-cart.js (OPTION_REQUIRED). Use this instead of building a separate options system. Sellers manage it per product in seller-dashboard (option chips incl. custom "+ Add", label, must-choose).
 
 📦 SOLD OUT (added 2026-10-04): products.visible means "listed", NOT "in stock" — nothing auto-hides at 0 stock any more. Stores show sold-out items ("Sold out · Notify me"); the homepage only browses/ranks/suggests browsableProducts() (listed + in stock) and shows sold-out items only in search results, last. Stock is enforced in validate-cart.js (physical stock is a hard cap) and addToCart — never rely on visible for stock.
 

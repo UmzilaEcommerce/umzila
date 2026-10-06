@@ -22,6 +22,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - **`checkout.html`:** a line shows "Jeqe • Qty: 1". Real clothing sizes keep "Size:".
 - **`validate-cart.js`:** a required option that matches none of the product's options (e.g. an old cart line saved as "One Size") is refused with "Please choose your starch for …" (`OPTION_REQUIRED`).
 
+**Seller dashboard (same day, follow-up):** a store can choose the options per product.
+- **The bug found:** the editor's option chips only knew clothing sizes. Editing a plate showed nothing ticked, and saving replaced Pap/Jeqe/Phuthu with S/M/L/XL. The chip click handlers also stacked on every edit-open: after opening a 2nd product a tap toggled twice and looked dead.
+- **Now:**
+  - the product's own options show as ticked chips (`ensureSizeChips`);
+  - "+ Add" creates any option (e.g. Rice);
+  - unticking removes it from that product only;
+  - per-option prices work as before;
+  - "What do buyers see above these options?" saves `metadata.option_label`, and "Buyer must choose one" saves `option_required` (`withOptionSettings`, new and edit forms);
+  - one delegated click handler per grid;
+  - saving with nothing ticked keeps the current options instead of resetting to S/M/L/XL.
+- **Verified** with the real dashboard functions in a harness page: a plate opened after a clothing product shows Pap/Jeqe/Phuthu ticked; untick Phuthu → [Pap, Jeqe]; add Rice → [Pap, Jeqe, Rice]; label/required saved, and cleared again when the label is set back to "Size".
+
 **Any product can use this:** set `metadata.option_label` (+ `option_required`) and give it variants.
 
 **Verified (local, real data):**

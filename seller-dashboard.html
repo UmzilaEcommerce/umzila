@@ -670,6 +670,15 @@
             </div>
             <div id="newProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
             <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
+            <div class="opt-add-row" style="display:flex;gap:6px;margin-top:8px">
+              <input type="text" class="form-control opt-add-input" data-target="newProdSizes" maxlength="30" placeholder="Add your own option, e.g. Pap" style="flex:1">
+              <button type="button" class="btn ghost sm opt-add-btn" data-target="newProdSizes">+ Add</button>
+            </div>
+            <div style="margin-top:12px">
+              <label class="form-label" for="newProdOptionLabel" style="font-size:12px">What do buyers see above these options? <span style="font-weight:400;color:#6b7280">(optional)</span></label>
+              <input type="text" id="newProdOptionLabel" class="form-control" maxlength="40" placeholder="Size  (e.g. Choose your starch)">
+              <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:600"><input type="checkbox" id="newProdOptionRequired"> Buyer must choose one (nothing picked for them)</label>
+            </div>
           </div>
           </div><!-- /newProductOnlyFields -->
           <!-- Service-only fields (hidden for products) — guided quiz -->
@@ -933,6 +942,15 @@
           </div>
           <div id="editProdSizePrices" class="size-prices-grid" style="margin-top:10px"></div>
           <div style="font-size:11px;color:#6b7280;margin-top:4px">Leave price blank to use the base price for that size.</div>
+            <div class="opt-add-row" style="display:flex;gap:6px;margin-top:8px">
+              <input type="text" class="form-control opt-add-input" data-target="editProdSizes" maxlength="30" placeholder="Add your own option, e.g. Pap" style="flex:1">
+              <button type="button" class="btn ghost sm opt-add-btn" data-target="editProdSizes">+ Add</button>
+            </div>
+            <div style="margin-top:12px">
+              <label class="form-label" for="editProdOptionLabel" style="font-size:12px">What do buyers see above these options? <span style="font-weight:400;color:#6b7280">(optional)</span></label>
+              <input type="text" id="editProdOptionLabel" class="form-control" maxlength="40" placeholder="Size  (e.g. Choose your starch)">
+              <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:600"><input type="checkbox" id="editProdOptionRequired"> Buyer must choose one (nothing picked for them)</label>
+            </div>
         </div>
         <!-- Service-only fields (hidden for products) — guided quiz -->
         <div id="editServiceFields" style="display:none">
@@ -1549,15 +1567,64 @@
       return overrides;
     }
 
+    // One delegated click handler per chip grid (2026-10-06): it used to add a
+    // handler per chip on EVERY edit-open, so after opening a second product a
+    // tap toggled twice and looked dead. existingVariants rides on the grid.
     function bindSizeChips(containerId, priceGridId, existingVariants) {
       var priceGrid = priceGridId || (containerId === 'newProdSizes' ? 'newProdSizePrices' : 'editProdSizePrices');
-      document.querySelectorAll('#' + containerId + ' .size-chip').forEach(function(chip) {
-        chip.addEventListener('click', function() {
-          chip.classList.toggle('selected');
-          renderSizePriceInputs(priceGrid, containerId, existingVariants);
-        });
+      var grid = document.getElementById(containerId);
+      if (!grid) return;
+      grid._variants = existingVariants || [];
+      grid.onclick = function(e) {
+        var chip = e.target.closest('.size-chip');
+        if (!chip) return;
+        chip.classList.toggle('selected');
+        renderSizePriceInputs(priceGrid, containerId, grid._variants);
+      };
+      renderSizePriceInputs(priceGrid, containerId, grid._variants);
+    }
+    // Options that aren't clothing sizes (e.g. Velaphi's Pap/Jeqe/Phuthu) get
+    // their own chips — otherwise editing a plate showed no options ticked and
+    // saving replaced them with S/M/L/XL.
+    var PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', 'One Size'];
+    function ensureSizeChips(containerId, sizes) {
+      var grid = document.getElementById(containerId);
+      if (!grid) return;
+      grid.querySelectorAll('.size-chip.custom').forEach(function(c) { if (sizes.indexOf(c.dataset.size) === -1) c.remove(); });
+      (sizes || []).forEach(function(sz) {
+        if (!sz || grid.querySelector('.size-chip[data-size="' + CSS.escape(sz) + '"]')) return;
+        var chip = document.createElement('span');
+        chip.className = 'size-chip custom';
+        chip.dataset.size = sz;
+        chip.textContent = sz;
+        grid.appendChild(chip);
       });
-      renderSizePriceInputs(priceGrid, containerId, existingVariants);
+    }
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('.opt-add-btn');
+      if (!btn) return;
+      var target = btn.dataset.target, input = document.querySelector('.opt-add-input[data-target="' + target + '"]');
+      var name = (input && input.value || '').trim().replace(/\s+/g, ' ').slice(0, 30);
+      if (!name) { if (input) input.focus(); return; }
+      ensureSizeChips(target, getSelectedSizes(target).concat(Array.from(document.querySelectorAll('#' + target + ' .size-chip.custom')).map(function(c) { return c.dataset.size; })).concat([name]));
+      var chip = document.querySelector('#' + target + ' .size-chip[data-size="' + CSS.escape(name) + '"]');
+      if (chip && !chip.classList.contains('selected')) chip.click();
+      input.value = '';
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('opt-add-input')) {
+        e.preventDefault();
+        var btn = document.querySelector('.opt-add-btn[data-target="' + e.target.dataset.target + '"]');
+        if (btn) btn.click();
+      }
+    });
+    // products.metadata option_label / option_required from the form.
+    function withOptionSettings(meta, prefix) {
+      var out = Object.assign({}, meta || {});
+      var lbl = ((document.getElementById(prefix + 'OptionLabel') || {}).value || '').trim();
+      if (lbl && !/^size$/i.test(lbl)) out.option_label = lbl.slice(0, 40); else delete out.option_label;
+      if ((document.getElementById(prefix + 'OptionRequired') || {}).checked) out.option_required = true; else delete out.option_required;
+      return out;
     }
     function getSelectedSizes(containerId) {
       var sizes = [];
@@ -3172,7 +3239,7 @@
         service_location: serviceLocation,
         intake_fields:  intakeFields,
         visible:        false,
-        metadata:    Object.assign({ review_status: 'pending_review' }, storeSectionValue('newProdSection') ? { store_section: storeSectionValue('newProdSection') } : {})
+        metadata:    withOptionSettings(Object.assign({ review_status: 'pending_review' }, storeSectionValue('newProdSection') ? { store_section: storeSectionValue('newProdSection') } : {}), 'newProd')
       }).select().single();
 
       setBtnLoading('submitProductBtn', false, 'Submit for Review');
@@ -3338,7 +3405,11 @@
         if (op) op.value = p.sale ? p.price : '';
       }
 
+      ensureSizeChips('editProdSizes', (p.sizes || []).filter(function(sz) { return PRESET_SIZES.indexOf(sz) === -1; }));
       setSelectedSizes('editProdSizes', p.sizes || ['S','M','L','XL']);
+      var pm = p.metadata || {};
+      var olEl = document.getElementById('editProdOptionLabel'); if (olEl) olEl.value = pm.option_label || '';
+      var orEl = document.getElementById('editProdOptionRequired'); if (orEl) orEl.checked = !!pm.option_required;
       setMsg('editProdMsg', '');
       var panel = document.getElementById('editProductPanel');
       panel.style.display = '';
@@ -3416,7 +3487,7 @@
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
       var curMetaRes = await SD.sb.from('products').select('metadata').eq('id', id).single();
       if (curMetaRes.error) { setBtnLoading('saveEditProdBtn', false, 'Save Changes'); setMsg('editProdMsg', 'Couldn’t save — please try again.'); return; }
-      var editMeta = withStoreSection(curMetaRes.data.metadata, storeSectionValue('editProdSection'));
+      var editMeta = withOptionSettings(withStoreSection(curMetaRes.data.metadata, storeSectionValue('editProdSection')), 'editProd');
       var { data, error } = await SD.sb.from('products').update({
         name:           name,
         description:    desc    || null,
@@ -3427,7 +3498,8 @@
         category_id:    categoryId,
         badge:          badge   || null,
         image:          image   || null,
-        sizes:          isServiceEdit ? [] : (sizes.length ? sizes : ['S','M','L','XL']),
+        // Nothing ticked keeps the product's current options (it used to reset to S/M/L/XL).
+        sizes:          isServiceEdit ? [] : (sizes.length ? sizes : (((SD.products.find(function(x) { return x.id === id; }) || {}).sizes) || ['One Size'])),
         delivery_class: deliveryClassEdit,
         units_per_trip: unitsPerTripEdit,
         listing_type:   ltEdit,
