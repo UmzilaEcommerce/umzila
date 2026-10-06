@@ -775,7 +775,7 @@
           style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:8px;box-sizing:border-box">
         <div id="myEmailErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
         <button class="btn" id="myBtnEmailContinue" style="width:100%;padding:14px">Continue</button>
-        <p style="color:var(--muted);font-size:12px;margin-top:10px">We'll only use this for your gift. No spam, promise.</p>
+        <p style="color:var(--muted);font-size:12px;margin-top:10px">We'll use this for your gift and to keep your basket handy if you shop. No spam, promise.</p>
       </div>
 
       <!-- S3a: no profile — create password (or skip) -->
@@ -1749,6 +1749,9 @@
           return;
         }
         currentEmail = email;
+        // Remember this guest's email on this browser (presence.js): any basket
+        // they start from now on shows in logistics → Baskets with it.
+        if (window.umzilaGuestContact) window.umzilaGuestContact({ email: email });
         currentCodeState = data.code_state || 'none';
         if (data.has_profile) {
           myP3bEmail.textContent = currentEmail;

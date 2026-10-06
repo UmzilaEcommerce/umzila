@@ -87,7 +87,11 @@
   // types them at checkout (umzilaGuestContact). Signed-in buyers already
   // have their own carts row, so for them the guest row is cleared instead.
   // Only sends when the cart actually changed (remembered across pages).
-  var SYNC_KEY = 'umz_cart_synced', contact = null, syncing = false;
+  // contact = details the guest gave us on this browser (mystery-gift popup
+  // email, checkout fields), remembered in localStorage so any basket they
+  // start later — on any page or visit — already carries them.
+  var SYNC_KEY = 'umz_cart_synced', CONTACT_KEY = 'umz_guest_contact', contact = null, syncing = false;
+  try { contact = JSON.parse(localStorage.getItem(CONTACT_KEY) || 'null'); } catch (e) { contact = null; }
   function noop() {}
   function syncGuestCart(force) {
     if (!client || syncing) return;
@@ -111,8 +115,17 @@
       });
     }).then(noop, noop).then(function () { syncing = false; });
   }
+  // Merges: a later source only fills in / updates what it actually has
+  // (the popup gives just an email; checkout adds name + phone).
   window.umzilaGuestContact = function (c) {
-    contact = { email: (c && c.email) || '', name: (c && c.name) || '', phone: (c && c.phone) || '' };
+    c = c || {};
+    var prev = contact || {};
+    contact = {
+      email: String(c.email || prev.email || '').trim().toLowerCase().slice(0, 200),
+      name: String(c.name || prev.name || '').trim().slice(0, 100),
+      phone: String(c.phone || prev.phone || '').trim().slice(0, 30)
+    };
+    try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contact)); } catch (e) {}
     syncGuestCart(true);
   };
   setInterval(function () { syncGuestCart(false); }, 5000);

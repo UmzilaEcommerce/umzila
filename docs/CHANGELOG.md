@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Mystery-gift email follows the guest's baskets
+
+**Asked for (founder):** many guests type their email into the mystery-gift popup. Remember them from that point, so any basket they start later shows with their details, before they reach checkout.
+
+**Changes:**
+- `presence.js` remembers the guest's details on the browser (localStorage `umz_guest_contact`) and sends them with every basket save.
+- `umzilaGuestContact()` now merges details: the popup gives an email, checkout adds a name and phone.
+- `index.html`: a valid email in the popup calls `umzilaGuestContact({email})`.
+- The popup line "We'll only use this for your gift" became "We'll use this for your gift and to keep your basket handy if you shop", so the promise stays true.
+- Signed-in visitors are unaffected; the server ignores guest saves when signed in.
+
+**Verified (local):** email given first, then a plate added later on the Velaphi page: the basket was saved with that email.
+
+**Files:** `presence.js`, `index.html`.
+
+---
+
 ## 2026-10-06 — Baskets tidy-up: 30-day window + nightly cleanup of expired guest baskets
 
 **Asked for (founder):** keep logistics → Baskets from filling up with long-abandoned carts.
