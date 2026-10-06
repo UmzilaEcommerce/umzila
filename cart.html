@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/product-sheet.js"></script>
   <style>
     /* Tokens match checkout.html's system — same brand, same page. */
     :root{
@@ -265,7 +265,8 @@
   // shape (id/qty/title/img). Convert both ways so neither side ends up with
   // lines the other can't read.
   const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
-    'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+    'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery', 'picks', 'picks_cfg'];
+  const isPicked = it => Array.isArray(it && it.picks) && it.picks.length > 0 && !!window.UmzilaPicks;
   function toServerItem(i){
     const out = { product_id: i.product_id || i.id, name: i.title || i.name, price: i.price, quantity: Number(i.quantity || i.qty || 1),
       size: i.size, image: i.img || i.image, variant_id: i.variantId || i.variant_id || null, stock: i.stock || 0,
@@ -418,7 +419,8 @@
     if(sumRows){
       sumRows.innerHTML = cart.map(item=>{
         const qty = item.quantity || item.qty || 1;
-        return `<div class="summary-row"><div>${esc(item.name||item.title||'Item')} ${item.size?'× '+esc(item.size):''} ×${qty}</div><div>${fmt(Number(item.price||0)*qty)}</div></div>`;
+        const detail = isPicked(item) ? ' · ' + esc(UmzilaPicks.short(item.picks, item.picks_cfg)) : (item.size && !/^one size$/i.test(item.size) ? ' · ' + esc(item.size) : '');
+        return `<div class="summary-row"><div>${esc(item.name||item.title||'Item')} ×${qty}${detail}</div><div>${fmt(Number(item.price||0)*qty)}</div></div>`;
       }).join('');
     }
     const requiresSignIn = currentDiscountInfo?.requiresSignIn;
@@ -467,7 +469,9 @@
       const qty = item.quantity || item.qty || 1;
       const imgSrc = item.image || item.img || item.thumbnail || 'https://placehold.co/80x80?text=Item';
 
-      const sizeOptions = uniqueSizes.length
+      const sizeOptions = isPicked(item)
+        ? `<button type="button" class="chg-btn" data-idx="${idx}" style="border:0;background:none;padding:4px 2px;color:var(--accent,#0a2f66);font-weight:700;text-decoration:underline;cursor:pointer;font-size:13px">Change ${esc((item.picks_cfg && item.picks_cfg.label) || 'choice')}es</button>`
+        : uniqueSizes.length
         ? `<select class="size-select" data-idx="${idx}">
             ${uniqueSizes.map(s=>`<option value="${esc(s)}" ${s===(item.size||'')?'selected':''}>${esc(s)}</option>`).join('')}
            </select>`
@@ -481,6 +485,7 @@
         <div class="cart-item-info">
           <div class="cart-item-name">${esc(item.name||item.title||'Product')}</div>
           <div class="cart-item-sub">${item.seller_name ? esc(item.seller_name) : ''}</div>
+          ${isPicked(item) ? `<div class="cart-item-picks" style="font-size:13px;font-weight:600;color:var(--text,#1a1a2e);margin:2px 0 4px">${esc(UmzilaPicks.summary(item.picks, item.picks_cfg))}</div>` : ''}
           <div class="cart-item-price amount-roll">${fmt(Number(item.price||0)*qty)}</div>
           <div class="cart-item-controls">
             <div class="qty-stepper">
@@ -509,6 +514,16 @@
         const idx = Number(btn.dataset.idx);
         const action = btn.dataset.action;
         const currentQty = cart[idx].quantity || cart[idx].qty || 1;
+        if (isPicked(cart[idx])) {
+          const it = cart[idx];
+          const cap = Number(it.stock || it.maxQuantity || 0) > 0 ? Number(it.stock || it.maxQuantity) : 99;
+          if (action === 'minus') it.picks = UmzilaPicks.minusOne(it.picks);
+          else if (it.picks.length < cap) it.picks = UmzilaPicks.plusOne(it.picks);
+          if (!it.picks.length) { await removeItem(idx); return; }
+          it.quantity = it.picks.length; if ('qty' in it) it.qty = it.picks.length;
+          await syncAndRender();
+          return;
+        }
         if(action === 'minus'){
           if(currentQty <= 1){ await removeItem(idx); return; }
           cart[idx].quantity = currentQty - 1;
@@ -520,6 +535,9 @@
         await syncAndRender();
       });
     });
+
+    // "Change starches": the same picker, filled in with this line's picks.
+    container.querySelectorAll('.chg-btn').forEach(btn => btn.addEventListener('click', () => editPicks(Number(btn.dataset.idx))));
 
     container.querySelectorAll('select.size-select').forEach(sel=>{
       sel.addEventListener('change', async ()=>{
@@ -570,6 +588,26 @@
     })().catch(()=>{}).finally(()=>{ pendingSync = null; });
     return pendingSync;
   }
+  async function editPicks(idx){
+    const it = cart[idx]; if (!it || !sb) return;
+    const pid = it.product_id || it.id;
+    const { data: p } = await sb.from('products').select('id, name, price, sale, sale_price, image, stock, metadata').eq('id', pid).maybeSingle();
+    const cfg = p && UmzilaPicks.cfgOf(p.metadata);
+    if (!cfg) { toast('This item can’t be changed here'); return; }
+    UmzilaSheet.open({
+      id: p.id, title: p.name, price: p.sale && p.sale_price ? Number(p.sale_price) : Number(p.price), images: p.image ? [p.image] : [],
+      stock: p.stock, picks: cfg
+    }, {
+      mode: 'quick', editing: true, initialPicks: it.picks,
+      onAdd: async ({ picks }) => {
+        if (!picks || !picks.length) { await removeItem(idx); return; }
+        it.picks = picks; it.quantity = picks.length; if ('qty' in it) it.qty = picks.length;
+        it.picks_cfg = { label: cfg.label, unit: cfg.unit, max: cfg.max };
+        await syncAndRender();
+      }
+    });
+  }
+
   async function syncAndRender(){
     writeLocalCart(cart);
     await renderCart();

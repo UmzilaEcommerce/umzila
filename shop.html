@@ -20,7 +20,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/product-sheet.js"></script>
 <style>
 /* Layout: Umzila chrome (navy) frames each store; store areas take the store's own accent. Hero → sticky shop toolbar → product sections → about → footer. Quick view + cart are sheets. */
 :root{
@@ -468,28 +468,7 @@ button,input,select{font:inherit;color:inherit}
   <button type="button" data-nav="cart" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>Cart<span class="count" id="bnavN" hidden>0</span></button>
 </nav>
 
-<dialog class="sheet qv" id="qv" aria-labelledby="qvTitle">
-  <div class="qv-grid">
-    <div class="qv-media" id="qvMedia"></div>
-    <form class="qv-body" id="qvForm">
-      <div class="qv-head">
-        <div><span class="qv-store" id="qvStore"></span><h2 class="display" id="qvTitle"></h2></div>
-        <button class="x" type="button" data-close aria-label="Close">×</button>
-      </div>
-      <div class="qv-price" id="qvPrice"></div>
-      <span class="qv-stock" id="qvStock" hidden></span>
-      <p id="qvDesc"></p>
-      <div id="qvOpts"></div>
-      <div class="buy" id="qvBuy">
-        <div class="stepper" role="group" aria-label="Quantity"><button type="button" id="qvMinus" aria-label="Less">−</button><output id="qvQty">1</output><button type="button" id="qvPlus" aria-label="More">+</button></div>
-        <button class="btn btn-accent" type="submit" id="qvAdd">Add to cart</button>
-      </div>
-      <div class="notify" id="qvNotify" hidden><input type="email" id="qvNotifyEmail" placeholder="Your email" autocomplete="email" aria-label="Email for a back-in-stock alert"><button class="btn btn-ink" type="button" id="qvNotifyBtn">Notify me</button></div>
-      <ul class="assure" id="qvAssure"></ul>
-      <button class="qv-link" type="button" id="qvCopy">Copy link to this item</button>
-    </form>
-  </div>
-</dialog>
+<!-- Product quick view: shared pop-up (product-sheet.js) -->
 
 <dialog class="sheet drawer" id="cart" aria-labelledby="cartH">
   <div class="dr">
@@ -558,7 +537,8 @@ function mapProduct(row){
   const onSale = !!row.sale && salePrice > 0 && (!price || salePrice < price);
   const sizes = (row.sizes || []).filter(Boolean);
   // "One Size" (or no sizes) isn't a choice worth asking about.
-  const choosable = sizes.length > 1 || (sizes.length === 1 && !/^one size$/i.test(sizes[0]));
+  const choosable = !(meta.picks && Array.isArray(meta.picks.options) && meta.picks.options.length)
+    && (sizes.length > 1 || (sizes.length === 1 && !/^one size$/i.test(sizes[0])));
   return {
     id: row.id, title: row.name || 'Item', desc: row.description || '',
     price, salePrice, sale: onSale, displayPrice: onSale ? salePrice : price,
@@ -573,7 +553,9 @@ function mapProduct(row){
     delivery_price: Number.isFinite(Number(meta.delivery_price)) && meta.delivery_price !== null && meta.delivery_price !== '' ? Number(meta.delivery_price) : null,
     is_voucher: meta.voucher === true,
     // e.g. Velaphi plates: "Choose your starch", nothing pre-selected
-    option_label: meta.option_label || 'Size', option_required: meta.option_required === true
+    option_label: meta.option_label || 'Size', option_required: meta.option_required === true,
+    // Per-item picks (Velaphi plates: a starch per plate) — product-sheet.js
+    picks: (window.UmzilaPicks && UmzilaPicks.cfgOf(meta)) || null
   };
 }
 const isService = p => p.listing_type === 'service';
@@ -874,7 +856,8 @@ const byId = id => S.products.find(p => p.id === id);
 function quickAdd(id, btn){
   const p = byId(id);
   if (!p) return;
-  if (!inStock(p) || p.sizes.length) { openQV(id); return; }
+  if (!inStock(p)) { openQV(id); return; }
+  if (p.picks || p.sizes.length) { openQV(id, 'quick'); return; }
   if (isService(p)) { serviceSetup(p); return; }
   addToCart(p, p.defaultSize, 1, btn);
 }
@@ -882,88 +865,56 @@ function quickAdd(id, btn){
 // answers, collection/return choices) — the homepage product modal does it.
 function serviceSetup(p){ location.href = '/?product=' + encodeURIComponent(p.id); }
 
-/* ================= QUICK VIEW ================= */
-const qv = $('#qv');
-let qvP = null, qvQty = 1;
-function showQvImage(i){
-  const p = qvP, src = p.images[i];
-  const main = $('#qvMain');
-  if (main && src) main.src = src;
-  $$('#qvThumbs button').forEach((b, bi) => b.setAttribute('aria-pressed', String(bi === i)));
+/* ================= QUICK VIEW =================
+   The shared product pop-up (product-sheet.js) — the same one the home page
+   uses. mode 'quick' = the short "+" sheet; editPicks = change a cart line's
+   picks (the cart sheet's "Change"). */
+function sheetProduct(p){
+  const s = S.seller, svc = isService(p);
+  return {
+    id: p.id, title: p.title, desc: p.desc, price: priceOf(p), was: p.sale ? p.price : null,
+    images: p.images, stock: svc ? null : p.stock, store: s.shop_name, location: s.location,
+    accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8553A',
+    isService: svc, soldOut: !inStock(p), unpriced: unpriced(p), freeDelivery: p.free_delivery,
+    serviceCta: svc ? (p.booking_mode === 'scheduled' ? 'Choose a time' : p.is_voucher ? 'Buy gift' : 'Set it up') : null,
+    serviceHint: svc ? (p.booking_mode === 'scheduled' ? 'Pick a day and time from the live calendar' : p.is_voucher ? 'Sent by email after checkout' : 'You’ll add the details next') : null,
+    closedNote: isClosed() && !svc ? 'Closed right now — orders are prepared when the store opens' + (S.hours.next_open_at ? ' (' + whenLabel(S.hours.next_open_at) + ')' : '') : null,
+    options: p.sizes.length ? { label: p.option_label, values: p.sizes, required: p.option_required } : null,
+    picks: p.picks
+  };
 }
-function openQV(id){
+function openQV(id, mode, editKey){
   const p = byId(id); if (!p) return;
-  qvP = p; qvQty = 1;
-  if (window.umzilaTrack) umzilaTrack('product_click', { product_id: p.id, seller_id: S.seller.id, category: p.section, metadata: { via: 'store_page' } });
-  const s = S.seller, svc = isService(p), out = !inStock(p);
-  $('#qvMedia').innerHTML = p.primary_image
-    ? `<img id="qvMain" src="${esc(p.primary_image)}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="qv-thumbs" id="qvThumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(thumbUrl(u))}" data-full="${esc(u)}" alt="" onerror="thumbFallback(this)"></button>`).join('')}</div>` : '')
-    : `<div class="ph"><span class="mono">${esc(s.shop_name)}</span><b style="font-size:clamp(1.6rem,4vw,2.6rem)">${esc(p.title)}</b></div>`;
-  $('#qvStore').textContent = s.shop_name;
-  $('#qvTitle').textContent = p.title;
-  $('#qvPrice').innerHTML = unpriced(p) ? '<span class="sub">Price on request — message Umzila support</span>' : `<span class="price">${money(priceOf(p))}</span>${p.sale ? `<span class="was">${money(p.price)}</span>` : ''}`;
-  const stk = $('#qvStock');
-  stk.hidden = svc || out || !(p.stock > 0 && p.stock < 5);
-  if (!stk.hidden) stk.textContent = `Only ${p.stock} left`;
-  $('#qvDesc').textContent = p.desc;
-  $('#qvOpts').innerHTML = p.sizes.length ? `<fieldset class="opt-group"><legend>${esc(p.option_label)}</legend><div class="opts">${p.sizes.map((o, oi) => `<label class="opt"><input type="radio" name="size" value="${esc(o)}"${oi === 0 && !p.option_required ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div><p class="opt-err" id="qvOptErr" hidden style="margin:.4rem 0 0;color:#b91c1c;font-weight:600;font-size:.9rem">Please choose one to continue.</p></fieldset>` : '';
-  $('#qvBuy').hidden = out || unpriced(p);
-  $('#qvNotify').hidden = !out;
-  // Signed in: one tap, sent to the account's email.
-  $('#qvNotifyEmail').value = (user && user.email) || '';
-  $('#qvNotifyEmail').hidden = !!(user && user.email);
-  $('#qvNotifyBtn').textContent = user && user.email ? 'Notify me when it’s back' : 'Notify me';
-  $('#qvNotifyBtn').style.flex = user && user.email ? '1' : '';
-  $('.stepper', qv).hidden = svc;
-  $('#qvAdd').textContent = svc ? (p.booking_mode === 'scheduled' ? 'Choose a time' : 'Set it up') : 'Add to cart';
-  const closedLine = isClosed() && !svc
-    ? `${ICON.clock}<span>Closed right now — orders are prepared when the store opens${S.hours.next_open_at ? ' (' + esc(whenLabel(S.hours.next_open_at)) + ')' : ''}</span>` : '';
-  $('#qvAssure').innerHTML = [
-    closedLine,
-    svc ? (p.booking_mode === 'scheduled' ? `${ICON.cal}<span>Pick a day and time from the live calendar</span>` : p.is_voucher ? `${ICON.chat}<span>Sent by email after checkout</span>` : `${ICON.chat}<span>You'll add the details next</span>`)
-        : p.free_delivery ? `${ICON.bike}<span>No delivery fee on this one</span>` : `${ICON.bike}<span>Delivered by Umzila. Fee depends on distance.</span>`,
-    `${ICON.shield}<span>Secure checkout with PayFast</span>`,
-    `${ICON.pin}<span>Sold by ${esc(s.shop_name)}${s.location ? ', ' + esc(s.location) : ''}</span>`
-  ].filter(Boolean).map(x => `<li>${x}</li>`).join('');
-  syncQty();
-  if (!qv.open) qv.showModal();
+  if (!editKey && window.umzilaTrack) umzilaTrack('product_click', { product_id: p.id, seller_id: S.seller.id, category: p.section, metadata: { via: mode === 'quick' ? 'store_quick_add' : 'store_page' } });
+  const line = editKey ? getCart().find(l => lineKey(l) === editKey) : null;
+  UmzilaSheet.open(sheetProduct(p), {
+    mode: mode === 'quick' || editKey ? 'quick' : 'full',
+    user, editing: !!line, initialPicks: line ? line.picks : null,
+    onAdd: ({ qty, size, picks, button }) => {
+      if (line) { replacePicks(editKey, picks); return; }
+      addToCart(p, size, qty, button && button.isConnected ? button : $('#cartBtn'), picks);
+    },
+    onService: () => serviceSetup(p),
+    onNotify: async email => {
+      const {error} = await sb.from('stock_alerts').insert({product_id: p.id, email});
+      // 23505: already signed up for this item (one pending alert per product + email)
+      if (error && error.code !== '23505') { toast('Couldn’t save that', 'Please try again'); throw error; }
+      toast(error ? 'You’re already on the list' : 'We’ll let you know', `We’ll email ${email} once ${p.title} is back`);
+    },
+    onCopy: async () => {
+      const url = location.origin + '/' + S.seller.slug + '?product=' + p.id;
+      try { await navigator.clipboard.writeText(url); toast('Link copied', p.title); } catch (_) { toast('Item link', url); }
+    }
+  });
 }
-$('#qvMedia').addEventListener('click', e => { const b = e.target.closest('[data-img]'); if (b) showQvImage(+b.dataset.img); });
-function maxQty(){ return qvP && qvP.stock > 0 ? Math.min(qvP.stock, 99) : 1; }
-function syncQty(){ $('#qvQty').textContent = qvQty; $('#qvMinus').disabled = qvQty <= 1; $('#qvPlus').disabled = qvQty >= maxQty(); }
-$('#qvMinus').addEventListener('click', () => { qvQty = Math.max(1, qvQty - 1); syncQty(); });
-$('#qvPlus').addEventListener('click', () => { qvQty = Math.min(maxQty(), qvQty + 1); syncQty(); });
-$('#qvForm').addEventListener('submit', e => {
-  e.preventDefault();
-  if (!qvP || !inStock(qvP) || unpriced(qvP)) return;
-  if (isService(qvP)) { serviceSetup(qvP); return; }
-  const c = $('input[name="size"]:checked', qv);
-  if (!c && qvP.option_required) { const er = $('#qvOptErr'); if (er) { er.hidden = false; er.scrollIntoView({ block: 'center', behavior: 'smooth' }); } return; }
-  addToCart(qvP, c ? c.value : qvP.defaultSize, qvQty, $('#qvAdd'));
-  qv.close();
-});
-$('#qvNotifyBtn').addEventListener('click', async () => {
-  const email = $('#qvNotifyEmail').value.trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('#qvNotifyEmail').focus(); toast('Enter your email', 'So we can tell you when it’s back'); return; }
-  const btn = $('#qvNotifyBtn'); btn.disabled = true;
-  const {error} = await sb.from('stock_alerts').insert({product_id: qvP.id, email});
-  btn.disabled = false;
-  // 23505: already signed up for this item (one pending alert per product + email)
-  if (error && error.code !== '23505') { toast('Couldn’t save that', 'Please try again'); return; }
-  qv.close();
-  toast(error ? 'You’re already on the list' : 'We’ll let you know', `We’ll email ${email} once ${qvP.title} is back`);
-});
-$('#qvCopy').addEventListener('click', async () => {
-  const url = location.origin + '/' + S.seller.slug + '?product=' + qvP.id;
-  try { await navigator.clipboard.writeText(url); toast('Link copied', qvP.title); } catch (_) { toast('Item link', url); }
-});
 
 /* ================= CART =================
    One cart for all of Umzila (localStorage ss_cart, same item shape as
    script.js addToCart, + the signed-in carts row). This page only shows and
    checks out this store's lines; everything else stays in the cart. */
 const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
-  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery', 'picks', 'picks_cfg'];
+const lineKey = l => (l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || '');
 function getCart(){ try { const c = JSON.parse(localStorage.getItem('ss_cart') || '[]'); return Array.isArray(c) ? c : []; } catch (_) { return []; } }
 const qtyOf = l => Number(l.qty || l.quantity || 1);
 async function saveCart(cart){
@@ -982,24 +933,44 @@ async function saveCart(cart){
 }
 // Same shape as the old shop page's buildCartItem() / script.js addToCart —
 // checkout re-prices every line from the DB anyway.
-function buildCartItem(p, size, qty){
+function buildCartItem(p, size, qty, picks){
   return {
     id: p.id, title: p.title, price: priceOf(p), qty, size,
+    picks: picks || undefined, picks_cfg: picks && p.picks ? { label: p.picks.label, unit: p.picks.unit, max: p.picks.max } : undefined,
     img: p.primary_image || '', stock: p.stock || 0, maxQuantity: p.stock || 0, preferred_delivery: '',
     seller_id: p.seller_id, listing_type: p.listing_type, delivery_class: p.delivery_class,
     free_delivery: p.free_delivery, units_per_trip: p.units_per_trip, delivery_price: p.delivery_price
   };
 }
-function addToCart(p, size, qty, from){
+function addToCart(p, size, qty, from, picks){
   const cart = getCart();
-  const hit = cart.find(l => (l.id || l.product_id) === p.id && l.size === size && !l.booking_id);
   const cap = p.stock > 0 ? p.stock : 99;
+  if (picks && picks.length) {
+    // One line per plate type: new plates join it, each keeping its own pick.
+    const hit = cart.find(l => (l.id || l.product_id) === p.id && !l.booking_id && Array.isArray(l.picks));
+    if (hit) { hit.picks = hit.picks.concat(picks).slice(0, cap); hit.qty = hit.picks.length; delete hit.quantity; }
+    else { const pk = picks.slice(0, cap); cart.push(buildCartItem(p, 'One Size', pk.length, pk)); }
+    saveCart(cart);
+    if (window.umzilaTrack) umzilaTrack('add_to_cart', { product_id: p.id, seller_id: S.seller.id, category: p.section });
+    fly(from).then(() => syncCart(true));
+    toast(`${p.title}`, UmzilaPicks.summary(picks, p.picks), true);
+    return;
+  }
+  const hit = cart.find(l => (l.id || l.product_id) === p.id && l.size === size && !l.booking_id);
   if (hit) { hit.qty = Math.min(qtyOf(hit) + qty, cap); delete hit.quantity; }
   else cart.push(buildCartItem(p, size, Math.min(qty, cap)));
   saveCart(cart);
   if (window.umzilaTrack) umzilaTrack('add_to_cart', { product_id: p.id, seller_id: S.seller.id, category: p.section });
   fly(from).then(() => syncCart(true));
   toast(`${qty} × ${p.title}`, size && p.sizes.length ? (p.option_label === 'Size' ? `Size ${size}` : size) : 'Added to your cart', true);
+}
+// The cart sheet's "Change": the picker returns the line's new picks.
+function replacePicks(key, picks){
+  const cart = getCart(), i = cart.findIndex(l => lineKey(l) === key);
+  if (i < 0) return;
+  if (!picks || !picks.length) cart.splice(i, 1);
+  else { cart[i].picks = picks; cart[i].qty = picks.length; delete cart[i].quantity; }
+  saveCart(cart); renderCart(); syncCart(false);
 }
 const storeLines = () => getCart().filter(l => l.seller_id === S.seller.id);
 const otherLines = () => getCart().filter(l => l.seller_id !== S.seller.id);
@@ -1026,7 +997,8 @@ function renderCart(){
   const closed = isClosed() && ls.some(l => l.listing_type !== 'service');
   body.innerHTML = `<div class="store-line"><span class="mini-logo">${s.logo_url ? `<img src="${esc(s.logo_url)}" alt="">` : `<span style="font:800 .75rem var(--font-display)">${esc(initials(s.shop_name))}</span>`}</span>${esc(s.shop_name)}</div>
     <ul class="lines">${ls.map(l => {
-      const key = esc((l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || ''));
+      const key = esc(lineKey(l));
+      const picked = Array.isArray(l.picks) && l.picks.length && window.UmzilaPicks;
       const img = l.img || l.image, title = l.title || l.name || 'Item';
       const when = l.booking_start_at ? sastFmt(l.booking_start_at, {weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false}) + ' · ' : '';
       const showSize = l.size && !/^one size$/i.test(l.size) && l.listing_type !== 'service';
@@ -1034,7 +1006,7 @@ function renderCart(){
         ? `<button class="rm" type="button" data-rm="${key}" aria-label="Remove ${esc(title)}">×</button>`
         : `<div class="stepper" role="group" aria-label="Quantity of ${esc(title)}"><button type="button" data-dec="${key}" aria-label="One less">−</button><output>${qtyOf(l)}</output><button type="button" data-inc="${key}" aria-label="One more">+</button></div>`;
       return `<li class="line"><span class="thumb">${img ? `<img src="${esc(thumbUrl(img))}" data-full="${esc(img)}" alt="" onerror="thumbFallback(this)">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
-        <div><b>${esc(title)}</b><span>${showSize ? (/^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?)$/i.test(l.size) ? 'Size ' : '') + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
+        <div><b>${esc(title)}</b>${picked ? `<span>${esc(UmzilaPicks.summary(l.picks, l.picks_cfg))} · ${money(l.price || 0)} each</span><button type="button" class="chg" data-edit="${key}" style="padding:0;border:0;background:none;color:var(--ink);text-decoration:underline;font-weight:600;cursor:pointer;font-size:.86rem;justify-self:start">Change ${esc((l.picks_cfg && l.picks_cfg.label) || 'choice')}es</button>` : ''}<span${picked ? ' hidden' : ''}>${showSize ? (/^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?)$/i.test(l.size) ? 'Size ' : '') + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
     }).join('')}</ul>
     ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
     <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>
@@ -1042,13 +1014,23 @@ function renderCart(){
     ${othersLine || '<p class="note">Secure checkout with PayFast. Delivery fee depends on your distance.</p>'}</div>`;
 }
 $('#cartBody').addEventListener('click', e => {
-  const b = e.target.closest('[data-inc],[data-dec],[data-rm]');
+  const b = e.target.closest('[data-inc],[data-dec],[data-rm],[data-edit]');
   if (!b) return;
-  const key = b.dataset.inc || b.dataset.dec || b.dataset.rm;
+  const key = b.dataset.inc || b.dataset.dec || b.dataset.rm || b.dataset.edit;
   const cart = getCart();
-  const i = cart.findIndex(l => ((l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || '')) === key);
+  const i = cart.findIndex(l => lineKey(l) === key);
   if (i < 0) return;
   const l = cart[i], p = byId(l.id || l.product_id);
+  if (b.dataset.edit) { cartDlg.close(); openQV(l.id || l.product_id, 'quick', key); return; }
+  if (Array.isArray(l.picks) && l.picks.length) {
+    // "+" = one more with the same choice as the last plate; "−" = drop the last one.
+    const cap = p && p.stock > 0 ? p.stock : 99;
+    if (b.dataset.inc && l.picks.length < cap) l.picks = UmzilaPicks.plusOne(l.picks);
+    else if (b.dataset.dec || b.dataset.rm) l.picks = UmzilaPicks.minusOne(l.picks);
+    if (!l.picks.length) cart.splice(i, 1); else { l.qty = l.picks.length; delete l.quantity; }
+    saveCart(cart); renderCart(); syncCart(false);
+    return;
+  }
   if (b.dataset.inc) { const cap = p && p.stock > 0 ? p.stock : 99; if (qtyOf(l) < cap) { l.qty = qtyOf(l) + 1; delete l.quantity; } }
   else if (b.dataset.dec && qtyOf(l) > 1) { l.qty = qtyOf(l) - 1; delete l.quantity; }
   else cart.splice(i, 1);

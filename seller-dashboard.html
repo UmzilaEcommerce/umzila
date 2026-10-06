@@ -679,6 +679,18 @@
               <input type="text" id="newProdOptionLabel" class="form-control" maxlength="40" placeholder="Size  (e.g. Choose your starch)">
               <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:600"><input type="checkbox" id="newProdOptionRequired"> Buyer must choose one (nothing picked for them)</label>
             </div>
+            <div class="picks-box" style="margin-top:14px;padding:12px 14px;border:1.5px dashed #dde1ea;border-radius:12px">
+              <label style="display:flex;gap:8px;align-items:flex-start;font-weight:700;font-size:13px;line-height:1.35"><input type="checkbox" id="newProdPicksOn" style="margin-top:2px"> Each item comes with its own choice <span style="font-weight:400;color:#6b7280">(e.g. every plate comes with a starch — buyers pick one per plate)</span></label>
+              <div id="newProdPicksFields" style="display:none;margin-top:10px;gap:10px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <div><label class="form-label" for="newProdPicksLabel" style="font-size:12px">What's the choice?</label><input type="text" id="newProdPicksLabel" class="form-control" maxlength="20" placeholder="starch"></div>
+                  <div><label class="form-label" for="newProdPicksUnit" style="font-size:12px">One item is a…</label><input type="text" id="newProdPicksUnit" class="form-control" maxlength="20" placeholder="plate"></div>
+                </div>
+                <div style="margin-top:10px"><label class="form-label" for="newProdPicksOptions" style="font-size:12px">Choices <span style="font-weight:400;color:#6b7280">(comma separated, free)</span></label><input type="text" id="newProdPicksOptions" class="form-control" maxlength="200" placeholder="Pap, Jeqe, Phuthu"></div>
+                <div style="margin-top:10px"><label class="form-label" for="newProdPicksMax" style="font-size:12px">How many per item?</label>
+                  <select id="newProdPicksMax" class="form-control"><option value="1">One each (most items)</option><option value="2">Up to two each (e.g. a big sharing plate)</option></select></div>
+              </div>
+            </div>
           </div>
           </div><!-- /newProductOnlyFields -->
           <!-- Service-only fields (hidden for products) — guided quiz -->
@@ -950,6 +962,18 @@
               <label class="form-label" for="editProdOptionLabel" style="font-size:12px">What do buyers see above these options? <span style="font-weight:400;color:#6b7280">(optional)</span></label>
               <input type="text" id="editProdOptionLabel" class="form-control" maxlength="40" placeholder="Size  (e.g. Choose your starch)">
               <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13px;font-weight:600"><input type="checkbox" id="editProdOptionRequired"> Buyer must choose one (nothing picked for them)</label>
+            </div>
+            <div class="picks-box" style="margin-top:14px;padding:12px 14px;border:1.5px dashed #dde1ea;border-radius:12px">
+              <label style="display:flex;gap:8px;align-items:flex-start;font-weight:700;font-size:13px;line-height:1.35"><input type="checkbox" id="editProdPicksOn" style="margin-top:2px"> Each item comes with its own choice <span style="font-weight:400;color:#6b7280">(e.g. every plate comes with a starch — buyers pick one per plate)</span></label>
+              <div id="editProdPicksFields" style="display:none;margin-top:10px;gap:10px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <div><label class="form-label" for="editProdPicksLabel" style="font-size:12px">What's the choice?</label><input type="text" id="editProdPicksLabel" class="form-control" maxlength="20" placeholder="starch"></div>
+                  <div><label class="form-label" for="editProdPicksUnit" style="font-size:12px">One item is a…</label><input type="text" id="editProdPicksUnit" class="form-control" maxlength="20" placeholder="plate"></div>
+                </div>
+                <div style="margin-top:10px"><label class="form-label" for="editProdPicksOptions" style="font-size:12px">Choices <span style="font-weight:400;color:#6b7280">(comma separated, free)</span></label><input type="text" id="editProdPicksOptions" class="form-control" maxlength="200" placeholder="Pap, Jeqe, Phuthu"></div>
+                <div style="margin-top:10px"><label class="form-label" for="editProdPicksMax" style="font-size:12px">How many per item?</label>
+                  <select id="editProdPicksMax" class="form-control"><option value="1">One each (most items)</option><option value="2">Up to two each (e.g. a big sharing plate)</option></select></div>
+              </div>
             </div>
         </div>
         <!-- Service-only fields (hidden for products) — guided quiz -->
@@ -1616,6 +1640,38 @@
         e.preventDefault();
         var btn = document.querySelector('.opt-add-btn[data-target="' + e.target.dataset.target + '"]');
         if (btn) btn.click();
+      }
+    });
+    // products.metadata.picks from the "Each item comes with its own choice"
+    // box (product-sheet.js / lib/picks.js): label, unit, options, max 1|2.
+    function withPicksSettings(meta, prefix) {
+      var out = Object.assign({}, meta || {});
+      var on = (document.getElementById(prefix + 'PicksOn') || {}).checked;
+      var opts = ((document.getElementById(prefix + 'PicksOptions') || {}).value || '').split(',')
+        .map(function(x) { return x.trim().replace(/\s+/g, ' ').slice(0, 30); }).filter(Boolean)
+        .filter(function(x, i, a) { return a.indexOf(x) === i; }).slice(0, 12);
+      if (on && opts.length) {
+        out.picks = {
+          label: (((document.getElementById(prefix + 'PicksLabel') || {}).value || '').trim() || 'option').toLowerCase().slice(0, 20),
+          unit: (((document.getElementById(prefix + 'PicksUnit') || {}).value || '').trim() || 'item').toLowerCase().slice(0, 20),
+          options: opts,
+          max: (document.getElementById(prefix + 'PicksMax') || {}).value === '2' ? 2 : 1
+        };
+      } else delete out.picks;
+      return out;
+    }
+    function fillPicksSettings(prefix, pk) {
+      var on = !!(pk && Array.isArray(pk.options) && pk.options.length);
+      var set = function(id, v) { var el = document.getElementById(prefix + id); if (el) el.value = v; };
+      var cb = document.getElementById(prefix + 'PicksOn'); if (cb) cb.checked = on;
+      set('PicksLabel', on ? (pk.label || '') : ''); set('PicksUnit', on ? (pk.unit || '') : '');
+      set('PicksOptions', on ? pk.options.join(', ') : ''); set('PicksMax', on && Number(pk.max) === 2 ? '2' : '1');
+      var fl = document.getElementById(prefix + 'PicksFields'); if (fl) fl.style.display = on ? 'grid' : 'none';
+    }
+    document.addEventListener('change', function(e) {
+      if (e.target && /PicksOn$/.test(e.target.id || '')) {
+        var fl = document.getElementById(e.target.id.replace(/On$/, 'Fields'));
+        if (fl) fl.style.display = e.target.checked ? 'grid' : 'none';
       }
     });
     // products.metadata option_label / option_required from the form.
@@ -3239,7 +3295,7 @@
         service_location: serviceLocation,
         intake_fields:  intakeFields,
         visible:        false,
-        metadata:    withOptionSettings(Object.assign({ review_status: 'pending_review' }, storeSectionValue('newProdSection') ? { store_section: storeSectionValue('newProdSection') } : {}), 'newProd')
+        metadata:    withPicksSettings(withOptionSettings(Object.assign({ review_status: 'pending_review' }, storeSectionValue('newProdSection') ? { store_section: storeSectionValue('newProdSection') } : {}), 'newProd'), 'newProd')
       }).select().single();
 
       setBtnLoading('submitProductBtn', false, 'Submit for Review');
@@ -3410,6 +3466,7 @@
       var pm = p.metadata || {};
       var olEl = document.getElementById('editProdOptionLabel'); if (olEl) olEl.value = pm.option_label || '';
       var orEl = document.getElementById('editProdOptionRequired'); if (orEl) orEl.checked = !!pm.option_required;
+      fillPicksSettings('editProd', pm.picks);
       setMsg('editProdMsg', '');
       var panel = document.getElementById('editProductPanel');
       panel.style.display = '';
@@ -3487,7 +3544,7 @@
       setBtnLoading('saveEditProdBtn', true, 'Save Changes');
       var curMetaRes = await SD.sb.from('products').select('metadata').eq('id', id).single();
       if (curMetaRes.error) { setBtnLoading('saveEditProdBtn', false, 'Save Changes'); setMsg('editProdMsg', 'Couldn’t save — please try again.'); return; }
-      var editMeta = withOptionSettings(withStoreSection(curMetaRes.data.metadata, storeSectionValue('editProdSection')), 'editProd');
+      var editMeta = withPicksSettings(withOptionSettings(withStoreSection(curMetaRes.data.metadata, storeSectionValue('editProdSection')), 'editProd'), 'editProd');
       var { data, error } = await SD.sb.from('products').update({
         name:           name,
         description:    desc    || null,

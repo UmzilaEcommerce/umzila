@@ -4,6 +4,47 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — One product pop-up everywhere + a starch per plate (replaces the "Choose your starch" size option)
+
+**Asked for (founder):**
+- every plate gets its own free starch, chosen per plate;
+- a quick way to make them all the same;
+- the +6 wings plate (R299.89) can have 1 or 2 starches, every other plate exactly 1;
+- it must be obvious that + adds a whole plate (not a starch);
+- the home "+" sheet should be minimal and fast;
+- the home pop-ups should be the same as the store pop-ups.
+
+**Why the earlier version wasn't enough:** the starch was stored as a size, so 5 plates added at once all got the same starch, and the home and store pop-ups were two separate implementations.
+
+**Changes** (full write-up: [docs/systems/product-sheet.md](systems/product-sheet.md)):
+- **New `product-sheet.js`:** one shared pop-up (full + quick "+" sheet) used by `shop.html` and the home page. Store quick-view markup and code were removed. Home goods open it (services keep the booking modal), and a product with nothing to choose adds straight from "+".
+- **Per-item picks** (`products.metadata.picks`):
+  - "🍽 Plate with pap [−] n [+]" rows, so the plate count is the total;
+  - "Plate 1 — pick 1 or 2" for the +6 wings plate;
+  - the summary and button count plates ("Add 3 plates · R210").
+- **Cart lines** carry `picks` and `picks_cfg` through every cart list. In the cart sheet and cart page, + copies the last plate, − drops the last, and "Change starches" reopens the picker.
+- **Checkout** shows "3 plates: 2 with pap · 1 with phuthu".
+- **`validate-cart.js` + new `lib/picks.js`:**
+  - picks are validated server side (`PICKS_REQUIRED`), with old "Pap" lines healed;
+  - quantity = picks;
+  - order `size` = "Pap ×2, Phuthu ×1", which the store card, rider and emails already show.
+- **Seller dashboard:** an "Each item comes with its own choice" box (choice name, item name, choices, one or up to two each).
+- **`script.js` `addToCart`** never adds a picked item without picks; it opens the picker instead.
+- **Data:** migration `velaphi_plates_picks_config` (all plates max 1, +6 wings max 2). The old Pap/Jeqe/Phuthu size variants and `option_label` are removed by a follow-up migration after the deploy.
+
+**Verified (local, real data):**
+- Store "+" on the R70 plate, then Pap + Pap + Phuthu → "3 plates: 2 with pap · 1 with phuthu", "Add 3 plates · R210.00".
+- +6 wings plate: plate 1 jeqe & phuthu (a third tap swaps), plate 2 pap.
+- Cart sheet: + on the wings line copied pap, − on the R70 line dropped the last; Change opened "Update 2 plates".
+- `validate-cart`: 200 with "Pap ×2, Jeqe ×1" / "Jeqe & Phuthu; Pap; Pap". Two starches on a single plate → 400; no picks → 400; an old "Jeqe" line → healed to "Jeqe ×2".
+- Checkout line "3 plates: 2 with pap · 1 with jeqe".
+- Home "+" quick sheet and home full pop-up (same as the store's); cart page summary, + and Change.
+- Dashboard picks box round-trips the +6 wings settings. No page errors.
+
+**Files:** `product-sheet.js` (new), `netlify/functions/lib/picks.js` (new), `netlify/functions/validate-cart.js`, `script.js`, `index.html`, `shop.html`, `cart.html`, `checkout.html`, `seller-dashboard.html`, `docs/qa-guest-checkout.e2e.js`.
+
+---
+
 ## 2026-10-06 — Velaphi plates: choose pap, jeqe or phuthu
 
 **Asked for (founder):** plate buyers choose their starch (pap, jeqe or phuthu) on the cards and pop-ups.

@@ -1153,7 +1153,7 @@
     }
   </style>
   <!-- Include Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/product-sheet.js"></script>
 </head>
 <body>
   <!-- Header -->
@@ -2937,7 +2937,7 @@
 // booking silently disappears and checkout blocks on "pick a time".
 // Same list as script.js's CART_EXTRA_FIELDS.
 const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
-  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery'];
+  'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery', 'picks', 'picks_cfg'];
 function cartExtras(item) {
   const out = {};
   CART_EXTRA_FIELDS.forEach(k => { if (item && item[k] !== undefined) out[k] = item[k]; });
@@ -4233,6 +4233,10 @@ async function validateCheckout() {
       // (docs/systems/service-orders.md). Products keep Size/Qty.
       function lineDetail(item, qty) {
         const kind = checkoutServiceKind(item);
+        if (!kind && Array.isArray(item.picks) && item.picks.length && window.UmzilaPicks) {
+            // Each plate with its own starch: "3 plates: 2 with pap · 1 with phuthu"
+            return escapeHtmlLite(UmzilaPicks.summary(item.picks, item.picks_cfg));
+        }
         if (!kind) {
             const sz = item.size || 'One Size';
             const isClothingSize = /^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?|one size)$/i.test(sz);

@@ -39,9 +39,18 @@ async function addFromStore(p, slug, n = 1) {
   await p.goto(`${B}/${slug}`, { waitUntil: 'networkidle2' });
   await p.waitForSelector('[data-add]', { timeout: 20000 });
   const ids = await p.$$eval('[data-add]', bs => bs.map(b => b.dataset.add));
-  for (let i = 0; i < n; i++) { await p.click(`[data-add="${ids[i]}"]`); await sleep(900); }
-  // some products open a quick view (sizes) — add from there
-  if (await p.$eval('#qvAdd', el => !!el.offsetParent).catch(() => false)) { await p.click('#qvAdd'); await sleep(800); }
+  for (let i = 0; i < n; i++) {
+    await p.click(`[data-add="${ids[i]}"]`); await sleep(900);
+    // Items with a choice open the shared sheet (product-sheet.js): plates get
+    // a starch per plate, the +6 wings plate a starch chip, sized items a size.
+    await p.evaluate(() => {
+      const d = document.querySelector('dialog.uq'); if (!d || !d.open) return;
+      const inc = d.querySelector('[data-inc]'), chip = d.querySelector('[data-plate="0"]'), opt = d.querySelector('input[name="uqopt"]');
+      if (inc) inc.click(); else if (chip) chip.click(); else if (opt && !opt.checked) opt.click();
+      const add = d.querySelector('#uqAdd'); if (add && !add.disabled) add.click();
+    });
+    await sleep(800);
+  }
 }
 
 async function fillContact(p, { email, first = 'Qa', last = 'Guest', phone = '0821234567' }) {

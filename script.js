@@ -124,7 +124,7 @@ const cartUpdateLimiter = {
 // intake answers, collection/return choices) and seller/delivery info. They
 // must survive the round trip through the signed-in buyer's `carts` row:
 // dropping them used to wipe a booking the moment the saved cart reloaded.
-const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
+const CART_EXTRA_FIELDS = ['picks', 'picks_cfg', 'seller_id', 'listing_type', 'fulfillment_type', 'service_turnaround', 'item_returned',
   'intake', 'booking_id', 'booking_start_at', 'service_options', 'preferred_delivery',
   'delivery_class', 'free_delivery', 'units_per_trip'];
 function pickCartExtras(item) {
@@ -366,9 +366,34 @@ async function validateCartPrices() {
 }
 
 // Enhanced add to cart function with validation - FIXED TO WORK PROPERLY
-async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '', serviceExtra = null) {
+async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '', serviceExtra = null, picks = null) {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
+  // A picked item (e.g. a plate) never goes in without its picks — any other
+  // add path (bundle suggestion, old quick add…) opens the picker instead.
+  if (p.picks && !(picks && picks.length)) { openProductSheet(p, 'quick'); return; }
+  if (picks && picks.length && p.picks) {
+    if (!p.visible || (p.stock || 0) <= 0) { showNotification('This item is out of stock.'); return; }
+    const cap = p.stock > 0 ? p.stock : 99;
+    const hit = state.cart.find(i => i.id === id && Array.isArray(i.picks) && !i.booking_id);
+    if (hit) { hit.picks = hit.picks.concat(picks).slice(0, cap); hit.qty = hit.picks.length; }
+    else {
+      const pk = picks.slice(0, cap);
+      state.cart.push({
+        id, title: p.title, price: p.sale && p.salePrice ? p.salePrice : p.price, qty: pk.length, size: 'One Size',
+        img: (p.primary_image || svgPlaceholder(p.title)), variantId: null, stock: p.stock, maxQuantity: p.stock,
+        preferred_delivery: '', seller_id: (p.seller && p.seller.id) || null, listing_type: p.listing_type || 'product',
+        delivery_class: p.delivery_class || 'small', free_delivery: p.free_delivery === true, units_per_trip: p.units_per_trip || null,
+        picks: pk, picks_cfg: { label: p.picks.label, unit: p.picks.unit, max: p.picks.max }
+      });
+    }
+    localStorage.setItem('ss_cart', JSON.stringify(state.cart));
+    if (supabaseClient && currentUser) await saveCartToServer();
+    updateCartBadge();
+    trackEvent('add_to_cart', { product_id: p.id, seller_id: p.seller && p.seller.id ? p.seller.id : null, category: p.category, metadata: { qty: picks.length } });
+    showNotification(`Added — ${UmzilaPicks.summary(picks, p.picks)}`);
+    return;
+  }
 
   // Refuse hidden products
   if (!p.visible) return;
@@ -1214,8 +1239,11 @@ async function loadProducts() {
         ];
       }
       
+      // Per-item picks (Velaphi plates: a starch per plate) — product-sheet.js.
+      // These items use the product's own stock and have no size options.
+      const picksCfg = window.UmzilaPicks ? UmzilaPicks.cfgOf(row.metadata) : null;
       // Get variants for this product
-      const variants = state.productVariants[row.id] || [];
+      const variants = picksCfg ? [] : (state.productVariants[row.id] || []);
       
       // Calculate total stock from variants
       let totalStock = row.stock || 0;
@@ -1231,6 +1259,8 @@ async function loadProducts() {
             availableSizes.push(variant.size);
           }
         });
+      } else if (picksCfg) {
+        availableSizes.push('One Size');
       } else if (sizes.length > 0) {
         availableSizes.push(...sizes);
       } else {
@@ -1272,7 +1302,8 @@ async function loadProducts() {
         units_per_trip: row.units_per_trip || null,
         delivery_class: row.delivery_class || null,
         free_delivery: row.free_delivery === true,
-        acceptance_deadline_hours: row.acceptance_deadline_hours || null
+        acceptance_deadline_hours: row.acceptance_deadline_hours || null,
+        picks: picksCfg
       };
     });
     
@@ -3328,10 +3359,12 @@ function attachProductListeners(){
       const id = addCircle.dataset.id;
       const product = state.products.find(x=>String(x.id)===String(id));
       if (!product) return;
-      if (product.listing_type === 'service') {
+      if (product.listing_type === 'service' || (product.stock || 0) <= 0) {
         openProductModal(product.id);
+      } else if (product.picks || homeOptions(product)) {
+        openProductSheet(product, 'quick');
       } else {
-        openQuickAddModal(product);
+        addToCart(product.id, 1, (product.size && product.size[0]) || 'One Size');
       }
     });
   });
@@ -3399,10 +3432,45 @@ function updateQuickAddStockInfo() {
  ********************/
 let currentModalProduct = null;
 
+// Real choices on a home product (not just "One Size").
+function homeOptions(p) {
+  const v = (p.size || []).filter(Boolean);
+  if (!v.length || (v.length === 1 && /^one size$/i.test(v[0]))) return null;
+  return { label: optionLabel(p), values: v, required: optionRequired(p) };
+}
+// Goods open the shared product pop-up (product-sheet.js) — the same one
+// every store page uses; mode 'quick' is the short "+" sheet. Services keep
+// the booking/intake modal below.
+function openProductSheet(p, mode) {
+  if (!window.UmzilaSheet) return false;
+  const real = (p.all_images || []).filter(u => u && !/picsum\.photos/.test(u));
+  if (mode !== 'quick') trackEvent('product_click', { product_id: p.id, seller_id: p.seller && p.seller.id ? p.seller.id : null, category: p.category });
+  UmzilaSheet.open({
+    id: p.id, title: p.title, desc: p.desc, price: p.sale && p.salePrice ? p.salePrice : p.price, was: p.sale && p.salePrice ? p.price : null,
+    images: real, stock: p.stock, store: p.seller && p.seller.shop_name, location: null,
+    soldOut: (p.stock || 0) <= 0, unpriced: !((p.sale && p.salePrice ? p.salePrice : p.price) > 0), freeDelivery: p.free_delivery === true,
+    options: p.picks ? null : homeOptions(p), picks: p.picks || null
+  }, {
+    mode, user: currentUser,
+    onAdd: ({ qty, size, picks }) => addToCart(p.id, qty, size, '', null, picks),
+    onNotify: async email => {
+      const { error } = await supabaseClient.from('stock_alerts').insert({ product_id: p.id, email });
+      if (error && error.code !== '23505') { showNotification('Couldn’t save that — please try again'); throw error; }
+      showNotification(error ? 'You’re already on the list' : `We’ll email ${email} once it’s back`);
+    },
+    onCopy: async () => {
+      const url = location.origin + '/?product=' + p.id;
+      try { await navigator.clipboard.writeText(url); showNotification('Link copied'); } catch (_) { showNotification(url); }
+    }
+  });
+  return true;
+}
+
 async function openProductModal(id) {
   currentModalProduct = state.products.find(x => x.id == id);
   if (!currentModalProduct) return;
   if (!currentModalProduct.visible) return;
+  if (currentModalProduct.listing_type !== 'service' && openProductSheet(currentModalProduct, 'full')) return;
 
   // Track product click
   trackEvent('product_click', {

@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { validateCode, computeDiscount } = require('./lib/discounts');
 const { FALLBACK_FEE, DELIVERY_FEE_MIN, DELIVERY_FEE_MAX } = require('./lib/delivery-price');
+const { picksCfg, normalizePicks, picksText } = require('./lib/picks');
 
 // Must match checkout.html's client-side copies — this server copy is authoritative.
 // Fallback when there's no live distance quote (routing down, store without
@@ -248,15 +249,19 @@ variants.forEach(v => {
   let itemStock = (isService && product.stock == null) ? Infinity : (Number.isFinite(product.stock) ? product.stock : Infinity);
   let maxQuantity = itemStock;
 
+  // Items with per-item picks (Velaphi plates' starch) use the product's own
+  // price and stock — never a size variant (lib/picks.js).
+  const pcfg = !isService ? picksCfg(product.metadata) : null;
+
   // If item has variant_id use that, else try by size
   let variant = null;
-  if (item.variant_id) variant = variantMap[item.variant_id];
-  if (!variant && item.size) variant = variantMap[`${pid}::${item.size}`];
+  if (!pcfg && item.variant_id) variant = variantMap[item.variant_id];
+  if (!pcfg && !variant && item.size) variant = variantMap[`${pid}::${item.size}`];
 
   // A required option (products.metadata.option_required, e.g. Velaphi's
   // starch) must match one of the product's options — an old "One Size" line
   // or a missing choice is refused so the store never gets a plate without it.
-  if (!variant && product.metadata && product.metadata.option_required && !isService) {
+  if (!pcfg && !variant && product.metadata && product.metadata.option_required && !isService) {
     const label = String(product.metadata.option_label || 'an option').replace(/^choose\s+/i, '');
     return { statusCode: 400, body: JSON.stringify({ error: `Please choose ${label} for "${item.name || product.name}" — open it from the store and pick one.`, code: 'OPTION_REQUIRED', productId: product.id }) };
   }
@@ -313,7 +318,22 @@ variants.forEach(v => {
   // stale cart line being bought. Services keep their old behaviour (a 0/null
   // stock on a service never limited it).
   const qtyCap = isService ? (itemStock || Infinity) : Math.max(0, itemStock);
-  const qty = booking ? booking.units : Math.min(item.quantity || 1, qtyCap);
+  let picks = null;
+  if (pcfg) {
+    const np = normalizePicks(pcfg, rawItem.picks, item.quantity, item.size);
+    if (np.error) {
+      return { statusCode: 400, body: JSON.stringify({
+        error: `Please choose a ${pcfg.label} for each ${pcfg.unit} of "${item.name || product.name}" — tap it in your cart to pick.`,
+        code: 'PICKS_REQUIRED', productId: product.id }) };
+    }
+    picks = np.picks;
+    if (picks.length > qtyCap) {
+      if (qtyCap <= 0) { hasChanges = true; continue; }
+      picks = picks.slice(0, qtyCap); // only this many left in stock
+      hasChanges = true;
+    }
+  }
+  const qty = booking ? booking.units : picks ? picks.length : Math.min(item.quantity || 1, qtyCap);
   if (qty <= 0) {
     hasChanges = true;
     continue;
@@ -334,9 +354,13 @@ variants.forEach(v => {
     name: item.name || product.name,
     price: itemPrice,
     quantity: qty,
-    size: item.size || 'One Size',
+    // Picked items: the readable breakdown ("Pap ×2, Phuthu ×1") rides in
+    // size — the store's order card, rider bag and emails already show it.
+    size: picks ? picksText(pcfg, picks) : (item.size || 'One Size'),
+    picks: picks || undefined,
+    picks_cfg: picks ? { label: pcfg.label, unit: pcfg.unit, max: pcfg.max } : undefined,
     image: product.image || item.image,
-    variant_id: item.variant_id,
+    variant_id: picks ? null : item.variant_id,
     max_quantity: maxQuantity,
     subtotal: itemPrice * qty,
     seller_id: product.seller_id || null,
@@ -431,7 +455,9 @@ variants.forEach(v => {
                     name: item.name,
                     price: item.price,
                     quantity: item.quantity,
-                    size: item.size,
+                    size: item.picks ? 'One Size' : item.size,
+                    picks: item.picks || undefined,
+                    picks_cfg: item.picks_cfg || undefined,
                     image: item.image,
                     variant_id: item.variant_id,
                     max_quantity: item.max_quantity,
