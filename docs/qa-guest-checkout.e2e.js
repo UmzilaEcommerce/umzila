@@ -23,6 +23,10 @@ async function newPage(b, mobile) {
       return r.abort();
     }
     if (/\/rest\/v1\/orders/.test(r.url()) && r.method() === 'POST') log.orders++;
+    if (log.failSaveOnce && /generate-payfast-signature/.test(r.url()) && r.method() === 'POST' && /subscription_type/.test(r.postData() || '')) {
+      log.failSaveOnce = false; log.forcedRefusal = true;
+      return r.respond({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'forced by QA' }) });
+    }
     r.continue();
   });
   p.on('response', async res => {
@@ -73,6 +77,7 @@ async function fillAddress(p, query) {
 }
 
 async function pay(p, log, { mobile, taps = 1 } = {}) {
+  log.card = await p.evaluate(() => ({ saveVisible: !!document.getElementById('saveCardCheckboxGroup')?.offsetParent, saveOn: !!document.getElementById('saveCardCheckbox')?.checked, nickname: document.getElementById('cardNameInput')?.value || null })).catch(() => null);
   const sel = mobile ? '#payNowBtnMobile' : '#payNowBtn';
   await p.evaluate(s => document.querySelector(s)?.scrollIntoView({ block: 'center' }), sel);
   const before = await p.$eval(sel, b => ({ text: b.textContent.trim(), visible: !!b.offsetParent })).catch(() => null);
@@ -97,7 +102,7 @@ function verdict(name, r) {
   console.log('   ', JSON.stringify({
     quote: r.addr && r.addr.eta, blocked: r.addr && r.addr.blocked ? String(r.addr.blocked).slice(0, 90) : undefined,
     firstTap: r.pay && r.pay.firstTapLabel, error: r.pay && r.pay.error, sig: r.log.sig, orderInserts: r.log.orders,
-    payfast: pf ? { amount: pf.amount, m_payment_id: pf.m_payment_id, email: pf.email_address, subscription_type: pf.subscription_type || null, item: pf.item_name } : null,
+    payfast: pf ? { amount: pf.amount, m_payment_id: pf.m_payment_id, email: pf.email_address, subscription_type: pf.subscription_type || null, item: pf.item_name } : null, card: r.log.card,
     notes: r.notes, errors: r.log.errors.slice(0, 4)
   }));
 }
@@ -148,6 +153,18 @@ const SCEN = {
     const cartLeft = await p.evaluate(() => JSON.parse(localStorage.getItem('ss_cart') || '[]').length).catch(() => null);
     await ctx.close();
     return { expect: 'payfast', log, addr, pay: payR, notes: { storeButtons: followed, linesStillInCart: cartLeft } };
+  },
+  // 1b. Safety net: the signer refuses save-card once -> checkout pays without saving the card
+  async safetyNet(b) {
+    const { p, ctx, log } = await newPage(b, false);
+    log.failSaveOnce = true;
+    await addFromStore(p, 'velaphishisanyama', 1);
+    await p.goto(B + '/checkout.html', { waitUntil: 'networkidle2' });
+    await fillContact(p, { email: mail('sn') });
+    const addr = await fillAddress(p, IN_ZONE);
+    const payR = await pay(p, log, {});
+    await ctx.close();
+    return { expect: 'payfast', log, addr, pay: payR, notes: { forcedRefusal: !!log.forcedRefusal } };
   },
   // 2b. Desktop, one store, two items via cart page, tip + note
   async sameStoreTipNote(b) {

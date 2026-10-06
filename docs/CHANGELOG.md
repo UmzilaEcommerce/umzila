@@ -45,6 +45,11 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 **Safety net:** if signing ever fails while a card token is requested, `submitToPayFast` signs again without it, so the buyer pays and the card just isn't saved. A save-card problem can no longer cost a sale (the 2026-10-06 morning incident).
 
+**Live re-test after deploying `1d58639`: all 11 guest scenarios PASS with "Save this card" on.**
+- Every case reached PayFast with `subscription_type=2`, and each order stored `pending_card_name` = the automatic "<Name>'s card".
+- `safetyNet` (signer forced to refuse save-card once): signatures 401 → 200, PayFast reached without `subscription_type`, so the buyer still pays.
+- Test orders, holds and baskets were deleted afterwards.
+
 **Not testable without a real card:** PayFast returning a token for a guest payment. Signed-in tokenization already works live, and the guest request is byte-for-byte the same request.
 
 **Files:** `netlify/functions/generate-payfast-signature.js` (guest guard only), `checkout.html`.
