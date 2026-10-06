@@ -1610,7 +1610,7 @@
               </label>
               <div class="form-group card-name-group" id="cardNameGroup">
                 <label class="form-label" for="cardNameInput">Card nickname</label>
-                <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. FNB debit, Mom's Visa" maxlength="40" autocomplete="off">
+                <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. FNB debit, Mom's Visa" maxlength="40" autocomplete="off" title="Change it to anything you like">
                 <div class="card-name-hint">So you can pick it next time — you can save as many cards as you like.</div>
               </div>
             </div>
@@ -2016,6 +2016,22 @@
     // was actually clicked. Mirror the processing/success class onto its
     // counterpart too so the visible button always reflects real state,
     // regardless of which one triggered it.
+    // Card nickname default (2026-10-06): buyers rarely name a card, so the
+    // box is pre-filled with "<First name>'s card" (", card 2" etc. when the
+    // account already has cards). It stays editable; once the buyer types
+    // in it we never overwrite it. An emptied box falls back to the default.
+    function defaultCardName() {
+      const first = (elements.firstName?.value || state.profile?.first_name || '').trim().split(/\s+/)[0] || '';
+      const base = first ? first.charAt(0).toUpperCase() + first.slice(1) + "'s card" : 'My card';
+      const n = (state.paymentMethods || []).length;
+      return n ? base + ' ' + (n + 1) : base;
+    }
+    function refreshDefaultCardName() {
+      const inp = elements.cardNameInput;
+      if (!inp || inp.dataset.touched === '1') return;
+      inp.value = defaultCardName();
+    }
+
     function mobilePairOf(btn) {
       return btn ? document.getElementById(btn.id + 'Mobile') : null;
     }
@@ -2541,6 +2557,7 @@
       elements.saveCardCheckboxGroup?.classList.remove('hidden');
       const saving = !!elements.saveCardCheckbox?.checked;
       elements.cardNameGroup?.classList.toggle('hidden', !saving);
+      refreshDefaultCardName();
       const sub = document.getElementById('saveCardSub');
       if (sub) sub.textContent = state.user
         ? 'Pay in one tap next time.'
@@ -5322,7 +5339,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // "the token only arrives later via ITN" — read back by
                 // completeOrderPayment() when it inserts the payment_methods
                 // row. Harmless when no card ends up getting tokenized.
-                pending_card_name: elements.saveCardCheckbox?.checked ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || null) : null,
+                pending_card_name: elements.saveCardCheckbox?.checked ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || defaultCardName()) : null,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
@@ -5766,6 +5783,8 @@ async function submitToPayFast(cartItems, orderId, total) {
       // opted into saving a card at all (once a card already exists, the
       // input is shown unconditionally by loadProfileData() instead).
       elements.saveCardCheckbox?.addEventListener('change', syncPayChoice);
+      elements.cardNameInput?.addEventListener('input', () => { elements.cardNameInput.dataset.touched = '1'; });
+      elements.firstName?.addEventListener('input', refreshDefaultCardName);
       // Priority delivery: re-price with/without it (server quote).
       document.getElementById('priorityToggle')?.addEventListener('change', (e) => {
         state.priorityDelivery = e.target.checked;

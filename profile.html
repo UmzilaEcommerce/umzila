@@ -645,6 +645,13 @@
         </div>
         <button id="addAddressBtn" class="p-btn">Save Address</button>
       </div>
+      <!-- Saved cards (payment_methods, own rows via RLS) — rename only; the
+           card itself (PayFast token) is never shown or editable. -->
+      <div class="p-card" id="savedCardsCard" style="display:none">
+        <div class="p-card-title"><span>Saved cards</span></div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Pay in one tap at checkout. Give each card a name you'll recognise.</p>
+        <div id="savedCardsList"></div>
+      </div>
       <div class="p-card">
         <div class="p-card-title"><span>Your Delivery PIN</span></div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:10px">When a driver hands you an order, just tell them this PIN to confirm you received it.</p>
@@ -1812,7 +1819,48 @@
     } catch(_) {}
     await loadProfile();
     await loadOrders();
+    loadSavedCards().catch(() => {});
   })();
+
+  // ── Saved cards: list + rename (rename_my_payment_method RPC) ──
+  async function loadSavedCards() {
+    const card = document.getElementById('savedCardsCard'), list = document.getElementById('savedCardsList');
+    if (!card || !list) return;
+    const { data, error } = await sb.from('payment_methods').select('id, display_name, created_at, last_used_at')
+      .order('last_used_at', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+    if (error || !data || !data.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    const added = d => new Date(d).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+    list.innerHTML = data.map(c => `
+      <div class="saved-card-row" data-id="${esc(c.id)}" style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)">
+        <span style="font-size:22px" aria-hidden="true">💳</span>
+        <div style="flex:1;min-width:0">
+          <div class="sc-name" style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.display_name || 'Card added ' + added(c.created_at))}</div>
+          <div style="font-size:12px;color:var(--muted)">Added ${esc(added(c.created_at))}${c.last_used_at ? ' · last used ' + esc(added(c.last_used_at)) : ''}</div>
+          <div class="sc-edit" style="display:none;gap:8px;margin-top:8px">
+            <input class="p-input sc-input" maxlength="40" value="${esc(c.display_name || '')}" placeholder="e.g. FNB debit" style="padding:8px 10px">
+            <button class="p-btn sm sc-save" type="button">Save</button>
+          </div>
+        </div>
+        <button class="p-btn ghost sm sc-rename" type="button">Rename</button>
+      </div>`).join('');
+    list.querySelectorAll('.saved-card-row').forEach(row => {
+      const edit = row.querySelector('.sc-edit'), input = row.querySelector('.sc-input');
+      row.querySelector('.sc-rename').addEventListener('click', () => { edit.style.display = edit.style.display === 'none' ? 'flex' : 'none'; if (edit.style.display === 'flex') input.focus(); });
+      const save = async () => {
+        const btn = row.querySelector('.sc-save');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        const { data: name, error } = await sb.rpc('rename_my_payment_method', { p_id: row.dataset.id, p_name: input.value });
+        btn.disabled = false; btn.textContent = 'Save';
+        if (error) { toast('Could not rename the card — try again'); return; }
+        row.querySelector('.sc-name').textContent = name || 'Saved card';
+        edit.style.display = 'none';
+        toast('Card renamed ✓');
+      };
+      row.querySelector('.sc-save').addEventListener('click', save);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+    });
+  }
 
 })();
 </script>

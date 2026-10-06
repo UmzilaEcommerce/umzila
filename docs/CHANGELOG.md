@@ -4,6 +4,25 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Card nicknames: automatic default at checkout, rename in profile
+
+**Asked for (founder):** buyers never fill in the card nickname box. Give it an automatic name they can change.
+
+**Changes:**
+- `checkout.html`:
+  - the nickname box is pre-filled with "<First name>'s card" ("… card 2", "card 3" when the account already has cards; "My card" before a name is typed) and follows the first-name field until the buyer edits it (`defaultCardName`/`refreshDefaultCardName`, `data-touched`);
+  - an emptied box saves the default, so a saved card is never nameless.
+- `profile.html` → **Saved cards**: lists the account's cards (name, added, last used) with **Rename**. The token is never shown.
+- New RPC `rename_my_payment_method(id, name)`: own card only, trimmed, max 40 characters, blank resets the name. `payment_methods` keeps no UPDATE policy, so tokens stay unwritable from the browser.
+
+**Verified:**
+- Checkout step 2 showed "Thandi's card" after typing "thandi"; once the buyer typed "Capitec debit", a later first-name change didn't overwrite it.
+- RPC (rolled back): own card renamed (trimmed); another user's card refused and unchanged.
+
+**Files:** `checkout.html`, `profile.html`. **Migration:** `rename_my_payment_method`.
+
+---
+
 ## 2026-10-06 — Guests can save their card (added to their account once they sign in)
 
 **Asked for (founder):** a guest who pays, then signs in, should never have to type card details again.
