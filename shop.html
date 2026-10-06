@@ -571,7 +571,9 @@ function mapProduct(row){
     delivery_class: row.delivery_class || 'small', free_delivery: row.free_delivery === true,
     units_per_trip: row.units_per_trip || null,
     delivery_price: Number.isFinite(Number(meta.delivery_price)) && meta.delivery_price !== null && meta.delivery_price !== '' ? Number(meta.delivery_price) : null,
-    is_voucher: meta.voucher === true
+    is_voucher: meta.voucher === true,
+    // e.g. Velaphi plates: "Choose your starch", nothing pre-selected
+    option_label: meta.option_label || 'Size', option_required: meta.option_required === true
   };
 }
 const isService = p => p.listing_type === 'service';
@@ -904,7 +906,7 @@ function openQV(id){
   stk.hidden = svc || out || !(p.stock > 0 && p.stock < 5);
   if (!stk.hidden) stk.textContent = `Only ${p.stock} left`;
   $('#qvDesc').textContent = p.desc;
-  $('#qvOpts').innerHTML = p.sizes.length ? `<fieldset class="opt-group"><legend>Size</legend><div class="opts">${p.sizes.map((o, oi) => `<label class="opt"><input type="radio" name="size" value="${esc(o)}"${oi === 0 ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div></fieldset>` : '';
+  $('#qvOpts').innerHTML = p.sizes.length ? `<fieldset class="opt-group"><legend>${esc(p.option_label)}</legend><div class="opts">${p.sizes.map((o, oi) => `<label class="opt"><input type="radio" name="size" value="${esc(o)}"${oi === 0 && !p.option_required ? ' checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div><p class="opt-err" id="qvOptErr" hidden style="margin:.4rem 0 0;color:#b91c1c;font-weight:600;font-size:.9rem">Please choose one to continue.</p></fieldset>` : '';
   $('#qvBuy').hidden = out || unpriced(p);
   $('#qvNotify').hidden = !out;
   // Signed in: one tap, sent to the account's email.
@@ -936,6 +938,7 @@ $('#qvForm').addEventListener('submit', e => {
   if (!qvP || !inStock(qvP) || unpriced(qvP)) return;
   if (isService(qvP)) { serviceSetup(qvP); return; }
   const c = $('input[name="size"]:checked', qv);
+  if (!c && qvP.option_required) { const er = $('#qvOptErr'); if (er) { er.hidden = false; er.scrollIntoView({ block: 'center', behavior: 'smooth' }); } return; }
   addToCart(qvP, c ? c.value : qvP.defaultSize, qvQty, $('#qvAdd'));
   qv.close();
 });
@@ -996,7 +999,7 @@ function addToCart(p, size, qty, from){
   saveCart(cart);
   if (window.umzilaTrack) umzilaTrack('add_to_cart', { product_id: p.id, seller_id: S.seller.id, category: p.section });
   fly(from).then(() => syncCart(true));
-  toast(`${qty} × ${p.title}`, size && p.sizes.length ? `Size ${size}` : 'Added to your cart', true);
+  toast(`${qty} × ${p.title}`, size && p.sizes.length ? (p.option_label === 'Size' ? `Size ${size}` : size) : 'Added to your cart', true);
 }
 const storeLines = () => getCart().filter(l => l.seller_id === S.seller.id);
 const otherLines = () => getCart().filter(l => l.seller_id !== S.seller.id);
@@ -1031,7 +1034,7 @@ function renderCart(){
         ? `<button class="rm" type="button" data-rm="${key}" aria-label="Remove ${esc(title)}">×</button>`
         : `<div class="stepper" role="group" aria-label="Quantity of ${esc(title)}"><button type="button" data-dec="${key}" aria-label="One less">−</button><output>${qtyOf(l)}</output><button type="button" data-inc="${key}" aria-label="One more">+</button></div>`;
       return `<li class="line"><span class="thumb">${img ? `<img src="${esc(thumbUrl(img))}" data-full="${esc(img)}" alt="" onerror="thumbFallback(this)">` : `<span class="tx">${esc(initials(title))}</span>`}</span>
-        <div><b>${esc(title)}</b><span>${showSize ? 'Size ' + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
+        <div><b>${esc(title)}</b><span>${showSize ? (/^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?)$/i.test(l.size) ? 'Size ' : '') + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
     }).join('')}</ul>
     ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
     <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>

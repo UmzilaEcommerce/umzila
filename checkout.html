@@ -4233,7 +4233,11 @@ async function validateCheckout() {
       // (docs/systems/service-orders.md). Products keep Size/Qty.
       function lineDetail(item, qty) {
         const kind = checkoutServiceKind(item);
-        if (!kind) return `Size: ${escapeHtmlLite(item.size || 'One Size')} • Qty: ${qty}`;
+        if (!kind) {
+            const sz = item.size || 'One Size';
+            const isClothingSize = /^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?|one size)$/i.test(sz);
+            return `${isClothingSize ? 'Size: ' : ''}${escapeHtmlLite(sz)} • Qty: ${qty}`;
+        }
         if (kind === 'booking') {
           return item.booking_start_at
             ? `📅 ${escapeHtmlLite(formatSAST(item.booking_start_at, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}${qty > 1 ? ' • ' + qty + ' booked' : ''}${item.service_location ? ' • ' + escapeHtmlLite(item.service_location) : ''}`

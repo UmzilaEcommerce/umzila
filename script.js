@@ -3283,6 +3283,13 @@ function renderAll(products){
 /********************
  * Get variant stock for specific size
  ********************/
+// Product options (2026-10-06): products.metadata.option_label renames the
+// "Size" choice (e.g. Velaphi plates: "Choose your starch" → Pap/Jeqe/Phuthu,
+// stored as product_variants sizes like any size), and option_required means
+// nothing is pre-selected — the buyer must pick before it goes in the cart.
+function optionLabel(p) { return (p && p.metadata && p.metadata.option_label) || 'Size'; }
+function optionRequired(p) { return !!(p && p.metadata && p.metadata.option_required); }
+
 function getVariantStock(product, size) {
   if (product.listing_type === 'service') return Infinity;
   if (!product.variants || product.variants.length === 0) {
@@ -3337,8 +3344,15 @@ function attachProductListeners(){
 function openQuickAddModal(product) {
   currentQuickAddProduct = product;
   
-  // Populate size dropdown
+  // Populate size dropdown (label + "pick one" placeholder for required options)
   quickAddSize.innerHTML = '';
+  const qaLabel = document.getElementById('quickAddSizeLabel');
+  if (qaLabel) qaLabel.textContent = optionLabel(product);
+  if (optionRequired(product)) {
+    const ph = document.createElement('option');
+    ph.value = ''; ph.textContent = 'Choose…'; ph.disabled = true; ph.selected = true;
+    quickAddSize.appendChild(ph);
+  }
   product.size.forEach(size => {
     const option = document.createElement('option');
     option.value = size;
@@ -3367,6 +3381,7 @@ function updateQuickAddStockInfo() {
   if (!currentQuickAddProduct) return;
   
   const selectedSize = quickAddSize.value;
+  if (!selectedSize) { quickAddStockInfo.textContent = ''; quickAddStockError.style.display = 'none'; return; }
   const stock = getVariantStock(currentQuickAddProduct, selectedSize);
   quickAddStockInfo.textContent = `${stock} items available`;
   
@@ -3536,10 +3551,11 @@ async function openProductModal(id) {
         </div>
         
         ${currentModalProduct.listing_type !== 'service' ? `<div class="product-modal-sizes">
-          <h3>Size</h3>
+          <h3>${esc(optionLabel(currentModalProduct))}</h3>
           <div class="size-options">
             ${sizeOptions}
           </div>
+          <div id="modal-option-error" style="display:none;color:#dc2626;font-size:13px;font-weight:600;margin-top:6px">Please choose one to continue.</div>
         </div>` : ''}
         
         ${colorOptionsHTML}
@@ -4055,9 +4071,15 @@ function setupProductModalEvents(bundleProduct) {
     const productId = this.dataset.id;
     const isService = currentModalProduct.listing_type === 'service';
     let quantity = parseInt(document.getElementById('quantity-value').textContent);
+    const pickedSize = document.querySelector('.size-option.selected')?.dataset.size;
+    if (!isService && !pickedSize && optionRequired(currentModalProduct)) {
+      const err = document.getElementById('modal-option-error');
+      if (err) { err.style.display = 'block'; err.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+      return;
+    }
     const selectedSize = isService
       ? 'One Size'
-      : (document.querySelector('.size-option.selected')?.dataset.size || currentModalProduct.size?.[0]);
+      : (pickedSize || currentModalProduct.size?.[0]);
     const preferredDelivery = (document.getElementById('modal-delivery-pref')?.value || '');
     const btn = this;
 
@@ -4201,7 +4223,7 @@ function setupProductModalEvents(bundleProduct) {
   });
   
   // Select first size and color by default
-  if (document.querySelector('.size-option')) {
+  if (document.querySelector('.size-option') && !optionRequired(currentModalProduct)) {
     document.querySelector('.size-option').classList.add('selected');
   }
   if (document.querySelector('.color-option')) {
@@ -4918,6 +4940,13 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!currentQuickAddProduct) return;
       
       const selectedSize = quickAddSize.value;
+      if (!selectedSize) {
+        quickAddStockInfo.textContent = 'Please choose one to continue.';
+        quickAddStockInfo.style.color = '#dc2626';
+        quickAddSize.focus();
+        return;
+      }
+      quickAddStockInfo.style.color = '';
       const quantity = parseInt(quickAddQty.value);
       const stock = getVariantStock(currentQuickAddProduct, selectedSize);
       

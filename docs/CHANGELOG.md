@@ -4,6 +4,36 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Velaphi plates: choose pap, jeqe or phuthu
+
+**Asked for (founder):** plate buyers choose their starch (pap, jeqe or phuthu) on the cards and pop-ups.
+
+**How:** the existing option system (the same one used for clothing sizes), so the choice flows through cart → checkout → order items → seller order card, rider bag and emails with no new plumbing.
+- **Data** (migration `velaphi_plates_starch_options`):
+  - the 6 plates now have variants Pap/Jeqe/Phuthu (each with the plate's previous stock) and `sizes` set to match;
+  - `metadata.option_label` = "Choose your starch", `metadata.option_required` = true;
+  - the old "One Size" variants were removed, including one with a stale **R99** `price_override` on the R70 plate (masked by the sale price, but it would have charged R99 once the sale ended).
+- **`script.js`** (home pop-up + "+" quick add):
+  - `optionLabel()`/`optionRequired()`;
+  - the label replaces "Size";
+  - required options are never pre-selected (quick add gets a "Choose…" placeholder);
+  - adding without a choice shows "Please choose one to continue."
+- **`shop.html`** (store quick view): same label, no default, inline error; the cart sheet and toast show "Jeqe", not "Size Jeqe".
+- **`checkout.html`:** a line shows "Jeqe • Qty: 1". Real clothing sizes keep "Size:".
+- **`validate-cart.js`:** a required option that matches none of the product's options (e.g. an old cart line saved as "One Size") is refused with "Please choose your starch for …" (`OPTION_REQUIRED`).
+
+**Any product can use this:** set `metadata.option_label` (+ `option_required`) and give it variants.
+
+**Verified (local, real data):**
+- Store quick view: "Choose your starch", nothing pre-selected; adding without a choice shows the error and adds nothing; choosing Jeqe adds a Jeqe line.
+- `validate-cart` accepts it at R70; an old "One Size" line gets a 400 with the message.
+- The checkout line reads "Jeqe • Qty: 1".
+- Home pop-up and "+" quick add behave the same (Phuthu, Pap). No page errors.
+
+**Files:** `script.js`, `index.html`, `shop.html`, `checkout.html`, `netlify/functions/validate-cart.js`.
+
+---
+
 ## 2026-10-06 — Card nicknames: automatic default at checkout, rename in profile
 
 **Asked for (founder):** buyers never fill in the card nickname box. Give it an automatic name they can change.

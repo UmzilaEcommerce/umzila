@@ -253,6 +253,14 @@ variants.forEach(v => {
   if (item.variant_id) variant = variantMap[item.variant_id];
   if (!variant && item.size) variant = variantMap[`${pid}::${item.size}`];
 
+  // A required option (products.metadata.option_required, e.g. Velaphi's
+  // starch) must match one of the product's options — an old "One Size" line
+  // or a missing choice is refused so the store never gets a plate without it.
+  if (!variant && product.metadata && product.metadata.option_required && !isService) {
+    const label = String(product.metadata.option_label || 'an option').replace(/^choose\s+/i, '');
+    return { statusCode: 400, body: JSON.stringify({ error: `Please choose ${label} for "${item.name || product.name}" — open it from the store and pick one.`, code: 'OPTION_REQUIRED', productId: product.id }) };
+  }
+
   if (variant) {
     itemPrice = variant.price_override || product.price;
     itemStock = variant.stock != null ? variant.stock : itemStock;
