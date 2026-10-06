@@ -4,6 +4,32 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Guest checkout matrix on the live site; existing-account emails no longer block; one-tap per-store checkout
+
+**Asked for (founder):** make sure every guest can check out. Test all cases and edge cases.
+
+**Tested live** (headless browser, real data, stopped at the PayFast redirect; nothing paid):
+- **PASS:**
+  - phone, store-page checkout (R70 plate + delivery);
+  - one store, 2 items, tip + note;
+  - priority delivery;
+  - 5 rapid Pay taps (exactly 1 order);
+  - address typed without picking a suggestion;
+  - outside the delivery area (blocked, no order);
+  - Nceks ride booking (no address);
+  - Nceks gift voucher.
+- **Every PASS case:** signature 200, no `subscription_type`, the button showed "Checking your order…" on the first tap, no console errors.
+
+**Bugs found and fixed (`checkout.html`):**
+1. **An email that already has an account blocked the guest completely.**
+   - Checkout demanded the password, and Pay then failed silently: the error was written into the hidden step-1 box.
+   - Anyone who forgot their password, or never confirmed the account, could not buy.
+   - Now signing in is optional ("Welcome back — sign in, or just carry on as a guest"), and a blank password means guest checkout. The order can be claimed into the account later via the confirmed-email claim.
+   - A failed sign-in now also shows next to Pay.
+2. **"Stores too far apart for one delivery" was a dead end** ("open the store and use its cart"). It now lists one-tap "Check out <store> only · R…" buttons (`checkout.html?store=<id>`). The other lines stay in the cart.
+
+---
+
 ## 2026-10-06 — URGENT: guests could not pay ("Failed to obtain signed PayFast parameters")
 
 **Reported (founder, live customer):** a guest checkout failed at Pay three times (3 pending R109.28 orders).

@@ -3125,9 +3125,12 @@ async function saveCartToServer() {
       elements.accountPasswordInput.value = '';
       elements.accountPasswordError.classList.add('hidden');
       if (mode === 'returning') {
-        elements.accountPasswordTitle.textContent = 'Welcome back — enter your password to sign in';
-        elements.accountPasswordHint.textContent = 'This email already has an Umzila account.';
-        elements.accountPasswordInput.required = true;
+        // Signing in is optional (2026-10-06): a returning buyer who forgot
+        // their password — or never confirmed the account — must still be
+        // able to pay. Blank password = guest checkout with this email.
+        elements.accountPasswordTitle.textContent = 'Welcome back — sign in, or just carry on as a guest';
+        elements.accountPasswordHint.textContent = 'This email has an Umzila account. Sign in to pay with a saved card and see this order in your account, or leave the password blank to check out as a guest.';
+        elements.accountPasswordInput.required = false;
         elements.accountPasswordSigninBtn.classList.remove('hidden');
         elements.accountPasswordForgot.classList.remove('hidden');
         elements.quickSigninCard?.classList.add('hidden');
@@ -3151,12 +3154,18 @@ async function saveCartToServer() {
       const password = elements.accountPasswordInput?.value || '';
 
       if (state.emailExists) {
-        if (!password) {
-          showError(elements.accountPasswordError, 'This email has an account — sign in above, or use a different email.');
+        // No password → guest checkout with this email (never blocked; the
+        // order can be claimed into the account later once the email is
+        // confirmed — claim_my_email_orders). A typed password → sign in.
+        if (!password) return true;
+        const res = await signInOrCreateAccount(email, password, true);
+        if (!res.ok) {
+          showError(elements.accountPasswordError, res.message);
+          // The sign-in box is on step 1 — say it next to Pay too, and show the box.
+          showError(elements.paymentError, res.message + ' (or clear the password to check out as a guest)');
+          elements.accountPasswordCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
           return false;
         }
-        const res = await signInOrCreateAccount(email, password, true);
-        if (!res.ok) { showError(elements.accountPasswordError, res.message); return false; }
         return true;
       }
 
@@ -3448,8 +3457,16 @@ async function saveCartToServer() {
             : '<button type="button" id="notifyAreaBtn" style="display:block;width:100%;margin-top:10px;padding:12px;border:0;border-radius:999px;background:#0a2f66;color:#fff;font-weight:700;font-size:14px;cursor:pointer">Notify me when you deliver here</button><div id="notifyAreaErr" style="margin-top:6px;color:#b91c1c;font-size:13px"></div>');
         document.getElementById('notifyAreaBtn')?.addEventListener('click', requestDeliveryArea);
       } else if (b.kind === 'multi') {
+        // One tap per store: checkout.html?store=<id> pays for that store's
+        // lines only and keeps the rest of the cart for the next checkout.
+        const lines = (state.cart || []).filter(i => i.seller_id && (i.listing_type || 'product') !== 'service');
+        const ids = [...new Set(lines.map(i => i.seller_id))];
+        const nameOf = id => ((state.sellerTurnarounds || []).find(s => s.id === id) || {}).shop_name || 'this store';
+        const sumOf = id => lines.filter(i => i.seller_id === id).reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.quantity || i.qty) || 1), 0);
         el.innerHTML = '<strong style="display:block;margin-bottom:4px">These stores are too far apart for one delivery</strong>' +
-          escapeHtmlLite(b.reason || '') + ' Please check out each store separately (open the store and use its cart).';
+          escapeHtmlLite(b.reason || '') + ' Check out one store now — everything else stays in your cart for next time.' +
+          ids.map(id => '<a href="checkout.html?store=' + encodeURIComponent(id) + '" style="display:block;margin-top:8px;padding:11px 14px;border-radius:999px;background:#0a2f66;color:#fff;font-weight:700;font-size:14px;text-align:center;text-decoration:none">Check out ' +
+            escapeHtmlLite(nameOf(id)) + ' only · ' + escapeHtmlLite(formatCurrency(sumOf(id))) + '</a>').join('');
       } else if (b.kind === 'unfound') {
         el.innerHTML = '<strong style="display:block;margin-bottom:4px">We couldn\'t find that address</strong>Start typing your street address above and pick it from the suggestions, so we can check we deliver there.';
       } else {
