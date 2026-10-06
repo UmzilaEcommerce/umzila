@@ -41,6 +41,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - Home "+" quick sheet and home full pop-up (same as the store's); cart page summary, + and Change.
 - Dashboard picks box round-trips the +6 wings settings. No page errors.
 
+**After deploy `9be2788`:**
+- The old Pap/Jeqe/Phuthu size variants (18) and `option_label`/`option_required` were removed from the 6 plates; `sizes` is back to One Size.
+- The live guest-checkout matrix passed 10/10, with the harness picking a starch in the new sheet.
+- Orders store `size` "Pap ×1" plus `picks`.
+- Test orders, holds and baskets were deleted.
+
 **Files:** `product-sheet.js` (new), `netlify/functions/lib/picks.js` (new), `netlify/functions/validate-cart.js`, `script.js`, `index.html`, `shop.html`, `cart.html`, `checkout.html`, `seller-dashboard.html`, `docs/qa-guest-checkout.e2e.js`.
 
 ---
