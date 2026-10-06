@@ -4,6 +4,32 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-06 — Guests can save their card (added to their account once they sign in)
+
+**Asked for (founder):** a guest who pays, then signs in, should never have to type card details again.
+
+**How it works now:**
+- **Checkout** shows "Save this card" to everyone again (on by default). Guests see: "Pay in one tap next time you sign in with this email."
+- **`generate-payfast-signature.js` guest path (the only PayFast change):** a guest may now request `subscription_type=2` (PayFast ad-hoc card token) and nothing else. Mode 1 (fixed recurring) and any `billing_date`/`recurring_amount`/`frequency`/`cycles` are still refused. Field order, encoding and signing are untouched.
+- **After payment** (`complete-order-payment.js`, unchanged):
+  - the token is saved on the order (`pf_response`);
+  - if that email already belongs to a **confirmed** account, the card goes straight into its saved cards;
+  - otherwise `claim_my_email_orders()` adds it, with the nickname, when they sign in with the email confirmed.
+- **Checkout runs the claim** before loading saved cards, so a guest who signs in and goes straight to checkout sees the card at once. Before, the claim ran only on the home, profile and track pages.
+
+**Verified:**
+- Signer tested against a real pending guest order:
+  - no save-card: 200, signature **identical** to the live function;
+  - mode 2: 200, signed with `subscription_type=2`;
+  - mode 1: 401; mode 2 + `recurring_amount`: 401; wrong amount: 401.
+- Claim tested in a rolled-back transaction: a paid guest order with a token and the email of a confirmed account → card added to that account with its nickname.
+
+**Not testable without a real card:** PayFast returning a token for a guest payment. Signed-in tokenization already works live, and the guest request is byte-for-byte the same request.
+
+**Files:** `netlify/functions/generate-payfast-signature.js` (guest guard only), `checkout.html`.
+
+---
+
 ## 2026-10-06 — Guest checkout matrix on the live site; existing-account emails no longer block; one-tap per-store checkout
 
 **Asked for (founder):** make sure every guest can check out. Test all cases and edge cases.

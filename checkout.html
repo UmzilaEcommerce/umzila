@@ -2358,6 +2358,9 @@
       state.paymentMethods = [];
       state.selectedPaymentMethodId = null;
       if (!supabaseClient || !state.user) return;
+      // Cards saved while checking out as a guest join this account once its
+      // email is confirmed — claim first so they show here straight away.
+      try { await supabaseClient.rpc('claim_my_email_orders'); } catch (_) {}
       try {
         const { data, error } = await supabaseClient
           .from('payment_methods')
@@ -2531,13 +2534,12 @@
       const useSaved = !state.payWithNewCard && (state.paymentMethods || []).length > 0;
       const card = useSaved ? state.paymentMethods.find(c => c.id === state.selectedPaymentMethodId) : null;
       document.getElementById('newCardBox')?.classList.toggle('hidden', useSaved);
-      // Guests can't save a card: generate-payfast-signature.js refuses to sign a
-      // guest payment that asks for a card token (subscription_type), so the
-      // switch only shows to signed-in buyers (2026-10-06 — guests were blocked
-      // at Pay with 'Failed to obtain signed PayFast parameters').
-      const canSave = !!state.user;
-      elements.saveCardCheckboxGroup?.classList.toggle('hidden', !canSave);
-      const saving = canSave && !!elements.saveCardCheckbox?.checked;
+      // Everyone can save a card (guests again since 2026-10-06, once the
+      // signer accepted subscription_type=2 for guests). A guest's card is kept
+      // on the order and added to their saved cards when they sign in with
+      // this email confirmed (claim_my_email_orders).
+      elements.saveCardCheckboxGroup?.classList.remove('hidden');
+      const saving = !!elements.saveCardCheckbox?.checked;
       elements.cardNameGroup?.classList.toggle('hidden', !saving);
       const sub = document.getElementById('saveCardSub');
       if (sub) sub.textContent = state.user
@@ -5114,8 +5116,8 @@ async function submitToPayFast(cartItems, orderId, total) {
   // the checkbox. Left unset for every ordinary checkout otherwise, matching
   // generate-payfast-signature.js's additive fields.
   // "Save this card" switch — on by default, the buyer can switch it off.
-  // Signed-in buyers only — a guest's tokenized payment is refused by the signer.
-  if (state.user && document.getElementById('saveCardCheckbox')?.checked) {
+  // Guests too: the signer accepts ad-hoc mode 2 for a verified guest order.
+  if (document.getElementById('saveCardCheckbox')?.checked) {
     payload.subscription_type = 2;
   }
 
@@ -5310,7 +5312,7 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // "the token only arrives later via ITN" — read back by
                 // completeOrderPayment() when it inserts the payment_methods
                 // row. Harmless when no card ends up getting tokenized.
-                pending_card_name: (state.user && elements.saveCardCheckbox?.checked) ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || null) : null,
+                pending_card_name: elements.saveCardCheckbox?.checked ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || null) : null,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,

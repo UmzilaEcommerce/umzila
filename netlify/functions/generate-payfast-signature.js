@@ -48,7 +48,14 @@ if (event.httpMethod !== 'POST') {
       try { gp = (JSON.parse(event.body || '{}').payload) || {}; } catch (e) { return guestReject(); }
       const gm = String(gp.m_payment_id || '');
       const gAmount = Number(gp.amount);
-      if (!/^UMZILA-\d{10,}-[a-z0-9]{6,}$/i.test(gm) || !(gAmount > 0) || gp.subscription_type) return guestReject();
+      // A guest may ask PayFast to keep a reusable card token — ad-hoc mode
+      // subscription_type=2 ONLY (no fixed recurring subscription fields).
+      // The token is attached only to an account that has CONFIRMED this
+      // email (complete-order-payment.js verified_user_id_for_email, or later
+      // claim_my_email_orders). Signing itself is unchanged.
+      const gSub = gp.subscription_type;
+      const gRecurring = gp.billing_date || gp.recurring_amount || gp.frequency || gp.cycles;
+      if (!/^UMZILA-\d{10,}-[a-z0-9]{6,}$/i.test(gm) || !(gAmount > 0) || (gSub && String(gSub) !== '2') || gRecurring) return guestReject();
       if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return guestReject();
       const { repriceOrder } = require('./lib/reprice-order');
       const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
