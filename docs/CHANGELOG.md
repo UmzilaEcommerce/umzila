@@ -28,6 +28,10 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
    - A failed sign-in now also shows next to Pay.
 2. **"Stores too far apart for one delivery" was a dead end** ("open the store and use its cart"). It now lists one-tap "Check out <store> only · R…" buttons (`checkout.html?store=<id>`). The other lines stay in the cart.
 
+**Re-run after deploying `1e995e8`: all 10 PASS.** The existing-account email reached PayFast as a guest; the multi-store cart showed "Check out Velaphi Shisanyama only · R70.00" / "Check out Sweet Corner only · R16.95", and the first one went through to PayFast. The 18 test orders, 2 Nceks holds and 25 test baskets were deleted afterwards. The harness is kept as `docs/qa-guest-checkout.e2e.js` (run with `B=<site> node …` from a folder with puppeteer-core); re-run it after any checkout change.
+
+**Not covered:** signed-in checkout (no test credentials; that path was not changed) and a wrong password for an existing account.
+
 ---
 
 ## 2026-10-06 — URGENT: guests could not pay ("Failed to obtain signed PayFast parameters")
