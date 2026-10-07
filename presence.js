@@ -93,8 +93,27 @@
   var SYNC_KEY = 'umz_cart_synced', CONTACT_KEY = 'umz_guest_contact', contact = null, syncing = false;
   try { contact = JSON.parse(localStorage.getItem(CONTACT_KEY) || 'null'); } catch (e) { contact = null; }
   function noop() {}
+  // Contact remembered before input-guard.js existed may hold a typo
+  // ("…@gmail.comw"): heal it to the suggested fix, or drop a bad email /
+  // phone, so the basket never carries details nobody can reach.
+  function tidyContact() {
+    var G = window.UmzilaInput; if (!G || !contact) return;
+    var changed = false;
+    if (contact.email) {
+      var e = G.checkEmail(contact.email);
+      var fixed = e.ok ? e.value : (e.suggestion || '');
+      if (fixed !== contact.email) { contact.email = fixed; changed = true; }
+    }
+    if (contact.phone) {
+      var p = G.checkPhone(contact.phone);
+      var ph = p.ok ? p.value : '';
+      if (ph !== contact.phone) { contact.phone = ph; changed = true; }
+    }
+    if (changed) try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contact)); } catch (e2) {}
+  }
   function syncGuestCart(force) {
     if (!client || syncing) return;
+    tidyContact();
     var raw, anon = anonId();
     try { raw = localStorage.getItem('ss_cart') || '[]'; } catch (e) { return; }
     if (!anon) return;

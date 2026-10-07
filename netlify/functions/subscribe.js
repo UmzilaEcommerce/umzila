@@ -12,7 +12,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const { checkEmail } = require('./lib/contact-check'); // same rules as the page (input-guard.js)
 
 exports.handler = async function (event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
@@ -30,8 +30,9 @@ exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); } catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const email = String(body.email || '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Please enter a valid email address.' }) };
+  const emCheck = checkEmail(email);
+  if (!emCheck.ok) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: emCheck.error, suggestion: emCheck.suggestion || null }) };
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });

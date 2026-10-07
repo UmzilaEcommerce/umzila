@@ -1153,7 +1153,7 @@
     }
   </style>
   <!-- Include Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/product-sheet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/product-sheet.js"></script>
 </head>
 <body>
   <!-- Header -->
@@ -2241,13 +2241,23 @@
     }
     
     // Validate email
+    // Same rules as the server (input-guard.js / lib/contact-check.js):
+    // syntax + typo check ("gmail.comw" fails with a suggested fix).
     function isValidEmail(email) {
+      if (window.UmzilaInput) return UmzilaInput.checkEmail(email).ok;
       const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       return re.test(email);
     }
-    
+
+    // Stored phone = +27XXXXXXXXX (the box shows +27 83 123 4567).
+    function cleanPhone(phone) {
+      const r = window.UmzilaInput && phone ? UmzilaInput.checkPhone(phone) : null;
+      return r && r.ok ? r.value : String(phone || '').trim();
+    }
+
     // Validate phone number
     function isValidPhone(phone) {
+      if (window.UmzilaInput) return UmzilaInput.checkPhone(phone).ok;
       const cleaned = phone.replace(/\D/g, '');
       return /^(0|27)[0-9]{9,10}$/.test(cleaned);
     }
@@ -3509,7 +3519,7 @@ async function saveCartToServer() {
           body: JSON.stringify({
             name: `${elements.firstName?.value || ''} ${elements.lastName?.value || ''}`.trim(),
             email,
-            phone: elements.phoneNumber?.value || '',
+            phone: cleanPhone(elements.phoneNumber?.value || ''),
             address: elements.shippingAddress?.value || '',
             city: elements.city?.value || '',
             postal_code: elements.postalCode?.value || '',
@@ -4829,14 +4839,21 @@ async function validateCheckout() {
             }
         }
 
-        if (!isValidEmail(elements.customerEmail.value)) {
+        // input-guard.js shows the exact problem under the box (with a
+        // one-tap fix for a typo like "gmail.comw").
+        if (window.UmzilaInput && !elements.customerEmail.readOnly) {
+            if (UmzilaInput.ok(elements.customerEmail) == null) {
+                showError(elements.detailsFormError, 'Please check your email address.');
+                return false;
+            }
+        } else if (!isValidEmail(elements.customerEmail.value)) {
             showError(elements.detailsFormError, 'Please enter a valid email address.');
             elements.customerEmail.focus();
             return false;
         }
 
-        if (!isValidPhone(elements.phoneNumber.value)) {
-            showError(elements.detailsFormError, 'Please enter a valid South African phone number (e.g., 0821234567 or +27821234567).');
+        if (window.UmzilaInput ? UmzilaInput.ok(elements.phoneNumber) == null : !isValidPhone(elements.phoneNumber.value)) {
+            showError(elements.detailsFormError, 'Please check your phone number (e.g. 083 123 4567).');
             elements.phoneNumber.focus();
             return false;
         }
@@ -4985,8 +5002,8 @@ async function saveShippingInfo() {
         state.shippingInfo = {
             firstName: elements.firstName.value.trim(),
             lastName: elements.lastName.value.trim(),
-            email: elements.customerEmail.value.trim(),
-            phone: elements.phoneNumber.value.trim(),
+            email: elements.customerEmail.value.trim().toLowerCase(),
+            phone: cleanPhone(elements.phoneNumber.value),
             address: elements.shippingAddress.value.trim(),
             city: elements.city.value.trim(),
             postalCode: elements.postalCode.value.trim(),
@@ -5711,8 +5728,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         document.getElementById(id)?.addEventListener('change', () => {
           if (state.user || !window.umzilaGuestContact) return;
           const v = x => (document.getElementById(x)?.value || '').trim();
-          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v('customerEmail'))) return;
-          umzilaGuestContact({ email: v('customerEmail'), name: [v('firstName'), v('lastName')].filter(Boolean).join(' '), phone: v('phoneNumber') });
+          if (!isValidEmail(v('customerEmail'))) return; // never save a typo'd email
+          umzilaGuestContact({ email: v('customerEmail').toLowerCase(), name: [v('firstName'), v('lastName')].filter(Boolean).join(' '), phone: cleanPhone(v('phoneNumber')) });
         });
       });
 

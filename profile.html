@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
   <title>Your Profile — Umzila</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script>
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -1052,12 +1052,15 @@
   document.getElementById('saveProfileBtn')?.addEventListener('click', async () => {
     const user = await requireUser(); if (!user) return;
     const btn = document.getElementById('saveProfileBtn');
+    // input-guard.js: phone saved as +27XXXXXXXXX; a bad number stops here with a hint
+    const phoneVal = window.UmzilaInput ? UmzilaInput.ok(document.getElementById('profilePhone'), { required: false }) : document.getElementById('profilePhone').value.trim();
+    if (phoneVal == null) return;
     btn.disabled = true; btn.textContent = 'Saving…';
     const payload = {
       user_id: user.id, email: user.email || null,
       first_name: document.getElementById('profileFirstName').value.trim(),
       last_name:  document.getElementById('profileLastName').value.trim(),
-      phone:      document.getElementById('profilePhone').value.trim(),
+      phone:      phoneVal,
       label:      document.getElementById('addrLabel').value.trim(),
       address:    document.getElementById('addrLine').value.trim(),
       city:       document.getElementById('addrCity').value.trim(),

@@ -4,6 +4,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-07 — Email + phone safeguards on every form
+
+**Reported:** a guest (Wandile) saved his basket with ; test entries used junk emails/numbers.
+**Cause:** every form used a loose  regex ( passes) and phones were stored however they were typed.
+**Changed:** one rule set —  (server) +  (browser copy, ; change both together). Emails: syntax + typo check against popular providers (, , , ) with a one-tap "Use it" fix; real look-alikes (ymail, mail.com, yahoo.ca…) allowed. Phones: SA assumed, any typed form → stored , shown ; too short/long and obvious fakes (0711111111, 082 123 4567) rejected;  foreign numbers allowed. input-guard.js auto-attaches to every email/tel box (incl. ones added later) on index, checkout, cart, shop, track, profile, seller-dashboard, enroll-seller(-free), logistics, admin, reset-password, login-admin; submit handlers call  (checkout details, mystery gift, notify-me, newsletter, sell-with-us, sign-up, profile, shop settings, enrolment, logistics order forms). Server re-checks: validate-cart finalCheck (guest email → 400 BAD_EMAIL), claim-mystery-gift, subscribe, request-delivery-area. presence.js heals a remembered typo'd guest email before saving the basket. Wandile's basket email fixed in the DB. QA harness phone changed off the fake 082 123 4567.
+**Files:** input-guard.js (new), netlify/functions/lib/contact-check.js (new), validate-cart.js, claim-mystery-gift.js, subscribe.js, request-delivery-area.js, presence.js, product-sheet.js, script.js, index.html, checkout.html, profile.html, seller-dashboard.html, enroll-seller.html, enroll-seller-free.html, logistics.html (+ script tag on cart, shop, track, admin, reset-password, login-admin), docs/qa-guest-checkout.e2e.js.
+
 ## 2026-10-06 — All emails send from mail.umzila.store
 
 **Asked for (founder):** use the new Resend sending domain `mail.umzila.store` (DNS set up; verified in Resend with DKIM + SPF).

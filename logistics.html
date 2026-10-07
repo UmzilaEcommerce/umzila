@@ -477,6 +477,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   }catch(e){console.error('Supabase init error',e)}
 })();
 </script>
+  <script src="/input-guard.js"></script>
 </head>
 <body>
 <div id="toasts"></div>
@@ -1595,8 +1596,8 @@ document.addEventListener('sb-ready', function(e){
         <div class="form-section-title">Customer</div>
         <div class="form-grid">
           <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ei-customer" value="${esc(o.customer)}"/></div>
-          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="ei-email" value="${esc(o.email)}"/></div>
-          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="ei-phone" value="${esc(o.phone||'')}"/></div>
+          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="ei-email" data-guard="email" value="${esc(o.email)}"/></div>
+          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="ei-phone" data-guard="phone" value="${esc(o.phone||'')}"/></div>
         </div>
       </div>
       <div class="form-section">
@@ -1685,8 +1686,9 @@ document.addEventListener('sb-ready', function(e){
 
     document.getElementById('ei-save')?.addEventListener('click',()=>{
       const customer=modalBody.querySelector('#ei-customer')?.value.trim();
-      const email=modalBody.querySelector('#ei-email')?.value.trim();
-      const phone=modalBody.querySelector('#ei-phone')?.value.trim()||'';
+      const email=guardVal(modalBody.querySelector('#ei-email'));
+      const phone=guardVal(modalBody.querySelector('#ei-phone'));
+      if(email==null||phone==null) return; // input-guard.js shows the problem under the box
       const address=modalBody.querySelector('#ei-address')?.value.trim()||'';
       const city=modalBody.querySelector('#ei-city')?.value.trim()||'';
       const province=modalBody.querySelector('#ei-province')?.value.trim()||'';
@@ -1752,8 +1754,8 @@ document.addEventListener('sb-ready', function(e){
         <div class="form-section-title">Customer</div>
         <div class="form-grid">
           <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="co-name" placeholder="John Doe"/></div>
-          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="co-email" placeholder="john@example.com"/></div>
-          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="co-phone" placeholder="+27 …"/></div>
+          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="co-email" data-guard="email" placeholder="john@example.com"/></div>
+          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="co-phone" data-guard="phone" placeholder="+27 …"/></div>
         </div>
       </div>
       <div class="form-section">
@@ -1887,8 +1889,9 @@ document.addEventListener('sb-ready', function(e){
       errEl.style.display='none';
 
       const name=modalBody.querySelector('#co-name')?.value.trim();
-      const email=modalBody.querySelector('#co-email')?.value.trim();
-      const phone=modalBody.querySelector('#co-phone')?.value.trim()||'';
+      const email=guardVal(modalBody.querySelector('#co-email'));
+      const phone=guardVal(modalBody.querySelector('#co-phone'));
+      if(email==null||phone==null) return; // input-guard.js shows the problem under the box
       const address=modalBody.querySelector('#co-address')?.value.trim();
       const city=modalBody.querySelector('#co-city')?.value.trim()||'';
       const province=modalBody.querySelector('#co-province')?.value.trim()||'';
@@ -2505,6 +2508,8 @@ document.addEventListener('sb-ready', function(e){
   let LAST_FIX = null, GPS_ERR = null, offerTick = null, lastOfferIds = new Set();
   const localChecked = new Set(); // pickup items ticked on this phone (sent on "Collected")
 
+  // input-guard.js (UmzilaInput): '' when empty, the clean value, or null (problem shown under the box)
+  function guardVal(el, required) { if (!el) return ''; if (!window.UmzilaInput) return (el.value || '').trim(); return UmzilaInput.ok(el, { required: !!required }); }
   function telLink(p){ const d = String(p||'').replace(/[^\d+]/g,''); return d ? 'tel:' + d : null; }
   function waLink(p){
     let d = String(p||'').replace(/\D/g,'');

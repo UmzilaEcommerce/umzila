@@ -181,6 +181,8 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 📧 EMAIL SENDING (added 2026-10-06): every email is sent via Resend using netlify/functions/lib/mail.js mailFrom(name, local[, 'news']): transactional from mail.umzila.store, marketing (campaigns, promos, nudges) from news.umzila.store; open+click tracking on both (links.*); DNS lives in Netlify DNS (reply_to = umzilaecommerce@gmail.com, env MAIL_REPLY_TO). Never hardcode a from address.
 
+✅ EMAIL & PHONE INPUTS (added 2026-10-07): one rule set — netlify/functions/lib/contact-check.js (server) + input-guard.js (browser copy, UmzilaInput) — change both together. Every email/tel box gets typo-checked/normalised automatically (input-guard.js on every buyer/seller/staff page); submit handlers use UmzilaInput.ok(el). Phones are stored +27XXXXXXXXX. New forms: use type="email"/"tel" (or data-guard) and include /input-guard.js; server functions that accept an email use checkEmail().
+
 🔔 BACK-IN-STOCK (added 2026-10-04): "Notify me" inserts stock_alerts (one pending row per product+email; 23505 = already on the list; signed-in buyers use their account email, no typing). send-stock-alerts.js (scheduled every 15 min in netlify.toml) emails once the product is visible + in stock and stamps notified_at.
 
 🏠 HOME CURATION (added 2026-10-05): script.js HOME_CURATION (store slugs) decides the home page's star row (Velaphi "Workshop Shisanyama"), experience row (Nceks) and the "Under R100 — goes with your plate" complement categories, and storeBoost() lifts those stores in every ranking. The older generic home rows are hidden, not deleted. Any new home row must also be added to showFilteredView()'s hide list.

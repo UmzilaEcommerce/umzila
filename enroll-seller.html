@@ -256,6 +256,7 @@
       .card { padding: 28px 20px; }
     }
   </style>
+  <script src="/input-guard.js"></script>
 </head>
 <body>
 
@@ -412,6 +413,7 @@
     const terms    = document.getElementById('termsCheck').checked;
 
     if (!phone)    { showError('Please enter your phone number.');          return false; }
+    if (window.UmzilaInput && UmzilaInput.ok(document.getElementById('fieldPhone')) == null) { showError('Please check your phone number (e.g. 083 123 4567).'); return false; }
     if (!delivery) { showError('Please select a delivery method.');         return false; }
     if (!location) { showError('Please enter your business location.');     return false; }
     if (!business) { showError('Please enter your business or shop name.'); return false; }
@@ -432,7 +434,9 @@
     btn.textContent = 'Setting up your account…';
 
     const password       = document.getElementById('fieldPassword').value;
-    const phone          = document.getElementById('fieldPhone').value.trim();
+    const phoneRaw       = document.getElementById('fieldPhone').value.trim();
+    const phoneChk       = window.UmzilaInput ? UmzilaInput.checkPhone(phoneRaw) : null;
+    const phone          = phoneChk && phoneChk.ok ? phoneChk.value : phoneRaw; // +27XXXXXXXXX
     const deliveryMethod = document.getElementById('fieldDelivery').value;
     const location       = document.getElementById('fieldLocation').value.trim();
 

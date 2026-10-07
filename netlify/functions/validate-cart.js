@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { validateCode, computeDiscount } = require('./lib/discounts');
 const { FALLBACK_FEE, DELIVERY_FEE_MIN, DELIVERY_FEE_MAX } = require('./lib/delivery-price');
 const { picksCfg, normalizePicks, picksText } = require('./lib/picks');
+const { checkEmail } = require('./lib/contact-check');
 
 // Must match checkout.html's client-side copies — this server copy is authoritative.
 // Fallback when there's no live distance quote (routing down, store without
@@ -527,6 +528,16 @@ variants.forEach(v => {
         // behavior (unchanged) whenever no quoteId is given, or the quote doesn't
         // check out -- fully backward compatible with every caller that predates
         // quotes entirely.
+        // A guest's email is how they get their receipt, tracking link and
+        // PIN — a typo ("…@gmail.comw") would lose all of it, so it is
+        // re-checked here with the same rules as the page (lib/contact-check).
+        if (finalCheck && !userId && customerEmail) {
+            const em = checkEmail(customerEmail);
+            if (!em.ok) {
+                return { statusCode: 400, body: JSON.stringify({ error: em.error, code: 'BAD_EMAIL', suggestion: em.suggestion || null }) };
+            }
+        }
+
         // Final pre-payment check (checkout sends finalCheck + the address's
         // coordinates): physical items are only delivered inside an active
         // delivery zone (admin → Service Areas). Outside every zone there is

@@ -1659,6 +1659,9 @@ if (modalSignupSubmit) {
       return;
     }
     
+    // A new account's email must be right first time (confirmation link goes there)
+    if (window.UmzilaInput && modalSignupEmail && UmzilaInput.ok(modalSignupEmail) == null) return;
+
     if (!checkPasswordRules(password)) {
       if (errorElement) {
         errorElement.textContent = 'Password does not meet the requirements.';
@@ -2333,9 +2336,11 @@ function closeNotifyModal() {
 
     if (submitBtn) {
       submitBtn.addEventListener('click', async function() {
-        var email = (document.getElementById('notifyEmailInput') || {}).value;
+        var emailInp = document.getElementById('notifyEmailInput');
+        var email = (emailInp || {}).value;
         var errEl = document.getElementById('notifyError');
         var sucEl = document.getElementById('notifySuccess');
+        if (window.UmzilaInput && emailInp) { email = UmzilaInput.ok(emailInp); if (!email) return; }
         if (!email || !email.includes('@')) {
           if (errEl) { errEl.textContent = 'Please enter a valid email.'; errEl.style.display = 'block'; }
           return;
@@ -4503,11 +4508,12 @@ async function handleSubscribe(email){
 }
 
 document.getElementById('subscribeBtn').addEventListener('click', async ()=>{ 
-  const email=document.getElementById('newsEmail').value.trim(); 
+  let email=document.getElementById('newsEmail').value.trim(); 
   if(!email){ 
     alert('Enter your email'); 
     return;
   } 
+  if (window.UmzilaInput) { email = UmzilaInput.ok(document.getElementById('newsEmail')); if (!email) return; }
   const res = await handleSubscribe(email); 
   if(res.success) { 
     alert('Thanks — subscription saved.'); 

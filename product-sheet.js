@@ -308,6 +308,7 @@
     const nb = $('#uqNotifyBtn');
     if (nb) nb.onclick = async () => {
       const em = (opts.user && opts.user.email) || ($('#uqNotifyEmail').value || '').trim().toLowerCase();
+      if (!(opts.user && opts.user.email) && window.UmzilaInput && UmzilaInput.ok($('#uqNotifyEmail')) == null) return;
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { $('#uqNotifyEmail').focus(); return; }
       nb.disabled = true;
       try { if (opts.onNotify) await opts.onNotify(em); d.close(); } finally { nb.disabled = false; }

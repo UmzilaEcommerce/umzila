@@ -316,6 +316,7 @@
     .svc-avail-day .time-inputs input[type=time] { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
     .svc-avail-day.disabled .time-inputs { opacity: .4; pointer-events: none; }
   </style>
+  <script src="/input-guard.js"></script>
 </head>
 <body>
 
@@ -2407,6 +2408,9 @@
       window.location.href = 'login-admin.html';
     });
 
+    // input-guard.js (UmzilaInput): '' when empty, the clean value, or null (problem shown under the box)
+    function guardVal(el, required) { if (!el) return ''; if (!window.UmzilaInput) return (el.value || '').trim(); return UmzilaInput.ok(el, { required: !!required }); }
+
     /* ─────────────────────────────────────────
        SETUP SHOP
     ───────────────────────────────────────── */
@@ -2414,6 +2418,8 @@
       var shopName = document.getElementById('setupShopName').value.trim();
       setMsg('setupMsg', '');
       if (!shopName) { setMsg('setupMsg', 'Shop name is required.'); return; }
+      var setupWa = guardVal(document.getElementById('setupWhatsApp'));
+      if (setupWa == null) { setMsg('setupMsg', 'Please check the WhatsApp number.'); return; }
 
       setBtnLoading('setupSubmitBtn', true, 'Create My Shop →');
       var { data, error } = await SD.sb.from('sellers').insert({
@@ -2422,7 +2428,7 @@
         description:     document.getElementById('setupDesc').value.trim()    || null,
         logo_url:        document.getElementById('setupLogo').value.trim()    || null,
         banner_url:      document.getElementById('setupBanner').value.trim()  || null,
-        whatsapp_number: document.getElementById('setupWhatsApp').value.trim()|| null
+        whatsapp_number: setupWa || null
       }).select().single();
 
       setBtnLoading('setupSubmitBtn', false, 'Create My Shop →');
@@ -2731,6 +2737,9 @@
       if (!shopName) { setMsg('shopSaveMsg', 'Shop name is required.'); return; }
 
       function gv(id) { var el = document.getElementById(id); return el ? (el.value || '').trim() || null : null; }
+      var editWa = guardVal(document.getElementById('editWhatsApp'));
+      var editMail = guardVal(document.getElementById('editSupportEmail'));
+      if (editWa == null || editMail == null) { setMsg('shopSaveMsg', 'Please check the WhatsApp number / support email.'); return; }
       var yrsEl = document.getElementById('editYearsOp');
       var yrs = yrsEl && yrsEl.value ? parseInt(yrsEl.value, 10) : null;
 
@@ -2740,8 +2749,8 @@
         description:      gv('editDesc'),
         logo_url:         gv('editLogo'),
         banner_url:       gv('editBanner'),
-        whatsapp_number:  gv('editWhatsApp'),
-        support_email:    gv('editSupportEmail'),
+        whatsapp_number:  editWa || null,
+        support_email:    editMail || null,
         location:         gv('editLocation'),
         delivery_method:  'self_dropoff',
         return_policy:    gv('editReturnPolicy'),

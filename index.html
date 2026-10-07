@@ -1039,6 +1039,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
   <script src="presence.js"></script>
+  <script src="input-guard.js"></script>
   <script src="product-sheet.js"></script>
   <script src="script.js"></script>
   <script>
@@ -1460,8 +1461,14 @@
 
     document.getElementById('sellModalSubmitBtn').addEventListener('click', async function() {
       var fullName   = document.getElementById('sellFullName').value.trim();
-      var email      = document.getElementById('sellEmail').value.trim();
+      var email      = document.getElementById('sellEmail').value.trim().toLowerCase();
       var phone      = document.getElementById('sellPhone').value.trim().replace(/\s/g, '');
+      // input-guard.js rules (typo check; phone → +27XXXXXXXXX)
+      var emOk = true, phOk = true;
+      if (window.UmzilaInput) {
+        var emR = UmzilaInput.check(document.getElementById('sellEmail'), { required: true }); emOk = emR.ok; if (emR.ok) email = emR.value;
+        var phR = UmzilaInput.check(document.getElementById('sellPhone'), { required: true }); phOk = phR.ok; if (phR.ok) phone = phR.value;
+      }
       var shopName   = document.getElementById('sellShopName').value.trim();
       var category   = document.getElementById('sellCategory').value;
       var priceRange = document.getElementById('sellPriceRange').value;
@@ -1485,8 +1492,8 @@
       function showErr(id) { var el = document.getElementById(id); if (el) el.style.display = 'block'; valid = false; }
 
       if (!fullName)                        showErr('sellFullNameError');
-      if (!emailRe.test(email))             showErr('sellEmailError');
-      if (!saPhoneRe.test(phone))           showErr('sellPhoneError');
+      if (!emOk || !emailRe.test(email))    showErr('sellEmailError');
+      if (!phOk || (!window.UmzilaInput && !saPhoneRe.test(phone))) showErr('sellPhoneError');
       if (!shopName)                        showErr('sellShopNameError');
       if (!category)                        showErr('sellCategoryError');
       if (!priceRange)                      showErr('sellPriceRangeError');
@@ -1734,11 +1741,11 @@
 
     // ---- S2: email -> check ----
     myBtnEmailContinue.addEventListener('click', async function() {
-      var email = myEmailInput.value.trim();
       myEmailErr.style.display = 'none';
+      // input-guard.js: syntax + typo check ("gmail.comw" → "Did you mean …? Use it")
+      var email = window.UmzilaInput ? UmzilaInput.ok(myEmailInput) : myEmailInput.value.trim().toLowerCase();
       if (!email || !EMAIL_RE.test(email)) {
-        myEmailErr.textContent = 'Please enter a valid email address.';
-        myEmailErr.style.display = 'block';
+        if (!window.UmzilaInput) { myEmailErr.textContent = 'Please enter a valid email address.'; myEmailErr.style.display = 'block'; }
         return;
       }
       myBtnEmailContinue.disabled = true; myBtnEmailContinue.textContent = 'Checking...';

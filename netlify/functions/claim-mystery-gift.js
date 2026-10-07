@@ -20,7 +20,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization'
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const { checkEmail } = require('./lib/contact-check'); // same rules as the page (input-guard.js)
 const DEFAULT_FREE_GIFT_PRODUCT_ID = 'eff1bf49-929a-4a71-8e4d-44189ccec7ea'; // Milky pie ice cream
 
 exports.handler = async function (event) {
@@ -43,8 +43,9 @@ exports.handler = async function (event) {
 
   const action = body.action || 'claim'; // default to legacy behaviour for safety
   const rawEmail = (body.email || '').trim().toLowerCase();
-  if (!rawEmail || !EMAIL_RE.test(rawEmail))
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Valid email address required' }) };
+  const emCheck = checkEmail(rawEmail);
+  if (!emCheck.ok)
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: emCheck.error, suggestion: emCheck.suggestion || null }) };
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false }

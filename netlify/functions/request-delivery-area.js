@@ -12,6 +12,7 @@
 // Cart lines are re-read from products (names/prices are never trusted from
 // the browser). The same email + address within 24 h isn't saved or emailed twice.
 const { createClient } = require('@supabase/supabase-js');
+const { checkEmail, checkPhone } = require('./lib/contact-check');
 const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 const headers = { 'Content-Type': 'application/json' };
@@ -26,7 +27,9 @@ exports.handler = async function (event) {
 
   const email = str(b.email, 200).toLowerCase();
   const address = str(b.address, 300);
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail(400, 'Enter your email so we can let you know.');
+  if (!email) return fail(400, 'Enter your email so we can let you know.');
+  const emCheck = checkEmail(email);
+  if (!emCheck.ok) return fail(400, emCheck.error);
   if (!address) return fail(400, 'Enter your address first.');
   const lat = Number(b.lat), lon = Number(b.lon);
   const hasPoint = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
@@ -70,7 +73,7 @@ exports.handler = async function (event) {
       user_id: userId,
       name: str(b.name, 120) || null,
       email,
-      phone: str(b.phone, 40) || null,
+      phone: (b.phone && checkPhone(b.phone).ok) ? checkPhone(b.phone).value : (str(b.phone, 40) || null),
       address,
       city: str(b.city, 120) || null,
       postal_code: str(b.postal_code, 20) || null,

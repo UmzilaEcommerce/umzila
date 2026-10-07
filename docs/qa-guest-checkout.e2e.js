@@ -53,7 +53,7 @@ async function addFromStore(p, slug, n = 1) {
   }
 }
 
-async function fillContact(p, { email, first = 'Qa', last = 'Guest', phone = '0821234567' }) {
+async function fillContact(p, { email, first = 'Qa', last = 'Guest', phone = '0835551287' }) {
   await p.waitForSelector('#customerEmail', { visible: true, timeout: 30000 });
   const type = async (sel, v) => { await p.click(sel, { clickCount: 3 }); await p.type(sel, v, { delay: 5 }); };
   await type('#customerEmail', email); await p.keyboard.press('Tab');
