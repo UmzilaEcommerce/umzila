@@ -1153,6 +1153,7 @@ async function boot(){
   $('#stLoading').hidden = true;
   $('#storeView').hidden = false;
   renderHero(); renderCats(); renderCatalog(); renderAbout(); syncCart(false); syncSaved();
+  setTimeout(() => showStorePromo(seller), 1800);
   if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
 
   const qp = params.get('q');
@@ -1172,6 +1173,73 @@ async function boot(){
     const {data} = await sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]});
     if (data && data[0]) { S.hours = data[0]; renderMeta(); renderAbout(); }
   }, 5 * 60000);
+}
+
+/* ── Store promo pop-up ───────────────────────────────────────────────
+   A time-boxed offer for one store: the visitor gives their email and gets
+   their own one-off code on screen (and by email) from
+   claim-store-promo.js, which holds the real rules (dates, cap, one code per
+   email). Shown once per browser per promo; never after `until`, so it
+   disappears by itself. Keep the dates in sync with PROMOS in that function. */
+const STORE_PROMOS = {
+  velaphishisanyama: { until: '2026-10-10T18:00:00+02:00', pct: 10, untilLabel: 'Sat 10 Oct, 6pm', thing: 'plate' }
+};
+function showStorePromo(seller) {
+  const p = STORE_PROMOS[seller.slug];
+  if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
+  const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
+  try { if (localStorage.getItem(seenKey)) return; } catch (e) {}
+  const css = document.createElement('style');
+  css.textContent = '#spOverlay{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:0;animation:spFade .2s ease}' +
+    '@media(min-width:600px){#spOverlay{align-items:center;padding:16px}}' +
+    '#spCard{background:#fff;width:100%;max-width:420px;border-radius:20px 20px 0 0;padding:26px 22px 22px;box-shadow:0 -8px 40px rgba(0,0,0,.2);position:relative;font-family:inherit;text-align:center;animation:spUp .25s ease}' +
+    '@media(min-width:600px){#spCard{border-radius:20px}}' +
+    '#spCard h3{margin:4px 0 8px;font-size:22px;line-height:1.25;color:#111}#spCard p{margin:0 0 14px;color:#555;font-size:14.5px;line-height:1.55}' +
+    '#spCard .sp-k{font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent,#e0284f)}' +
+    '#spCard input{width:100%;box-sizing:border-box;padding:13px 14px;border:1.5px solid #d1d5db;border-radius:12px;font-size:16px;margin:0 0 4px}' +
+    '#spCard .sp-btn{width:100%;margin-top:10px;padding:14px;border:0;border-radius:999px;background:var(--accent,#e0284f);color:#fff;font-weight:800;font-size:16px;cursor:pointer}' +
+    '#spCard .sp-btn[disabled]{opacity:.6}#spCard .sp-x{position:absolute;top:10px;right:12px;border:0;background:none;font-size:26px;line-height:1;color:#9ca3af;cursor:pointer;padding:4px 8px}' +
+    '#spCard .sp-code{font:800 26px/1.2 ui-monospace,Menlo,monospace;letter-spacing:3px;color:var(--accent,#e0284f);border:2px dashed var(--accent,#e0284f);border-radius:12px;padding:14px;margin:6px 0 10px;background:#fff7f8}' +
+    '#spCard .sp-err{color:#b91c1c;font-size:13px;min-height:18px;margin-top:6px}#spCard .sp-small{font-size:12.5px;color:#888;margin:10px 0 0}' +
+    '@keyframes spFade{from{opacity:0}}@keyframes spUp{from{transform:translateY(30px);opacity:0}}';
+  document.head.appendChild(css);
+  const ov = document.createElement('div');
+  ov.id = 'spOverlay';
+  ov.innerHTML = '<div id="spCard" role="dialog" aria-modal="true" aria-labelledby="spTitle"><button class="sp-x" type="button" aria-label="Close">×</button>' +
+    '<div style="font-size:40px">🔥</div><div class="sp-k">' + esc(seller.shop_name) + ' · limited offer</div>' +
+    '<h3 id="spTitle">' + p.pct + '% off your ' + esc(p.thing) + '</h3>' +
+    '<p>Get your own one-off code for the next 100 orders — until ' + esc(p.untilLabel) + '. No account needed.</p>' +
+    '<div id="spForm"><input type="email" id="spEmail" placeholder="Your email" autocomplete="email"' + (user && user.email ? ' value="' + esc(user.email) + '"' : '') + '>' +
+    '<button class="sp-btn" type="button" id="spGo">Get my code</button><div class="sp-err" id="spErr"></div></div>' +
+    '<p class="sp-small">Store closed? Order anyway — your order is prepared first when they open.</p></div>';
+  document.body.appendChild(ov);
+  const close = () => { ov.remove(); try { localStorage.setItem(seenKey, '1'); } catch (e) {} };
+  ov.querySelector('.sp-x').onclick = close;
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  const go = ov.querySelector('#spGo'), inp = ov.querySelector('#spEmail'), err = ov.querySelector('#spErr');
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go.click(); });
+  go.onclick = async () => {
+    err.textContent = '';
+    const email = window.UmzilaInput ? UmzilaInput.ok(inp) : inp.value.trim();
+    if (!email) return;
+    go.disabled = true; go.textContent = 'Getting your code…';
+    try {
+      const r = await fetch('/.netlify/functions/claim-store-promo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug: seller.slug, email }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.code) { err.textContent = j.error || 'Couldn’t get a code — please try again.'; go.disabled = false; go.textContent = 'Get my code'; return; }
+      try {
+        localStorage.setItem('umz_promo_code', JSON.stringify({ code: j.code, until: j.until, slug: seller.slug }));
+        localStorage.setItem(seenKey, '1');
+      } catch (e) {}
+      if (window.umzilaGuestContact && !user) umzilaGuestContact({ email });
+      ov.querySelector('#spForm').innerHTML = '<div class="sp-code">' + esc(j.code) + '</div>' +
+        '<p style="margin:0">It’s filled in for you at checkout — use <b>' + esc(email) + '</b> there. We’ve emailed it too.</p>' +
+        '<button class="sp-btn" type="button" id="spShop">Start ordering</button>';
+      ov.querySelector('#spShop').onclick = close;
+    } catch (e) {
+      err.textContent = 'No connection — please try again.'; go.disabled = false; go.textContent = 'Get my code';
+    }
+  };
 }
 boot();
 })();

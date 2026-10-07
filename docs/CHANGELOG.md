@@ -4,6 +4,16 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-07 — Velaphi 10% promo: store pop-up codes, visible code box at checkout, temporary prices
+
+**Asked:** a 10%-off Velaphi promo (emailed codes + codes for new visitors) until Sat 10 Oct 18:00, plate prices set to sale price + 9% for the promo and restored on 15 Oct, and the checkout code box visible instead of folded away.
+**Changed:**
+- **Store promo pop-up** (`shop.html` `STORE_PROMOS` + new `netlify/functions/claim-store-promo.js` `PROMOS` — keep the dates in sync). On a promo store, before `until`, a pop-up asks for an email and shows that person's own one-off code (also emailed). One code per email per promo (asking again returns it), locked to the email, single use, that store only, no account — plain `discount_codes` rows (type 'percentage', seller_id, expires_at = promo end), validated by lib/discounts.js like any code. Server stops issuing after the end date or once 100 promo codes are used. Shown once per browser; never after the end date, so it disappears by itself. The claimed code is saved in localStorage `umz_promo_code` and pre-filled at checkout.
+- **Promo email**: 51 personal codes (same shape) emailed from news.umzila.store, scheduled in Resend for Thu 8 Oct 10:30 (sent by a one-off script, not a site function).
+- **Checkout code box** moved out of the collapsed Order Summary to directly under "Payment", always open.
+- **Velaphi prices (data, not code):** sale switched off and price = old sale price × 1.09 (R70 → R76.30, R99.99 → R108.99, R129.99 → R141.69, R159.99 → R174.39, R299.89 → R326.88; the R250 plate wasn't on sale, unchanged). pg_cron job `velaphi-promo-revert-2026-10-15` restores today's exact price/sale/sale_price at 00:00 SAST 15 Oct and then unschedules itself.
+**Files:** shop.html, checkout.html, netlify/functions/claim-store-promo.js (new), CLAUDE.md.
+
 ## 2026-10-07 — Admin "Delivery markup %" now changes the customer's delivery price
 
 **Reported:** founder wants the admin margin box to work like a dial: 5% → delivery costs 5% more, back to 0 → back to normal.

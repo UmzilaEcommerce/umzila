@@ -1125,6 +1125,8 @@
        always-visible input box */
     .promo-toggle{background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0;display:inline-flex;align-items:center;gap:5px;min-height:32px}
     .promo-toggle:hover{text-decoration:underline}
+    .promo-code-section.promo-visible{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:6px 12px 12px;margin:0 0 14px}
+    .promo-code-section.promo-visible .promo-toggle{cursor:default;text-decoration:none;color:#1a1a2e}
     .promo-code-input-panel{overflow:hidden;max-height:0;transition:max-height .28s ease-in-out}
     .promo-code-input-panel.open{max-height:120px}
     .promo-code-input-panel.open:has(#promoSignin:not(.hidden)){max-height:420px} /* room for the account panel */
@@ -1484,6 +1486,35 @@
 
           <div class="field-group-label">Payment</div>
 
+          <!-- Discount code — always visible here (founder 2026-10-07: it was
+               folded away inside the collapsed order summary). -->
+          <div class="promo-code-section promo-visible">
+            <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="true">
+              <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
+              Have a code?
+            </button>
+            <div class="promo-code-input-panel open" id="promoCodePanel">
+              <div class="promo-code-input">
+                <input type="text" id="promoCodeInput" placeholder="Enter promo code">
+                <button id="applyPromoCode" class="btn">Apply</button>
+              </div>
+              <div id="promoMessage" class="promo-message"></div>
+              <!-- Once-per-person codes need an account: the buyer adds a
+                   password (or signs in) right here, using the email they
+                   already gave in step 1 — see renderPromoSignin(). -->
+              <div id="promoSignin" class="hidden" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:#f0f4ff;border:1px solid #dbe4ff">
+                <div id="promoSigninTitle" style="font-weight:700;font-size:14px;color:#0a2f66"></div>
+                <div id="promoSigninHint" style="font-size:12.5px;color:#4b5563;margin:3px 0 10px;line-height:1.45"></div>
+                <div id="promoSigninRow" style="display:flex;gap:8px;flex-wrap:wrap">
+                  <input type="password" id="promoSigninPassword" class="form-control" placeholder="Password" style="flex:1 1 150px;min-width:0">
+                  <button type="button" id="promoSigninBtn" class="btn" style="padding:10px 16px;font-size:14px;white-space:nowrap"></button>
+                </div>
+                <button type="button" id="promoSigninForgot" class="auth-text-link hidden" style="margin-top:8px">Forgot password?</button>
+                <div id="promoSigninError" class="error-message hidden" style="margin-top:8px"></div>
+              </div>
+            </div>
+          </div>
+
           <!-- Order summary — moved here (bottom of the form, single
                stacked column) so it reads as the last thing a buyer checks
                before paying, rather than a persistent side rail. The item
@@ -1502,32 +1533,6 @@
                 <!-- Order items will be populated here -->
               </div>
 
-              <div class="promo-code-section">
-                <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="false">
-                  <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
-                  Have a code?
-                </button>
-                <div class="promo-code-input-panel" id="promoCodePanel">
-                  <div class="promo-code-input">
-                    <input type="text" id="promoCodeInput" placeholder="Enter promo code">
-                    <button id="applyPromoCode" class="btn">Apply</button>
-                  </div>
-                  <div id="promoMessage" class="promo-message"></div>
-                  <!-- Once-per-person codes need an account: the buyer adds a
-                       password (or signs in) right here, using the email they
-                       already gave in step 1 — see renderPromoSignin(). -->
-                  <div id="promoSignin" class="hidden" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:#f0f4ff;border:1px solid #dbe4ff">
-                    <div id="promoSigninTitle" style="font-weight:700;font-size:14px;color:#0a2f66"></div>
-                    <div id="promoSigninHint" style="font-size:12.5px;color:#4b5563;margin:3px 0 10px;line-height:1.45"></div>
-                    <div id="promoSigninRow" style="display:flex;gap:8px;flex-wrap:wrap">
-                      <input type="password" id="promoSigninPassword" class="form-control" placeholder="Password" style="flex:1 1 150px;min-width:0">
-                      <button type="button" id="promoSigninBtn" class="btn" style="padding:10px 16px;font-size:14px;white-space:nowrap"></button>
-                    </div>
-                    <button type="button" id="promoSigninForgot" class="auth-text-link hidden" style="margin-top:8px">Forgot password?</button>
-                    <div id="promoSigninError" class="error-message hidden" style="margin-top:8px"></div>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div class="summary-totals">
@@ -5865,14 +5870,22 @@ async function submitToPayFast(cartItems, orderId, total) {
       // typed) gets its account panel once the email is there.
       elements.customerEmail?.addEventListener('change', () => renderPromoSignin());
 
-      // Collapsed "Have a code?" toggle (order-summary sidebar)
+      // "Have a code?" is always open now (above the order summary) — the
+      // label just focuses the box.
       document.getElementById('promoCodeToggle')?.addEventListener('click', () => {
-        const panel = document.getElementById('promoCodePanel');
-        const toggle = document.getElementById('promoCodeToggle');
-        const isOpen = panel.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', String(isOpen));
-        if (isOpen) elements.promoCodeInput?.focus();
+        openPromoCodePanel();
+        elements.promoCodeInput?.focus();
       });
+      // A code claimed from a store promo pop-up (shop.html, localStorage
+      // umz_promo_code) is filled in, ready to apply.
+      try {
+        const saved = JSON.parse(localStorage.getItem('umz_promo_code') || 'null');
+        if (saved && saved.code && new Date(saved.until) > new Date() && elements.promoCodeInput && !elements.promoCodeInput.value) {
+          elements.promoCodeInput.value = saved.code;
+          const msg = document.getElementById('promoMessage');
+          if (msg && !msg.textContent) { msg.textContent = 'Your code is filled in — tap Apply (use the same email you claimed it with).'; msg.className = 'promo-message'; }
+        }
+      } catch (e) { /* ignore */ }
 
       // Driver tip — optional pill row, tapping the already-selected pill
       // again clears it back to no tip. Never pre-selected.
