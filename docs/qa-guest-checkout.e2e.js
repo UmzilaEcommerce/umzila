@@ -38,6 +38,8 @@ async function newPage(b, mobile) {
 async function addFromStore(p, slug, n = 1) {
   await p.goto(`${B}/${slug}`, { waitUntil: 'networkidle2' });
   await p.waitForSelector('[data-add]', { timeout: 20000 });
+  // store promo pop-up (shop.html STORE_PROMOS) — close it like a visitor would
+  await sleep(2200); await p.$eval('#spOverlay .sp-x', b => b.click()).catch(() => {});
   const ids = await p.$$eval('[data-add]', bs => bs.map(b => b.dataset.add));
   for (let i = 0; i < n; i++) {
     await p.click(`[data-add="${ids[i]}"]`); await sleep(900);

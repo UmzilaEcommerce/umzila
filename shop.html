@@ -1179,7 +1179,7 @@ async function boot(){
    A time-boxed offer for one store: the visitor gives their email and gets
    their own one-off code on screen (and by email) from
    claim-store-promo.js, which holds the real rules (dates, cap, one code per
-   email). Shown once per browser per promo; never after `until`, so it
+   email). Shown every visit until they claim a code; never after `until`, so it
    disappears by itself. Keep the dates in sync with PROMOS in that function. */
 const STORE_PROMOS = {
   velaphishisanyama: { until: '2026-10-10T18:00:00+02:00', pct: 10, untilLabel: 'Sat 10 Oct, 6pm', thing: 'plate' }
@@ -1188,7 +1188,9 @@ function showStorePromo(seller) {
   const p = STORE_PROMOS[seller.slug];
   if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
   const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
-  try { if (localStorage.getItem(seenKey)) return; } catch (e) {}
+  // Claimed = never again (localStorage). Closed without claiming = hidden
+  // for this visit only (sessionStorage) and shown again next visit.
+  try { if (localStorage.getItem(seenKey) || sessionStorage.getItem(seenKey)) return; } catch (e) {}
   const css = document.createElement('style');
   css.textContent = '#spOverlay{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:0;animation:spFade .2s ease}' +
     '@media(min-width:600px){#spOverlay{align-items:center;padding:16px}}' +
@@ -1213,7 +1215,7 @@ function showStorePromo(seller) {
     '<button class="sp-btn" type="button" id="spGo">Get my code</button><div class="sp-err" id="spErr"></div></div>' +
     '<p class="sp-small">Store closed? Order anyway — your order is prepared first when they open.</p></div>';
   document.body.appendChild(ov);
-  const close = () => { ov.remove(); try { localStorage.setItem(seenKey, '1'); } catch (e) {} };
+  const close = () => { ov.remove(); try { sessionStorage.setItem(seenKey, '1'); } catch (e) {} };
   ov.querySelector('.sp-x').onclick = close;
   ov.addEventListener('click', e => { if (e.target === ov) close(); });
   const go = ov.querySelector('#spGo'), inp = ov.querySelector('#spEmail'), err = ov.querySelector('#spErr');
