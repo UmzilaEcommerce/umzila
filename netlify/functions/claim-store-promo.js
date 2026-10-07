@@ -39,16 +39,32 @@ exports.handler = async (event) => {
   const ends = new Date(promo.ends);
   if (Date.now() >= ends.getTime()) return reply(410, { error: 'This promo has ended.' });
 
-  const em = checkEmail(b.email);
-  if (!em.ok) return reply(400, { error: em.error, suggestion: em.suggestion || null });
-  const email = em.value;
-
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const { data: seller, error: sErr } = await admin.from('sellers').select('id, shop_name').eq('slug', slug).maybeSingle();
   if (sErr || !seller) return reply(500, { error: 'Something went wrong — please try again.' });
 
   const promoCodes = (cols, opts) => admin.from('discount_codes').select(cols, opts)
     .eq('seller_id', seller.id).eq('type', 'percentage').eq('expires_at', ends.toISOString()).like('code', promo.prefix + '%');
+
+  // action 'status' { code? | email? } — does this visitor already have a
+  // promo code (sent by the promo email, or claimed before)? The pop-up then
+  // shows "add to cart, we'll fill your code in" instead of the claim form.
+  // Only ever answers for a code the caller already holds or an email they
+  // typed on this browser; the code is useless without that same email.
+  if (b.action === 'status') {
+    const byCode = String(b.code || '').trim().toUpperCase();
+    const byEmail = checkEmail(b.email);
+    if (!byCode && !byEmail.ok) return reply(200, { has: false });
+    let q = promoCodes('code, used');
+    q = byCode ? q.eq('code', byCode) : q.eq('email', byEmail.value);
+    const { data: row } = await q.limit(1).maybeSingle();
+    if (!row) return reply(200, { has: false });
+    return reply(200, row.used ? { has: true, used: true } : { has: true, code: row.code, until: promo.ends });
+  }
+
+  const em = checkEmail(b.email);
+  if (!em.ok) return reply(400, { error: em.error, suggestion: em.suggestion || null });
+  const email = em.value;
 
   // Already has one → same code again
   const { data: mine } = await promoCodes('code, used').eq('email', email).limit(1).maybeSingle();

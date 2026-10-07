@@ -1184,13 +1184,41 @@ async function boot(){
 const STORE_PROMOS = {
   velaphishisanyama: { until: '2026-10-10T18:00:00+02:00', pct: 10, untilLabel: 'Sat 10 Oct, 6pm', thing: 'plate' }
 };
-function showStorePromo(seller) {
+async function showStorePromo(seller) {
   const p = STORE_PROMOS[seller.slug];
   if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
   const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
-  // Claimed = never again (localStorage). Closed without claiming = hidden
-  // for this visit only (sessionStorage) and shown again next visit.
-  try { if (localStorage.getItem(seenKey) || sessionStorage.getItem(seenKey)) return; } catch (e) {}
+  const heldKey = 'umz_promo_held_' + seller.slug + '_' + p.until.slice(0, 10);
+  // Claimed here = never again (localStorage).
+  try { if (localStorage.getItem(seenKey)) return; } catch (e) {}
+  // Already has a code (the promo email's link ?c=CODE, a code saved on this
+  // browser, or an email we know: signed in / typed before) → never the
+  // claim form; instead, once, "add to cart — we'll fill your code in".
+  const qs = new URLSearchParams(location.search);
+  const urlCode = (qs.get('c') || '').trim();
+  if (urlCode && history.replaceState) { qs.delete('c'); const q = qs.toString(); history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash); }
+  let saved = null, knownEmail = (user && user.email) || '';
+  try { saved = JSON.parse(localStorage.getItem('umz_promo_code') || 'null'); } catch (e) {}
+  try { if (!knownEmail) knownEmail = (JSON.parse(localStorage.getItem('umz_guest_contact') || 'null') || {}).email || ''; } catch (e) {}
+  let held = null;
+  if (urlCode || (saved && saved.code) || knownEmail) {
+    try {
+      const r = await fetch('/.netlify/functions/claim-store-promo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'status', slug: seller.slug, code: urlCode || (saved && saved.code) || '', email: knownEmail }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.has && j.used) return;               // already used it — nothing to show
+      if (j.has && j.code) held = j;
+    } catch (e) { /* offline: fall through to the normal pop-up */ }
+  }
+  if (held) {
+    try { localStorage.setItem('umz_promo_code', JSON.stringify({ code: held.code, until: held.until, slug: seller.slug })); } catch (e) {}
+    try { if (localStorage.getItem(heldKey)) return; localStorage.setItem(heldKey, '1'); } catch (e) {}
+  } else {
+    // Closed without claiming = hidden for this visit only (sessionStorage)
+    // and shown again next visit.
+    try { if (sessionStorage.getItem(seenKey)) return; } catch (e) {}
+  }
+  if (document.getElementById('spOverlay')) return;
   const css = document.createElement('style');
   css.textContent = '#spOverlay{position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.55);display:flex;align-items:flex-end;justify-content:center;padding:0;animation:spFade .2s ease}' +
     '@media(min-width:600px){#spOverlay{align-items:center;padding:16px}}' +
@@ -1207,6 +1235,21 @@ function showStorePromo(seller) {
   document.head.appendChild(css);
   const ov = document.createElement('div');
   ov.id = 'spOverlay';
+  if (held) {
+    ov.innerHTML = '<div id="spCard" role="dialog" aria-modal="true" aria-labelledby="spTitle"><button class="sp-x" type="button" aria-label="Close">×</button>' +
+      '<div style="font-size:40px">🎁</div><div class="sp-k">' + esc(seller.shop_name) + ' · your code is waiting</div>' +
+      '<h3 id="spTitle">Your ' + p.pct + '% off is ready</h3>' +
+      '<div class="sp-code">' + esc(held.code) + '</div>' +
+      '<p>Add your ' + esc(p.thing) + ' to the cart, then go to checkout — we’ll try to fill your code in for you automatically. If it isn’t there, type the code from your email. Use the email it was sent to. Valid until ' + esc(p.untilLabel) + '.</p>' +
+      '<button class="sp-btn" type="button" id="spShop">Start ordering</button>' +
+      '<p class="sp-small">Store closed? Order anyway — your order is prepared first when they open.</p></div>';
+    document.body.appendChild(ov);
+    const closeB = () => ov.remove();
+    ov.querySelector('.sp-x').onclick = closeB;
+    ov.querySelector('#spShop').onclick = closeB;
+    ov.addEventListener('click', e => { if (e.target === ov) closeB(); });
+    return;
+  }
   ov.innerHTML = '<div id="spCard" role="dialog" aria-modal="true" aria-labelledby="spTitle"><button class="sp-x" type="button" aria-label="Close">×</button>' +
     '<div style="font-size:40px">🔥</div><div class="sp-k">' + esc(seller.shop_name) + ' · limited offer</div>' +
     '<h3 id="spTitle">' + p.pct + '% off your ' + esc(p.thing) + '</h3>' +

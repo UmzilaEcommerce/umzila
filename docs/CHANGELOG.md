@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-07 — Velaphi promo: "your code is waiting" pop-up for people who already have a code; auto-apply at checkout
+
+**Asked:** people who got the promo email (and Sanele) shouldn't see the claim pop-up; show them once a pop-up saying to add to cart and that checkout will try to fill their code in; R250 plate also +9% until 15 Oct.
+**Changed:** claim-store-promo.js action 'status' ({code} or {email}) says whether this visitor already holds a promo code (used → nothing shown). shop.html checks it first — from the email link's `?c=CODE` (removed from the address bar), a code saved on the browser, the signed-in email, or the guest email remembered in umz_guest_contact — and shows the "your code is waiting" pop-up once (localStorage umz_promo_held_*), never the claim form; everyone else gets the claim form every visit until they claim. checkout.html now says it's trying to add the saved code and applies it automatically once the cart and a valid email are there (falls back to a clear message; the code stays in the box). The 51 scheduled promo emails were cancelled and re-scheduled (Thu 8 Oct 10:30) with personal `?c=` links. Sanele got a Velaphi promo code (same expiry) so his browser is recognised. R250 plate → R272.50; a second pg_cron job (velaphi-promo-revert-250-2026-10-15) puts it back to R250, no sale, on 15 Oct.
+**Files:** shop.html, checkout.html, netlify/functions/claim-store-promo.js.
+
 ## 2026-10-07 — Velaphi 10% promo: store pop-up codes, visible code box at checkout, temporary prices
 
 **Asked:** a 10%-off Velaphi promo (emailed codes + codes for new visitors) until Sat 10 Oct 18:00, plate prices set to sale price + 9% for the promo and restored on 15 Oct, and the checkout code box visible instead of folded away.
