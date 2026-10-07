@@ -300,6 +300,29 @@
   .live-visitors { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; background: #eff6ff; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; color: #1e3a8a; }
   .live-visitors b { font-size: 22px; font-weight: 900; line-height: 1.1; }
   .live-visitors .lv-pages { width: 100%; font-size: 12px; color: #475569; font-weight: 600; }
+  /* Visitors history (get_site_traffic) */
+  .traffic { background: var(--card); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04); border: 1px solid var(--border); }
+  .traffic-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .traffic-h span { font-weight: 800; font-size: 14px; }
+  .traffic-h select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 13px; }
+  .tr-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  .tr-kpis div { background: #f8fafc; border-radius: 10px; padding: 10px; }
+  .tr-kpis b { display: block; font-size: 22px; font-weight: 900; line-height: 1.1; }
+  .tr-kpis span { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .tr-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .tr-box h4 { margin: 0 0 8px; font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .tr-bars { display: flex; align-items: flex-end; gap: 2px; height: 90px; border-bottom: 1px solid var(--border); }
+  .tr-bars i { flex: 1; background: #2563eb; border-radius: 3px 3px 0 0; min-height: 1px; position: relative; }
+  .tr-bars i.today { background: #e0284f; }
+  .tr-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .tr-row { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+  .tr-row b { font-weight: 800; }
+  .tr-row small { color: var(--muted); font-weight: 600; }
+  .tr-funnel div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin: 4px 0; }
+  .tr-funnel em { font-style: normal; width: 74px; color: var(--muted); font-weight: 600; flex: none; }
+  .tr-funnel u { text-decoration: none; height: 14px; background: #93c5fd; border-radius: 4px; min-width: 2px; }
+  .tr-note { font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+  @media (max-width: 760px) { .tr-kpis { grid-template-columns: repeat(2, 1fr); } .tr-grid { grid-template-columns: 1fr; } }
   .live-row span { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 600; }
   .live-row.bad span { color: #dc2626; }
   .admin-bnav { display: none; }
@@ -497,6 +520,13 @@ const supabaseClient = supabase.createClient(
         <div class="live-ops" id="liveOps">
           <div class="live-ops-h"><span><i></i>Live now</span><button class="btn" id="liveOpsOpen">Delivery Ops →</button></div>
           <div id="liveOpsBody" class="muted" style="font-size:13px">Loading…</div>
+        </div>
+        <!-- Visitors history — get_site_traffic() over the presence.js heartbeat -->
+        <div class="traffic" id="trafficCard">
+          <div class="traffic-h"><span>📈 Visitors</span>
+            <select id="trafficDays" aria-label="Period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option></select>
+          </div>
+          <div id="trafficBody" class="muted" style="font-size:13px">Loading…</div>
         </div>
         <!-- KPI Row 1 -->
         <div class="grid">
@@ -2317,6 +2347,56 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   }));
   document.getElementById('bnavMenu')?.addEventListener('click', () => document.body.classList.add('sidebar-open'));
   loadLiveOps();
+
+  // ── Visitors history (get_site_traffic) ──────────────────────────────────
+  // "Visitors" = phones/browsers (one per browser, from presence.js), not
+  // accounts. Staff browsers are left out server-side.
+  async function loadTraffic() {
+    const body = document.getElementById('trafficBody');
+    if (!body || !supabaseClient) return;
+    const days = Number(document.getElementById('trafficDays')?.value || 30);
+    const { data: t, error } = await supabaseClient.rpc('get_site_traffic', { p_days: days });
+    if (error || !t) { body.textContent = 'Visitor history unavailable right now.'; return; }
+    const e = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const daily = t.daily || [];
+    const max = Math.max(1, ...daily.map(d => d.visitors));
+    const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+    const todayStr = daily.length ? daily[daily.length - 1].day : '';
+    const f = t.funnel || {}; const fmax = Math.max(1, f.visited || 0);
+    const hours = t.hours || []; const hmax = Math.max(1, ...hours.map(h => h.n));
+    const peak = hours.slice().sort((a, b) => b.n - a.n)[0];
+    body.className = '';
+    body.innerHTML = `
+      <div class="tr-kpis">
+        <div><b>${t.today}</b><span>today (${t.new_today} new)</span></div>
+        <div><b>${t.yesterday}</b><span>yesterday</span></div>
+        <div><b>${t.last7}</b><span>last 7 days</span></div>
+        <div><b>${t.period}</b><span>last ${t.days} days</span></div>
+      </div>
+      <div class="tr-grid">
+        <div class="tr-box">
+          <h4>Visitors per day</h4>
+          <div class="tr-bars">${daily.map(d => `<i class="${d.day === todayStr ? 'today' : ''}" style="height:${Math.round(d.visitors / max * 100)}%" title="${fmtDay(d.day)}: ${d.visitors} visitors · ${d.new} new · ${d.store} on a store page"></i>`).join('')}</div>
+          <div class="tr-axis"><span>${daily.length ? fmtDay(daily[0].day) : ''}</span><span>today</span></div>
+          <h4 style="margin-top:14px">When people arrive (SA time)</h4>
+          <div class="tr-bars" style="height:60px">${hours.map(h => `<i style="height:${Math.round(h.n / hmax * 100)}%;background:#7c3aed" title="${h.h}:00 – ${h.n} visits"></i>`).join('')}</div>
+          <div class="tr-axis"><span>00:00</span><span>12:00</span><span>23:00</span></div>
+          ${peak && peak.n ? `<div class="tr-note">Busiest hour: <b>${peak.h}:00–${peak.h + 1}:00</b></div>` : ''}
+        </div>
+        <div class="tr-box">
+          <h4>Most visited stores</h4>
+          ${(t.stores || []).length ? t.stores.map((st, i) => `<div class="tr-row"><span>${i + 1}. ${e(st.name)}</span><span><b>${st.visitors}</b> <small>visitors · ${st.today} today</small></span></div>`).join('') : '<div class="tr-row"><span>No store visits yet</span></div>'}
+          <h4 style="margin-top:14px">How far they get</h4>
+          <div class="tr-funnel">
+            ${[['Visited', f.visited], ['A store', f.store], ['Cart', f.cart], ['Checkout', f.checkout], ['Paid', f.paid]].map(([k, n]) => `<div><em>${k}</em><u style="width:${Math.round((n || 0) / fmax * 100)}%"></u><b>${n || 0}</b></div>`).join('')}
+          </div>
+          <div class="tr-note">${t.returning} came back on another day · ${t.signed_in} signed in · ~${t.avg_minutes || 0} min per visit</div>
+        </div>
+      </div>
+      <div class="tr-note">One visitor = one phone/browser (people on two phones count twice). Your staff browsers are left out. Counting started ${t.since ? fmtDay(t.since) : 'today'}.</div>`;
+  }
+  document.getElementById('trafficDays')?.addEventListener('change', loadTraffic);
+  loadTraffic();
 
   // ── Ad Campaigns ───────────────────────────────────────────────────────────
   let adCampaignsLoaded = false;

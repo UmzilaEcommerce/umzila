@@ -18,8 +18,11 @@
   catch (e) { sid = newId(); }
 
   var client = null, page = 'home', last = 0, timer = null;
+  // Automated browsers (test runs, crawlers: navigator.webdriver) are never
+  // counted as visitors — live counter, visit history or behaviour events.
+  var BOT = !!(navigator && navigator.webdriver);
   function beat(force) {
-    if (!client || document.visibilityState === 'hidden') return;
+    if (BOT || !client || document.visibilityState === 'hidden') return;
     var now = Date.now();
     if (!force && now - last < MIN_GAP_MS) return;
     last = now;
@@ -57,7 +60,7 @@
   }
   window.umzilaTrack = function (eventType, data) {
     try {
-      if (!client) return;
+      if (!client || BOT) return;
       data = data || {};
       client.auth.getSession().then(function (r) {
         var session = r && r.data && r.data.session;
