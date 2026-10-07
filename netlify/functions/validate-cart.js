@@ -1,6 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { validateCode, computeDiscount } = require('./lib/discounts');
-const { FALLBACK_FEE, DELIVERY_FEE_MIN, DELIVERY_FEE_MAX } = require('./lib/delivery-price');
+const { FALLBACK_FEE, DELIVERY_FEE_MIN, DELIVERY_FEE_MAX, withMarkup } = require('./lib/delivery-price');
 const { picksCfg, normalizePicks, picksText } = require('./lib/picks');
 const { checkEmail } = require('./lib/contact-check');
 
@@ -584,6 +584,17 @@ variants.forEach(v => {
             // An invalid/expired/mismatched quote is not an error -- it just means
             // the fallback computeFees() total (already assigned above) is used,
             // same as if no quoteId had been sent at all.
+        }
+        // No live quote: the flat fallback gets the same admin markup a quote
+        // would (quotes already include it — get-delivery-quote.js).
+        if (!quoteApplied && fees.productDelivery > 0) {
+            const { data: pc } = await supabase.from('delivery_pricing_config')
+                .select('margin_percent').eq('is_active', true)
+                .order('version', { ascending: false }).limit(1).maybeSingle();
+            const marked = withMarkup(fees.productDelivery, pc && pc.margin_percent);
+            if (marked !== fees.productDelivery) {
+                fees = { ...fees, productDelivery: marked, total: Math.round((marked + (fees.serviceCollection || 0) + (fees.serviceReturn || 0)) * 100) / 100 };
+            }
         }
 
         return {

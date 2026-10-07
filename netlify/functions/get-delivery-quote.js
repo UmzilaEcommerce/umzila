@@ -34,7 +34,7 @@
 // Does not touch validate-cart.js, checkout.html, or any PayFast file.
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
-const { feeForRoadKm, clampFee } = require('./lib/delivery-price');
+const { feeForRoadKm, clampFee, withMarkup } = require('./lib/delivery-price');
 
 const QUOTE_TTL_MINUTES = 15; // no existing convention in this repo for quote TTLs — 15 min is a reasonable default for a checkout session.
 
@@ -451,6 +451,8 @@ exports.handler = async function (event, context) {
           (!zone.promo_expires_at || new Date(zone.promo_expires_at) > new Date())) {
         productDelivery = Math.min(productDelivery, Number(zone.promo_cap_fee));
       }
+      // Umzila's markup (admin "Delivery markup %"), last — see delivery-price.js
+      productDelivery = withMarkup(productDelivery, pricingConfig.margin_percent);
     }
 
     const priorityFee = priority ? PRIORITY_FEE : 0; // flat, belongs to Umzila — unaffected by the free-delivery waiver/cap

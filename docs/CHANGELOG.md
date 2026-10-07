@@ -4,6 +4,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-07 — Admin "Delivery markup %" now changes the customer's delivery price
+
+**Reported:** founder wants the admin margin box to work like a dial: 5% → delivery costs 5% more, back to 0 → back to normal.
+**Cause:** since the 2026-10-04 pricing (R34–R45 band in lib/delivery-price.js) `delivery_pricing_config.margin_percent` was saved but read nowhere — the box did nothing.
+**Changed:** `withMarkup(fee, margin_percent)` in lib/delivery-price.js, applied last (after the R45 cap and any zone promo cap) in get-delivery-quote.js (every quote) and validate-cart.js (the no-quote R39 fallback, which also covers the guest PayFast signer via reprice-order). 5% → R39 becomes R40.95, R45 becomes R47.25; 0 → the band exactly. Rider pay is unchanged (payout trigger / payout-formula untouched) — the markup is Umzila's. Admin label renamed "Delivery markup (%) — customer pays this much more". checkout.html's offline preview (R39 before a quote exists) does not include the markup; the quote and the charged price do.
+**Files:** netlify/functions/lib/delivery-price.js, get-delivery-quote.js, validate-cart.js, admin.html, CLAUDE.md.
+
 ## 2026-10-07 — Email + phone safeguards on every form
 
 **Reported:** a guest (Wandile) saved his basket with `…@gmail.comw`; test entries used junk emails/numbers.
