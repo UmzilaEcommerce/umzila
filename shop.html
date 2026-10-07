@@ -1240,7 +1240,7 @@ async function showStorePromo(seller) {
       '<div style="font-size:40px">🎁</div><div class="sp-k">' + esc(seller.shop_name) + ' · your code is waiting</div>' +
       '<h3 id="spTitle">Your ' + p.pct + '% off is ready</h3>' +
       '<div class="sp-code">' + esc(held.code) + '</div>' +
-      '<p>Add your ' + esc(p.thing) + ' to the cart, then go to checkout — we’ll try to fill your code in for you automatically. If it isn’t there, type the code from your email. Use the email it was sent to. Valid until ' + esc(p.untilLabel) + '.</p>' +
+      '<p>Add your ' + esc(p.thing) + ' to the cart, then enter this code in the discount box at checkout, with the email it was sent to. Valid until ' + esc(p.untilLabel) + '.</p>' +
       '<button class="sp-btn" type="button" id="spShop">Start ordering</button>' +
       '<p class="sp-small">Store closed? Order anyway — your order is prepared first when they open.</p></div>';
     document.body.appendChild(ov);

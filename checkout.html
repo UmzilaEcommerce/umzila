@@ -5877,26 +5877,25 @@ async function submitToPayFast(cartItems, orderId, total) {
         elements.promoCodeInput?.focus();
       });
       // A code from a store promo (shop.html pop-up or the promo email's link,
-      // localStorage umz_promo_code) is filled in and applied automatically
-      // once the cart and a valid email are there — it says it's trying, and
-      // if it can't, the code stays in the box with the reason.
+      // localStorage umz_promo_code) is filled in and applied quietly once the
+      // cart and a valid email are there. No "trying…" wording (founder
+      // 2026-10-07: don't set expectations) — if it can't apply, the code just
+      // stays in the box with no message.
       try {
         const saved = JSON.parse(localStorage.getItem('umz_promo_code') || 'null');
         if (saved && saved.code && new Date(saved.until) > new Date() && elements.promoCodeInput && !elements.promoCodeInput.value) {
           elements.promoCodeInput.value = saved.code;
-          showPromoMessage('Trying to add your code ' + saved.code + ' for you…', 'info');
           let tries = 0, done = false;
           const attempt = async () => {
             if (done || state.couponCode) return;
             const email = state.user?.email || (elements.customerEmail?.value || '').trim();
             if (!state.cart || !state.cart.length || !isValidEmail(email)) {
               if (++tries < 20) return setTimeout(attempt, 700);
-              showPromoMessage('Your code ' + saved.code + ' is ready — add your email above and it’s added automatically (or tap Apply).', 'info');
               return;
             }
             done = true;
             const ok = await applyCoupon(saved.code);
-            if (!ok) showPromoMessage('Couldn’t add ' + saved.code + ' automatically — use the email the code was sent to, or type the code from your email and tap Apply.', 'error');
+            if (!ok) showPromoMessage('', ''); // stay quiet; the code is still in the box
           };
           setTimeout(attempt, 600);
           elements.customerEmail?.addEventListener('change', () => { if (!state.couponCode) { done = false; tries = 0; attempt(); } });
