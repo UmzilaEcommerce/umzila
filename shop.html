@@ -1197,10 +1197,10 @@ async function loadHouseAddons(seller){
     if (!HOUSE.ids.size || !ADDON_STORES.includes(seller.slug)) return;
     const { data: rows } = await sb.from('products').select('*, product_images!fk_product_images_product(*)')
       .in('seller_id', [...HOUSE.ids]).eq('visible', true).gt('stock', 0).order('price', { ascending: true });
-    HOUSE.items = (rows || []).filter(r => r.metadata && r.metadata.addon).map(mapProduct);
+    // metadata.popular → the green "Popular" badge (set per product in the DB)
+    HOUSE.items = (rows || []).filter(r => r.metadata && r.metadata.addon).map(r => Object.assign(mapProduct(r), { popular: r.metadata.popular === true }));
   } catch (e) { /* add-ons are optional — never block the store */ }
 }
-const POPULAR_ADDONS = /coca-cola 500ml|coca-cola 1\.5l|fanta orange 500ml/i;
 function showAddons(href){
   if (!HOUSE.items.length || !ADDON_STORES.includes(S.seller.slug)) return false;
   if (sessionStorage.getItem('umz_addons_seen_' + S.seller.id)) return false; // once per visit
@@ -1234,7 +1234,7 @@ function showAddons(href){
   const qtyIn = id => getCart().filter(l => (l.id || l.product_id) === id).reduce((a, l) => a + qtyOf(l), 0);
   const card = p => {
     const q = qtyIn(p.id);
-    return `<div class="ad-card" data-ad="${esc(p.id)}"><div class="ad-img">${p.primary_image ? `<img src="${esc(thumbUrl(p.primary_image))}" alt="" loading="lazy" onerror="this.src='${esc(p.primary_image)}'">` : ''}${POPULAR_ADDONS.test(p.title) ? '<span class="ad-pop">Popular</span>' : ''}
+    return `<div class="ad-card" data-ad="${esc(p.id)}"><div class="ad-img">${p.primary_image ? `<img src="${esc(thumbUrl(p.primary_image))}" alt="" loading="lazy" onerror="this.src='${esc(p.primary_image)}'">` : ''}${p.popular ? '<span class="ad-pop">Popular</span>' : ''}
       ${q ? `<div class="ad-step"><button type="button" data-ad-dec aria-label="One less">−</button><output>${q}</output><button type="button" data-ad-inc aria-label="One more">+</button></div>` : `<button class="ad-plus" type="button" data-ad-inc aria-label="Add ${esc(p.title)}">+</button>`}</div>
       <div class="ad-name">${esc(p.title)}</div><div class="ad-price">${money(p.displayPrice)}</div></div>`;
   };

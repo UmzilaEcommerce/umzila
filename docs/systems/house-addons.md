@@ -16,8 +16,8 @@ Umzila sells its own drinks (Coca-Cola, Fanta, Sprite, Appletiser, Liqui-Fruitâ€
 
 ### Products
 
-- `products.metadata.addon = true`, category Drinks. Managed in admin like any product (price, stock, visible).
-- **Images:** the tiles are designed placeholders (`stores/umzila-drinks/drink-*.w1280.webp` + `.w480`). Replace them with real photos when available.
+- `products.metadata.addon = true`, category Drinks; `metadata.popular = true` shows the green "Popular" badge on the add-ons screen. Managed in admin like any product (price, stock, visible).
+- **Images:** product packshots on a pure-white square (`stores/umzila-drinks/photo-*.w1280.webp` + `.w480`), 2026-10-08. Coca-Cola No Sugar 500ml is hidden until it has a photo.
 
 ### Riding along
 
