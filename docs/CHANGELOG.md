@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — 1–5 star delivery rating by email
+
+**Asked:** a rating email after delivery (Shireletso, first promo order) with clickable 1–5 stars; 3 or fewer asks why; ratings and comments show in admin delivery feedback.
+**Changed:** delivery_feedback gets a nullable `rating` (1–5). New `netlify/functions/rate-delivery.js`: each star in the email links to it (?d=delivery id&t=tracking token&r=1-5); GET returns a small page that saves the rating from the browser (so mail link-scanners can't record one), then asks "What went wrong?" for ≤3 or an optional comment for 4–5; POST upserts the one feedback row per delivery (≥4 compliment, ≤3 complaint, category "Email rating", seller/driver resolved from the route). Only DELIVERED deliveries; the tracking token (the private track link secret) is the only key. New `lib/rating-email.js` builds the plain order-style email from mail.umzila.store. admin.html Recent Feedback shows the stars and the customer's name.
+**Files:** netlify/functions/rate-delivery.js (new), netlify/functions/lib/rating-email.js (new), admin.html, DB migration delivery_feedback_rating.
+
 ## 2026-10-08 — Store promo button; returning guests start checkout at the address step
 
 **Asked:** a way back to the promo pop-up for people who closed it (Nomasonto went back from checkout to the store, where it no longer showed), and checkout should remember a guest's name/email/phone so a returning buyer only adds the address.
