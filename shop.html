@@ -1184,7 +1184,26 @@ async function boot(){
 const STORE_PROMOS = {
   velaphishisanyama: { until: '2026-10-10T18:00:00+02:00', pct: 10, untilLabel: 'Sat 10 Oct, 6pm', thing: 'plate' }
 };
-async function showStorePromo(seller) {
+// Small floating "🎁 Get 10% off" / "🎁 Your 10% code" button, so a visitor
+// who closed the pop-up can open it again any time (until the promo ends or
+// their code is used). Tapping it opens the pop-up regardless of the
+// once-per-visit rules (force).
+function promoPill(seller, hasCode) {
+  const p = STORE_PROMOS[seller.slug];
+  let b = document.getElementById('spPill');
+  if (!p || Date.now() >= new Date(p.until).getTime()) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement('button');
+    b.id = 'spPill'; b.type = 'button';
+    b.style.cssText = 'position:fixed;left:12px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:44;border:0;border-radius:999px;padding:10px 16px;background:var(--accent,#e0284f);color:#fff;font:inherit;font-weight:800;font-size:14px;box-shadow:0 8px 24px -6px rgba(0,0,0,.35);cursor:pointer';
+    if (window.matchMedia && matchMedia('(min-width:900px)').matches) b.style.bottom = '22px';
+    b.onclick = () => showStorePromo(seller, true);
+    document.body.appendChild(b);
+  }
+  b.textContent = hasCode ? '🎁 Your ' + p.pct + '% code' : '🎁 Get ' + p.pct + '% off';
+}
+
+async function showStorePromo(seller, force) {
   const p = STORE_PROMOS[seller.slug];
   if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
   const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
@@ -1207,14 +1226,15 @@ async function showStorePromo(seller) {
       const r = await fetch('/.netlify/functions/claim-store-promo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'status', slug: seller.slug, code: urlCode || (saved && saved.code) || '', email: knownEmail }) });
       const j = await r.json().catch(() => ({}));
-      if (j.has && j.used) return;               // already used it — nothing to show
+      if (j.has && j.used) { const pl = document.getElementById('spPill'); if (pl) pl.remove(); return; } // used — nothing to show
       if (j.has && j.code) held = j;
     } catch (e) { /* offline: fall through to the normal pop-up */ }
   }
+  promoPill(seller, !!held);
   if (held) {
     try { localStorage.setItem('umz_promo_code', JSON.stringify({ code: held.code, until: held.until, slug: seller.slug })); } catch (e) {}
-    try { if (localStorage.getItem(heldKey)) return; localStorage.setItem(heldKey, '1'); } catch (e) {}
-  } else {
+    if (!force) { try { if (localStorage.getItem(heldKey)) return; localStorage.setItem(heldKey, '1'); } catch (e) {} }
+  } else if (!force) {
     // Claimed here before = never the claim form again. Closed without
     // claiming = hidden for this visit only (sessionStorage), back next visit.
     if (claimedHere) return;
@@ -1279,6 +1299,7 @@ async function showStorePromo(seller) {
         localStorage.setItem(seenKey, '1');
       } catch (e) {}
       if (window.umzilaGuestContact && !user) umzilaGuestContact({ email });
+      promoPill(seller, true);
       ov.querySelector('#spForm').innerHTML = '<div class="sp-code">' + esc(j.code) + '</div>' +
         '<p style="margin:0">It’s filled in for you at checkout — use <b>' + esc(email) + '</b> there. ' + (j.again ? 'It’s the same code we emailed you.' : 'We’ve emailed it too.') + '</p>' +
         '<button class="sp-btn" type="button" id="spShop">Start ordering</button>';

@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Store promo button; returning guests start checkout at the address step
+
+**Asked:** a way back to the promo pop-up for people who closed it (Nomasonto went back from checkout to the store, where it no longer showed), and checkout should remember a guest's name/email/phone so a returning buyer only adds the address.
+**Changed:** shop.html promoPill(): a small floating "🎁 Get 10% off" button ("🎁 Your 10% code" once they hold one) while the promo runs; tapping it opens the pop-up regardless of the once-per-visit rules (showStorePromo(seller, true)); hidden once the code is used or the promo ends. checkout.html guestSkipToStep2IfComplete(): a guest whose email/name/phone were filled from this browser (umz_guest_contact) and are all valid lands on page 2 (address + pay) with the Back link, like a signed-in buyer with a complete profile. Silent — never shows errors.
+**Files:** shop.html, checkout.html.
+
 ## 2026-10-08 — Working unsubscribe links on every marketing email (+ one-click headers)
 
 **Reported:** Resend flagged the Velaphi promo's `mailto:umzilaecommerce@gmail.com` unsubscribe link ("link URLs should match the sending domain"); it was used because the site's own unsubscribe link didn't work.

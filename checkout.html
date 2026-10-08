@@ -2795,6 +2795,21 @@
     // vs page 2), so the two never disagree. A signed-in buyer with an
     // incomplete profile (e.g. missing phone) is NOT considered "complete"
     // here — same as today — so they still see the full contact fields.
+    // A returning guest whose details were filled in from this browser
+    // (umz_guest_contact) and are all valid skips page 1 the same way a
+    // signed-in buyer with a complete profile does — straight to the address
+    // step, with the Back link to change details. Silent: never shows errors.
+    function guestSkipToStep2IfComplete() {
+      if (state.user || state.guestSkipDone) return;
+      const v = el => (el?.value || '').trim();
+      if (!isValidEmail(v(elements.customerEmail)) || !v(elements.firstName) || !v(elements.lastName) || !isValidPhone(v(elements.phoneNumber))) return;
+      const page1 = document.getElementById('step1Page');
+      if (page1 && page1.classList.contains('hidden')) return; // already moved on
+      state.guestSkipDone = true;
+      elements.step2BackLink?.classList.remove('hidden');
+      showCheckoutPage(2);
+    }
+
     function hasCompleteContact() {
       const p = state.profile;
       return !!(state.user && p && p.first_name && p.last_name && p.phone);
@@ -2942,6 +2957,7 @@
         // back to yet (matches today's default).
         elements.step2BackLink?.classList.add('hidden');
         showCheckoutPage(1);
+        guestSkipToStep2IfComplete();
     }
 }
 	
@@ -5906,6 +5922,7 @@ async function submitToPayFast(cartItems, orderId, total) {
             const parts = String(gc.name || '').trim().split(/\s+/).filter(Boolean);
             if (parts.length) { fillIn(elements.firstName, parts[0]); if (parts.length > 1) fillIn(elements.lastName, parts.slice(1).join(' ')); }
             if (gc.phone) fillIn(elements.phoneNumber, gc.phone);
+            guestSkipToStep2IfComplete();
           } catch (e) { /* ignore */ }
         }
         if (saved && saved.code && new Date(saved.until) > new Date() && elements.promoCodeInput && !elements.promoCodeInput.value) {
