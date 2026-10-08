@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Tracking shows minutes until the rider reaches you (incl. orders ahead)
+
+**Asked:** a customer in Shireletso's position (collected, another drop first) should see how long until the rider reaches them.
+**Changed:** new RPC `get_delivery_eta(order, token)` (same access rule as get_delivery_tracking; only from PICKED_UP to ARRIVING): walks the trip from the rider's live position (or the last completed stop if the position is stale) through every remaining stop up to this customer's drop — 2.2 min per straight-line km + 3 min per other customer's handover (+5 per pickup still ahead), calibrated on the 8 Oct trip (it would have said ~25 min at 13:29; she was reached at 13:54). Returns minutes only, never other stops' locations. track.html shows "⏱ About N min until it reaches you (around HH:MM)" (rounded up to 5 above 10 min), re-asked every poll. Also fixed: the step text for a collected order said the rider was still on the way to the store; and the empty 🚗 line when no car is known.
+**Files:** track.html, DB: get_delivery_eta().
+
 ## 2026-10-08 — Honest delivery target; customers see the rider's car
 
 **Reported:** the first real orders took 1 h 19 – 1 h 40 against a ~55 min checkout target (45 min prep at Velaphi, ~20 min rider-to-store + collection; the drive itself matched km × 2), and customers only saw the rider's first name.

@@ -420,13 +420,20 @@
   }
 
   let selectedStep = null;
+  // Collected but the rider isn't heading here yet: the "Collecting" step's
+  // text says so (instead of "on their way to the store").
+  let collectedNow = false, aheadNow = false;
+  function currentInfo(i) {
+    if (i === 1 && collectedNow) return '<strong>Your order is collected.</strong> ' + (aheadNow ? 'Your rider is dropping off an order before yours, then heads to you.' : 'Your rider will head your way shortly.');
+    return STEPS[i].info;
+  }
   function selectStep(i, stepIdx) {
     selectedStep = i;
     document.querySelectorAll('.t-step').forEach(b => b.classList.toggle('selected', Number(b.dataset.step) === i));
     const info = document.getElementById('stepInfo');
     if (!info) return;
     const st = STEPS[i];
-    info.innerHTML = i < stepIdx ? `<strong>✓ Done.</strong> ${esc(st.done)}` : i > stepIdx ? `<strong>Coming up:</strong> ${esc(st.soon)}` : st.info;
+    info.innerHTML = i < stepIdx ? `<strong>✓ Done.</strong> ${esc(st.done)}` : i > stepIdx ? `<strong>Coming up:</strong> ${esc(st.soon)}` : currentInfo(i);
     info.classList.remove('swap'); void info.offsetWidth; info.classList.add('swap');
   }
 
@@ -548,6 +555,18 @@
       try { const v = await sb.rpc('get_delivery_vehicle', { p_order_id: orderId, p_token: trackToken }); riderCar = (v && typeof v.data === 'string' && v.data) || null; } catch (e) { riderCar = null; }
     }
     if (row && !HEADING.includes(row.status)) { riderCar = null; carAsked = false; }
+    // Minutes until the rider reaches this customer (get_delivery_eta) — from
+    // collection onwards, including while other customers on the same trip
+    // are dropped first. Re-asked every poll as the rider moves.
+    let etaMin = null;
+    if (row && ['PICKED_UP', 'PARTIALLY_PICKED_UP', 'IN_ROUTE', 'NEXT_STOP', 'ARRIVING'].includes(row.status)) {
+      try { const e = await sb.rpc('get_delivery_eta', { p_order_id: orderId, p_token: trackToken }); etaMin = (e && typeof e.data === 'number' && e.data > 0) ? e.data : null; } catch (e) { etaMin = null; }
+    }
+    const etaText = etaMin ? (() => {
+      const shown = etaMin <= 10 ? etaMin : Math.ceil(etaMin / 5) * 5;
+      const at = new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(Date.now() + shown * 60000));
+      return '⏱ About ' + shown + ' min until it reaches you (around ' + at + ')';
+    })() : '';
 
     if (error || !row || !row.delivery_id) {
       content.innerHTML = emptyCard('📦', trackToken
@@ -568,6 +587,9 @@
     // Collected but the rider isn't heading here yet (other drop-offs on a
     // shared trip come first) — "Picked up", plus a hint when orders are ahead.
     const pickedUp = row.status === 'PICKED_UP' || row.status === 'PARTIALLY_PICKED_UP';
+    const infoChanged = collectedNow !== pickedUp || aheadNow !== !!row.orders_ahead;
+    collectedNow = pickedUp; aheadNow = !!row.orders_ahead;
+    if (infoChanged && selectedStep === null && shownStep === 1) { const si = document.getElementById('stepInfo'); if (si) si.innerHTML = currentInfo(1); }
     if (pickedUp) meta.label = 'Order picked up';
     let title = named(isProblem ? meta.label : atDoor ? 'Your rider is here!' : pickedUp ? 'Your order is picked up' : stage.title);
     let sub = named(isProblem ? 'Something\'s not right with this delivery — our team can help below.' : atDoor ? 'Show them your 4-digit PIN to get your order.'
@@ -593,8 +615,9 @@
           <div class="t-headline">
             <h1 id="heroTitle">${esc(title)}</h1>
             <p id="heroSub">${esc(sub)}</p>
+            <span class="t-distance" id="etaChip"${etaText ? '' : ' hidden'}>${esc(etaText)}</span>
             <span class="t-distance" id="distanceChip" hidden></span>
-            <div class="t-rider" id="riderChip"${riderName ? '' : ' hidden'}>🛵 Your rider: <strong id="riderName">${esc(riderName || '')}</strong><span id="riderCar" style="display:block;margin-top:4px;font-weight:600"${riderCar ? '' : ' hidden'}>🚗 ${esc(riderCar || '')}</span></div>
+            <div class="t-rider" id="riderChip"${riderName ? '' : ' hidden'}>🛵 Your rider: <strong id="riderName">${esc(riderName || '')}</strong><div id="riderCar" style="margin-top:4px;font-weight:600"${riderCar ? '' : ' hidden'}>🚗 ${esc(riderCar || '')}</div></div>
           </div>
         </div>
         ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
@@ -620,6 +643,8 @@
       document.getElementById('stepsCard').hidden = isProblem;
       const rc = document.getElementById('riderChip');
       if (rc) { rc.hidden = !riderName; document.getElementById('riderName').textContent = riderName || ''; }
+      const etaEl = document.getElementById('etaChip');
+      if (etaEl) { etaEl.hidden = !etaText; etaEl.textContent = etaText; }
       const car = document.getElementById('riderCar');
       if (car) { car.hidden = !riderCar; car.textContent = riderCar ? '🚗 ' + riderCar : ''; }
     }
