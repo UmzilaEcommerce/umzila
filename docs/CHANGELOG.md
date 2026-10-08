@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Checkout totals: clear discount, delivery and priority lines
+
+**Asked:** the discount looked like another number added onto the total; show what was taken off and what was added.
+**Changed (checkout.html updateShippingAndTotal + summary markup):** with a code applied the subtotal is struck out with a green "Discount added" tag; the discount is its own line with a minus in red; Delivery shows the delivery fee only and ⚡ Priority delivery is its own line (the live quote's fee includes the priority fee — split out as priorityPart); delivery/priority/tip amounts in black; Total shows the before-discount total struck out and the amount to pay in green, or just the total when there's no discount. Delivery label no longer green; stray "·" after "No minimum order" removed.
+**Files:** checkout.html.
+
 ## 2026-10-08 — Dashboards no longer load blank after login; honest seller analytics
 
 **Reported:** logistics wouldn't load after logging in until refreshed several times; seller-dashboard analytics wrong.

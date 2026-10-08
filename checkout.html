@@ -387,11 +387,11 @@
     }
     
     .summary-row.shipping {
-      color: var(--success);
+      color: #111827; /* delivery lines in black (founder 2026-10-08) */
     }
     
     .summary-row.discount {
-      color: var(--success);
+      color: #111827; /* the minus amount itself is red — see the totals breakdown styles */
     }
     
     /* Promo Code Section */
@@ -1125,6 +1125,14 @@
        always-visible input box */
     .promo-toggle{background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:6px 0;display:inline-flex;align-items:center;gap:5px;min-height:32px}
     .promo-toggle:hover{text-decoration:underline}
+    /* Totals breakdown (founder 2026-10-08): subtotal struck out + green "Discount added"
+       tag, discount in red with a minus, delivery and priority on their own black lines,
+       total struck out and the amount to pay in green when a discount applies. */
+    .was-amount{color:#111827;text-decoration:line-through;text-decoration-thickness:1.5px;font-weight:500;margin-right:4px}
+    .disc-tag{display:inline-block;background:#dcfce7;color:#15803d;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .summary-row.discount span:last-child{color:#dc2626;font-weight:600}
+    .summary-totals .summary-row.shipping span:last-child, #priorityRow span:last-child, #tipRow span:last-child{color:#111827}
+    #totalAmount.discounted{color:#16a34a}
     .promo-code-section.promo-visible{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:6px 12px 12px;margin:0 0 14px}
     .promo-code-section.promo-visible .promo-toggle{cursor:default;text-decoration:none;color:#1a1a2e}
     .promo-code-input-panel{overflow:hidden;max-height:0;transition:max-height .28s ease-in-out}
@@ -1548,9 +1556,13 @@
                 <span>Delivery</span>
                 <span id="shippingAmount">—</span>
               </div>
+              <div class="summary-row hidden" id="priorityRow">
+                <span>⚡ Priority delivery</span>
+                <span id="priorityAmount">R0.00</span>
+              </div>
               <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
               <div id="noMinimumNote" style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
-                No minimum order &nbsp;·&nbsp; <span id="multiSellerNote" style="display:none">Multiple sellers may increase fee</span>
+                No minimum order<span id="multiSellerNote" style="display:none"> &nbsp;·&nbsp; Multiple sellers may increase fee</span>
               </div>
               <div class="summary-row shipping hidden" id="serviceCollectionRow">
                 <span>Item collection</span>
@@ -1566,7 +1578,7 @@
               </div>
               <div class="summary-row total">
                 <span>Total</span>
-                <span id="totalAmount" class="amount-roll">R0.00</span>
+                <span><s id="totalBefore" class="was-amount" hidden></s> <span id="totalAmount" class="amount-roll">R0.00</span></span>
               </div>
               <!-- Value-anchor line (founder ask 2026-09-26): moved below
                    the total itself, on purpose -- reads as a reason for the
@@ -4389,6 +4401,8 @@ async function validateCheckout() {
 
       const discount = state.discount || 0;
       const tip      = clampTip(state.tip);
+      // The live quote's fee includes the priority fee; shown as its own line.
+      const priorityPart = (!deliveryBlocked && liveQuote && liveQuote.priority && cartHasProducts(cartForFee)) ? (Number(liveQuote.priorityFee) || 0) : 0;
       const total    = Math.max(0, subtotal - discount + fee + svcFees.total + tip);
       state.orderTotal = total;
 
@@ -4406,7 +4420,12 @@ async function validateCheckout() {
       if (returnRow) returnRow.classList.toggle('hidden', svcFees.returnDelivery <= 0);
       if (returnAmt) returnAmt.textContent = formatCurrency(svcFees.returnDelivery);
 
-      elements.subtotalAmount.textContent = formatCurrency(subtotal);
+      // Subtotal: struck out with a green "Discount added" tag once a code applies
+      // (the discount itself is its own red minus line below).
+      const discountLive = discount > 0 && !!state.couponCode && !state.appliedPromoCode?.requiresSignIn;
+      elements.subtotalAmount.innerHTML = discountLive
+        ? '<span class="disc-tag">Discount added</span><s class="was-amount" style="margin-right:0">' + formatCurrency(subtotal) + '</s>'
+        : formatCurrency(subtotal);
 
       // Nothing physical travels for a booking / online service / voucher —
       // don't show delivery maths or ask for a delivery-rep tip.
@@ -4442,7 +4461,8 @@ async function validateCheckout() {
           breakdownEl.style.display = 'block';
         }
       } else {
-        shippingEl.textContent = formatCurrency(fee);
+        // Priority is its own line (below) — never mixed into "Delivery".
+        shippingEl.textContent = formatCurrency(Math.max(0, fee - priorityPart));
         if (breakdownEl) {
           const classLabel = maxClass.charAt(0).toUpperCase() + maxClass.slice(1);
           const sellerLabel = uniqueSellers === 1 ? '1 seller' : `${uniqueSellers} sellers`;
@@ -4453,6 +4473,8 @@ async function validateCheckout() {
         }
       }
       if (multiSellerEl) multiSellerEl.style.display = (uniqueSellers > 1) ? 'inline' : 'none';
+      const prioRow = document.getElementById('priorityRow');
+      if (prioRow) { prioRow.classList.toggle('hidden', !(priorityPart > 0)); document.getElementById('priorityAmount').textContent = formatCurrency(priorityPart); }
       refreshEstimatedTime();
       renderPriorityCard();
 
@@ -4479,12 +4501,17 @@ async function validateCheckout() {
         if (discount > 0 && state.couponCode) {
           elements.discountRow.classList.remove('hidden');
           const scopeNote = (promo?.scopeLabel && promo.scopeLabel !== 'your whole order') ? ` <span style="color:#6b7280;font-weight:400">(${escapeHtmlLite(promo.scopeLabel)})</span>` : '';
-          elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})${scopeNote}</span> <span>-${formatCurrency(discount)}</span>`;
+          elements.discountRow.innerHTML = `<span>Discount (${state.couponCode})${scopeNote}</span> <span>−${formatCurrency(discount)}</span>`;
         } else {
           elements.discountRow.classList.add('hidden');
         }
       }
 
+      // Total: with a discount, the before-discount total struck out and the
+      // amount to pay in green; without one, just the total.
+      const before = document.getElementById('totalBefore');
+      if (before) { before.hidden = !discountLive; before.textContent = discountLive ? formatCurrency(total + discount) : ''; }
+      elements.totalAmount.classList.toggle('discounted', discountLive);
       setAmountText(elements.totalAmount, formatCurrency(total));
       updateSummaryHeaderMeta(formatCurrency(total));
     }
