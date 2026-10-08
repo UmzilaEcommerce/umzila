@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Checkout fills in a returning guest's details; the applied code shows on step 1
+
+**Reported:** Sanele came back from the win-back email in a new browser (Gmail's in-app browser), claimed his code in the store pop-up, added the plate, opened checkout and left within a minute. The code was in the box but not applied — it only applies once an email is in the checkout email box, which was empty — so he saw the full R76.30 + delivery and an empty form.
+**Changed:** checkout.html fills empty contact boxes for a guest from what they already gave on this browser (presence.js umz_guest_contact: store pop-up / mystery gift / earlier checkout), so a saved promo code applies straight away; the "Ordering from" banner now shows an applied code (struck-out price → discounted price) on step 1. shop.html pop-up says "It's the same code we emailed you" when the person already had one (it is not re-sent), instead of "We've emailed it too".
+**Files:** checkout.html, shop.html.
+
 ## 2026-10-07 — Visitor history: daily visitors, top stores, funnel, peak hours (admin dashboard)
 
 **Asked:** turn the live-visitor heartbeat into history — how many phones visited today / yesterday / 30 days, most visited stores, etc.

@@ -4235,6 +4235,7 @@ async function validateCheckout() {
     
     // Update order summary
     function updateOrderSummary() {
+      refreshBrandingAmount();
       if (state.cart.length === 0) {
         showEmptyCart();
         return;
@@ -4575,13 +4576,23 @@ async function validateCheckout() {
 
       // Single line item — show its subtotal; multiple items from the same
       // seller — keep the banner to just the shop identity, no recompute.
-      if (cart.length === 1) {
-        amountEl.textContent = formatCurrency((cart[0].price || 0) * (cart[0].quantity || cart[0].qty || 1));
-      } else {
-        amountEl.textContent = '';
-      }
+      amountEl.dataset.base = cart.length === 1 ? String((cart[0].price || 0) * (cart[0].quantity || cart[0].qty || 1)) : '';
+      refreshBrandingAmount();
 
       banner.classList.remove('hidden');
+    }
+
+    // The banner's amount shows an applied code straight away (struck-out
+    // price → price after the discount), so it's visible on step 1 too.
+    function refreshBrandingAmount() {
+      const el = document.getElementById('shopBrandingAmount');
+      if (!el) return;
+      const base = Number(el.dataset.base);
+      if (!el.dataset.base || !(base > 0)) { el.textContent = ''; return; }
+      const off = Number(state.discount) || 0;
+      el.innerHTML = off > 0 && state.couponCode
+        ? `<s style="opacity:.7">${formatCurrency(base)}</s> <b style="color:#16a34a">${formatCurrency(Math.max(0, base - off))}</b>`
+        : formatCurrency(base);
     }
 
     /********************
@@ -5883,6 +5894,20 @@ async function submitToPayFast(cartItems, orderId, total) {
       // stays in the box with no message.
       try {
         const saved = JSON.parse(localStorage.getItem('umz_promo_code') || 'null');
+        // A guest who gave their details on this browser (store promo pop-up,
+        // mystery gift, an earlier checkout — presence.js umz_guest_contact)
+        // gets them filled in, so a saved code applies straight away instead of
+        // waiting on an empty email box. Only empty boxes are filled.
+        if (!state.user) {
+          try {
+            const gc = JSON.parse(localStorage.getItem('umz_guest_contact') || 'null') || {};
+            const fillIn = (el, v) => { if (el && v && !el.value && !el.readOnly) { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); } };
+            if (gc.email && isValidEmail(gc.email)) fillIn(elements.customerEmail, gc.email);
+            const parts = String(gc.name || '').trim().split(/\s+/).filter(Boolean);
+            if (parts.length) { fillIn(elements.firstName, parts[0]); if (parts.length > 1) fillIn(elements.lastName, parts.slice(1).join(' ')); }
+            if (gc.phone) fillIn(elements.phoneNumber, gc.phone);
+          } catch (e) { /* ignore */ }
+        }
         if (saved && saved.code && new Date(saved.until) > new Date() && elements.promoCodeInput && !elements.promoCodeInput.value) {
           elements.promoCodeInput.value = saved.code;
           let tries = 0, done = false;

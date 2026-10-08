@@ -1278,7 +1278,7 @@ async function showStorePromo(seller) {
       } catch (e) {}
       if (window.umzilaGuestContact && !user) umzilaGuestContact({ email });
       ov.querySelector('#spForm').innerHTML = '<div class="sp-code">' + esc(j.code) + '</div>' +
-        '<p style="margin:0">It’s filled in for you at checkout — use <b>' + esc(email) + '</b> there. We’ve emailed it too.</p>' +
+        '<p style="margin:0">It’s filled in for you at checkout — use <b>' + esc(email) + '</b> there. ' + (j.again ? 'It’s the same code we emailed you.' : 'We’ve emailed it too.') + '</p>' +
         '<button class="sp-btn" type="button" id="spShop">Start ordering</button>';
       ov.querySelector('#spShop').onclick = close;
     } catch (e) {
