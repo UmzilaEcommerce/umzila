@@ -7,10 +7,7 @@
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
-function sign(email) {
-  const secret = process.env.UNSUBSCRIBE_SECRET || '';
-  return crypto.createHmac('sha256', secret).update(email.toLowerCase().trim()).digest('hex');
-}
+const { signUnsubscribe: sign } = require('./lib/unsubscribe');
 
 function page(title, message) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
@@ -27,7 +24,9 @@ function page(title, message) {
 exports.handler = async function (event) {
   const htmlHeaders = { 'Content-Type': 'text/html; charset=utf-8' };
 
-  if (event.httpMethod !== 'GET') {
+  // GET = the link in the email; POST = a mail app's one-click "Unsubscribe"
+  // button (RFC 8058, List-Unsubscribe-Post) — same signed URL, same result.
+  if (event.httpMethod !== 'GET' && event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: htmlHeaders, body: page('Unsubscribe', 'Method not allowed.') };
   }
 

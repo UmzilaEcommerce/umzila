@@ -9,10 +9,7 @@ const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replie
 const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
 
-function signUnsubscribe(email) {
-  const secret = process.env.UNSUBSCRIBE_SECRET || '';
-  return crypto.createHmac('sha256', secret).update(email.toLowerCase().trim()).digest('hex');
-}
+const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
 
 function chunk(arr, size) {
   const out = [];
@@ -136,13 +133,13 @@ exports.handler = async function (event) {
   const batches = chunk(recipients, 100);
   for (const batch of batches) {
     const payload = batch.map(email => {
-      const unsubscribeUrl = `${SITE_BASE_URL}/.netlify/functions/unsubscribe?e=${encodeURIComponent(email)}&t=${signUnsubscribe(email)}`;
+      const unsubscribeUrl = makeUnsubUrl(SITE_BASE_URL, email);
       const html = renderMarketingEmail({
         headline: campaign.headline, bodyMessage: campaign.body_message, ctaText: campaign.cta_text, ctaUrl,
         shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
         siteUrl: SITE_BASE_URL, unsubscribeUrl
       });
-      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html };
+      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) };
     });
 
     const res = await fetch('https://api.resend.com/emails/batch', {

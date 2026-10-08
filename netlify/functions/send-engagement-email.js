@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
 const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 exports.handler = async function(event) {
@@ -62,6 +63,12 @@ exports.handler = async function(event) {
     if (!['free-delivery', 'discount'].includes(email_type)) {
         return { statusCode: 400, body: JSON.stringify({ error: 'email_type must be free-delivery or discount' }) };
     }
+    // A basket nudge is marketing: never to someone who unsubscribed.
+    const { data: unsubRow } = await supabase.from('subscribers').select('unsubscribed').ilike('email', String(customer_email).trim()).maybeSingle();
+    if (unsubRow && unsubRow.unsubscribed) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'This person has unsubscribed from marketing emails.' }) };
+    }
+    const unsubUrl = makeUnsubUrl(SITE_BASE_URL, customer_email);
 
     const esc = (s) => (s || '').toString().replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     const fmt = (n) => 'R' + (parseFloat(n) || 0).toFixed(2);
@@ -130,7 +137,8 @@ exports.handler = async function(event) {
   </div>
 
   <div style="background:#f4f6fb;padding:16px 36px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0">
-    <strong><a href="${esc(SITE_BASE_URL)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses
+    <strong><a href="${esc(SITE_BASE_URL)}" style="color:#0a2f66;text-decoration:none">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
+    <a href="${esc(unsubUrl)}" style="color:#aaa;text-decoration:underline">Unsubscribe</a>
   </div>
 </div>
 </body>
@@ -144,7 +152,8 @@ exports.handler = async function(event) {
                 ...mailFrom('Umzila', 'hello', 'news'),
                 to:      [customer_email],
                 subject,
-                html
+                html,
+                headers: unsubscribeHeaders(unsubUrl)
             })
         });
 

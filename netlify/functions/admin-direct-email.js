@@ -15,10 +15,7 @@ function clamp(str, max) {
   return String(str || '').trim().replace(/[<>]/g, '').slice(0, max);
 }
 
-function signUnsubscribe(email) {
-  const secret = process.env.UNSUBSCRIBE_SECRET || '';
-  return crypto.createHmac('sha256', secret).update(email.toLowerCase().trim()).digest('hex');
-}
+const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
 
 exports.handler = async function (event) {
   const origin = process.env.ALLOWED_ORIGIN || '*';
@@ -98,7 +95,7 @@ exports.handler = async function (event) {
 
   if (!RESEND_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Email service not configured' }) };
 
-  const unsubscribeUrl = `${SITE_BASE_URL}/.netlify/functions/unsubscribe?e=${encodeURIComponent(email)}&t=${signUnsubscribe(email)}`;
+  const unsubscribeUrl = makeUnsubUrl(SITE_BASE_URL, email);
   const html = renderMarketingEmail({
     headline, bodyMessage: body_message, ctaText: cta_text, ctaUrl: SITE_BASE_URL || '/',
     shopName: null, codeRow: null, sellerShopName: null,
@@ -108,7 +105,7 @@ exports.handler = async function (event) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject, html })
+    body: JSON.stringify({ ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject, html, headers: unsubscribeHeaders(unsubscribeUrl) })
   });
   if (!res.ok) {
     const errText = await res.text();

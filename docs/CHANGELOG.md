@@ -4,6 +4,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Working unsubscribe links on every marketing email (+ one-click headers)
+
+**Reported:** Resend flagged the Velaphi promo's `mailto:umzilaecommerce@gmail.com` unsubscribe link ("link URLs should match the sending domain"); it was used because the site's own unsubscribe link didn't work.
+**Cause:** `UNSUBSCRIBE_SECRET` was never set in Netlify, so unsubscribe.js answered every link with "This unsubscribe link is invalid", and the signing code was copy-pasted in two senders; basket nudges (send-engagement-email) had no unsubscribe link at all and ignored unsubscribed people.
+**Changed:** `UNSUBSCRIBE_SECRET` set in Netlify (secret; production, deploy-preview, branch-deploy). New `netlify/functions/lib/unsubscribe.js` (signUnsubscribe / unsubscribeUrl / unsubscribeHeaders) used by admin-direct-email, admin-manage-marketing, send-engagement-email and unsubscribe.js. Every marketing email now carries the umzila.store link plus RFC 8058 `List-Unsubscribe` / `List-Unsubscribe-Post` headers (Gmail/Apple show their own Unsubscribe button); unsubscribe.js accepts that one-click POST. Basket nudges refuse unsubscribed people and include the link. Bounced test/typo addresses (abumaps@, amazibuka382@, zakwe@gmail.com) removed from subscribers.
+**Files:** netlify/functions/lib/unsubscribe.js (new), unsubscribe.js, admin-direct-email.js, admin-manage-marketing.js, send-engagement-email.js, CLAUDE.md.
+
 ## 2026-10-08 — Checkout fills in a returning guest's details; the applied code shows on step 1
 
 **Reported:** Sanele came back from the win-back email in a new browser (Gmail's in-app browser), claimed his code in the store pop-up, added the plate, opened checkout and left within a minute. The code was in the box but not applied — it only applies once an email is in the checkout email box, which was empty — so he saw the full R76.30 + delivery and an empty form.
