@@ -115,7 +115,7 @@
     if (changed) try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contact)); } catch (e2) {}
   }
   function syncGuestCart(force) {
-    if (!client || syncing) return;
+    if (!client || syncing || BOT) return; // test runs / crawlers never leave baskets
     tidyContact();
     var raw, anon = anonId();
     try { raw = localStorage.getItem('ss_cart') || '[]'; } catch (e) { return; }
