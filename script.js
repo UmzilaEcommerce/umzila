@@ -2384,7 +2384,9 @@ document.addEventListener('click', function(e) {
 // out. Sold-out products are kept in state.products only so search, shared
 // links and the back-in-stock sign-up still find them.
 function browsableProducts() {
-  return state.products.filter(p => p.visible !== false && (p.listing_type === 'service' || (p.stock || 0) > 0));
+  // Drinks add-ons (metadata.addon — Umzila Drinks) are offered at a store's
+  // checkout (shop.html 'Complete your order'), not browsed on their own.
+  return state.products.filter(p => p.visible !== false && !(p.metadata && p.metadata.addon) && (p.listing_type === 'service' || (p.stock || 0) > 0));
 }
 
 function applyFilters(){

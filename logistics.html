@@ -2858,6 +2858,7 @@ document.addEventListener('sb-ready', function(e){
       const bags = group.map(g=>`<div class="rd-card rd-bag">
           <div class="rd-bag-h">Bag for <strong>${esc(g.for_customer || 'customer')}</strong>${g.priority?' <span class="rd-prio">⚡ priority</span>':''}<span class="rd-muted"> · #…${esc(String(g.order_ref||'').toUpperCase())}</span></div>
           ${itemsList(g.items, active, g.id)}
+          ${(g.house_items||[]).length ? `<div class="rd-hint" style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:8px 10px">🥤 <strong>Also bring from Umzila stock:</strong> ${g.house_items.map(h=>`${esc(String(h.qty||1))}× ${esc(h.name)}`).join(', ')}</div>` : ''}
         </div>`).join('');
       body = storeCard + (group.length > 1 ? `<div class="rd-hint">Keep each order in its own bag, labelled with the customer's name.</div>` : '') + bags;
       if(!active){

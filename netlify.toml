@@ -9,6 +9,10 @@
 [functions."send-stock-alerts"]
   schedule = "*/15 * * * *"
 
+# Post-delivery 1–5 star rating email, ~10 min after delivery (once per delivery).
+[functions."send-rating-requests"]
+  schedule = "*/5 * * * *"
+
 # Site images: browsers reuse them for a day and keep showing the cached copy
 # while re-checking in the background for a week (instant repeat visits). When
 # replacing one of these files with a different picture, give it a new name.

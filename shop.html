@@ -972,8 +972,11 @@ function replacePicks(key, picks){
   else { cart[i].picks = picks; cart[i].qty = picks.length; delete cart[i].quantity; }
   saveCart(cart); renderCart(); syncCart(false);
 }
-const storeLines = () => getCart().filter(l => l.seller_id === S.seller.id);
-const otherLines = () => getCart().filter(l => l.seller_id !== S.seller.id);
+// House add-ons (Umzila Drinks — sellers.is_house) travel with whichever
+// store you check out, so they count as this store's lines here.
+const isHouseLine = l => HOUSE.ids.has(l.seller_id);
+const storeLines = () => getCart().filter(l => l.seller_id === S.seller.id || isHouseLine(l));
+const otherLines = () => getCart().filter(l => l.seller_id !== S.seller.id && !isHouseLine(l));
 function syncCart(bump){
   if (!S.seller) return;
   const ls = storeLines(), n = ls.reduce((a, l) => a + qtyOf(l), 0), sum = ls.reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
@@ -1010,10 +1013,12 @@ function renderCart(){
     }).join('')}</ul>
     ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
     <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>
-    <a class="btn btn-accent btn-block" href="/checkout.html?store=${encodeURIComponent(s.id)}" style="margin-top:6px;padding-block:1rem">Check out ${esc(s.shop_name)} · ${money(sum)}</a>
+    <a class="btn btn-accent btn-block" data-checkout href="/checkout.html?store=${encodeURIComponent(s.id)}" style="margin-top:6px;padding-block:1rem">Check out ${esc(s.shop_name)} · ${money(sum)}</a>
     ${othersLine || '<p class="note">Secure checkout with PayFast. Delivery fee depends on your distance.</p>'}</div>`;
 }
 $('#cartBody').addEventListener('click', e => {
+  const go = e.target.closest('a[data-checkout]');
+  if (go && showAddons(go.href)) { e.preventDefault(); return; }
   const b = e.target.closest('[data-inc],[data-dec],[data-rm],[data-edit]');
   if (!b) return;
   const key = b.dataset.inc || b.dataset.dec || b.dataset.rm || b.dataset.edit;
@@ -1154,6 +1159,7 @@ async function boot(){
   $('#storeView').hidden = false;
   renderHero(); renderCats(); renderCatalog(); renderAbout(); syncCart(false); syncSaved();
   setTimeout(() => showStorePromo(seller), 1800);
+  loadHouseAddons(seller).then(() => syncCart(false));
   if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
 
   const qp = params.get('q');
@@ -1173,6 +1179,92 @@ async function boot(){
     const {data} = await sb.rpc('get_store_hours_status', {p_seller_ids: [seller.id]});
     if (data && data[0]) { S.hours = data[0]; renderMeta(); renderAbout(); }
   }, 5 * 60000);
+}
+
+/* ── "Complete your order" — Umzila Drinks add-ons ─────────────────────
+   Drinks are sold by Umzila's own house store (sellers.is_house, "Umzila
+   Drinks"), never by the store you're on: the store never sees them, the
+   rider brings them from Umzila stock, and they ride in the same delivery
+   (no extra pickup or store fee — validate-cart / get-delivery-quote).
+   On stores listed in ADDON_STORES, tapping Check out first shows a grid of
+   drinks (+ to add, "No thanks" / "Continue to checkout"). */
+const ADDON_STORES = ['velaphishisanyama'];
+const HOUSE = { ids: new Set(), items: [] };
+async function loadHouseAddons(seller){
+  try {
+    const { data: hs } = await sb.from('sellers').select('id').eq('is_house', true).eq('status', 'active');
+    (hs || []).forEach(h => HOUSE.ids.add(h.id));
+    if (!HOUSE.ids.size || !ADDON_STORES.includes(seller.slug)) return;
+    const { data: rows } = await sb.from('products').select('*, product_images!fk_product_images_product(*)')
+      .in('seller_id', [...HOUSE.ids]).eq('visible', true).gt('stock', 0).order('price', { ascending: true });
+    HOUSE.items = (rows || []).filter(r => r.metadata && r.metadata.addon).map(mapProduct);
+  } catch (e) { /* add-ons are optional — never block the store */ }
+}
+const POPULAR_ADDONS = /coca-cola 500ml|coca-cola 1\.5l|fanta orange 500ml/i;
+function showAddons(href){
+  if (!HOUSE.items.length || !ADDON_STORES.includes(S.seller.slug)) return false;
+  if (sessionStorage.getItem('umz_addons_seen_' + S.seller.id)) return false; // once per visit
+  try { sessionStorage.setItem('umz_addons_seen_' + S.seller.id, '1'); } catch (e) {}
+  if (cartDlg.open) cartDlg.close();
+  let ov = document.getElementById('adOverlay'); if (ov) ov.remove();
+  if (!document.getElementById('adCss')) {
+    const css = document.createElement('style'); css.id = 'adCss';
+    css.textContent = '#adOverlay{position:fixed;inset:0;z-index:9998;background:#fff;display:flex;flex-direction:column;animation:adIn .2s ease}' +
+      '@keyframes adIn{from{transform:translateY(24px);opacity:0}}' +
+      '#adOverlay .ad-top{display:flex;align-items:center;gap:6px;padding:14px 16px 4px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}' +
+      '#adOverlay .ad-back{border:0;background:none;font-size:26px;line-height:1;padding:6px 8px 6px 0;cursor:pointer;color:var(--ink,#111)}' +
+      '#adOverlay h2{margin:4px 16px 12px;font:800 1.65rem/1.15 var(--font-display,inherit);letter-spacing:-.02em;max-width:720px;width:calc(100% - 32px);align-self:center;box-sizing:border-box}' +
+      '#adOverlay .ad-scroll{flex:1;overflow:auto;padding:0 16px 110px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}' +
+      '#adOverlay .ad-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}' +
+      '@media(min-width:640px){#adOverlay .ad-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}' +
+      '#adOverlay .ad-card{display:flex;flex-direction:column;gap:6px}' +
+      '#adOverlay .ad-img{position:relative;aspect-ratio:1;border-radius:16px;overflow:hidden;background:#f4f4f5}' +
+      '#adOverlay .ad-img img{width:100%;height:100%;object-fit:cover;display:block}' +
+      '#adOverlay .ad-pop{position:absolute;left:10px;top:10px;background:#0f7a3a;color:#fff;font-size:12px;font-weight:700;padding:4px 9px;border-radius:7px}' +
+      '#adOverlay .ad-plus{position:absolute;right:10px;bottom:10px;width:42px;height:42px;border-radius:50%;border:0;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.18);font-size:24px;line-height:1;cursor:pointer;color:#111}' +
+      '#adOverlay .ad-step{position:absolute;right:10px;bottom:10px;display:flex;align-items:center;gap:2px;background:#fff;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.18);padding:3px}' +
+      '#adOverlay .ad-step button{width:34px;height:34px;border-radius:50%;border:0;background:#f4f4f5;font-size:20px;cursor:pointer;color:#111}' +
+      '#adOverlay .ad-step output{min-width:22px;text-align:center;font-weight:800}' +
+      '#adOverlay .ad-name{font-size:15px;font-weight:600;line-height:1.3;color:var(--ink,#111)}#adOverlay .ad-price{font-size:15px;color:#333}' +
+      '#adOverlay .ad-foot{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(transparent,#fff 28%);padding:22px 16px calc(16px + env(safe-area-inset-bottom,0px))}' +
+      '#adOverlay .ad-go{display:block;max-width:688px;margin:0 auto;width:100%;border:0;border-radius:14px;background:#111;color:#fff;font:700 17px/1 inherit;padding:19px;cursor:pointer}';
+    document.head.appendChild(css);
+  }
+  ov = document.createElement('div'); ov.id = 'adOverlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'Complete your order');
+  const qtyIn = id => getCart().filter(l => (l.id || l.product_id) === id).reduce((a, l) => a + qtyOf(l), 0);
+  const card = p => {
+    const q = qtyIn(p.id);
+    return `<div class="ad-card" data-ad="${esc(p.id)}"><div class="ad-img">${p.primary_image ? `<img src="${esc(thumbUrl(p.primary_image))}" alt="" loading="lazy" onerror="this.src='${esc(p.primary_image)}'">` : ''}${POPULAR_ADDONS.test(p.title) ? '<span class="ad-pop">Popular</span>' : ''}
+      ${q ? `<div class="ad-step"><button type="button" data-ad-dec aria-label="One less">−</button><output>${q}</output><button type="button" data-ad-inc aria-label="One more">+</button></div>` : `<button class="ad-plus" type="button" data-ad-inc aria-label="Add ${esc(p.title)}">+</button>`}</div>
+      <div class="ad-name">${esc(p.title)}</div><div class="ad-price">${money(p.displayPrice)}</div></div>`;
+  };
+  const added = () => HOUSE.items.reduce((a, p) => a + qtyIn(p.id) * p.displayPrice, 0);
+  const render = () => {
+    const extra = added(), total = storeLines().reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
+    ov.innerHTML = `<div class="ad-top"><button class="ad-back" type="button" data-ad-back aria-label="Back to your cart">←</button></div>
+      <h2>Complete your order</h2>
+      <div class="ad-scroll"><div class="ad-grid">${HOUSE.items.map(card).join('')}</div></div>
+      <div class="ad-foot"><button class="ad-go" type="button" data-ad-go>${extra ? 'Continue to checkout · ' + money(total) : 'No thanks'}</button></div>`;
+  };
+  render();
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => {
+    if (e.target.closest('[data-ad-back]')) { ov.remove(); try { sessionStorage.removeItem('umz_addons_seen_' + S.seller.id); } catch (_) {} openCart(); return; }
+    if (e.target.closest('[data-ad-go]')) { if (window.umzilaNavigating) umzilaNavigating(); location.href = href; return; }
+    const c = e.target.closest('[data-ad]'); if (!c) return;
+    const p = HOUSE.items.find(x => x.id === c.dataset.ad); if (!p) return;
+    const cart = getCart(), line = cart.find(l => (l.id || l.product_id) === p.id);
+    if (e.target.closest('[data-ad-inc]')) {
+      if (line) { line.qty = Math.min(qtyOf(line) + 1, p.stock || 99); delete line.quantity; saveCart(cart); }
+      else { cart.push(buildCartItem(p, 'One Size', 1)); saveCart(cart); }
+      if (window.umzilaTrack) umzilaTrack('add_to_cart', { product_id: p.id, seller_id: p.seller_id, category: 'Drinks' });
+    } else if (e.target.closest('[data-ad-dec]') && line) {
+      if (qtyOf(line) <= 1) cart.splice(cart.indexOf(line), 1); else { line.qty = qtyOf(line) - 1; delete line.quantity; }
+      saveCart(cart);
+    } else return;
+    render(); syncCart(true);
+  });
+  return true;
 }
 
 /* ── Store promo pop-up ───────────────────────────────────────────────

@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Umzila Drinks add-ons ("Complete your order") + automatic rating email
+
+**Asked:** offer drinks (Coke, Fanta, Appletiser, Liqui-Fruit…) before checkout on Velaphi, sold by Umzila (Velaphi must not see them); rating email automatically ~10 min after delivery, redesigned.
+**Changed:** see [docs/systems/house-addons.md](systems/house-addons.md). New house seller "Umzila Drinks" (`sellers.is_house`) with 8 drink products (metadata.addon, R21.90 500ml / R32.90 1.5L / R29.90 Appletiser can / R26.90 Liqui-Fruit can, stock 24, designed placeholder tiles). House items ride along in the store's delivery: no pickup stop / store fee / readiness wait (get-delivery-quote, validate-cart, create_delivery_on_payment, advance-delivery-on-fulfillment), rider sees "Also bring from Umzila stock" (get_driver_board + logistics.html), drinks-only carts refused (ADDON_ONLY). shop.html "Complete your order" grid between the cart and checkout on ADDON_STORES; checkout keeps drinks in a store-scoped checkout and never counts them as another store; home hides add-ons and the house store. Rating email: new scheduled `send-rating-requests.js` (every 5 min; delivered 10 min–2 h ago; exactly once via notification_log RATING_REQUEST; skipped if feedback exists), redesigned receipt-style `lib/rating-email.js` from mail.umzila.store. Past deliveries marked as already requested.
+**Files:** shop.html, checkout.html, script.js, logistics.html, netlify.toml, netlify/functions/{validate-cart,get-delivery-quote,advance-delivery-on-fulfillment,get-catalog,send-rating-requests(new)}.js, lib/rating-email.js, DB: sellers.is_house, create_delivery_on_payment(), get_driver_board(), docs/systems/house-addons.md (new), CLAUDE.md.
+
 ## 2026-10-08 — Tracking shows minutes until the rider reaches you (incl. orders ahead)
 
 **Asked:** a customer in Shireletso's position (collected, another drop first) should see how long until the rider reaches them.

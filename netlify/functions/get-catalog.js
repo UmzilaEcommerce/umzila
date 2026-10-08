@@ -32,7 +32,7 @@ exports.handler = async function (event) {
         .eq('visible', true)
         .order('created_at', { ascending: false }),
       sb.from('product_variants').select('*'),
-      sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active'),
+      sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active').eq('is_house', false), // house add-on store (Umzila Drinks) isn't a browsable store
       sb.from('ad_campaigns').select('type, product_id, seller_id, image_url, link_url, ends_at')
         .eq('status', 'active').gt('ends_at', new Date().toISOString())
     ]);

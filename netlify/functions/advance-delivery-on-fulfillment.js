@@ -93,7 +93,11 @@ exports.handler = async function (event) {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to load order item statuses', detail: statusError.message }) };
       }
       const READY_STATUSES = ['fulfilled', 'delivered', 'refunded'];
-      const sellersOnOrder = [...new Set(orderItems.map(i => i.seller_id).filter(Boolean))];
+      // House add-ons (sellers.is_house — drinks from Umzila stock) never wait
+      // for a "Mark ready": only real stores count.
+      const { data: houseRows } = await supabase.from('sellers').select('id').eq('is_house', true);
+      const houseIds = new Set((houseRows || []).map(s => s.id));
+      const sellersOnOrder = [...new Set(orderItems.map(i => i.seller_id).filter(id => id && !houseIds.has(id)))];
       const allSellersReady = sellersOnOrder.every(sellerId => {
         // Distinct lines (product + size), so a duplicated order_items row
         // can never make a seller look "not ready" forever.

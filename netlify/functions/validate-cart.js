@@ -71,7 +71,7 @@ function computeFees(validatedCart) {
             if (rawIdx > maxClassIdx) maxClassIdx = Math.min(rawIdx, 2);
             extraTrips += Math.max(0, rawIdx - 2);
         });
-        feeItems.forEach(item => { if (item.seller_id) sellerIds.add(item.seller_id); });
+        feeItems.forEach(item => { if (item.seller_id && !item.house) sellerIds.add(item.seller_id); }); // house add-ons ride along — never +1 store
         deliveryClass = classNames[maxClassIdx];
         sellerCount = Math.max(sellerIds.size, 1);
         const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[deliveryClass] : 0;
@@ -168,7 +168,7 @@ if (!productIds.length) {
         // Fetch products — only visible ones
 const { data: products, error: productsError } = await supabase
   .from('products')
-  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, service_location, slot_duration_minutes, metadata, sellers(free_delivery)')
+  .select('id, price, sale, sale_price, stock, name, image, seller_id, delivery_class, visible, listing_type, fulfillment_type, service_turnaround, acceptance_deadline_hours, free_delivery, units_per_trip, intake_kind, intake_fields, booking_mode, instant_confirm, service_location, slot_duration_minutes, metadata, sellers(free_delivery, is_house)')
   .in('id', productIds)
   .eq('visible', true);
 
@@ -365,6 +365,9 @@ variants.forEach(v => {
     max_quantity: maxQuantity,
     subtotal: itemPrice * qty,
     seller_id: product.seller_id || null,
+    // Umzila's house store (sellers.is_house — drinks add-ons): rides along in
+    // another store's delivery, never counts as an extra store.
+    house: !!(product.sellers && product.sellers.is_house) || undefined,
     delivery_class: product.delivery_class || 'small',
     delivery_price: deliveryPrice,
     listing_type: product.listing_type || 'product',
@@ -543,6 +546,14 @@ variants.forEach(v => {
         // delivery zone (admin → Service Areas). Outside every zone there is
         // no delivery — checkout offers "notify me when you deliver here"
         // instead (founder decision 2026-10-04: never a default fee there).
+        // House add-ons (drinks) only travel with a store's order.
+        if (finalCheck) {
+            const physical = validatedCart.filter(i => (i.listing_type || 'product') !== 'service');
+            if (physical.length && physical.every(i => i.house)) {
+                return { statusCode: 400, body: JSON.stringify({ error: 'Drinks are added to a store order — add something from a store first.', code: 'ADDON_ONLY' }) };
+            }
+        }
+
         if (finalCheck && validatedCart.some(i => (i.listing_type || 'product') !== 'service')) {
             const dLat = destination ? Number(destination.lat) : NaN, dLon = destination ? Number(destination.lon) : NaN;
             if (!Number.isFinite(dLat) || !Number.isFinite(dLon)) {

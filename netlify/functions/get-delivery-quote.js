@@ -177,7 +177,7 @@ exports.handler = async function (event, context) {
 
     const { data: products, error: productsError } = await supabase
       .from('products')
-      .select('id, price, sale, sale_price, seller_id, delivery_class, visible, listing_type, free_delivery, units_per_trip, metadata, sellers(free_delivery)')
+      .select('id, price, sale, sale_price, seller_id, delivery_class, visible, listing_type, free_delivery, units_per_trip, metadata, sellers(free_delivery, is_house)')
       .in('id', productIds)
       .eq('visible', true);
     if (productsError) {
@@ -229,6 +229,7 @@ exports.handler = async function (event, context) {
 
       productItems.push({
         seller_id: product.seller_id,
+        house: !!(product.sellers && product.sellers.is_house), // drinks add-ons: no pickup stop of their own
         price: Number(itemPrice) || 0,
         quantity: qty,
         delivery_class: (product.delivery_class || 'small').toLowerCase(),
@@ -248,7 +249,12 @@ exports.handler = async function (event, context) {
     // (plan §15/§137's full inter-store route scoring is more than a 2-seller
     // pilot needs -- see delivery-network-spec.md §B.2/§4 for what's deferred
     // and why).
-    const pickupSellerIds = [...new Set(productItems.map(i => i.seller_id))];
+    // House add-ons (sellers.is_house, e.g. Umzila Drinks) come from Umzila's
+    // own stock in the rider's car: never a pickup stop, never an extra store.
+    if (productItems.every(i => i.house)) {
+      return ineligible('Drinks are added to a store order — add something from a store first.', 'addon_only');
+    }
+    const pickupSellerIds = [...new Set(productItems.filter(i => !i.house).map(i => i.seller_id))];
     if (pickupSellerIds.length > MAX_BUNDLE_SELLERS) {
       return ineligible(MULTI_SELLER_REASON, 'multi_seller');
     }

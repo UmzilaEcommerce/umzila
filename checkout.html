@@ -1906,7 +1906,7 @@
         // trip can't physically absorb two different bulky products' overflow.
         extraTrips += Math.max(0, rawIdx - 2);
       });
-      feeItems.forEach(item => { if (item.seller_id) sellerIds.add(item.seller_id); });
+      feeItems.forEach(item => { if (item.seller_id && !HOUSE_IDS.has(item.seller_id) && item.house !== true) sellerIds.add(item.seller_id); }); // drinks add-ons ride along
       const maxClass = classNames[maxClassIdx];
       const uniqueSellers = Math.max(sellerIds.size, 1);
       const classBaseFee = classItems.length ? DELIVERY_CLASS_PRICES[maxClass] : 0;
@@ -3509,7 +3509,7 @@ async function saveCartToServer() {
       } else if (b.kind === 'multi') {
         // One tap per store: checkout.html?store=<id> pays for that store's
         // lines only and keeps the rest of the cart for the next checkout.
-        const lines = (state.cart || []).filter(i => i.seller_id && (i.listing_type || 'product') !== 'service');
+        const lines = (state.cart || []).filter(i => i.seller_id && !HOUSE_IDS.has(i.seller_id) && (i.listing_type || 'product') !== 'service');
         const ids = [...new Set(lines.map(i => i.seller_id))];
         const nameOf = id => ((state.sellerTurnarounds || []).find(s => s.id === id) || {}).shop_name || 'this store';
         const sumOf = id => lines.filter(i => i.seller_id === id).reduce((s, i) => s + (Number(i.price) || 0) * (Number(i.quantity || i.qty) || 1), 0);
@@ -3592,6 +3592,7 @@ async function saveCartToServer() {
     // Load cart with server validation
 async function loadCart() {
     try {
+        if (supabaseClient) await ensureHouseIds();
         state.cartRest = [];
         const urlParams = new URLSearchParams(window.location.search);
         const couponCode = urlParams.get('coupon');
@@ -3647,10 +3648,21 @@ async function loadCart() {
 // only that store's lines are priced and paid; the buyer's other lines wait
 // in state.cartRest and are written back with every cart save, so nothing
 // from other stores is lost. Called with the FULL cart each time.
+// House add-ons (Umzila Drinks — sellers.is_house) travel with whichever
+// store is being checked out, so they stay in the scoped cart.
 function scopeCart(fullCart) {
     if (!state.storeScope || state.isBuyNow) { state.cart = fullCart; state.cartRest = []; return; }
-    state.cart = fullCart.filter(i => i.seller_id === state.storeScope);
-    state.cartRest = fullCart.filter(i => i.seller_id !== state.storeScope);
+    const mine = i => i.seller_id === state.storeScope || i.house === true || HOUSE_IDS.has(i.seller_id);
+    state.cart = fullCart.filter(mine);
+    state.cartRest = fullCart.filter(i => !mine(i));
+}
+const HOUSE_IDS = new Set();
+let houseIdsPromise = null;
+function ensureHouseIds() {
+    if (!houseIdsPromise) houseIdsPromise = (async () => {
+        try { const { data } = await supabaseClient.from('sellers').select('id').eq('is_house', true); (data || []).forEach(h => HOUSE_IDS.add(h.id)); } catch (e) { /* optional */ }
+    })();
+    return houseIdsPromise;
 }
 function fullCart() { return state.cart.concat(state.cartRest || []); }
 // Every ss_cart write goes through here: a Buy Now never touches the real
@@ -4483,13 +4495,13 @@ async function validateCheckout() {
 
     async function updateEstimatedDelivery() {
       const cart = state.validatedCart || state.cart;
-      const sellerIds = [...new Set(cart.map(i => i.seller_id).filter(Boolean))];
+      const sellerIds = [...new Set(cart.map(i => i.seller_id).filter(id => id && !HOUSE_IDS.has(id)))]; // drinks add-ons never make it multi-store
       if (!sellerIds.length) return;
       if (!supabaseClient) return;
       try {
         // Opening hours ride along: a closed store changes the delivery
         // target (goods are made when it opens — refreshEstimatedTime).
-        const goodsSellerIds = [...new Set(cart.filter(waitsForOpenStore).map(i => i.seller_id).filter(Boolean))];
+        const goodsSellerIds = [...new Set(cart.filter(waitsForOpenStore).map(i => i.seller_id).filter(id => id && !HOUSE_IDS.has(id)))];
         const [{ data: sellers }, hoursRes] = await Promise.all([
           supabaseClient
             .from('sellers')
