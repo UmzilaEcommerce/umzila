@@ -535,9 +535,19 @@
   let firstDriverFit = true;
   let shownStep = null;
 
+  // The rider's car (get_delivery_vehicle) — only returned while the rider is
+  // heading to this customer, so it's fetched then and kept.
+  let riderCar = null, carAsked = false;
+  const HEADING = ['IN_ROUTE', 'NEXT_STOP', 'ARRIVING', 'PIN_REQUIRED'];
+
   async function loadTracking() {
     const { data, error } = await sb.rpc('get_delivery_tracking', { p_order_id: orderId, p_token: trackToken });
     const row = Array.isArray(data) ? data[0] : data;
+    if (row && HEADING.includes(row.status) && !carAsked) {
+      carAsked = true;
+      try { const v = await sb.rpc('get_delivery_vehicle', { p_order_id: orderId, p_token: trackToken }); riderCar = (v && typeof v.data === 'string' && v.data) || null; } catch (e) { riderCar = null; }
+    }
+    if (row && !HEADING.includes(row.status)) { riderCar = null; carAsked = false; }
 
     if (error || !row || !row.delivery_id) {
       content.innerHTML = emptyCard('📦', trackToken
@@ -584,7 +594,7 @@
             <h1 id="heroTitle">${esc(title)}</h1>
             <p id="heroSub">${esc(sub)}</p>
             <span class="t-distance" id="distanceChip" hidden></span>
-            <div class="t-rider" id="riderChip"${riderName ? '' : ' hidden'}>🛵 Your rider: <strong id="riderName">${esc(riderName || '')}</strong></div>
+            <div class="t-rider" id="riderChip"${riderName ? '' : ' hidden'}>🛵 Your rider: <strong id="riderName">${esc(riderName || '')}</strong><span id="riderCar" style="display:block;margin-top:4px;font-weight:600"${riderCar ? '' : ' hidden'}>🚗 ${esc(riderCar || '')}</span></div>
           </div>
         </div>
         ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
@@ -610,6 +620,8 @@
       document.getElementById('stepsCard').hidden = isProblem;
       const rc = document.getElementById('riderChip');
       if (rc) { rc.hidden = !riderName; document.getElementById('riderName').textContent = riderName || ''; }
+      const car = document.getElementById('riderCar');
+      if (car) { car.hidden = !riderCar; car.textContent = riderCar ? '🚗 ' + riderCar : ''; }
     }
 
     // Only swap the scene/timeline when the stage actually changes, so the

@@ -4516,13 +4516,14 @@ async function validateCheckout() {
     // that data is known, then the real seller-turnaround estimate once it
     // arrives. No delivery zone involved (deliveries aren't restricted by
     // area), so this is purely a function of state.sellerTurnarounds.
-    // Delivery target (founder 2026-10-04): road distance × 2 min/km + 25 min
-    // — the quickest it can realistically take. Uses the live quote's road
-    // route (store → this address, the same distance the price uses); it is
-    // a target we aim for, never a guarantee. Was: the store's free-text
-    // "ready within" setting mapped to "~2–4 hours" etc., no distance at all.
+    // Delivery target: road distance × 2 min/km + 45 min. The 45 (was 25,
+    // founder 2026-10-08) covers cooking/prep, the rider getting to the store
+    // and collecting — measured on the first real orders (8 Oct: 45 min prep,
+    // ~20 min rider-to-store + collection; the drive itself matched km × 2).
+    // Uses the live quote's road route (store → this address, the same
+    // distance the price uses); a target we aim for, never a guarantee.
     const ETA_MIN_PER_KM = 2;
-    const ETA_BASE_MIN = 25;
+    const ETA_BASE_MIN = 45;
     function formatEtaMinutes(m) {
       m = Math.round(m);
       if (m < 60) return `about ${m} min`;

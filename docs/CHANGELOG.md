@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Honest delivery target; customers see the rider's car
+
+**Reported:** the first real orders took 1 h 19 – 1 h 40 against a ~55 min checkout target (45 min prep at Velaphi, ~20 min rider-to-store + collection; the drive itself matched km × 2), and customers only saw the rider's first name.
+**Changed:** checkout.html delivery target = road km × 2 + **45** min (was + 25). New RPC `get_delivery_vehicle(order, token)` returns `drivers.vehicle_description` (both founders: "Silver Hyundai i20 · DM99ZWZN") with the same access rule as get_delivery_tracking and only while the rider is heading to that customer (IN_ROUTE…PIN_REQUIRED); track.html shows it under "Your rider". (A separate RPC rather than a new column on get_delivery_tracking, because changing that function's return type needs a drop/recreate.)
+**Files:** checkout.html, track.html, DB: get_delivery_vehicle(), drivers.vehicle_description data, CLAUDE.md.
+
 ## 2026-10-08 — 1–5 star delivery rating by email
 
 **Asked:** a rating email after delivery (Shireletso, first promo order) with clickable 1–5 stars; 3 or fewer asks why; ratings and comments show in admin delivery feedback.
