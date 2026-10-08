@@ -473,7 +473,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
     const key = c.supabaseAnonKey||c.SUPABASE_ANON_KEY||c.anonKey;
     if(!url||!key) return console.error('Missing supabase config',c);
     window._sb = supabase.createClient(url,key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-    document.dispatchEvent(new CustomEvent('sb-ready',{detail:window._sb}));
+    // Fired only once the whole page is parsed: get-client-config is CDN-cached and can
+    // resolve before the parser reaches the 'sb-ready' listeners further down, and the
+    // event then fired into the void (blank logistics until a lucky refresh).
+    (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('sb-ready',{detail:window._sb})));
   }catch(e){console.error('Supabase init error',e)}
 })();
 </script>
@@ -3148,10 +3151,16 @@ document.addEventListener('sb-ready', function(e){
     // Products are only needed for the New/Edit order forms — load in the background
     fetchProducts();
 
-    // Load orders
-    const [orders] = await Promise.all([fetchOrders(), loadOps()]);
-    ORDERS=orders;
+    // Load orders + the live board. Either failing (e.g. a session still
+    // refreshing) must never leave a blank screen: show what loaded, and
+    // retry the orders once a moment later.
+    const [ordersRes] = await Promise.allSettled([fetchOrders(), loadOps()]);
+    ORDERS = ordersRes.status === 'fulfilled' && Array.isArray(ordersRes.value) ? ordersRes.value : [];
     showPanel('overview');
+    if (ordersRes.status !== 'fulfilled') {
+      console.warn('logistics: orders failed to load, retrying', ordersRes.reason);
+      setTimeout(async () => { try { ORDERS = await fetchOrders() || []; showPanel('overview'); } catch (e) { console.warn('logistics: retry failed', e); } }, 2500);
+    }
   })();
 });
 </script>

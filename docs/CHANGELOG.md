@@ -4,6 +4,14 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-08 — Dashboards no longer load blank after login; honest seller analytics
+
+**Reported:** logistics wouldn't load after logging in until refreshed several times; seller-dashboard analytics wrong.
+**Cause (blank pages):** pages create their Supabase client after fetching get-client-config and then fire 'sb-ready'/'supabase-ready'; the listeners live in later <script> blocks. Since get-client-config became CDN-cached it can resolve before the parser reaches those scripts, so the event fired with nobody listening and the page sat empty. Logistics also awaited orders + ops board together with no error handling, so one failure left it blank.
+**Changed:** the ready event now fires once the page is parsed (DOMContentLoaded) on logistics, seller-dashboard, admin, cart and profile; logistics init uses Promise.allSettled, always shows the overview and retries orders once.
+**Seller analytics:** reuse loadProducts/loadOrders (same numbers as the Orders tab, incl. live delivery status); Umzila's staff test product (metadata.staff_test) excluded; cancelled/returned deliveries aren't sales; the always-"Paid" payment breakdown replaced by Delivered / In progress / Cancelled; new Last 7 days (orders, sales, items) + average order; per-product views → added to cart → sold (products.click_count/cart_count); store visitors now from site_visits (get_my_store_traffic; bots excluded). Removed Ntando Shazi's two unfinished test payments.
+**Files:** logistics.html, seller-dashboard.html, admin.html, cart.html, profile.html, DB: get_my_store_traffic().
+
 ## 2026-10-08 — Umzila Drinks add-ons ("Complete your order") + automatic rating email
 
 **Asked:** offer drinks (Coke, Fanta, Appletiser, Liqui-Fruit…) before checkout on Velaphi, sold by Umzila (Velaphi must not see them); rating email automatically ~10 min after delivery, redesigned.

@@ -441,7 +441,7 @@ const supabaseClient = supabase.createClient(
     window.supabase = supabaseClient; // make it accessible globally
 
     // Optional: notify other scripts that Supabase is ready
-    document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } }));
+    /* fired after the page is parsed so every listener is attached (see logistics.html) */ (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: supabaseClient } })));
     console.log('Supabase client initialized');
   } catch (err) {
     console.error('Error initializing Supabase client', err);

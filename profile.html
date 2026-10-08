@@ -535,9 +535,9 @@
         window.supabase = client;
         if (window.umzilaPresence) umzilaPresence.start(client, 'profile');
       }
-      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } }));
+      /* fired after the page is parsed so every listener is attached (see logistics.html) */ (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } })));
     }catch(e){
-      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: {} }));
+      (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('supabase-ready', { detail: {} })));
     }
   })();
   </script>

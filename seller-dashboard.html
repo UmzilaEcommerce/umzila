@@ -1202,9 +1202,18 @@
         <!-- Overview stats -->
         <div class="analytics-grid">
           <div class="stat-card"><div class="stat-value" id="statProducts">—</div><div class="stat-label">Products Listed</div></div>
-          <div class="stat-card"><div class="stat-value" id="statOrders">—</div><div class="stat-label">Total Orders</div></div>
-          <div class="stat-card alt"><div class="stat-value" id="statRevenue">—</div><div class="stat-label">Revenue (ZAR)</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Product sales only — delivery is charged and handled by Umzila</div></div>
+          <div class="stat-card"><div class="stat-value" id="statOrders">—</div><div class="stat-label">Orders</div></div>
+          <div class="stat-card alt"><div class="stat-value" id="statRevenue">—</div><div class="stat-label">Sales (ZAR)</div><div style="font-size:10px;color:var(--muted);margin-top:2px">Your products' prices, before promo discounts — delivery is Umzila's</div></div>
           <div class="stat-card green"><div class="stat-value" id="statFavourites">—</div><div class="stat-label">Total Favourites</div></div>
+        </div>
+
+        <!-- Last 7 days -->
+        <div class="analytics-section-title">Last 7 days</div>
+        <div class="analytics-grid">
+          <div class="stat-card"><div class="stat-value" id="statOrders7">—</div><div class="stat-label">Orders</div></div>
+          <div class="stat-card alt"><div class="stat-value" id="statRevenue7">—</div><div class="stat-label">Sales (ZAR)</div></div>
+          <div class="stat-card"><div class="stat-value" id="statItems7">—</div><div class="stat-label">Items sold</div></div>
+          <div class="stat-card green"><div class="stat-value" id="statAvgOrder">—</div><div class="stat-label">Average order (all time)</div></div>
         </div>
 
         <!-- Store page traffic (get_my_store_traffic) -->
@@ -1217,11 +1226,11 @@
         </div>
 
         <!-- Payment status breakdown -->
-        <div class="analytics-section-title">Orders by Payment Status</div>
+        <div class="analytics-section-title">Orders by delivery</div>
         <div class="status-breakdown">
-          <div class="sb-card paid">   <div class="sb-val" id="statPaid">—</div>   <div class="sb-lbl">Paid</div></div>
-          <div class="sb-card pending"><div class="sb-val" id="statUnpaid">—</div>  <div class="sb-lbl">Pending</div></div>
-          <div class="sb-card other">  <div class="sb-val" id="statOtherOrders">—</div><div class="sb-lbl">Other</div></div>
+          <div class="sb-card paid">   <div class="sb-val" id="statPaid">—</div>   <div class="sb-lbl">Delivered</div></div>
+          <div class="sb-card pending"><div class="sb-val" id="statUnpaid">—</div>  <div class="sb-lbl">In progress</div></div>
+          <div class="sb-card other">  <div class="sb-val" id="statOtherOrders">—</div><div class="sb-lbl">Cancelled / returned</div></div>
         </div>
 
         <!-- Product status breakdown -->
@@ -1238,6 +1247,12 @@
           <div style="color:var(--muted);font-size:13px">Loading...</div>
         </div>
 
+        <!-- Views → cart → sold, per product -->
+        <div class="analytics-section-title">How shoppers respond to each product</div>
+        <div class="top-products-list" id="funnelList">
+          <div style="color:var(--muted);font-size:13px">Loading...</div>
+        </div>
+
         <!-- Most favourited products -->
         <div class="analytics-section-title">Most Favourited Products</div>
         <div class="top-products-list" id="topFavList">
@@ -1245,7 +1260,7 @@
         </div>
 
         <hr class="divider" style="margin-top:20px">
-        <div style="font-size:12px;color:var(--muted)">Revenue calculated from paid orders containing your products.</div>
+        <div style="font-size:12px;color:var(--muted)">From paid orders containing your products (cancelled or returned deliveries aren't counted as sales). Umzila's internal test orders are left out.</div>
       </div>
     </div>
 
@@ -1493,7 +1508,7 @@
         if (!url || !key) { redirectToLogin(); return; }
         var client = supabase.createClient(url, key);
         window.supabase = client;
-        document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } }));
+        /* fired after the page is parsed so every listener is attached (see logistics.html) */ (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(function(){ document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabase: client } })); });
       } catch (err) { console.error('Supabase init error', err); redirectToLogin(); }
     })();
 
@@ -2999,7 +3014,7 @@
 
       var { data, error } = await SD.sb
         .from('products')
-        .select('id, name, description, price, sale_price, sale, visible, badge, category, category_id, image, sizes, stock, metadata, created_at, favourite_count, delivery_class')
+        .select('id, name, description, price, sale_price, sale, visible, badge, category, category_id, image, sizes, stock, metadata, created_at, favourite_count, delivery_class, click_count, cart_count')
         .eq('seller_id', SD.seller.id)
         .order('created_at', { ascending: false });
 
@@ -4367,91 +4382,87 @@
 
     async function loadAnalytics() {
       loadStoreTraffic().catch(function() {});
-      // Ensure products loaded — shared loader, see loadProgressBar's comment.
+      // Products + orders through the same loaders the other tabs use, so
+      // the numbers always match the Orders tab (incl. each order's live
+      // delivery status, o._deliveryStatus).
       await loadProducts();
-      var myProductIds = SD.products.map(function(p) { return p.id; });
-      var totalProducts = SD.products.length;
-      var pendingCount  = SD.products.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
-      var approvedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'approved'; }).length;
-      var rejectedProds = SD.products.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
-      var totalFavs     = SD.products.reduce(function(s, p) { return s + (p.favourite_count || 0); }, 0);
+      if (!ordersLoaded) { try { await loadOrders(); } catch (e) { console.warn('analytics: orders', e); } }
 
-      // Ensure orders loaded — paid orders only for analytics accuracy
-      if (!SD.orders.length && myProductIds.length) {
-        var { data: od } = await SD.sb
-          .from('orders').select('id, items, raw_cart, order_status, payment_status')
-          .eq('payment_status', 'paid')
-          .order('created_at', { ascending: false }).limit(200);
-        SD.orders = (od || []).filter(function(o) {
-          var items = Array.isArray(o.items) ? o.items : (Array.isArray(o.raw_cart) ? o.raw_cart : []);
-          return items.some(function(i) { return myProductIds.includes(i.id || i.product_id); });
-        });
-      }
+      // Umzila's internal delivery-test product (metadata.staff_test) is never
+      // counted — those R5 test runs aren't this store's sales.
+      var real = SD.products.filter(function(p) { return !(p.metadata && p.metadata.staff_test); });
+      var realIds = real.map(function(p) { return p.id; });
+      var totalProducts = real.filter(function(p) { return p.visible !== false; }).length;
+      var pendingCount  = real.filter(function(p) { return getProductStatus(p) === 'pending_review'; }).length;
+      var approvedProds = real.filter(function(p) { return getProductStatus(p) === 'approved'; }).length;
+      var rejectedProds = real.filter(function(p) { return getProductStatus(p) === 'rejected'; }).length;
+      var totalFavs     = real.reduce(function(s, p) { return s + (p.favourite_count || 0); }, 0);
 
-      var totalOrders = SD.orders.length;
-      var paidCount = 0, unpaidCount = 0, otherCount = 0, totalRevenue = 0;
-      var prodRevMap = {};
-      SD.products.forEach(function(p) { prodRevMap[p.id] = { id: p.id, name: p.name || 'Untitled', revenue: 0, qty: 0, favs: p.favourite_count || 0 }; });
+      var itemsOf = function(o) { return Array.isArray(o.items) ? o.items : (Array.isArray(o.raw_cart) ? o.raw_cart : []); };
+      var mine = function(o) { return itemsOf(o).filter(function(i) { return realIds.includes(i.id || i.product_id); }); };
+      var orders = (SD.orders || []).filter(function(o) { return mine(o).length > 0; });
+      var CANCELLED = ['CANCELLED', 'FAILED', 'RETURNED'];
+      var isCancelled = function(o) { return CANCELLED.includes(o._deliveryStatus) || /^(cancelled|returned|refunded)$/i.test(o.order_status || ''); };
+      var qtyOf = function(i) { return Number(i.qty || i.quantity || 1); };
+      var lineTotal = function(i) { return Number(i.price || i.unit_price || 0) * qtyOf(i); };
 
-      SD.orders.forEach(function(order) {
-        var items = Array.isArray(order.items) ? order.items : (Array.isArray(order.raw_cart) ? order.raw_cart : []);
-        var myItems = items.filter(function(i) { return myProductIds.includes(i.id || i.product_id); });
-        var orderRevenue = myItems.reduce(function(s, i) { return s + (Number(i.price||i.unit_price||0) * Number(i.qty||i.quantity||1)); }, 0);
-        totalRevenue += orderRevenue;
+      var weekAgo = Date.now() - 7 * 86400000;
+      var delivered = 0, inProgress = 0, cancelled = 0, sales = 0, counted = 0, orders7 = 0, sales7 = 0, items7 = 0;
+      var prodMap = {};
+      real.forEach(function(p) { prodMap[p.id] = { id: p.id, name: p.name || 'Untitled', revenue: 0, qty: 0, favs: p.favourite_count || 0, views: p.click_count || 0, carts: p.cart_count || 0 }; });
 
-        // Use payment_status for payment tracking (falls back to order_status for backward compat)
-        var ps = (order.payment_status || order.order_status || '').toLowerCase();
-        if (ps === 'paid') paidCount++;
-        else if (ps === 'pending' || ps === 'pending_payment') unpaidCount++;
-        else otherCount++;
-
-        myItems.forEach(function(i) {
-          var pid = i.id || i.product_id;
-          if (prodRevMap[pid]) {
-            prodRevMap[pid].revenue += Number(i.price||i.unit_price||0) * Number(i.qty||i.quantity||1);
-            prodRevMap[pid].qty     += Number(i.qty||i.quantity||1);
-          }
-        });
+      orders.forEach(function(o) {
+        if (isCancelled(o)) { cancelled++; return; }
+        if (o._deliveryStatus === 'DELIVERED' || (!o._deliveryStatus && /delivered|completed/i.test(o.order_status || ''))) delivered++; else inProgress++;
+        var my = mine(o), orderSales = my.reduce(function(s, i) { return s + lineTotal(i); }, 0);
+        sales += orderSales; counted++;
+        if (new Date(o.created_at).getTime() >= weekAgo) { orders7++; sales7 += orderSales; items7 += my.reduce(function(s, i) { return s + qtyOf(i); }, 0); }
+        my.forEach(function(i) { var pm = prodMap[i.id || i.product_id]; if (pm) { pm.revenue += lineTotal(i); pm.qty += qtyOf(i); } });
       });
 
-      // Update UI
-      document.getElementById('statProducts').textContent    = totalProducts;
-      document.getElementById('statOrders').textContent      = totalOrders;
-      document.getElementById('statRevenue').textContent     = fmt(totalRevenue);
-      document.getElementById('statFavourites').textContent  = totalFavs;
-      document.getElementById('statPaid').textContent        = paidCount;
-      document.getElementById('statUnpaid').textContent      = unpaidCount;
-      document.getElementById('statOtherOrders').textContent = otherCount;
-      document.getElementById('statApprovedProds').textContent= approvedProds;
-      document.getElementById('statPendingProds').textContent = pendingCount;
-      document.getElementById('statRejectedProds').textContent= rejectedProds;
+      var setText = function(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; };
+      setText('statProducts', totalProducts);
+      setText('statOrders', counted);
+      setText('statRevenue', fmt(sales));
+      setText('statFavourites', totalFavs);
+      setText('statOrders7', orders7);
+      setText('statRevenue7', fmt(sales7));
+      setText('statItems7', items7);
+      setText('statAvgOrder', counted ? fmt(sales / counted) : '—');
+      setText('statPaid', delivered);
+      setText('statUnpaid', inProgress);
+      setText('statOtherOrders', cancelled);
+      setText('statApprovedProds', approvedProds);
+      setText('statPendingProds', pendingCount);
+      setText('statRejectedProds', rejectedProds);
 
-      // Top products by revenue
-      var topProds = Object.values(prodRevMap).filter(function(p) { return p.qty > 0; })
-        .sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 5);
-      var topList = document.getElementById('topProductsList');
-      topList.innerHTML = !topProds.length
+      var esc2 = function(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+      var row = function(rank, name, meta, right) {
+        return '<div class="top-prod-row"><div class="top-prod-rank">' + rank + '</div>' +
+          '<div class="top-prod-info"><div class="top-prod-name">' + esc2(name) + '</div><div class="top-prod-meta">' + meta + '</div></div>' +
+          (right ? '<div class="top-prod-rev">' + right + '</div>' : '') + '</div>';
+      };
+
+      var topProds = Object.values(prodMap).filter(function(p) { return p.qty > 0; }).sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 5);
+      document.getElementById('topProductsList').innerHTML = !topProds.length
         ? '<div style="color:var(--muted);font-size:13px">No sales yet — your top sellers will appear here.</div>'
-        : topProds.map(function(p, i) {
-            return '<div class="top-prod-row">' +
-              '<div class="top-prod-rank">' + (i+1) + '</div>' +
-              '<div class="top-prod-info"><div class="top-prod-name">' + p.name + '</div><div class="top-prod-meta">' + p.qty + ' sold</div></div>' +
-              '<div class="top-prod-rev">' + fmt(p.revenue) + '</div>' +
-            '</div>';
+        : topProds.map(function(p, i) { return row(i + 1, p.name, p.qty + ' sold', fmt(p.revenue)); }).join('');
+
+      // Views → added to cart → sold (views/carts are Umzila's counters on each product)
+      var funnel = Object.values(prodMap).filter(function(p) { return p.views > 0 || p.carts > 0 || p.qty > 0; })
+        .sort(function(a, b) { return b.views - a.views; }).slice(0, 8);
+      var fl = document.getElementById('funnelList');
+      if (fl) fl.innerHTML = !funnel.length
+        ? '<div style="color:var(--muted);font-size:13px">No product views yet.</div>'
+        : funnel.map(function(p, i) {
+            var conv = p.views ? Math.round(p.qty / p.views * 100) : 0;
+            return row(i + 1, p.name, '👀 ' + p.views + ' views · 🛒 ' + p.carts + ' added to cart · ✅ ' + p.qty + ' sold', p.views ? conv + '% bought' : '');
           }).join('');
 
-      // Most favourited products
-      var topFav = Object.values(prodRevMap).filter(function(p) { return p.favs > 0; })
-        .sort(function(a, b) { return b.favs - a.favs; }).slice(0, 5);
-      var favList = document.getElementById('topFavList');
-      favList.innerHTML = !topFav.length
+      var topFav = Object.values(prodMap).filter(function(p) { return p.favs > 0; }).sort(function(a, b) { return b.favs - a.favs; }).slice(0, 5);
+      document.getElementById('topFavList').innerHTML = !topFav.length
         ? '<div style="color:var(--muted);font-size:13px">No favourites yet — encourage buyers to save your products!</div>'
-        : topFav.map(function(p, i) {
-            return '<div class="top-prod-row">' +
-              '<div class="top-prod-rank">' + (i+1) + '</div>' +
-              '<div class="top-prod-info"><div class="top-prod-name">' + p.name + '</div><div class="top-prod-meta">❤️ ' + p.favs + ' favourites</div></div>' +
-            '</div>';
-          }).join('');
+        : topFav.map(function(p, i) { return row(i + 1, p.name, '❤️ ' + p.favs + ' favourites'); }).join('');
     }
 
     /* ─────────────────────────────────────────
