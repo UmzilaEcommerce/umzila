@@ -1189,11 +1189,12 @@ async function showStorePromo(seller) {
   if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
   const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
   const heldKey = 'umz_promo_held_' + seller.slug + '_' + p.until.slice(0, 10);
-  // Claimed here = never again (localStorage).
-  try { if (localStorage.getItem(seenKey)) return; } catch (e) {}
+  let claimedHere = false;
+  try { claimedHere = !!localStorage.getItem(seenKey); } catch (e) {}
   // Already has a code (the promo email's link ?c=CODE, a code saved on this
-  // browser, or an email we know: signed in / typed before) → never the
-  // claim form; instead, once, "add to cart — we'll fill your code in".
+  // browser — incl. one claimed here on an earlier visit — or an email we
+  // know: signed in / typed before) → never the claim form; instead, once,
+  // the "your code is waiting" reminder. Used code → nothing.
   const qs = new URLSearchParams(location.search);
   const urlCode = (qs.get('c') || '').trim();
   if (urlCode && history.replaceState) { qs.delete('c'); const q = qs.toString(); history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash); }
@@ -1214,8 +1215,9 @@ async function showStorePromo(seller) {
     try { localStorage.setItem('umz_promo_code', JSON.stringify({ code: held.code, until: held.until, slug: seller.slug })); } catch (e) {}
     try { if (localStorage.getItem(heldKey)) return; localStorage.setItem(heldKey, '1'); } catch (e) {}
   } else {
-    // Closed without claiming = hidden for this visit only (sessionStorage)
-    // and shown again next visit.
+    // Claimed here before = never the claim form again. Closed without
+    // claiming = hidden for this visit only (sessionStorage), back next visit.
+    if (claimedHere) return;
     try { if (sessionStorage.getItem(seenKey)) return; } catch (e) {}
   }
   if (document.getElementById('spOverlay')) return;
