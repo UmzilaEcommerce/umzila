@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-09 — Marketing source tracking (?src=); drinks screen no longer jumps to the top
+
+**Asked:** know which creator / ad / group / poster brings orders; tapping + on a drink lower down jumped the add-ons screen back to the top.
+**Changed:** presence.js remembers ?src= / utm_source from the landing link for 30 days (localStorage umz_src, last touch wins), logs one user_events 'source_landing' per browser+source, and exposes umzilaSource(); checkout.html writes it to the new `orders.source` column (lowercase a-z0-9_-, ≤40). get_site_traffic() returns `sources` (arrivals, paid orders, sales per source) and the admin Visitors card shows "Where orders come from". shop.html add-ons screen keeps its scroll position when + / − redraws the grid.
+**Files:** presence.js, checkout.html, admin.html, shop.html, DB: orders.source, get_site_traffic(), CLAUDE.md.
+
 ## 2026-10-08 — Checkout totals: clear discount, delivery and priority lines
 
 **Asked:** the discount looked like another number added onto the total; show what was taken off and what was added.

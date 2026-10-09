@@ -1241,10 +1241,13 @@ function showAddons(href){
   const added = () => HOUSE.items.reduce((a, p) => a + qtyIn(p.id) * p.displayPrice, 0);
   const render = () => {
     const extra = added(), total = storeLines().reduce((a, l) => a + qtyOf(l) * Number(l.price || 0), 0);
+    // Keep the shopper where they are when a + / − redraws the grid (no jump to the top).
+    const prevScroll = (ov.querySelector('.ad-scroll') || {}).scrollTop || 0;
     ov.innerHTML = `<div class="ad-top"><button class="ad-back" type="button" data-ad-back aria-label="Back to your cart">←</button></div>
       <h2>Complete your order</h2>
       <div class="ad-scroll"><div class="ad-grid">${HOUSE.items.map(card).join('')}</div></div>
       <div class="ad-foot"><button class="ad-go" type="button" data-ad-go>${extra ? 'Continue to checkout · ' + money(total) : 'No thanks'}</button></div>`;
+    const sc = ov.querySelector('.ad-scroll'); if (sc && prevScroll) sc.scrollTop = prevScroll;
   };
   render();
   document.body.appendChild(ov);

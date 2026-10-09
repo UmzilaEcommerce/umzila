@@ -30,12 +30,32 @@
       client.rpc('touch_presence', { p_session: sid, p_page: page }).then(function () {}, function () {});
     } catch (e) { /* ignore */ }
   }
+  // ── Marketing source (?src=thandi / ?utm_source=tiktok on the landing link) ──
+  // Remembered for 30 days on this browser (last touch wins) and written onto
+  // the order at checkout (orders.source); each landing is logged once per
+  // browser+source as a user_events 'source_landing'. Admin → Visitors →
+  // "Where orders come from".
+  var SRC_KEY = 'umz_src', pendingLanding = null;
+  try {
+    var qs = new URLSearchParams(location.search);
+    var raw = (qs.get('src') || qs.get('utm_source') || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+    if (raw && /^[a-z0-9]/.test(raw)) {
+      localStorage.setItem(SRC_KEY, JSON.stringify({ src: raw, at: Date.now() }));
+      var seenKey = 'umz_src_seen_' + raw;
+      if (!localStorage.getItem(seenKey)) { localStorage.setItem(seenKey, '1'); pendingLanding = raw; }
+    }
+  } catch (e) { /* ignore */ }
+  window.umzilaSource = function () {
+    try { var v = JSON.parse(localStorage.getItem(SRC_KEY) || 'null'); return v && v.src && Date.now() - v.at < 30 * 86400000 ? v.src : null; } catch (e) { return null; }
+  };
+
   window.umzilaPresence = {
     start: function (sb, label) {
       if (!sb || typeof sb.rpc !== 'function') return;
       var first = !client;
       client = sb; if (label) page = String(label).slice(0, 60);
       beat(true);
+      if (pendingLanding && window.umzilaTrack) { window.umzilaTrack('source_landing', { metadata: { src: pendingLanding, page: page } }); pendingLanding = null; }
       if (!first) return;
       timer = setInterval(function () { beat(false); }, BEAT_MS);
       document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') beat(false); });

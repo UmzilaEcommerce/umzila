@@ -5432,6 +5432,9 @@ async function submitToPayFast(cartItems, orderId, total) {
                 discount: discount,
                 shipping_cost: shipping,
                 tip_amount: tip,
+                // Marketing source of the landing link (?src= / utm_source, last
+                // 30 days on this browser — presence.js umzilaSource()).
+                source: (window.umzilaSource && window.umzilaSource()) || null,
                 // Bridges the gap between "buyer names a new card here" and
                 // "the token only arrives later via ITN" — read back by
                 // completeOrderPayment() when it inserts the payment_methods

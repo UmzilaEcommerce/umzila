@@ -2361,6 +2361,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const daily = t.daily || [];
     const max = Math.max(1, ...daily.map(d => d.visitors));
     const fmtDay = d => new Date(d + 'T12:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+    const fmtR = n => 'R' + (Number(n) || 0).toFixed(2);
     const todayStr = daily.length ? daily[daily.length - 1].day : '';
     const f = t.funnel || {}; const fmax = Math.max(1, f.visited || 0);
     const hours = t.hours || []; const hmax = Math.max(1, ...hours.map(h => h.n));
@@ -2392,6 +2393,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           </div>
           <div class="tr-note">${t.returning} came back on another day · ${t.signed_in} signed in · ~${t.avg_minutes || 0} min per visit</div>
         </div>
+      </div>
+      <div class="tr-box" style="margin-top:14px">
+        <h4>Where orders come from (links with ?src=)</h4>
+        ${(t.sources || []).length ? t.sources.map(x => `<div class="tr-row"><span>${e(x.src)}</span><span><b>${x.orders}</b> <small>paid order${x.orders === 1 ? '' : 's'} · ${fmtR(x.sales)} · ${x.visitors} arrived</small></span></div>`).join('')
+          : '<div class="tr-row"><span>No tagged links yet — share e.g. <b>…/velaphishisanyama?src=thandi</b> or <b>?src=tiktok</b> and orders from them show up here.</span></div>'}
       </div>
       <div class="tr-note">One visitor = one phone/browser (people on two phones count twice). Your staff browsers are left out. Counting started ${t.since ? fmtDay(t.since) : 'today'}.</div>`;
   }
