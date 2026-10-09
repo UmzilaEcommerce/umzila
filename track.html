@@ -282,7 +282,7 @@
       taps: ['Beep beep! 🚗', 'Vroom vroom 💨', 'On it!'],
       icon: '<path d="M3 10l2-6h14l2 6"/><path d="M4 10v10h16V10"/><path d="M10 20v-5h4v5"/>' },
     { label: 'On the way', title: 'On the way to you', sub: 'Your order has left the store.',
-      info: '<strong>Your order is out of the store</strong> and heading your way. Follow your rider live on the map below.',
+      info: '<strong>Your order is out of the store</strong> and heading your way. Follow your rider live on the map above.',
       done: 'Your rider made the trip over to you.', soon: 'Your rider heads your way, and you can follow along live on the map.',
       taps: ['Zooming over 💨', 'Coming in hot 🔥', 'Not long now!'],
       icon: '<path d="M3 17h2a2 2 0 1 0 4 0h6a2 2 0 1 0 4 0h2v-5l-3-5h-5v10"/><path d="M14 7H3v10"/>' },
@@ -738,6 +738,7 @@
       // deliberately hides position until the rider is actually heading to the
       // customer (STAGE_ONWAY+), even once one is ASSIGNED and collecting the order.
       mapNote.textContent = isProblem ? '' :
+        isDone ? 'Delivered — live tracking has ended.' :
         (row.status === 'PICKED_UP' || row.status === 'PARTIALLY_PICKED_UP') ? 'Your rider has your order — live tracking starts once they head your way.' :
         STAGE_PICKUP.includes(row.status) ? 'Your rider is on the way to collect your order — live tracking starts once they head your way.' :
         'A rider hasn\'t been assigned to your delivery yet.';
