@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-09 — Tracking: map on top, road route line from rider to customer
+
+**Asked:** map above the animation; a line on the map between the rider and the delivery address.
+**Changed:** track.html — map card first, status/ETA/rider card next, the animation in its own card at the bottom. New `get-delivery-route.js` (GET ?order=&t= or the owner's session): runs get_delivery_tracking() as the caller (so a rider position exists only while they're heading to that customer) and returns the road path via new `lib/road-distance.js getRoadPath()` (OpenRouteService directions geojson, thinned to ≤300 points; not cached — positions change). track.html draws a dashed straight line at once, replaces it with the blue road route, and re-asks only after ~400 m of movement or every 3 minutes; lines are removed when the rider isn't heading here.
+**Files:** track.html, netlify/functions/get-delivery-route.js (new), netlify/functions/lib/road-distance.js.
+
 ## 2026-10-09 — Marketing source tracking (?src=); drinks screen no longer jumps to the top
 
 **Asked:** know which creator / ad / group / poster brings orders; tapping + on a drink lower down jumped the add-ons screen back to the top.

@@ -121,4 +121,33 @@ async function getRoadMatrix(supabase, points) {
   return (i, j) => (table[i] && table[i][j]) || null;
 }
 
-module.exports = { getRoadLeg, getRoadMatrix };
+// The road path itself (for drawing the rider → customer line on track.html).
+// Not cached: the rider's position changes every time; track.html only asks
+// again after the rider has moved ~400 m or every 3 minutes, which keeps
+// usage far below the free daily limit. Returns [[lat, lon], …] (thinned to
+// ≤ 300 points) + distance/time, or null when routing fails (caller draws a
+// straight dashed line instead).
+async function getRoadPath(from, to) {
+  const key = process.env.ORS_API_KEY;
+  if (!key) return null;
+  try {
+    const res = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
+      method: 'POST',
+      headers: { Authorization: key, 'Content-Type': 'application/json', Accept: 'application/geo+json, application/json' },
+      body: JSON.stringify({ coordinates: [[from.lon, from.lat], [to.lon, to.lat]], units: 'm', instructions: false })
+    });
+    const json = await res.json().catch(() => null);
+    const f = json && Array.isArray(json.features) && json.features[0];
+    const coords = f && f.geometry && Array.isArray(f.geometry.coordinates) ? f.geometry.coordinates : null;
+    if (!res.ok || !coords || coords.length < 2) return null;
+    const step = Math.max(1, Math.ceil(coords.length / 300));
+    const path = coords.filter((_, i) => i % step === 0 || i === coords.length - 1).map(c => [round4(c[1]), round4(c[0])]);
+    const s = (f.properties && f.properties.summary) || {};
+    return { path, distanceKm: Math.round(Number(s.distance || 0) / 100) / 10, durationMin: Math.round(Number(s.duration || 0) / 60) };
+  } catch (e) {
+    console.warn('road-distance: ORS path unreachable', e.message);
+    return null;
+  }
+}
+
+module.exports = { getRoadLeg, getRoadMatrix, getRoadPath };

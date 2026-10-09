@@ -498,6 +498,42 @@
   // ── map (Leaflet + OSM tiles — free, keyless, no Google browser key;
   // static display only, no in-page turn-by-turn routing/navigation) ─────
   let map = null, destMarker = null, driverMarker = null;
+  let routeLine = null, straightLine = null, routeFrom = null, routeAt = 0, routeBusy = false;
+  const metresBetween = (a, b) => haversineKm(a[0], a[1], b[0], b[1]) * 1000;
+  function clearRouteLines() {
+    if (routeLine) { routeLine.remove(); routeLine = null; }
+    if (straightLine) { straightLine.remove(); straightLine = null; }
+    routeFrom = null; routeAt = 0;
+  }
+  // Called on every poll while the rider is heading here.
+  async function updateRouteLine(dLat, dLon, cLat, cLon) {
+    if (!map) return;
+    const here = [dLat, dLon], dest = [cLat, cLon];
+    if (!routeLine) {
+      if (straightLine) straightLine.setLatLngs([here, dest]);
+      else straightLine = L.polyline([here, dest], { color: '#0a2f66', weight: 3, opacity: 0.55, dashArray: '6 8' }).addTo(map);
+    }
+    // Ask for the road route again only after ~400 m of movement or 3 minutes.
+    const due = !routeFrom || metresBetween(routeFrom, here) > 400 || Date.now() - routeAt > 180000;
+    if (!due || routeBusy) return;
+    routeBusy = true;
+    try {
+      const headers = {};
+      try { const { data: { session } } = await sb.auth.getSession(); if (session) headers.Authorization = 'Bearer ' + session.access_token; } catch (e) {}
+      const qs = new URLSearchParams({ order: orderId }); if (trackToken) qs.set('t', trackToken);
+      const r = await fetch('/.netlify/functions/get-delivery-route?' + qs.toString(), { headers });
+      const j = r.ok ? await r.json() : null;
+      routeFrom = here; routeAt = Date.now();
+      if (j && Array.isArray(j.path) && j.path.length > 1) {
+        // the route starts where the rider was when asked; keep the live dot joined to it
+        const pts = [here].concat(j.path);
+        if (routeLine) routeLine.setLatLngs(pts);
+        else routeLine = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 0.85, lineJoin: 'round' }).addTo(map);
+        if (straightLine) { straightLine.remove(); straightLine = null; }
+      }
+    } catch (e) { /* keep the dashed line */ }
+    finally { routeBusy = false; }
+  }
   function ensureMap(destLat, destLon) {
     if (map) return;
     const mapEl = document.createElement('div');
@@ -605,13 +641,17 @@
     // patch the live bits (status pill, scene, steps, map marker) rather
     // than rebuilding the whole card and losing map pan/zoom state.
     if (!document.getElementById('statusPill')) {
+      // Map first (founder 2026-10-09), the animation lives at the bottom.
       content.innerHTML = `
+        <div class="t-card">
+          <div id="mapMount"></div>
+          <div id="mapNote" class="t-map-note"></div>
+        </div>
         <div class="t-card t-hero">
           <div class="t-hero-top">
             <span id="statusPill" class="t-status-pill ${meta.cls}">${esc(meta.label)}</span>
             <span class="t-live" id="liveWrap"><span class="t-live-dot"></span><span id="liveText">Live</span></span>
           </div>
-          <div class="t-scene" id="scene" title="Tap me"></div>
           <div class="t-headline">
             <h1 id="heroTitle">${esc(title)}</h1>
             <p id="heroSub">${esc(sub)}</p>
@@ -623,10 +663,7 @@
         ${row.delivery_pin ? pinCard(row.delivery_pin) : ''}
         ${row.delivery_note ? `<div class="t-card" style="background:#fffbeb;border:1px solid #fde68a;color:#78350f;font-size:14px;font-weight:600">📝 Your note to the store &amp; rider: ${esc(row.delivery_note)}</div>` : ''}
         <div class="t-card" id="stepsCard"${isProblem ? ' hidden' : ''}><div id="stepsWrap"></div></div>
-        <div class="t-card">
-          <div id="mapMount"></div>
-          <div id="mapNote" class="t-map-note"></div>
-        </div>
+        <div class="t-card t-hero"><div class="t-scene" id="scene" title="Tap me" style="margin:0"></div></div>
         <div id="feedbackMount"></div>
         ${supportCard()}
         ${backLink()}
@@ -680,6 +717,9 @@
       const isStale = ageSec > STALENESS_SECONDS;
       const staleLabel = formatStale(ageSec);
       updateDriverMarker(row.driver_lat, row.driver_lon, isStale, staleLabel);
+      if (!isDone && !isProblem && Number.isFinite(row.destination_lat) && Number.isFinite(row.destination_lon)) {
+        updateRouteLine(row.driver_lat, row.driver_lon, row.destination_lat, row.destination_lon);
+      }
       if (mapNote) mapNote.textContent = isStale ? `Rider location last seen ${staleLabel} — may not be current.` : 'Showing your rider\'s live position.';
       if (firstDriverFit && map) {
         map.fitBounds(L.latLngBounds([[row.driver_lat, row.driver_lon], [row.destination_lat, row.destination_lon]]), { padding: [30, 30] });
@@ -693,6 +733,7 @@
         chip.hidden = false;
       }
     } else if (mapNote) {
+      clearRouteLines();
       // No live coordinates doesn't mean no rider yet -- Fix D (delivery-network-spec.md)
       // deliberately hides position until the rider is actually heading to the
       // customer (STAGE_ONWAY+), even once one is ASSIGNED and collecting the order.
