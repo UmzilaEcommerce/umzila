@@ -37,8 +37,11 @@
   // "Where orders come from".
   var SRC_KEY = 'umz_src', pendingLanding = null;
   try {
-    var qs = new URLSearchParams(location.search);
-    var raw = (qs.get('src') || qs.get('utm_source') || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
+    // Parameter names are matched in any case (?SRC= / ?Src= / ?UTM_SOURCE=) so a
+    // typo in an ad or a bio link never loses the tracking.
+    var qs = new URLSearchParams(location.search), found = {};
+    qs.forEach(function (v, k) { var key = k.toLowerCase(); if ((key === 'src' || key === 'utm_source') && !found[key]) found[key] = v; });
+    var raw = (found.src || found.utm_source || '').toLowerCase().trim().replace(/[^a-z0-9_-]/g, '').slice(0, 40);
     if (raw && /^[a-z0-9]/.test(raw)) {
       localStorage.setItem(SRC_KEY, JSON.stringify({ src: raw, at: Date.now() }));
       var seenKey = 'umz_src_seen_' + raw;
