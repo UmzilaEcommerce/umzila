@@ -4,6 +4,18 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-13 — Isiqalo Kitchen: drinks add-ons + product clean-up
+
+- **Requested:** the Umzila Drinks "Complete your order" screen before checkout on Isiqalo Kitchen too, plus a check of its products.
+- **Change:** `shop.html` `ADDON_STORES` now includes `isiqalokitchen`. Drinks stay Umzila's (house seller); Isiqalo never sees them, same as Velaphi.
+- **Product issues found and fixed (data only, no orders or carts existed):**
+  - "4 Wings" had starch chips named "wings and pap" etc. It now uses the same per-plate starch picker as every other plate.
+  - The plate/platter starch lists were lowercase and inconsistent: rice was missing on most, even though the seller lists it. All now offer Pap / Phuthu / Jeqe / Rice; the platters also offer "Meat only".
+  - Platters (for 2/3/4/6, SPECIAL) now say "per platter", not "per plate".
+  - Placeholder descriptions ("plata", "plate") were cleared.
+- Files: `shop.html`, `docs/systems/house-addons.md`.
+
+
 ## 2026-10-13 — Clear "Check your email" panel for sign-up / sign-in
 
 **Reported:** people signing up didn't realise they had to open an email and tap its link; they kept trying to sign in and ended up with several unopened confirmation emails, never signed in.

@@ -35,7 +35,7 @@ A house item rides along in the order of whichever store it was added to:
 
 ### On the store page (`shop.html`)
 
-- **`ADDON_STORES`** (store slugs, currently Velaphi) decides where the add-ons screen appears.
+- **`ADDON_STORES`** (store slugs, currently Velaphi and Isiqalo Kitchen) decides where the add-ons screen appears.
 - **`loadHouseAddons`** loads house sellers (anon read of `sellers.is_house`) and in-stock add-on products.
 - **Cart scope:** `storeLines()` includes house lines, so drinks stay in that store's cart and checkout.
 - **Checkout tap:** in the cart sheet, `a[data-checkout]` first opens **"Complete your order"** (`showAddons`), once per visit. It shows:
