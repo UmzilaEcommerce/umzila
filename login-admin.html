@@ -206,8 +206,10 @@ async function checkUserPermission(email, password, selectedRole) {
     });
     
     if (authError && (authError.code === 'email_not_confirmed' || /not confirmed/i.test(authError.message || ''))) {
-      await window.supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname } });
-      return { success: false, error: 'Please confirm your email first — we’ve sent a new link to ' + email + '. Open it, then sign in here.' };
+      // Only send another link if none went out in the last 10 minutes (auth-mail.js).
+      const fresh = !window.UmzilaAuthMail || UmzilaAuthMail.shouldResend(email);
+      if (fresh) { await window.supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname } }); if (window.UmzilaAuthMail) UmzilaAuthMail.markSent(email); }
+      return { success: false, error: (fresh ? 'Check your email: we’ve sent a confirmation link to ' : 'Check your email: we already sent a confirmation link to ') + email + '. Open the email from Umzila (check Spam/Promotions), tap Confirm, then sign in here. No need to request another.' };
     }
     if (authError) {
       return {
@@ -554,6 +556,7 @@ document.addEventListener('submit', (e) => {
 });
 </script>
   <script src="/input-guard.js"></script>
+  <script src="/auth-mail.js"></script>
 </head>
 <body>
   <div class="center">

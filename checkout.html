@@ -1163,7 +1163,7 @@
     }
   </style>
   <!-- Include Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/product-sheet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/auth-mail.js"></script><script src="/product-sheet.js"></script>
 </head>
 <body>
   <!-- Header -->
@@ -3221,6 +3221,15 @@ async function saveCartToServer() {
         // confirmed — claim_my_email_orders). A typed password → sign in.
         if (!password) return true;
         const res = await signInOrCreateAccount(email, password, true);
+        if (!res.ok && res.unconfirmed && window.UmzilaAuthMail) {
+          // Not confirmed yet: the clear "Check your email" panel (auth-mail.js).
+          UmzilaAuthMail.show(elements.accountPasswordError, email, { client: supabaseClient, context: 'to your account',
+            resend: () => supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: authReturnUrl() } }),
+            onSignedIn: async (sess) => { state.user = sess.user; await verifyUserProfile(sess.user.id); updateAuthUI(sess.user); } });
+          showError(elements.paymentError, 'Confirm your email first (see the box above) — or clear the password to check out as a guest.');
+          elements.accountPasswordCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return false;
+        }
         if (!res.ok) {
           showError(elements.accountPasswordError, res.message);
           // The sign-in box is on step 1 — say it next to Pay too, and show the box.
@@ -4077,6 +4086,16 @@ async function loadBuyNowItem() {
       const res = await signInOrCreateAccount(email, password, promoSigninMode === 'returning');
       btn.disabled = false; btn.textContent = label;
       if (res.switchToReturning) { promoSigninMode = 'returning'; await renderPromoSignin(); showError(document.getElementById('promoSigninError'), res.message); return; }
+      if (!res.ok && (res.unconfirmed || res.created) && window.UmzilaAuthMail) {
+        UmzilaAuthMail.show(err, email, { client: supabaseClient, context: 'and use this code',
+          resend: () => supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: authReturnUrl() } }),
+          onSignedIn: async (sess) => {
+            state.user = sess.user; await verifyUserProfile(sess.user.id); updateAuthUI(sess.user);
+            document.getElementById('promoSignin').classList.add('hidden');
+            if (await applyCoupon(promo.code)) showPromoMessage(`You're signed in — ${promo.code} applied: -${formatCurrency(state.discount)}`, 'success');
+          } });
+        return;
+      }
       if (!res.ok) { showError(err, res.message); return; }
       // Signed in — re-check the code against the real account.
       document.getElementById('promoSigninPassword').value = '';
@@ -4115,7 +4134,12 @@ async function loadBuyNowItem() {
     function authReturnUrl() { return window.location.origin + window.location.pathname + window.location.search; }
     async function unconfirmedEmailMessage(email, error) {
       if (!error || !(error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || ''))) return null;
-      const { error: rErr } = await supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: authReturnUrl() } });
+      // Only send another link if none went out in the last 10 minutes.
+      let rErr = null;
+      if (!window.UmzilaAuthMail || UmzilaAuthMail.shouldResend(email)) {
+        ({ error: rErr } = await supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: authReturnUrl() } }));
+        if (!rErr && window.UmzilaAuthMail) UmzilaAuthMail.markSent(email);
+      }
       return rErr
         ? `Please confirm your email first — open the link we sent to ${email}. (Couldn’t send a new one just now: ${rErr.message})`
         : `Please confirm your email first — we’ve just sent a new link to ${email}. Open it and you’ll come back here signed in.`;
@@ -4126,7 +4150,7 @@ async function loadBuyNowItem() {
       try {
         if (exists) {
           const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-          if (error) return { ok: false, message: (await unconfirmedEmailMessage(email, error)) || error.message || 'Wrong email or password.' };
+          if (error) { const um = await unconfirmedEmailMessage(email, error); return um ? { ok: false, unconfirmed: true, message: um } : { ok: false, message: error.message || 'Wrong email or password.' }; }
           state.user = data.user;
           await verifyUserProfile(data.user.id);
           updateAuthUI(data.user);
@@ -4147,6 +4171,7 @@ async function loadBuyNowItem() {
           updateAuthUI(data.user);
           return { ok: true };
         }
+        if (window.UmzilaAuthMail) UmzilaAuthMail.markSent(email);
         return { ok: false, created: true, message: `Almost done — we sent a confirmation link to ${email}. Open it and this page comes back signed in with your code applied (your cart is kept).` };
       } catch (e) {
         return { ok: false, message: 'Something went wrong — please try again.' };

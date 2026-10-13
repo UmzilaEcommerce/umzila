@@ -4,6 +4,13 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-13 — Clear "Check your email" panel for sign-up / sign-in
+
+**Reported:** people signing up didn't realise they had to open an email and tap its link; they kept trying to sign in and ended up with several unopened confirmation emails, never signed in.
+**Cause:** the instruction was one line of small (often red, error-looking) text, and every sign-in attempt before confirming silently sent another link.
+**Changed:** new shared `auth-mail.js` (UmzilaAuthMail): a prominent panel — their email, three steps (open email → find Umzila, check Spam/Promotions → tap Confirm), "Open Gmail/Outlook/Yahoo/iCloud" shortcut, Resend with a 60-s wait, "Use a different email", and it switches to "You're signed in ✓" by itself once the link is opened (session check every 4 s). Links are re-sent only if none went out to that address in the last 10 minutes (shouldResend/markSent, localStorage). Used by the home sign-up and sign-in modals (script.js), the mystery-gift sign-in (index.html), checkout's step-1 sign-in and promo-code sign-in, and the seller/staff login (re-send limit + clearer text).
+**Files:** auth-mail.js (new), script.js, index.html, checkout.html, login-admin.html.
+
 ## 2026-10-09 — Tracking: map on top, road route line from rider to customer
 
 **Asked:** map above the animation; a line on the map between the rider and the delivery address.

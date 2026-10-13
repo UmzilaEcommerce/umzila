@@ -1040,6 +1040,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
   <script src="presence.js"></script>
   <script src="input-guard.js"></script>
+  <script src="auth-mail.js"></script>
   <script src="product-sheet.js"></script>
   <script src="script.js"></script>
   <script>
@@ -1796,6 +1797,7 @@
         var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
         if (client && client.auth) {
           var res = await client.auth.signUp({ email: currentEmail, password: pw, options: { emailRedirectTo: window.location.origin + '/' } });
+          if (!res.error && window.UmzilaAuthMail) UmzilaAuthMail.markSent(currentEmail); // the confirmation link just went out
           if (!res.error && res.data && res.data.user && res.data.user.id && client.from) {
             try {
               await client.from('profiles').upsert([{
@@ -1836,9 +1838,10 @@
         if (!client || !client.auth) throw new Error('Auth client not available.');
         var res = await client.auth.signInWithPassword({ email: currentEmail, password: pw });
         if (res.error && (res.error.code === 'email_not_confirmed' || /not confirmed/i.test(res.error.message || ''))) {
-          await client.auth.resend({ type: 'signup', email: currentEmail, options: { emailRedirectTo: window.location.origin + '/' } });
-          mySigninErr.textContent = 'Please confirm your email first — we’ve sent a link to ' + currentEmail + '. Open it, then come back to claim your gift.';
-          mySigninErr.style.display = 'block';
+          var resendMg = function () { return client.auth.resend({ type: 'signup', email: currentEmail, options: { emailRedirectTo: window.location.origin + '/' } }); };
+          if (!window.UmzilaAuthMail || UmzilaAuthMail.shouldResend(currentEmail)) { var rr = await resendMg(); if (!(rr && rr.error) && window.UmzilaAuthMail) UmzilaAuthMail.markSent(currentEmail); }
+          if (window.UmzilaAuthMail) UmzilaAuthMail.show(mySigninErr, currentEmail, { client: client, resend: resendMg, context: 'and claim your gift' });
+          else { mySigninErr.textContent = 'Please confirm your email first — we’ve sent a link to ' + currentEmail + '. Open it, then come back to claim your gift.'; mySigninErr.style.display = 'block'; }
           return;
         }
         if (res.error) {

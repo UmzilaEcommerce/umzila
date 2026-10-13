@@ -1755,11 +1755,22 @@ if (modalSignupSubmit) {
         }
       }
 
-      // Show success message
+      // Show success message — without a session they must open the emailed
+      // link first: the clear "Check your email" panel (auth-mail.js).
       if (successElement) {
-        successElement.innerHTML = data?.session
-          ? 'Account created!' + referralMsg
-          : 'Almost done — we sent a confirmation link to <strong>' + escapeAuthHtml(email) + '</strong>. Open it to finish and you’ll come back here signed in. (Check spam too. Already have an account? Sign in instead.)' + referralMsg;
+        if (!data?.session && window.UmzilaAuthMail) {
+          UmzilaAuthMail.markSent(email);
+          UmzilaAuthMail.show(successElement, email, {
+            client, context: 'to your new account',
+            resend: () => client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname + window.location.search } }),
+            onSignedIn: (s) => { setTimeout(() => { hideModal(signupModal); updateAuthUI(s.user); }, 1500); }
+          });
+          if (referralMsg) successElement.insertAdjacentHTML('beforeend', '<div style="font-size:13px;margin-top:6px">' + referralMsg.replace(/^<br>/, '') + '</div>');
+        } else {
+          successElement.innerHTML = data?.session
+            ? 'Account created!' + referralMsg
+            : 'Almost done — we sent a confirmation link to <strong>' + escapeAuthHtml(email) + '</strong>. Open it to finish and you’ll come back here signed in. (Check spam too.)' + referralMsg;
+        }
         successElement.style.display = 'block';
       }
 
@@ -1844,12 +1855,19 @@ if (modalLoginSubmit) {
       if (error) {
         console.error('Login error:', error);
         if (error.code === 'email_not_confirmed' || /not confirmed/i.test(error.message || '')) {
-          const { error: rErr } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname + window.location.search } });
+          // Not confirmed yet: only send another link if none went out in the
+          // last 10 minutes (each attempt used to send one), then show the panel.
+          const redirect = window.location.origin + window.location.pathname + window.location.search;
+          const resend = () => client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirect } });
+          let rErr = null;
+          if (!window.UmzilaAuthMail || UmzilaAuthMail.shouldResend(email)) { ({ error: rErr } = await resend()); if (!rErr && window.UmzilaAuthMail) UmzilaAuthMail.markSent(email); }
           if (errorElement) {
-            errorElement.textContent = rErr
-              ? 'Please confirm your email first — open the link we sent to ' + email + '.'
-              : 'Please confirm your email first — we’ve just sent a new link to ' + email + '. Open it and you’ll be signed in.';
-            errorElement.style.display = 'block';
+            if (window.UmzilaAuthMail) {
+              UmzilaAuthMail.show(errorElement, email, { client, resend, onSignedIn: (s) => { setTimeout(() => { if (typeof loginModal !== 'undefined' && loginModal) hideModal(loginModal); updateAuthUI(s.user); }, 1200); } });
+            } else {
+              errorElement.textContent = rErr ? 'Please confirm your email first — open the link we sent to ' + email + '.' : 'Please confirm your email first — we’ve just sent a new link to ' + email + '. Open it and you’ll be signed in.';
+              errorElement.style.display = 'block';
+            }
           }
           return;
         }
