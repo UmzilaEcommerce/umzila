@@ -4000,6 +4000,9 @@ async function loadBuyNowItem() {
           showPromoMessage(Number(state.appliedPromoCode.previewAmount) > 0
             ? `${formatCurrency(state.appliedPromoCode.previewAmount)} off is waiting — this code needs a quick account (below).`
             : 'This code needs a quick account (below).', 'info');
+        } else if (!(Number(state.discount) > 0) && state.appliedPromoCode?.reason === 'no_eligible_items') {
+          // e.g. a store promo code with only an excluded (already-on-special) item in the cart
+          showPromoMessage('This code doesn’t cover the items in your cart (items already on special aren’t included). Add another item from the store to use it.', 'info');
         } else {
           showPromoMessage(`Promo code applied! Discount: ${formatCurrency(state.discount)}`, 'success');
         }

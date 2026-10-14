@@ -21,6 +21,17 @@ const PROMOS = {
     maxOrders: 100,          // codes actually used across this promo
     prefix: 'VELAPHI',
     label: 'Workshop Shisanyama'
+  },
+  isiqalokitchen: {
+    percent: 10,
+    ends: '2026-10-17T18:00:00+02:00',
+    maxOrders: 100,
+    prefix: 'ISIQALO',
+    label: 'Isiqalo Kitchen',
+    // Already-discounted items the code must not reduce further. The code is
+    // then scoped to the store's other products (scope 'products').
+    excludeProductIds: ['36e126a7-a77b-4a55-bd0f-e7b5b5e31eb9'], // SPECIAL
+    exclusionNote: 'except the SPECIAL (already on special)'
   }
 };
 
@@ -76,12 +87,22 @@ exports.handler = async (event) => {
   const { count: usedCount } = await promoCodes('id', { count: 'exact', head: true }).eq('used', true);
   if ((usedCount || 0) >= promo.maxOrders) return reply(410, { error: `All ${promo.maxOrders} promo orders have been claimed.` });
 
+  // Exclusions: the code covers every other product of the store (as listed
+  // now — a product added during the promo isn't covered).
+  let scope = { scope: 'order' };
+  if (promo.excludeProductIds && promo.excludeProductIds.length) {
+    const { data: prods, error: pErr } = await admin.from('products').select('id').eq('seller_id', seller.id);
+    if (pErr) return reply(500, { error: 'Something went wrong — please try again.' });
+    const ids = (prods || []).map(p => p.id).filter(id => !promo.excludeProductIds.includes(id));
+    scope = { scope: 'products', product_ids: ids };
+  }
+
   let code = null;
   for (let i = 0; i < 4 && !code; i++) {
     const c = promo.prefix + crypto.randomBytes(4).toString('hex').slice(0, 5).toUpperCase();
     const { error } = await admin.from('discount_codes').insert({
       code: c, amount: promo.percent, type: 'percentage', email, seller_id: seller.id,
-      expires_at: ends.toISOString(), multi_use: false, per_user_limit: 1, scope: 'order', status: 'active'
+      expires_at: ends.toISOString(), multi_use: false, per_user_limit: 1, ...scope, status: 'active'
     });
     if (!error) code = c;
     else if (error.code !== '23505') { console.error('claim-store-promo insert', error); break; }
@@ -98,7 +119,7 @@ exports.handler = async (event) => {
 <h2 style="margin:0 0 12px;color:#1a1a1a">Here's your ${promo.percent}% off code 🔥</h2>
 <div style="border:2px dashed #e0284f;border-radius:12px;padding:16px;text-align:center;margin:16px 0;background:#fff7f8">
 <div style="font-size:26px;font-weight:800;color:#e0284f;letter-spacing:3px;font-family:monospace">${esc(code)}</div>
-<div style="font-size:12px;color:#888;margin-top:4px">Any ${esc(seller.shop_name)} order · use with this email · until ${esc(until)}</div></div>
+<div style="font-size:12px;color:#888;margin-top:4px">Any ${esc(seller.shop_name)} order${promo.exclusionNote ? ' ' + esc(promo.exclusionNote) : ''} · use with this email · until ${esc(until)}</div></div>
 <p style="color:#444;line-height:1.6;font-size:15px">Add your plate → checkout → type the code in the discount box. No account needed. Store closed? Order anyway — it's prepared first when they open.</p>
 <p style="text-align:center;margin:20px 0"><a href="${store}" style="background:#e0284f;color:#fff;padding:13px 32px;border-radius:999px;text-decoration:none;font-weight:700">Order now &rarr;</a></p></div>`;
     try {

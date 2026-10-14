@@ -4,6 +4,34 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-14 — Isiqalo Kitchen: better photos + 10% promo (same as Velaphi's)
+
+**Asked:** make Isiqalo's food photos look appetising and professional (the AI photo on "Plata for 1" put people off), then run the Velaphi campaign on Isiqalo: prices +9%, the same pop-up with personal one-off 10% codes. The SPECIAL stays as it is, and the code must not reduce it further.
+
+**Photos (data only):**
+- Every Isiqalo photo is re-cropped to a square on the food, colour-graded (warmer, richer, sharper) and given a soft blurred/darkened edge. The wide SPECIAL shot sits on a blurred fill.
+- Distracting backgrounds are cropped out: skincare products and sunglasses behind the curry, and the "Plata for 6 R300" text on the photo.
+- "Plata for 1 (meat)" now uses the real stall photo; the AI cut-out is gone.
+- All are the seller's own photos, nothing generated. Uploaded with new names (`<product>_<ts>_ed.w1280/.w480.webp`); `product_images` and `products.image` were updated.
+
+**Promo:**
+- `claim-store-promo.js` has a new entry: `isiqalokitchen`, ISIQALO… codes, 10%, ends Sat 17 Oct 18:00, 100-order cap.
+- New `excludeProductIds` option: the code row gets `scope 'products'` with every other product of the store, so `lib/discounts.js` never discounts the SPECIAL. That function already supported product scope, so no new discount logic was needed.
+- `shop.html` STORE_PROMOS has a matching entry, with a "Not on the SPECIAL" note in both pop-ups.
+- A code saved on the browser for another store's promo is no longer used for this store's "your code is waiting" check.
+- `checkout.html`: a code with nothing eligible in the cart (SPECIAL only) now explains why instead of "Discount: R0.00". R0 codes are never recorded on the order (`coupon_code` only when the discount is > 0), so the code isn't burnt.
+
+**Prices (data):** every Isiqalo item except the SPECIAL is set to price × 1.09 (R50 → R54.50 … R300 → R327). pg_cron `isiqalo-promo-revert-2026-10-22` restores the exact old prices at 00:00 SAST on 22 Oct, then unschedules itself. That is the same 5-day gap Velaphi had.
+
+**Verified:** claim / repeat claim / status calls, and validate-cart with the test code:
+- SPECIAL only → R0, `no_eligible_items`;
+- SPECIAL + plate → 10% of the plate only;
+- another email → `email_mismatch`.
+The test code was deleted afterwards.
+
+Files: `netlify/functions/claim-store-promo.js`, `shop.html`, `checkout.html`.
+
+
 ## 2026-10-13 — Isiqalo Kitchen: drinks add-ons + product clean-up
 
 - **Requested:** the Umzila Drinks "Complete your order" screen before checkout on Isiqalo Kitchen too, plus a check of its products.
