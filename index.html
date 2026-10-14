@@ -21,7 +21,7 @@
   <link rel="preload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" as="script">
   <link rel="preload" href="/.netlify/functions/get-client-config" as="fetch" crossorigin>
   <link rel="preload" href="/.netlify/functions/get-catalog" as="fetch" crossorigin>
-  <link rel="preload" href="hero-velaphi-shisanyama.webp" as="image" fetchpriority="high">
+  <link rel="preload" href="hero-isiqalo-kitchen.webp" as="image" fetchpriority="high">
 </head>
 <body>
 
@@ -191,8 +191,9 @@
       <!-- HERO — clean clickable images, no text overlay -->
       <div class="hero fade-up" id="hero">
         <div class="slides" id="slides">
-          <div class="slide" data-slide="hotDeals" data-href="/velaphishisanyama" data-filter=""></div>
+          <div class="slide" data-slide="isiqalo" data-href="/isiqalokitchen" aria-label="Isiqalo Kitchen — order plates and platters"></div>
           <div class="slide" data-slide="nceks" data-href="/ncekeniquads" aria-label="Nceks Quad Biking — book a ride"></div>
+          <div class="slide" data-slide="velaphi" data-href="/velaphishisanyama" aria-label="Velaphi Shisanyama — order a plate"></div>
           <!-- Curated (2026-10-05): only the star + the experience. The laundry slide linked to a store that isn't on Umzila. -->
         </div>
 
@@ -359,8 +360,8 @@
            Store links + boosts live in script.js HOME_CURATION. -->
       <section class="fade-up show curated-hero" id="shisanyamaSection">
         <div class="section-header">
-          <div><h2>🔥 Workshop Shisanyama</h2><div class="section-sub">Flame-grilled plates from Velaphi — free sides on every plate</div></div>
-          <a class="section-see-more" id="shisanyamaLink" href="/velaphishisanyama">Order from Velaphi →</a>
+          <div><h2>🔥 Workshop Shisanyama</h2><div class="section-sub">Isiqalo Kitchen &amp; Velaphi, side by side at the Workshop. Mix plates from both, one delivery</div></div>
+          <a class="section-see-more" id="shisanyamaLink" href="#" data-section="workshop">See all plates →</a>
         </div>
         <div class="hscroll" id="shisanyamaScroll" aria-busy="true"><!-- skeletons until script.js renders the row --><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div><div class="sk-wrap" style="min-width:180px;max-width:180px" aria-hidden="true"><div class="product-card sk-card"><div class="product-media sk"></div><div class="sk sk-line"></div><div class="sk sk-line short"></div></div></div></div>
       </section>
@@ -1245,7 +1246,7 @@
         var featuredIds = new Set(((featuredAdsRes.data) || []).map(function(a){ return a.seller_id; }));
 
         // Curated stores first (script.js HOME_CURATION), then paid features, then size.
-        var curatedRank = function(s) { var c = (typeof HOME_CURATION !== 'undefined') ? HOME_CURATION : null; return !c ? 9 : s.slug === c.starStore ? 0 : s.slug === c.experienceStore ? 1 : 9; };
+        var curatedRank = function(s) { var c = (typeof HOME_CURATION !== 'undefined') ? HOME_CURATION : null; if (!c) return 9; var si = (c.starStores || []).indexOf(s.slug); return si === 0 ? 0 : s.slug === c.experienceStore ? 1 : si > 0 ? 2 : 9; };
         sellers.sort(function(a, b) {
           var ca = curatedRank(a), cb = curatedRank(b);
           if (ca !== cb) return ca - cb;

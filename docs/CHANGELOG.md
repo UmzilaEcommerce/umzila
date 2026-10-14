@@ -4,6 +4,27 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-15 — Home page: Isiqalo leads; one Workshop row with plates from both stores
+
+**Asked:**
+- Isiqalo in the hero (first slide, clickable), then Nceks, then Velaphi.
+- The rows below should prefer Isiqalo and show both stores, not only Velaphi.
+- One spot with all the plates so people can add to cart without thinking about which store. Both stores sit at the Workshop, Durban.
+
+**Changed:**
+- **Hero:** new `hero-isiqalo-kitchen.webp` (1600×900, same style as Velaphi's, using the store's real edited photo and logo). Slide order is Isiqalo → Nceks → Velaphi, each linking to its store. The preload now points at the Isiqalo slide.
+- **`script.js` HOME_CURATION:**
+  - `starStore` is replaced by `starStores: ['isiqalokitchen', 'velaphishisanyama']`. The first store is the preferred one.
+  - Boost: Isiqalo 1100, Velaphi 1000, Nceks 600.
+  - New `workshopPlates()`: each store's plates cheapest first, interleaved Isiqalo / Velaphi.
+  - "🔥 Workshop Shisanyama" uses it, and its link is now "See all plates →", which opens `#section=workshop` with all the plates.
+  - `complementUnderR100()` treats both stores as the star.
+  - Featured Shops order: Isiqalo, Nceks, Velaphi.
+- **Mixed baskets checked live:** `get-delivery-quote` for one Velaphi + one Isiqalo item returned one bundled delivery (R37 = R34 band + R3 for the second pickup), so checkout isn't blocked.
+
+Files: `index.html`, `script.js`, `hero-isiqalo-kitchen.webp`.
+
+
 ## 2026-10-14 — Isiqalo Kitchen: better photos + 10% promo (same as Velaphi's)
 
 **Asked:** make Isiqalo's food photos look appetising and professional (the AI photo on "Plata for 1" put people off), then run the Velaphi campaign on Isiqalo: prices +9%, the same pop-up with personal one-off 10% codes. The SPECIAL stays as it is, and the code must not reduce it further.

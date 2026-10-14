@@ -2128,9 +2128,9 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [   
-  `hero-velaphi-shisanyama.webp`,
+  `hero-isiqalo-kitchen.webp`,
   `hero-nceks-quad-biking.webp`,
-  `bannerLaundry.webp`,
+  `hero-velaphi-shisanyama.webp`,
   `thumbnail1.webp`  // 4th slide fallback
 ];
 Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
@@ -2810,9 +2810,12 @@ function getUserPreferenceCategories() {
 // categories, "See all"), so these stores lead and everything else sits lower.
 // Change the line-up here; the home page's star/experience rows follow it.
 const HOME_CURATION = {
-  starStore: 'velaphishisanyama',     // 🔥 Workshop Shisanyama — the star
+  // 🔥 Workshop Shisanyama — the star row: every plate from these stores in
+  // one row (they sit side by side at the Workshop, Durban, so a mixed basket
+  // is one delivery). First store = preferred: it leads the row and ranks first.
+  starStores: ['isiqalokitchen', 'velaphishisanyama'],
   experienceStore: 'ncekeniquads',    // 🏍️ Xperience of a lifetime with Nceks
-  boost: { velaphishisanyama: 1000, ncekeniquads: 600 },
+  boost: { isiqalokitchen: 1100, velaphishisanyama: 1000, ncekeniquads: 600 },
   // "Under R100 — goes with your plate": only things that complement a meal.
   complementCategories: ['Drinks', 'Desserts', 'Snacks'],
   complementOrder: { Desserts: 0, Drinks: 1, Snacks: 2 }
@@ -2820,14 +2823,22 @@ const HOME_CURATION = {
 function storeSlugOf(p) { return (p && p.seller && p.seller.slug) || ''; }
 function storeBoost(p) { return HOME_CURATION.boost[storeSlugOf(p)] || 0; }
 function effectivePrice(p) { return p.sale && p.salePrice ? p.salePrice : p.price; }
+function isStarStore(p) { return HOME_CURATION.starStores.indexOf(storeSlugOf(p)) !== -1; }
+// All Workshop plates in one list: each store's items cheapest first, then
+// interleaved store by store (preferred store first), so both show up front.
+function workshopPlates(prods) {
+  const lists = HOME_CURATION.starStores.map(slug => prods.filter(p => storeSlugOf(p) === slug).sort((a, b) => effectivePrice(a) - effectivePrice(b)));
+  const out = [];
+  for (let i = 0; lists.some(l => i < l.length); i++) lists.forEach(l => { if (l[i]) out.push(l[i]); });
+  return out;
+}
 // Under R100 that complements a plate: the star store's own items first, then
 // desserts, drinks, snacks (best-performing first within each).
 function complementUnderR100(prods) {
-  const star = HOME_CURATION.starStore;
-  return prods.filter(p => effectivePrice(p) < 100 && (storeSlugOf(p) === star || HOME_CURATION.complementCategories.indexOf(p.category) !== -1))
+  return prods.filter(p => effectivePrice(p) < 100 && (isStarStore(p) || HOME_CURATION.complementCategories.indexOf(p.category) !== -1))
     .sort((a, b) => {
-      const ga = storeSlugOf(a) === star ? -1 : (HOME_CURATION.complementOrder[a.category] ?? 9);
-      const gb = storeSlugOf(b) === star ? -1 : (HOME_CURATION.complementOrder[b.category] ?? 9);
+      const ga = isStarStore(a) ? -1 : (HOME_CURATION.complementOrder[a.category] ?? 9);
+      const gb = isStarStore(b) ? -1 : (HOME_CURATION.complementOrder[b.category] ?? 9);
       if (ga !== gb) return ga - gb;
       if (ga === -1) return effectivePrice(a) - effectivePrice(b); // the star's cheapest plate first
       return computeScore(b, { boostAfford: true }) - computeScore(a, { boostAfford: true });
@@ -3145,9 +3156,9 @@ function renderAll(products){
   // / All Shops, the category bubbles and search (where they rank below the
   // curated stores). The older generic rows below are hidden (code kept).
   {
-    const star = HOME_CURATION.starStore, xp = HOME_CURATION.experienceStore;
-    // Star: cheapest plate first, so the R70 plate leads.
-    const starItems = visible.filter(p => storeSlugOf(p) === star).sort((a, b) => effectivePrice(a) - effectivePrice(b));
+    const xp = HOME_CURATION.experienceStore;
+    // Star: every Workshop plate (both stores, interleaved, cheapest first).
+    const starItems = workshopPlates(visible);
     const shEl = document.getElementById('shisanyamaScroll');
     if (shEl) shEl.innerHTML = cards(starItems, 180);
     showSection('shisanyamaSection', starItems.length);
@@ -4437,6 +4448,7 @@ function openSectionView(key){
   else if(key.type==='newDrops') items=prods.slice().sort(function(a,b){ var da=a.created_at?new Date(a.created_at).getTime():Number(a.id)||0; var db=b.created_at?new Date(b.created_at).getTime():Number(b.id)||0; return db-da; });
   else if(key.type==='student'){ const sg=getSchoolCategorySubs(); items=sc(prods.filter(function(p){ return sg.indexOf(p.category)!==-1; })); }
   else if(key.type==='underR100') items=complementUnderR100(prods);
+  else if(key.type==='workshop') items=workshopPlates(prods);
   else if(key.type==='bestSellers') items=sc(prods);
   else if(key.type==='clothing'){ const cs=getCategoryGroupSubs('Clothing'); items=sc(prods.filter(function(p){ return cs.indexOf(p.category)!==-1; })); }
   else if(key.type==='food'){ const fs=getCategoryGroupSubs('Food'); items=sc(prods.filter(function(p){ return fs.indexOf(p.category)!==-1; })); }
@@ -4455,6 +4467,7 @@ const SECTION_KEY_MAP = {
   newDrops:   { type:'newDrops',   title:'New Drops' },
   student:    { type:'student',    title:'Back to School' },
   underR100:  { type:'underR100',  title:'Under R100 — goes with your plate' },
+  workshop:   { type:'workshop',   title:'Workshop Shisanyama — all the plates' },
   bestSellers:{ type:'bestSellers',title:'Best Sellers' },
   clothing:   { type:'clothing',   title:'Popular in Clothing' },
   food:       { type:'food',       title:'Popular in Food' },
