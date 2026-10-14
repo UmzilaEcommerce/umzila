@@ -15,7 +15,7 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 - All are the seller's own photos, nothing generated. Uploaded with new names (`<product>_<ts>_ed.w1280/.w480.webp`); `product_images` and `products.image` were updated.
 
 **Promo:**
-- `claim-store-promo.js` has a new entry: `isiqalokitchen`, ISIQALO… codes, 10%, ends Sat 17 Oct 18:00, 100-order cap.
+- `claim-store-promo.js` has a new entry: `isiqalokitchen`, ISIQALO… codes, 10%, ends Mon 19 Oct 23:59 (extended from Sat 17 Oct before launch), 100-order cap.
 - New `excludeProductIds` option: the code row gets `scope 'products'` with every other product of the store, so `lib/discounts.js` never discounts the SPECIAL. That function already supported product scope, so no new discount logic was needed.
 - `shop.html` STORE_PROMOS has a matching entry, with a "Not on the SPECIAL" note in both pop-ups.
 - A code saved on the browser for another store's promo is no longer used for this store's "your code is waiting" check.

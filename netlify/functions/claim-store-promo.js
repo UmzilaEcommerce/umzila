@@ -24,7 +24,7 @@ const PROMOS = {
   },
   isiqalokitchen: {
     percent: 10,
-    ends: '2026-10-17T18:00:00+02:00',
+    ends: '2026-10-19T23:59:00+02:00',
     maxOrders: 100,
     prefix: 'ISIQALO',
     label: 'Isiqalo Kitchen',
