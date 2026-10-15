@@ -26,7 +26,7 @@ module.exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); }
   catch (e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
-  const { full_name, email, phone, shop_name, category, location, delivery_method } = body;
+  const { full_name, email, phone, shop_name, category, location, plan_to_sell, instagram } = body;
 
   const adminLink = `${SITE_BASE_URL}/admin.html`;
 
@@ -67,7 +67,8 @@ module.exports.handler = async function (event) {
       <tr><td>Shop Name</td><td>${esc(shop_name)}</td></tr>
       <tr><td>Category</td><td>${esc(category)}</td></tr>
       <tr><td>Location</td><td>${esc(location)}</td></tr>
-      <tr><td>Delivery</td><td>${esc(delivery_method)}</td></tr>
+      <tr><td>Instagram</td><td>${instagram ? esc('@' + instagram) : '—'}</td></tr>
+      <tr><td>About</td><td style="white-space:pre-wrap">${esc(plan_to_sell)}</td></tr>
     </table>
     <div class="cta">
       <a href="${esc(adminLink)}" class="btn">Review in Admin &rarr;</a>

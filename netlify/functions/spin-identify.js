@@ -3,6 +3,8 @@
 //      { mode: 'track', links: [{order, token}] }  private tracking links on this device
 //      { mode: 'email', email }             → { needsPhoneCheck } | 404 not_found
 //      { mode: 'verify', email, last4 }     → last 4 digits of the phone on their order
+//      { mode: 'share' }                    + Bearer: just their invite link code (home-page banner)
+//                                           → { shareCode, firstName }; any confirmed account
 // Success → { spinSession, firstName, emailMasked, state, lastOrder, gift?, reason? }
 // Nothing personal is returned until one of session / track / verify proves it.
 const { createClient } = require('@supabase/supabase-js');
@@ -23,17 +25,28 @@ exports.handler = async (event) => {
     const out = { spinSession: session, firstName: st.firstName, emailMasked: st.emailMasked, state: st.state, lastOrder: st.lastOrder || null };
     if (st.gift) out.gift = st.gift;
     if (st.reason) out.reason = st.reason;
+    // nothing to spin right now → still offer their invite link
+    if (st.state === 'HAS_GIFT' || st.state === 'NEEDS_ORDER') {
+      out.shareCode = (st.gift && st.gift.shareCode) || await S.shareCodeFor(admin, { email, userId, name: st.firstName });
+      if (out.gift) out.gift.shareCode = out.shareCode;
+    }
     return S.reply(200, out);
   };
 
   try {
-    if (b.mode === 'session') {
+    if (b.mode === 'session' || b.mode === 'share') {
       const auth = event.headers.authorization || event.headers.Authorization || '';
       const tok = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
       if (!tok) return S.reply(401, { error: 'no_session' });
       const { data: { user } = {}, error } = await admin.auth.getUser(tok);
       if (error || !user || !user.email || !user.email_confirmed_at) return S.reply(401, { error: 'no_session' });
       const email = user.email.toLowerCase();
+      if (b.mode === 'share') {
+        const { data: pr } = await admin.from('profiles').select('first_name, phone').eq('user_id', user.id).maybeSingle();
+        const firstName = S.firstNameOf(pr && pr.first_name);
+        const shareCode = await S.shareCodeFor(admin, { email, userId: user.id, name: firstName || null, phone: pr && pr.phone });
+        return S.reply(200, { shareCode, firstName });
+      }
       const orders = await S.paidOrders(admin, email, user.id);
       if (!orders.length) {
         // A signed-in account with no orders: friend path unless it already spun.

@@ -256,8 +256,8 @@ async function loadCartWithSync() {
         .from('carts')
         .select('items')
         .eq('user_id', currentUser.id)
-        .single();
-        
+        .maybeSingle(); // no saved basket yet = null, not a 406
+
       if (!error && data && data.items) {
         // Sanitize and validate server cart items
         const sanitizedItems = sanitizeCartData(data.items);
@@ -1032,12 +1032,6 @@ function getSchoolCategorySubs(){
   return SCHOOL_GROUP_LABELS.reduce((acc, label) => acc.concat(getCategoryGroupSubs(label)), []);
 }
 
-// Store current user referral info
-let userReferralInfo = {
-  code: null,
-  link: null
-};
-
 // Store current auth user
 let currentUser = null;
 
@@ -1079,12 +1073,6 @@ const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
 const signBtn = document.getElementById('signBtn');
 const modal = document.getElementById('productModal');
 const modalClose = document.getElementById('closeProductModal');
-const copyReferralBtn = document.getElementById('copyReferral');
-const shareBtn = document.getElementById('shareBtn');
-const userReferralCode = document.getElementById('userReferralCode');
-const userReferralLink = document.getElementById('userReferralLink');
-const referralCodeDisplay = document.getElementById('referralCodeDisplay');
-const referralLinkDisplay = document.getElementById('referralLinkDisplay');
 const profileBtnHeader = document.getElementById('profileBtnHeader');
 const orderUpdatesBadge = document.getElementById('orderUpdatesBadge');
 const quickAddModal = document.getElementById('quickAddModal');
@@ -1115,7 +1103,6 @@ const modalForgotPassword = document.getElementById('modalForgotPassword');
 const modalForgotPasswordEmail = document.getElementById('modalForgotPasswordEmail');
 const modalForgotPasswordSubmit = document.getElementById('modalForgotPasswordSubmit');
 const modalForgotPasswordCancel = document.getElementById('modalForgotPasswordCancel');
-const modalSignupReferralCode = document.getElementById('modalSignupReferralCode');
 
 /********************
  * Checkout Redirection - DIRECT TO checkout.html
@@ -1359,123 +1346,21 @@ function clearHomeSkeletons() {
   });
 }
 
-/********************
- * Referral System
- ********************/
-
-// Generate a random referral code
 function escapeAuthHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-function generateReferralCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-// Get or create referral code for user
-async function getUserReferralInfo(userId) {
-  if (!supabaseClient || !userId) return null;
-  
-  try {
-    const { data: profileData, error: profileError } = await supabaseClient
-      .from('profiles')
-      .select('referral_code, id')
-      .eq('user_id', userId)
-      .maybeSingle();
-    
-    if (profileError) return null;
-    
-    let referralCode = null;
-    
-    if (!profileData) {
-      const { data: userData } = await supabaseClient.auth.getUser();
-      const userEmail = userData?.user?.email || '';
-      
-      referralCode = generateReferralCode();
-      
-      const { data: newProfile, error: createError } = await supabaseClient
-        .from('profiles')
-        .insert([{ 
-          user_id: userId,
-          email: userEmail,
-          referral_code: referralCode,
-          first_name: 'User',
-          last_name: ''
-        }])
-        .select('referral_code')
-        .single();
-      
-      if (createError) return null;
-      referralCode = newProfile.referral_code;
-    } else {
-      referralCode = profileData.referral_code;
-      
-      if (!referralCode) {
-        referralCode = generateReferralCode();
-        
-        const { error: updateError } = await supabaseClient
-          .from('profiles')
-          .update({ referral_code: referralCode })
-          .eq('id', profileData.id);
-        
-        if (updateError) return null;
-      }
-    }
-    
-    return {
-      code: referralCode,
-      link: `${window.location.origin}?ref=${referralCode}`
-    };
-  } catch (e) {
-    console.error('Error in getUserReferralInfo:', e);
-    return null;
-  }
-}
-
-// REMOVED: getReferrerFromCode, createRefereeDiscountCode, createReferrerRewardCode
-// These were dead frontend functions that wrote directly to discount_codes via the anon key.
-// All discount code creation is handled server-side by /.netlify/functions/process-referral.
-
-// Check URL for referral parameter.
-// Stores pending_referral as JSON { code, storedAt } so it can expire after 7 days.
+/********************
+ * Invites = Spin & Win "Give a friend a spin" (docs/systems/spin-wheel-spec.md §11)
+ ********************/
+// Old invite links (umzila.store/?ref=CODE) now open the spin page with the
+// same code: their codes were carried over as the sharer's spins 'share' row.
 function checkUrlForReferral() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const refCode = urlParams.get('ref');
-
-  if (refCode) {
-    if (modalSignupReferralCode) {
-      modalSignupReferralCode.value = refCode;
-    }
-
-    try {
-      localStorage.setItem('pending_referral', JSON.stringify({ code: refCode, storedAt: Date.now() }));
-    } catch (e) {}
-  }
-}
-
-// Read pending referral, respecting 7-day expiry. Returns code string or null.
-function readPendingReferral() {
   try {
-    const raw = localStorage.getItem('pending_referral');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // Support legacy plain-string storage
-    if (typeof parsed === 'string') return parsed;
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-    if (!parsed.storedAt || Date.now() - parsed.storedAt > SEVEN_DAYS) {
-      localStorage.removeItem('pending_referral');
-      return null;
-    }
-    return parsed.code || null;
-  } catch (e) {
-    localStorage.removeItem('pending_referral');
-    return null;
-  }
+    const ref = (new URLSearchParams(window.location.search).get('ref') || '').trim();
+    if (ref && /^[A-Za-z0-9]{4,20}$/.test(ref)) { window.location.replace('/spin?ref=' + encodeURIComponent(ref)); return true; }
+  } catch (e) {}
+  return false;
 }
 
 /********************
@@ -1498,7 +1383,7 @@ function updateAuthUI(user) {
         window.location.href = 'profile.html';
       };
     }
-    updateReferralBanner(user);
+    updateInviteBanner(user);
     
     // Sync cart on login
     syncCartOnLogin(user);
@@ -1508,74 +1393,53 @@ function updateAuthUI(user) {
     if (signBtn) signBtn.style.display = 'inline-flex';
     if (mobileSignIn) mobileSignIn.textContent = 'Sign In / Sign Up';
     if (profileBtnHeader) profileBtnHeader.style.display = 'none';
-    updateReferralBanner(null);
+    updateInviteBanner(null);
     // Clear favourite state on sign-out
     state.userFavourites = new Set();
     markFavourites();
   }
 }
 
-// Update referral banner
-function updateReferralBanner(user) {
-  const copyBtn = document.getElementById('copyReferral');
-  const shareBtn = document.getElementById('shareBtn');
-  const referralCodeDisplay = document.getElementById('referralCodeDisplay');
-  const referralLinkDisplay = document.getElementById('referralLinkDisplay');
-  const userReferralCodeEl = document.getElementById('userReferralCode');
-  const userReferralLinkEl = document.getElementById('userReferralLink');
-  
-  if (!copyBtn || !shareBtn) return;
-  
-  const newCopyBtn = copyBtn.cloneNode(true);
-  const newShareBtn = shareBtn.cloneNode(true);
-  copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
-  shareBtn.parentNode.replaceChild(newShareBtn, shareBtn);
-  
-  const updatedCopyBtn = document.getElementById('copyReferral');
-  const updatedShareBtn = document.getElementById('shareBtn');
-  
-  if (user) {
-    getUserReferralInfo(user.id).then(info => {
-      if (info) {
-        userReferralInfo = info;
-        userReferralCodeEl.textContent = info.code;
-        userReferralLinkEl.textContent = info.link;
-        referralCodeDisplay.style.display = 'block';
-        referralLinkDisplay.style.display = 'block';
-        
-        updatedCopyBtn.addEventListener('click', function() {
-          navigator.clipboard.writeText(info.code).then(() => {
-            showNotification(`Referral code copied: ${info.code}`);
-          });
-        });
-        
-        updatedShareBtn.addEventListener('click', function() {
-          if (navigator.share) {
-            navigator.share({
-              title: 'Join Umzila!',
-              text: `Get 15% off your first order at Umzila with my referral code: ${info.code}`,
-              url: info.link
-            });
-          } else {
-            navigator.clipboard.writeText(info.link).then(() => {
-              showNotification(`Referral link copied to clipboard: ${info.link}`);
-            });
-          }
-        });
-      }
-    });
-  } else {
-    referralCodeDisplay.style.display = 'none';
-    referralLinkDisplay.style.display = 'none';
-    
-    updatedCopyBtn.addEventListener('click', function() {
-      showModal(loginModal);
-    });
-    
-    updatedShareBtn.addEventListener('click', function() {
-      showModal(loginModal);
-    });
-  }
+// Home banner "Give a friend a spin". Signed in → their personal link
+// (spin-identify mode 'share'). Signed out → the spin page, which works out who
+// they are and shows their link (?share=1).
+let inviteBannerFor = undefined;
+async function updateInviteBanner(user) {
+  const wa = document.getElementById('inviteWa'), copyBtn = document.getElementById('inviteCopy');
+  const row = document.getElementById('inviteLinkRow'), linkEl = document.getElementById('inviteLink');
+  if (!wa || !copyBtn) return;
+  const uid = user ? user.id : null;
+  if (inviteBannerFor === uid) return; // already set up for this person
+  inviteBannerFor = uid;
+  const signedOut = () => {
+    wa.href = '/spin?share=1&src=home-invite'; wa.removeAttribute('target'); wa.textContent = 'Get my invite link →';
+    copyBtn.hidden = true; row.hidden = true;
+  };
+  signedOut();
+  if (!user || !supabaseClient) return;
+  try {
+    const { data: { session } = {} } = await supabaseClient.auth.getSession();
+    const tok = session && session.access_token;
+    if (!tok) return;
+    const r = await fetch('/.netlify/functions/spin-identify', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ mode: 'share' }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.shareCode || inviteBannerFor !== uid) return;
+    const link = window.location.origin + '/spin?ref=' + encodeURIComponent(j.shareCode);
+    linkEl.textContent = link.replace(/^https?:\/\//, ''); row.hidden = false;
+    wa.href = 'https://wa.me/?text=' + encodeURIComponent('Here’s a spin on the Umzila wheel for you 🎡 There’s a welcome gift waiting for your first order: ' + link);
+    wa.target = '_blank'; wa.rel = 'noopener'; wa.textContent = 'Share on WhatsApp';
+    copyBtn.hidden = false;
+    copyBtn.onclick = () => {
+      const done = () => showNotification('Invite link copied ✓');
+      const fallback = () => {
+        const t = document.createElement('textarea'); t.value = link; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); done(); } catch (e) { window.prompt('Copy your invite link:', link); }
+        t.remove();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, fallback); else fallback();
+    };
+  } catch (e) { /* stays on the signed-out version */ }
 }
 
 /********************
@@ -1649,7 +1513,6 @@ if (modalSignupSubmit) {
     const name = (modalSignupName && modalSignupName.value || '').trim();
     const email = (modalSignupEmail && modalSignupEmail.value || '').trim();
     const password = (modalSignupPassword && modalSignupPassword.value) || '';
-    const referralCode = modalSignupReferralCode ? modalSignupReferralCode.value : '';
     
     if (!name || !email || !password) {
       if (errorElement) {
@@ -1715,43 +1578,13 @@ if (modalSignupSubmit) {
             user_id: userId,
             email: email,
             first_name: name.split(' ')[0] || name,
-            last_name: name.split(' ').slice(1).join(' ') || '',
-            referral_code: generateReferralCode()
+            last_name: name.split(' ').slice(1).join(' ') || ''
           }], {
             onConflict: 'user_id',
             returning: 'minimal'
           });
         } catch (profileError) {
           console.warn('Profile creation failed:', profileError);
-        }
-      }
-
-      // Process referral server-side — creates discount codes, tracking record, and sends emails.
-      // Awaited so we can report accurate success/failure to the user.
-      let referralMsg = '';
-      if (referralCode) {
-        try {
-          const rfRes = await fetch('/.netlify/functions/process-referral', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              referral_code: referralCode,
-              referee_email: email,
-              referee_name: name.split(' ')[0] || 'there'
-            })
-          });
-          if (rfRes.ok) {
-            referralMsg = '<br><strong>Check your email — your 15% off code is on its way!</strong>';
-            // Successfully processed — clear pending referral
-            try { localStorage.removeItem('pending_referral'); } catch (e) {}
-          } else {
-            console.warn('process-referral returned non-ok status', rfRes.status);
-            referralMsg = '<br>Your account was created but we could not issue the referral reward yet. Please contact support if needed.';
-            // Keep pending_referral so it can be retried if needed
-          }
-        } catch (rfErr) {
-          console.warn('process-referral network error', rfErr);
-          referralMsg = '<br>Your account was created but we could not issue the referral reward yet. Please contact support if needed.';
         }
       }
 
@@ -1765,11 +1598,10 @@ if (modalSignupSubmit) {
             resend: () => client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: window.location.origin + window.location.pathname + window.location.search } }),
             onSignedIn: (s) => { setTimeout(() => { hideModal(signupModal); updateAuthUI(s.user); }, 1500); }
           });
-          if (referralMsg) successElement.insertAdjacentHTML('beforeend', '<div style="font-size:13px;margin-top:6px">' + referralMsg.replace(/^<br>/, '') + '</div>');
         } else {
           successElement.innerHTML = data?.session
-            ? 'Account created!' + referralMsg
-            : 'Almost done — we sent a confirmation link to <strong>' + escapeAuthHtml(email) + '</strong>. Open it to finish and you’ll come back here signed in. (Check spam too.)' + referralMsg;
+            ? 'Account created!'
+            : 'Almost done — we sent a confirmation link to <strong>' + escapeAuthHtml(email) + '</strong>. Open it to finish and you’ll come back here signed in. (Check spam too.)';
         }
         successElement.style.display = 'block';
       }
@@ -1778,12 +1610,6 @@ if (modalSignupSubmit) {
       if (modalSignupName) modalSignupName.value = '';
       if (modalSignupEmail) modalSignupEmail.value = '';
       if (modalSignupPassword) modalSignupPassword.value = '';
-      if (modalSignupReferralCode) modalSignupReferralCode.value = '';
-
-      // Clear stored referral only if no referral code was used (already cleared above on success)
-      if (!referralCode) {
-        try { localStorage.removeItem('pending_referral'); } catch (e) {}
-      }
       
       // Close modal after success
       // Without a session they must read the "check your email" note — leave it open.
@@ -2111,6 +1937,7 @@ fallbackProducts.forEach(p=>{
 // set logos directly
 document.getElementById('logoImg').src = 'umzila.webp';
 document.getElementById('footerLogo').src = 'umzila.webp';
+{ const y = document.getElementById('sfYear'); if (y) y.textContent = new Date().getFullYear(); }
 
 /********************
  * Store for filter options from Supabase - UPDATED FOR CORRECT FILTERING
@@ -4478,7 +4305,7 @@ const SECTION_KEY_MAP = {
 
 // Wire up section "See more" buttons (new section-see-more class)
 document.addEventListener('click', function(e){
-  const btn = e.target.closest('.section-see-more');
+  const btn = e.target.closest('.section-see-more, .sf-sec'); // .sf-sec = footer category links
   // Plain links styled like "See more" (e.g. "Book a ride →" to a store page)
   // have no data-section — let them navigate normally.
   if(!btn || !btn.dataset.section) return;
@@ -4522,10 +4349,6 @@ document.getElementById('backToHomeBtn')?.addEventListener('click', function(){
  ********************/
 async function handleSubscribe(email){
   if(!email) return { success:false, error: 'no email' };
-  if(!supabaseClient) {
-    try{ localStorage.setItem('demo_subscribe_'+email, Date.now()); }catch(e){}
-    return { success: true, demo:true };
-  }
   try {
     const res = await fetch('/.netlify/functions/subscribe', {
       method: 'POST',
@@ -4540,21 +4363,21 @@ async function handleSubscribe(email){
   }
 }
 
-document.getElementById('subscribeBtn').addEventListener('click', async ()=>{ 
-  let email=document.getElementById('newsEmail').value.trim(); 
-  if(!email){ 
-    alert('Enter your email'); 
-    return;
-  } 
-  if (window.UmzilaInput) { email = UmzilaInput.ok(document.getElementById('newsEmail')); if (!email) return; }
-  const res = await handleSubscribe(email); 
-  if(res.success) { 
-    alert('Thanks — subscription saved.'); 
-    document.getElementById('newsEmail').value=''; 
-  } else { 
-    console.error(res.error); 
-    alert('Could not save your email (check console).'); 
-  } 
+// Footer "Specials in your inbox": inline feedback (no browser alerts).
+document.getElementById('subscribeBtn').addEventListener('click', async ()=>{
+  const input = document.getElementById('newsEmail'), btn = document.getElementById('subscribeBtn'), msg = document.getElementById('newsMsg');
+  const say = (t, ok) => { if (msg) { msg.textContent = t; msg.classList.toggle('ok', !!ok); } };
+  say('');
+  let email = input.value.trim();
+  if (!email) { say('Type your email first.'); input.focus(); return; }
+  if (window.UmzilaInput) { email = UmzilaInput.ok(input); if (!email) return; }
+  btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
+  try {
+    const res = await handleSubscribe(email);
+    if (res.success) { say('You’re in 🎉 Watch your inbox for specials.', true); input.value = ''; }
+    else { console.error(res.error); say('Couldn’t save that right now. Please try again.'); }
+  } catch (e) { say('No connection. Please try again.'); }
+  finally { btn.disabled = false; btn.textContent = label; }
 });
 
 /********************
@@ -4995,8 +4818,8 @@ function initMobileBottomNav() {
  * Initialize
  ********************/
 document.addEventListener('DOMContentLoaded', function() {
-  // Check URL for referral code
-  checkUrlForReferral();
+  // Old invite links (?ref=) → the spin page
+  if (checkUrlForReferral()) return;
   
   // Setup lazy loading
   setupLazyLoading();
@@ -5098,15 +4921,7 @@ document.addEventListener('DOMContentLoaded', function() {
     localStorage.setItem('ss_cart', JSON.stringify(state.cart));
   });
   
-  // Check if we have a pending referral code (respects 7-day expiry)
-  try {
-    const pendingReferral = readPendingReferral();
-    if (pendingReferral) {
-      if (modalSignupReferralCode) {
-        modalSignupReferralCode.value = pendingReferral;
-      }
-    }
-  } catch (e) {}
+  try { localStorage.removeItem('pending_referral'); } catch (e) {} // old sign-up referral (retired 2026-10-15)
 });
 
 var revealObserver = null;

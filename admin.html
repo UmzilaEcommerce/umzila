@@ -506,6 +506,7 @@ const supabaseClient = supabase.createClient(
           <li class="menu-group" role="presentation">Growth</li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
           <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
+          <li data-section="spin"><span class="menu-icon">🎡</span><span class="menu-label">Spin &amp; Win</span></li>
           <li class="menu-group" role="presentation">System</li>
           <li data-section="settings"><span class="menu-icon">⚙️</span><span class="menu-label">Settings</span></li>
           <li id="lsLogout"><span class="menu-icon">🚪</span><span class="menu-label">Logout</span></li>
@@ -1146,6 +1147,39 @@ const supabaseClient = supabase.createClient(
       </section>
 
       <!-- Settings -->
+      <!-- Spin & Win (docs/systems/spin-wheel-spec.md §8). Reads/writes only via
+           netlify/functions/spin-admin.js (admins table check server-side). -->
+      <section id="section-spin" style="display:none">
+        <style>
+          #section-spin .spa-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px}
+          #section-spin .spa-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px}
+          #section-spin .spa-card h3{margin:0 0 10px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+          #section-spin .spa-live{background:linear-gradient(150deg,#0a2f66,#123f80);color:#fff;border:0}
+          #section-spin .spa-live h3{color:#ffc21a}
+          #section-spin .spa-big{font-size:24px;font-weight:800;line-height:1.2}
+          #section-spin .spa-sub{font-size:13px;opacity:.8;margin-top:4px}
+          #section-spin .spa-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+          #section-spin .spa-row label{display:block;font-size:12px;font-weight:700;color:#374151;margin-bottom:4px}
+          #section-spin .spa-row select,#section-spin .spa-row input{padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font:inherit;font-size:14px;min-width:0}
+          #section-spin .spa-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+          #section-spin .spa-tile{background:#f8fafc;border-radius:10px;padding:10px 12px}
+          #section-spin .spa-tile b{display:block;font-size:20px;color:#0a2f66}
+          #section-spin .spa-tile span{font-size:12px;color:#6b7280}
+          #section-spin .spa-table{width:100%;border-collapse:collapse;font-size:13px}
+          #section-spin .spa-table th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;padding:8px;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+          #section-spin .spa-table td{padding:8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+          #section-spin .spa-scroll{overflow-x:auto}
+          #section-spin .spa-pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+          #section-spin .spa-warn{background:#fef3c7;color:#92400e;border-radius:10px;padding:10px 12px;font-size:13px;margin-top:10px}
+          #section-spin .spa-msg{font-size:13px;margin-top:8px;min-height:1em}
+        </style>
+        <div class="section-top">
+          <h2>🎡 Spin &amp; Win</h2>
+          <button class="small-btn" type="button" onclick="window.loadSpinAdmin?.()">↻ Refresh</button>
+        </div>
+        <div id="spinAdminMount"><p style="color:#6b7280">Loading…</p></div>
+      </section>
+
       <section id="section-settings" style="display:none">
         <div class="section-top"><h2>⚙️ Settings</h2></div>
         <div style="display:flex;gap:16px;flex-wrap:wrap">
@@ -2262,7 +2296,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'delivery-ops': document.getElementById('section-delivery-ops'),
     'deliveries': document.getElementById('section-deliveries'),
     'delivery-pricing': document.getElementById('section-delivery-pricing'),
-    'delivery-analytics': document.getElementById('section-delivery-analytics')
+    'delivery-analytics': document.getElementById('section-delivery-analytics'),
+    'spin': document.getElementById('section-spin')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -2956,6 +2991,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="delivery-ops"]')?.addEventListener('click', () => window.loadDeliveryOps?.());
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
   document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
+  document.querySelector('[data-section="spin"]')?.addEventListener('click', () => window.loadSpinAdmin?.());
   document.querySelector('[data-section="delivery-analytics"]')?.addEventListener('click', () => window.loadDeliveryAnalytics?.());
 
   // Manage-shops sub-tabs
@@ -3514,6 +3550,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         <div class="fg"><label>Phone</label><div style="font-size:14px">${escapeHtml(app.phone||'—')}</div></div>
         <div class="fg"><label>Instagram</label><div style="font-size:14px">${app.instagram ? `<a href="https://instagram.com/${encodeURIComponent(app.instagram)}" target="_blank" rel="noopener">@${escapeHtml(app.instagram)}</a>` : '—'}</div></div>
         <div class="fg"><label>Applied</label><div style="font-size:14px">${app.created_at ? new Date(app.created_at).toLocaleString('en-ZA') : '—'}</div></div>
+        <div class="fg"><label>Sells</label><div style="font-size:14px">${escapeHtml(app.category||'—')}</div></div>
+        <div class="fg"><label>Based in</label><div style="font-size:14px">${escapeHtml(app.location||'—')}</div></div>
+        ${app.price_range ? `<div class="fg"><label>Price range (old form)</label><div style="font-size:14px">${escapeHtml(app.price_range)}</div></div>` : ''}
+        ${app.delivery_method ? `<div class="fg"><label>Delivery (old form)</label><div style="font-size:14px">${escapeHtml(app.delivery_method)}</div></div>` : ''}
       </div>
       <div class="fg"><label>Plans to Sell</label>
         <div style="font-size:14px;line-height:1.7;white-space:pre-wrap;background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e5e7eb">${escapeHtml(app.plan_to_sell||'—')}</div>
@@ -5061,6 +5101,143 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   let deliveryPricingCache = [];
   let deliveryPricingEditing = false;
+
+
+  // ── Spin & Win (admin tab) — everything through spin-admin.js ──
+  (function(){
+    const fmt = d => d ? new Date(d).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const rand = n => 'R' + Number(n || 0).toFixed(2);
+    let spinData = null;
+
+    async function call(body){
+      const { data: { session } = {} } = await supabaseClient.auth.getSession();
+      if (!session) throw new Error('Not signed in');
+      const r = await fetch('/.netlify/functions/spin-admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+      return j;
+    }
+
+    window.loadSpinAdmin = async function(){
+      const mount = document.getElementById('spinAdminMount');
+      if (!mount) return;
+      if (!supabaseClient) { mount.innerHTML = '<p style="color:#6b7280">Supabase not available</p>'; return; }
+      if (!spinData) mount.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+      try { spinData = await call({ action: 'status' }); render(); }
+      catch (e) { mount.innerHTML = `<p style="color:#dc2626">Couldn't load Spin &amp; Win: ${escapeHtml(e.message)}</p>`; }
+    };
+
+    function giftName(k){ const g = spinData.gifts[k]; return g ? g.emoji + ' ' + g.label : k; }
+    function slotState(s){
+      const now = Date.now();
+      if (s.status === 'cancelled') return ['Cancelled', '#e5e7eb', '#374151'];
+      if (s.max_winners != null && s.winners >= s.max_winners) return ['Full', '#fde68a', '#92400e'];
+      if (new Date(s.ends_at) <= now) return ['Ended', '#e5e7eb', '#374151'];
+      if (new Date(s.starts_at) <= now) return ['Live', '#bbf7d0', '#065f46'];
+      return ['Scheduled', '#dbeafe', '#1e40af'];
+    }
+
+    function render(){
+      const d = spinData, mount = document.getElementById('spinAdminMount');
+      const opts = sel => Object.keys(d.gifts).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${escapeHtml(giftName(k))}</option>`).join('');
+      const live = d.live || {};
+      const t = d.totals || {};
+      const conv = t.spins ? Math.round(100 * (t.used || 0) / t.spins) : 0;
+      const slots = (d.slots || []).slice().sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+      const startDefault = (() => { const x = new Date(Date.now() + 2 * 3600e3 + 60 * 60e3); x.setUTCMinutes(0, 0, 0); return x.toISOString().slice(0, 16); })(); // next hour, SAST
+
+      mount.innerHTML = `
+        <div class="spa-grid">
+          <div class="spa-card spa-live">
+            <h3>Being given right now</h3>
+            <div class="spa-big">${escapeHtml(giftName(live.kind || d.defaultGift))}</div>
+            <div class="spa-sub">${live.isDefault ? 'Default gift (no slot running)' : 'Slot ends ' + escapeHtml(fmt(live.endsAt)) + (live.maxWinners != null ? ` · ${live.winners}/${live.maxWinners} winners` : ` · ${live.winners || 0} winners`)}</div>
+          </div>
+          <div class="spa-card">
+            <h3>Default gift</h3>
+            <div class="spa-row">
+              <div style="flex:1"><label for="spaDefault">When no slot is running</label><select id="spaDefault" style="width:100%">${opts(d.defaultGift)}</select></div>
+              <button class="small-btn" type="button" id="spaDefaultSave">Save</button>
+            </div>
+            <div class="spa-msg" id="spaDefaultMsg"></div>
+          </div>
+        </div>
+
+        <div class="spa-card" style="margin-bottom:14px">
+          <h3>Add a time slot</h3>
+          <div class="spa-row">
+            <div><label for="spaGift">Gift</label><select id="spaGift">${opts('food150')}</select></div>
+            <div><label for="spaStart">Starts (SAST)</label><input id="spaStart" type="datetime-local" value="${startDefault}"></div>
+            <div><label for="spaMins">Minutes</label><input id="spaMins" type="number" min="1" value="30" style="width:90px"></div>
+            <div><label for="spaMax">Max winners</label><input id="spaMax" type="number" min="1" placeholder="no limit" style="width:110px"></div>
+            <button class="small-btn" type="button" id="spaAdd">Add slot</button>
+          </div>
+          <div class="spa-msg" id="spaAddMsg"></div>
+          <p style="font-size:12.5px;color:#6b7280;margin:8px 0 0">When a slot ends or its winners are used up, spins go back to the default gift automatically. Every gift on the wheel (${Object.values(d.gifts).map(g => g.emoji).join(' ')}) should be given away in some slot from time to time.</p>
+        </div>
+
+        <div class="spa-card" style="margin-bottom:14px">
+          <h3>Slots (last 7 days and upcoming)</h3>
+          ${slots.length ? `<div class="spa-scroll"><table class="spa-table"><thead><tr><th>Gift</th><th>Starts</th><th>Ends</th><th>Winners</th><th>Status</th><th></th></tr></thead><tbody>
+            ${slots.map(s => { const [lbl, bg, fg] = slotState(s); const canCancel = s.status !== 'cancelled' && new Date(s.ends_at) > Date.now();
+              return `<tr><td>${escapeHtml(giftName(s.gift_kind))}</td><td>${escapeHtml(fmt(s.starts_at))}</td><td>${escapeHtml(fmt(s.ends_at))}</td><td>${s.winners}${s.max_winners != null ? ' / ' + s.max_winners : ''}</td>
+                <td><span class="spa-pill" style="background:${bg};color:${fg}">${lbl}</span></td>
+                <td>${canCancel ? `<button class="small-btn" type="button" data-cancel="${s.id}">Cancel</button>` : ''}</td></tr>`; }).join('')}
+          </tbody></table></div>` : '<p style="color:#6b7280;font-size:13px;margin:0">No slots yet. Everyone gets the default gift.</p>'}
+        </div>
+
+        <div class="spa-card" style="margin-bottom:14px">
+          <h3>Results (staff test spins not counted)</h3>
+          <div class="spa-tiles">
+            <div class="spa-tile"><b>${t.spins || 0}</b><span>spins</span></div>
+            <div class="spa-tile"><b>${t.used || 0}</b><span>codes used</span></div>
+            <div class="spa-tile"><b>${conv}%</b><span>used / spins</span></div>
+            <div class="spa-tile"><b>${rand(t.orderValue)}</b><span>orders paid with spin codes</span></div>
+            <div class="spa-tile"><b>${rand(t.discountGiven)}</b><span>discount given</span></div>
+            <div class="spa-tile"><b>${t.referralRewards || 0}</b><span>friend rewards (R20)</span></div>
+          </div>
+        </div>
+
+        <div class="spa-card">
+          <h3>Latest spins</h3>
+          ${(d.spins || []).length ? `<div class="spa-scroll"><table class="spa-table"><thead><tr><th>When</th><th>Who</th><th>Kind</th><th>Gift</th><th>Code</th><th>Rating</th></tr></thead><tbody>
+            ${d.spins.map(s => { const expired = s.expiresAt && new Date(s.expiresAt) < Date.now();
+              const st = s.used ? ['Used', '#bbf7d0', '#065f46'] : expired ? ['Expired', '#e5e7eb', '#374151'] : ['Waiting', '#dbeafe', '#1e40af'];
+              const kind = { order: 'Order', welcome_back: 'Welcome back', friend: s.referred_by_spin_id ? 'Friend (invited)' : 'Friend' }[s.kind] || s.kind;
+              return `<tr><td style="white-space:nowrap">${escapeHtml(fmt(s.created_at))}</td>
+                <td>${escapeHtml(s.name || '—')}<div style="color:#6b7280;font-size:12px">${escapeHtml(s.email || '')}</div></td>
+                <td>${escapeHtml(kind)}${s.test ? ' <span class="spa-pill" style="background:#fef3c7;color:#92400e">staff test</span>' : ''}</td>
+                <td>${escapeHtml(giftName(s.gift_kind))}</td>
+                <td style="white-space:nowrap"><code>${escapeHtml(s.code || '')}</code> <span class="spa-pill" style="background:${st[1]};color:${st[2]}">${st[0]}</span></td>
+                <td>${s.rating ? '★'.repeat(s.rating) : '—'}</td></tr>`; }).join('')}
+          </tbody></table></div>` : '<p style="color:#6b7280;font-size:13px;margin:0">No spins yet. They appear here as soon as people scan their thank-you cards.</p>'}
+        </div>`;
+
+      const say = (id, txt, ok) => { const m = document.getElementById(id); if (m) { m.textContent = txt; m.style.color = ok ? '#065f46' : '#b91c1c'; } };
+      document.getElementById('spaDefaultSave').onclick = async () => {
+        try { await call({ action: 'set_default', gift: document.getElementById('spaDefault').value }); say('spaDefaultMsg', 'Saved ✓', true); window.loadSpinAdmin(); }
+        catch (e) { say('spaDefaultMsg', e.message); }
+      };
+      document.getElementById('spaAdd').onclick = async () => {
+        const startLocal = document.getElementById('spaStart').value; // SAST wall-clock
+        if (!startLocal) return say('spaAddMsg', 'Pick a start time.');
+        const startsAt = new Date(startLocal + ':00+02:00').toISOString();
+        const minutes = parseInt(document.getElementById('spaMins').value, 10);
+        const max = document.getElementById('spaMax').value;
+        const end = new Date(new Date(startsAt).getTime() + (minutes || 0) * 60000);
+        const overlap = (spinData.slots || []).some(s => s.status !== 'cancelled' && new Date(s.starts_at) < end && new Date(s.ends_at) > new Date(startsAt));
+        if (overlap && !confirm('This overlaps another slot. The newest slot wins while both run. Add it anyway?')) return;
+        try { await call({ action: 'add_slot', gift: document.getElementById('spaGift').value, startsAt, minutes, maxWinners: max || null }); say('spaAddMsg', 'Slot added ✓', true); window.loadSpinAdmin(); }
+        catch (e) { say('spaAddMsg', e.message); }
+      };
+      mount.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
+        if (!confirm('Cancel this slot? Spins go back to the default gift.')) return;
+        b.disabled = true;
+        try { await call({ action: 'cancel_slot', id: b.dataset.cancel }); window.loadSpinAdmin(); }
+        catch (e) { b.disabled = false; showToast('Cancel failed: ' + e.message); }
+      });
+    }
+  })();
 
   window.loadDeliveryPricing = async function loadDeliveryPricing(){
     const mount = document.getElementById('deliveryPricingMount');

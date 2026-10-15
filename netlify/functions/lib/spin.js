@@ -148,6 +148,27 @@ async function getState(admin, { email, userId, name }) {
   return { ...base, state: 'NEEDS_ORDER', reason, lastOrder: await orderSummary(admin, newest) };
 }
 
+// Their personal "give a friend a spin" code (umzila.store/spin?ref=<code>).
+// The newest code they already have (from a spin, or their kind='share' row),
+// else a new kind='share' row (no gift) just to hold it. One link per person.
+async function shareCodeFor(admin, { email, userId, name, phone }) {
+  const { data: have } = await admin.from('spins').select('share_code').ilike('email', email)
+    .in('outcome', ['won', 'share']).not('share_code', 'is', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (have && have.share_code) return have.share_code;
+  for (let i = 0; i < 3; i++) {
+    const { data, error } = await admin.from('spins').insert({
+      email, user_id: userId || null, name: name || null, phone: phone || null, kind: 'share', outcome: 'share',
+      share_code: crypto.randomBytes(5).toString('hex'), test: false
+    }).select('share_code').single();
+    if (!error) return data.share_code;
+    if (error.code !== '23505') throw error;
+    // a parallel request made their share row: read it back
+    const { data: again } = await admin.from('spins').select('share_code').ilike('email', email).eq('kind', 'share').maybeSingle();
+    if (again) return again.share_code;
+  }
+  return null;
+}
+
 // The discount_codes row for a gift.
 async function codeRowFor(admin, kind, { email, friend, test }) {
   const row = {
@@ -238,5 +259,5 @@ const reply = (code, body) => ({ statusCode: code, headers: CORS, body: JSON.str
 module.exports = {
   GIFTS, WORKSHOP, REFERRAL_MONTHLY_CAP, esc, firstNameOf, maskEmail, digits,
   signSession, readSession, giftExpiry, randomCode, isStaff, paidOrders, orderSummary, useUrlFor,
-  getState, codeRowFor, giftEmail, sendGiftEmail, reply, CORS
+  getState, shareCodeFor, codeRowFor, giftEmail, sendGiftEmail, reply, CORS
 };

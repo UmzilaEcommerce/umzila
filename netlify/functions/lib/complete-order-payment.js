@@ -185,20 +185,6 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         }
     }
 
-    // ── Update referral_tracking to converted ──────────────
-    const buyerEmail = existingOrder.customer_email || pfData.email_address || '';
-    if (buyerEmail) {
-        try {
-            await supabase
-                .from('referral_tracking')
-                .update({ status: 'converted' })
-                .eq('referee_email', buyerEmail.toLowerCase())
-                .eq('status', 'signed_up'); // only advance, never overwrite
-        } catch (refErr) {
-            console.warn('completeOrderPayment: referral_tracking conversion error:', refErr.message);
-        }
-    }
-
     // ── Send buyer order confirmation email ────────────────
     // Only for product orders, not seller enrollment
     if (pfData.custom_str1 !== 'seller_enrollment' && existingOrder.label !== 'seller_enrollment' && existingOrder.customer_email) {

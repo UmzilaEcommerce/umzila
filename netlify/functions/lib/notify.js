@@ -36,7 +36,7 @@ function esc(s) {
 }
 
 // Shared visual chrome -- same header/body-card/footer structure already
-// used by send-on-the-way.js and send-referral-email.js, pulled out here so
+// used by send-on-the-way.js, pulled out here so
 // this and send-on-the-way.js's reconciled version don't each carry their
 // own separate copy of the same boilerplate (CLAUDE.md: don't duplicate the
 // same thing across files).

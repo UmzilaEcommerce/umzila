@@ -473,55 +473,87 @@
         <div class="hscroll" id="beautyScroll"></div>
       </section>
 
-      <!-- Referral Banner -->
-      <div style="margin-top:12px;padding:12px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)">
-        <div>
-          <strong>Share with friends & get rewards.</strong>
-          <div style="font-size:13px;color:var(--muted)">
-            Refer a friend — they'll get 15% off their first order when they sign up with your code.
-            <div id="referralCodeDisplay" style="display:none; margin-top: 6px; font-size: 12px; color: var(--accent);">
-              Your referral code: <strong id="userReferralCode">Loading...</strong>
-            </div>
-            <div id="referralLinkDisplay" style="display:none; margin-top: 4px; font-size: 11px; color: var(--muted);">
-              Link: <span id="userReferralLink">Loading...</span>
-            </div>
+      <!-- Give a friend a spin: the Spin & Win invite (script.js updateInviteBanner; docs/systems/spin-wheel-spec.md §11) -->
+      <div id="inviteBanner" style="margin-top:12px;padding:16px;border-radius:14px;background:#fff;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;box-shadow:var(--shadow)">
+        <div style="flex:1 1 240px;min-width:0">
+          <strong style="font-size:16px">🎡 Give a friend a spin</strong>
+          <div style="font-size:13.5px;color:var(--muted);margin-top:2px">
+            They spin the Umzila wheel for a welcome gift on their first order. When they order, you unlock a mystery gift 🎁
+          </div>
+          <div id="inviteLinkRow" hidden style="margin-top:6px;font-size:12.5px;color:var(--muted);overflow-wrap:anywhere">
+            Your link: <strong id="inviteLink" style="color:var(--accent)"></strong>
           </div>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn ghost" id="copyReferral">Copy code</button>
-          <button class="btn" id="shareBtn">Share</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn ghost" id="inviteCopy" type="button" hidden>Copy link</button>
+          <a class="btn" id="inviteWa" href="/spin?share=1&amp;src=home-invite">Get my invite link →</a>
         </div>
       </div>
 
-      <!-- FOOTER -->
-      <footer>
-        <div class="footer-grid">
-          <div class="footer-col">
-            <img id="footerLogo" src="umzila.webp" alt="Umzila">
-            <p class="footer-tagline">Durban's best local businesses,<br>delivered to your door.</p>
-            <div class="footer-newsletter">
-              <input id="newsEmail" type="email" placeholder="Your email" aria-label="Subscribe to newsletter">
-              <button id="subscribeBtn">Subscribe</button>
+      <!-- FOOTER (style.css .site-footer). Every link goes somewhere real. -->
+      <footer class="site-footer">
+        <div class="sf-top">
+          <div class="sf-brand">
+            <a class="sf-logo" href="/" aria-label="Umzila home"><img id="footerLogo" src="umzila.webp" alt="Umzila" width="480" height="480" loading="lazy"></a>
+            <p class="sf-tagline">Durban's local favourites, from Workshop plates to quad rides, delivered to your door.</p>
+            <div class="sf-contact">
+              <a class="sf-pill sf-wa" href="https://wa.me/27797662768?text=Hi%20Umzila!%20I%20have%20a%20question." target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.9 9.9 0 0 0-8.5 14.97L2 22l5.17-1.5A9.9 9.9 0 1 0 12.04 2Zm0 18.1a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-3.07.89.9-2.99-.2-.31a8.2 8.2 0 1 1 6.85 3.74Zm4.5-6.14c-.25-.12-1.46-.72-1.69-.8-.23-.08-.39-.12-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06a6.7 6.7 0 0 1-3.32-2.9c-.25-.43.25-.4.72-1.33.08-.16.04-.3-.02-.43-.06-.12-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.43h-.48a.92.92 0 0 0-.66.31 2.8 2.8 0 0 0-.87 2.07 4.8 4.8 0 0 0 1.01 2.56c.12.16 1.74 2.66 4.22 3.73 1.57.68 2.18.74 2.97.62.48-.07 1.46-.6 1.67-1.18.2-.58.2-1.08.14-1.18-.06-.1-.23-.16-.48-.28Z"/></svg>
+                WhatsApp us
+              </a>
+              <a class="sf-pill" href="mailto:umzilaecommerce@gmail.com">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm-1 1 9 7 9-7"/></svg>
+                Email us
+              </a>
             </div>
           </div>
-          <div class="footer-col">
-            <h4>Quick Links</h4>
-            <a href="about.html">About</a>
-            <a href="mailto:umzilaecommerce@gmail.com">Email Us</a>
-            <a href="https://wa.me/27797662768?text=Hi%20Umzila!%20I%20have%20a%20question." target="_blank" rel="noopener noreferrer">WhatsApp Us</a>
-            <a href="#">Returns &amp; Exchanges</a>
-            <a href="#" id="sellOnUmzilaBtn">Sell on Umzila</a>
-          </div>
-          <div class="footer-col">
-            <h4>Follow Us</h4>
-            <div class="socials" style="margin-bottom:12px">
-              <a href="#" aria-label="Instagram">📸</a>
-              <a href="#" aria-label="TikTok">🎵</a>
-              <a href="#" aria-label="Facebook">📘</a>
+          <div class="sf-news">
+            <h4>Specials in your inbox</h4>
+            <p>New stores, specials and drops. No spam, unsubscribe anytime.</p>
+            <div class="sf-news-row">
+              <input id="newsEmail" type="email" placeholder="you@gmail.com" aria-label="Your email for specials">
+              <button id="subscribeBtn" type="button">Subscribe</button>
             </div>
-            <p style="font-size:12px;color:rgba(255,255,255,0.5);margin:0">Secured by PayFast</p>
-            <p class="footer-copyright">&copy; 2025 Umzila. All rights reserved.</p>
+            <p id="newsMsg" class="sf-news-msg" aria-live="polite"></p>
           </div>
+        </div>
+
+        <nav class="sf-links" aria-label="Footer">
+          <div class="sf-col">
+            <h4>Eat &amp; shop</h4>
+            <a href="#section=workshop" class="sf-sec" data-section="workshop">All Workshop plates</a>
+            <a href="#section=underR100" class="sf-sec" data-section="underR100">Under R100</a>
+            <a href="#section=trending" class="sf-sec" data-section="trending">Trending now</a>
+            <a href="#section=services" class="sf-sec" data-section="services">Services &amp; experiences</a>
+          </div>
+          <div class="sf-col">
+            <h4>Stores</h4>
+            <a href="/isiqalokitchen">Isiqalo Kitchen</a>
+            <a href="/velaphishisanyama">Velaphi Shisanyama</a>
+            <a href="/ncekeniquads">Nceks Quad Biking</a>
+            <button type="button" id="sellOnUmzilaBtn">Sell on Umzila →</button>
+          </div>
+          <div class="sf-col">
+            <h4>Help</h4>
+            <a href="/profile.html">My orders &amp; tracking</a>
+            <a href="/spin">Got a thank-you card? Spin 🎡</a>
+            <a href="/about.html#returns">Returns &amp; refunds</a>
+            <a href="https://wa.me/27797662768?text=Hi%20Umzila!%20I%20need%20help%20with%20an%20order." target="_blank" rel="noopener noreferrer">Order help on WhatsApp</a>
+          </div>
+          <div class="sf-col">
+            <h4>Umzila</h4>
+            <a href="/about.html">About us</a>
+            <a href="/about.html#terms">Terms &amp; conditions</a>
+            <a href="/about.html#privacy">Privacy policy</a>
+          </div>
+        </nav>
+
+        <div class="sf-bottom">
+          <span>&copy; <span id="sfYear">2026</span> Umzila · Durban, KwaZulu-Natal</span>
+          <span class="sf-secure">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z"/></svg>
+            Secure card payments by PayFast
+          </span>
         </div>
       </footer>
     </main>
@@ -587,167 +619,112 @@
     <div id="panelContent" class="panel-grid"></div>
   </div>
 
-  <!-- ===== SELL ON UMZILA MODAL ===== -->
+  <!-- ===== SELL ON UMZILA MODAL (index.html script: openSellModal / sellModalSubmitBtn) ===== -->
   <div id="sellModal" class="modal">
-  <div class="modal-card" style="max-width:700px;">
+  <div class="modal-card sell-card">
     <div class="modal-header">
-      <h3>Turn your passion into profit – sell on Umzila</h3>
-      <button class="modal-close" id="sellModalClose">&times;</button>
+      <h3>Sell on Umzila</h3>
+      <button class="modal-close" id="sellModalClose" aria-label="Close">&times;</button>
     </div>
-    <div class="modal-body" id="sellModalBody" style="max-height:70vh; overflow-y:auto;">
-      <!-- Introduction -->
-      <div class="mission" style="background:#eef2f6; padding:20px; border-radius:8px; margin-bottom:30px;">
-        <p>Umzila is more than a store – we're a curated marketplace and delivery network that puts Durban's best local businesses in front of thousands of customers. If you make it, design it, or curate it, we want to help you sell it.</p>
+    <div class="modal-body sell-body" id="sellModalBody">
+      <div class="sell-hero">
+        <p class="sell-kicker">For Durban's local businesses</p>
+        <h4>Your own store page. Our riders deliver.</h4>
+        <p>Kitchens, shisanyamas, bakers, makers and experience businesses sell on Umzila. Customers order and pay online, and an Umzila rider collects from you and delivers.</p>
       </div>
 
-      <!-- Benefits grid -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:30px 0;">
-        <div style="background:white; border:1px solid #e0e0e5; border-radius:8px; padding:20px;">
-          <h3 style="color:var(--accent); margin-bottom:10px;">🚀 Get noticed</h3>
-          <p style="color:var(--muted);">Your products will be featured alongside Durban's best local businesses, reaching shoppers across the city.</p>
-        </div>
-        <div style="background:white; border:1px solid #e0e0e5; border-radius:8px; padding:20px;">
-          <h3 style="color:var(--accent); margin-bottom:10px;">📸 Professional listings</h3>
-          <p style="color:var(--muted);">We take your photos, edit them, and create stunning product pages – you don't need any technical skills.</p>
-        </div>
-        <div style="background:white; border:1px solid #e0e0e5; border-radius:8px; padding:20px;">
-          <h3 style="color:var(--accent); margin-bottom:10px;">💬 We handle the hustle</h3>
-          <p style="color:var(--muted);">From uploading to customer questions, we're here to support you. You focus on creating, we handle the rest.</p>
-        </div>
-        <div style="background:white; border:1px solid #e0e0e5; border-radius:8px; padding:20px;">
-          <h3 style="color:var(--accent); margin-bottom:10px;">🤝 Fair & transparent</h3>
-          <p style="color:var(--muted);">No hidden fees. You only pay a small one‑time fee when you're ready to list – and you keep 100% of your sales.</p>
-        </div>
+      <ol class="sell-steps">
+        <li><b>Apply</b><span>Takes about 2 minutes.</span></li>
+        <li><b>We WhatsApp you</b><span>Within 24 hours, to get to know your business.</span></li>
+        <li><b>Set up your store</b><span>Once approved, you get an email to create your store, your link (umzila.store/<i>yourstore</i>), products and opening hours.</span></li>
+        <li><b>Get orders</b><span>You're told the moment an order is paid. Get it ready; a rider picks it up.</span></li>
+      </ol>
+
+      <div class="sell-fees">
+        <div><b>Free</b><span>to join while free spots last; no monthly fees</span></div>
+        <div><b>15%</b><span>per sale, for payments and the platform (R100 sale → you get R85)</span></div>
+        <div><b>2–3 days</b><span>payouts to your bank after an order clears</span></div>
       </div>
 
-      <!-- Pricing box -->
-      <div style="background:var(--accent); color:white; border-radius:8px; padding:20px; margin:30px 0; text-align:center;">
-        <h4 style="font-size:1.5rem; margin-bottom:10px;">Simple investment in your success</h4>
-        <p><span style="font-size:2rem; font-weight:700;">R100</span> covers professional editing & uploading of up to 30 images (that's about 5–10 products).</p>
-        <p>Need more? Add 15 extra images for just R50.</p>
-        <p style="margin-top:10px;"><strong>No monthly fees. No commission on your sales.</strong> You keep every rand you earn FOR  a Full Year(12 months) to get an opportunity to see our value.Terms & Conditions APPLY!</p>
-      </div>
-
-      <p style="font-size:1.2rem; text-align:center; margin:30px 0;">Ready to grow your brand? Tell us a bit about yourself – we'll be in touch within 24 hours.</p>
-
-      <div style="margin: 30px 0; padding: 20px; background: linear-gradient(145deg, var(--accent) 0%, var(--accent-2) 100%); border-radius: 12px; color: white; text-align: center; font-size: 1.3rem; font-weight: 700; box-shadow: var(--shadow);">
-        💡 A R1 invested is better than a R1 spent. Join us in our journey of investing in your FUTURE !
-      </div>
-
-      <!-- APPLICATION FORM -->
-      <form id="sellForm">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellFullName">Full name *</label>
-            <input type="text" id="sellFullName" placeholder="e.g. Thabo Mbeki">
-            <div class="error-message" id="sellFullNameError">Please enter your full name.</div>
+      <form id="sellForm" novalidate>
+        <h4 class="sell-form-title">Tell us about your business</h4>
+        <div class="sell-grid">
+          <div class="form-group">
+            <label for="sellFullName">Your name *</label>
+            <input type="text" id="sellFullName" autocomplete="name" placeholder="e.g. Thandi Zulu">
+            <div class="error-message" id="sellFullNameError">Please enter your name.</div>
           </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellShopName">Shop / Brand name *</label>
-            <input type="text" id="sellShopName" placeholder="e.g. Thabo's Kicks">
-            <div class="error-message" id="sellShopNameError">Please enter your shop name.</div>
+          <div class="form-group">
+            <label for="sellShopName">Business name *</label>
+            <input type="text" id="sellShopName" autocomplete="organization" placeholder="e.g. Thandi's Kitchen">
+            <div class="error-message" id="sellShopNameError">Please enter your business name.</div>
           </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellEmail">Email address *</label>
-            <input type="email" id="sellEmail" placeholder="you@example.com">
+          <div class="form-group">
+            <label for="sellEmail">Email *</label>
+            <input type="email" id="sellEmail" autocomplete="email" placeholder="you@gmail.com">
             <div class="error-message" id="sellEmailError">Please enter a valid email address.</div>
           </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellPhone">WhatsApp number * <span style="font-weight:400;font-size:0.8em;color:var(--muted)">(SA format)</span></label>
-            <input type="tel" id="sellPhone" placeholder="0821234567 or +27821234567">
+          <div class="form-group">
+            <label for="sellPhone">WhatsApp number *</label>
+            <input type="tel" id="sellPhone" autocomplete="tel" placeholder="082 123 4567">
             <div class="error-message" id="sellPhoneError">Please enter a valid SA number (e.g. 082 123 4567).</div>
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellCategory">Category *</label>
-            <select id="sellCategory" style="width:100%;padding:10px;border:1px solid #d0d0d8;border-radius:8px;font-size:14px">
-              <option value="">— Select a category —</option>
-              <option>Clothing &amp; Fashion</option>
-              <option>Footwear</option>
-              <option>Accessories &amp; Jewellery</option>
-              <option>Beauty &amp; Health</option>
-              <option>Food &amp; Snacks</option>
-              <option>Art &amp; Crafts</option>
-              <option>Electronics &amp; Gadgets</option>
-              <option>Services</option>
-              <option>Other</option>
-            </select>
-            <div class="error-message" id="sellCategoryError">Please select a category.</div>
+        <div class="form-group">
+          <label id="sellCategoryLabel">What do you sell? *</label>
+          <div class="sell-chips" id="sellCategory" role="radiogroup" aria-labelledby="sellCategoryLabel">
+            <button type="button" role="radio" aria-checked="false" data-v="Food &amp; Drinks">🍽️ Food &amp; drinks</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Baked Goods &amp; Treats">🧁 Baked goods &amp; treats</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Fashion &amp; Accessories">👟 Fashion &amp; accessories</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Beauty &amp; Self-Care">💄 Beauty &amp; self-care</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Services &amp; Bookings">✂️ Services &amp; bookings</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Experiences &amp; Activities">🏍️ Experiences &amp; activities</button>
+            <button type="button" role="radio" aria-checked="false" data-v="Other">✨ Something else</button>
           </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellPriceRange">Typical price range *</label>
-            <select id="sellPriceRange" style="width:100%;padding:10px;border:1px solid #d0d0d8;border-radius:8px;font-size:14px">
-              <option value="">— Select a range —</option>
-              <option>Under R100</option>
-              <option>R100 – R300</option>
-              <option>R300 – R700</option>
-              <option>R700 – R1 500</option>
-              <option>R1 500+</option>
-              <option>Varies</option>
-            </select>
-            <div class="error-message" id="sellPriceRangeError">Please select a price range.</div>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellLocation">Your location *</label>
-            <input type="text" id="sellLocation" placeholder="e.g. Musgrave, Pinetown, Umhlanga">
-            <div class="error-message" id="sellLocationError">Please enter your location.</div>
-          </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label for="sellDelivery">Delivery method *</label>
-            <select id="sellDelivery" style="width:100%;padding:10px;border:1px solid #d0d0d8;border-radius:8px;font-size:14px">
-              <option value="">— Select —</option>
-              <option>Pickup only</option>
-              <option>Delivery</option>
-              <option>Both pickup &amp; delivery</option>
-            </select>
-            <div class="error-message" id="sellDeliveryError">Please select a delivery method.</div>
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-top:14px">
-          <label for="sellPlanToSell">What exactly do you plan to sell? * <span style="font-weight:400;font-size:0.85em;color:var(--muted)">(Be specific — helps us match you with buyers)</span></label>
-          <textarea id="sellPlanToSell" rows="3" placeholder="e.g. Custom hand-painted sneakers, thrifted streetwear, homemade cookies…"></textarea>
-          <div class="error-message" id="sellPlanToSellError">Please describe what you plan to sell.</div>
+          <div class="error-message" id="sellCategoryError">Pick what you sell.</div>
         </div>
 
         <div class="form-group">
-          <label for="sellInstagram">Instagram handle <span style="font-weight:400;color:var(--muted)">(optional — helps us verify your brand)</span></label>
-          <input type="text" id="sellInstagram" placeholder="@yourhandle">
+          <label for="sellLocation">Where are you based? *</label>
+          <input type="text" id="sellLocation" autocomplete="address-level2" placeholder="Suburb or area, e.g. Glenwood, Durban">
+          <div class="sell-hint">Riders collect orders from here. We deliver around Durban, KwaZulu-Natal.</div>
+          <div class="error-message" id="sellLocationError">Please tell us your suburb or area.</div>
         </div>
 
-        <!-- Terms -->
-        <div style="background:#f0f4ff;border-radius:10px;padding:16px 20px;margin:16px 0">
-          <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
-            <input type="checkbox" id="sellTermsAgreement" style="width:auto;margin-top:3px;flex-shrink:0">
-            <label for="sellTermsAgreement" style="font-weight:normal;font-size:0.9rem;color:#333">
-              I have read and agree to the Umzila Seller Terms and Conditions.
-            </label>
-          </div>
-          <button type="button" id="sellReadTermsBtn" style="background:none;border:1px solid #0a2f66;color:#0a2f66;padding:7px 18px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer">
-            📄 Read Seller Terms
-          </button>
-          <div class="error-message" id="sellTermsError" style="margin-top:8px">Please read and accept the Seller Terms before submitting.</div>
+        <div class="form-group">
+          <label for="sellPlanToSell">Tell us about your business *</label>
+          <textarea id="sellPlanToSell" rows="3" placeholder="What you sell, your best-sellers and roughly what they cost, e.g. Plates from R60: pap &amp; wors, beef stew…"></textarea>
+          <div class="error-message" id="sellPlanToSellError">Please tell us a little about what you sell.</div>
+        </div>
+
+        <div class="form-group">
+          <label for="sellInstagram">Instagram <span class="sell-opt">(optional)</span></label>
+          <input type="text" id="sellInstagram" autocapitalize="off" spellcheck="false" placeholder="@yourbusiness">
+        </div>
+
+        <div class="sell-terms">
+          <label class="sell-check">
+            <input type="checkbox" id="sellTermsAgreement">
+            <span>I agree to the <button type="button" id="sellReadTermsBtn" class="sell-link">Umzila Seller Terms</button>.</span>
+          </label>
+          <div class="error-message" id="sellTermsError">Please accept the Seller Terms to apply.</div>
         </div>
 
         <div class="error-message" id="sellSubmitError"></div>
-        <div class="success-message" id="sellSubmitSuccess">Application submitted! We'll be in touch within 24 hours.</div>
+        <div class="success-message sell-success" id="sellSubmitSuccess">
+          <b>Application sent 🎉</b>
+          We'll WhatsApp you within 24 hours. Keep an eye on your email too: that's where your store set-up link arrives once you're approved.
+        </div>
 
         <div class="modal-footer" id="sellModalFooter">
           <button type="button" class="btn ghost" id="sellModalCancelBtn">Cancel</button>
-          <button type="button" class="btn" id="sellModalSubmitBtn">Submit Application</button>
+          <button type="button" class="btn" id="sellModalSubmitBtn">Send application</button>
         </div>
       </form>
     </div>
   </div>
-</div>
+  </div>
 
   <!-- Mystery Gift Popup -->
   <style>.mystery-pane{display:none}.mystery-pane.active{display:block}</style>
@@ -987,8 +964,6 @@
             Password must be at least 8 characters with 1 number and 1 special character.
           </div>
         </div>
-        <!-- Hidden referral code input -->
-        <input type="hidden" id="modalSignupReferralCode" value="" />
         <div class="error-message" id="modalSignupError"></div>
         <div class="success-message" id="modalSignupSuccess"></div>
       </div>
@@ -1380,74 +1355,84 @@
     });
 
     /* ── Sell on Umzila modal ── */
+    // Application → seller_applications (anon insert, status 'pending' only — RLS)
+    // → notify-seller-application emails admin → admin approves (approve-seller.js)
+    // → enrolment email (free while free spots last) → seller dashboard.
     var SELL_DRAFT_KEY = 'sell_application_draft';
+    var SELL_FIELDS = ['sellFullName','sellEmail','sellPhone','sellShopName','sellLocation','sellPlanToSell','sellInstagram'];
+    var sellCategory = '';
+
+    function setSellCategory(v) {
+      sellCategory = v || '';
+      document.querySelectorAll('#sellCategory [data-v]').forEach(function(b) {
+        var on = b.getAttribute('data-v') === sellCategory;
+        b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+      });
+    }
+    document.querySelectorAll('#sellCategory [data-v]').forEach(function(b) {
+      b.addEventListener('click', function() {
+        setSellCategory(b.getAttribute('data-v'));
+        document.getElementById('sellCategoryError').style.display = 'none';
+        sellDraftSave();
+      });
+    });
 
     function sellDraftGet() {
       try { return JSON.parse(sessionStorage.getItem(SELL_DRAFT_KEY) || '{}'); } catch(e) { return {}; }
     }
     function sellDraftSave() {
-      var d = {
-        fullName:   document.getElementById('sellFullName').value,
-        email:      document.getElementById('sellEmail').value,
-        phone:      document.getElementById('sellPhone').value,
-        shopName:   document.getElementById('sellShopName').value,
-        category:   document.getElementById('sellCategory').value,
-        priceRange: document.getElementById('sellPriceRange').value,
-        location:   document.getElementById('sellLocation').value,
-        delivery:   document.getElementById('sellDelivery').value,
-        planToSell: document.getElementById('sellPlanToSell').value,
-        instagram:  document.getElementById('sellInstagram').value,
-        termsAgreed: document.getElementById('sellTermsAgreement').checked
-      };
-      sessionStorage.setItem(SELL_DRAFT_KEY, JSON.stringify(d));
+      var d = { category: sellCategory, termsAgreed: document.getElementById('sellTermsAgreement').checked };
+      SELL_FIELDS.forEach(function(id) { d[id] = document.getElementById(id).value; });
+      try { sessionStorage.setItem(SELL_DRAFT_KEY, JSON.stringify(d)); } catch(e) {}
     }
     function sellDraftRestore() {
       var d = sellDraftGet();
-      if (!d.email && !d.fullName) return; // empty draft
-      var set = function(id, val) { var el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
-      set('sellFullName', d.fullName);
-      set('sellEmail', d.email);
-      set('sellPhone', d.phone);
-      set('sellShopName', d.shopName);
-      set('sellCategory', d.category);
-      set('sellPriceRange', d.priceRange);
-      set('sellLocation', d.location);
-      set('sellDelivery', d.delivery);
-      set('sellPlanToSell', d.planToSell);
-      set('sellInstagram', d.instagram);
+      SELL_FIELDS.forEach(function(id) { if (typeof d[id] === 'string') document.getElementById(id).value = d[id]; });
+      if (d.category) setSellCategory(d.category);
       if (d.termsAgreed) document.getElementById('sellTermsAgreement').checked = true;
     }
     function sellFormReset() {
-      ['sellFullName','sellEmail','sellPhone','sellShopName','sellCategory','sellPriceRange',
-       'sellLocation','sellDelivery','sellPlanToSell','sellInstagram'].forEach(function(id){
-        var el = document.getElementById(id); if (el) el.value = '';
-      });
+      SELL_FIELDS.forEach(function(id) { document.getElementById(id).value = ''; });
+      setSellCategory('');
       document.getElementById('sellTermsAgreement').checked = false;
-      sessionStorage.removeItem(SELL_DRAFT_KEY);
+      try { sessionStorage.removeItem(SELL_DRAFT_KEY); } catch(e) {}
     }
+    // Keep what they typed if they close the pop-up or go and read the terms
+    document.getElementById('sellForm').addEventListener('input', function(e) {
+      sellDraftSave();
+      var err = e.target && e.target.id && document.getElementById(e.target.id + 'Error');
+      if (err) err.style.display = 'none'; // fixed it: the message goes away
+    });
+    document.getElementById('sellForm').addEventListener('change', function(e) {
+      sellDraftSave();
+      if (e.target && e.target.id === 'sellTermsAgreement' && e.target.checked) document.getElementById('sellTermsError').style.display = 'none';
+    });
 
+    function sellShowForm(show) {
+      document.getElementById('sellForm').querySelectorAll('.form-group, .sell-grid, .sell-terms, .sell-form-title').forEach(function(x){ x.style.display = show ? '' : 'none'; });
+    }
     function openSellModal() {
-      var m = document.getElementById('sellModal');
-      m.classList.add('open');
-      document.getElementById('sellSubmitSuccess').style.display = 'none';
-      document.getElementById('sellSubmitError').style.display = 'none';
-      document.getElementById('sellTermsError').style.display = 'none';
+      document.getElementById('sellModal').classList.add('open');
+      document.body.style.overflow = 'hidden';
+      ['sellSubmitSuccess','sellSubmitError','sellTermsError'].forEach(function(id){ document.getElementById(id).style.display = 'none'; });
+      sellShowForm(true);
       document.getElementById('sellModalFooter').style.display = '';
       document.getElementById('sellModalSubmitBtn').disabled = false;
-      document.getElementById('sellModalSubmitBtn').textContent = 'Submit Application';
+      document.getElementById('sellModalSubmitBtn').textContent = 'Send application';
       sellDraftRestore();
     }
     function closeSellModal() {
       document.getElementById('sellModal').classList.remove('open');
+      document.body.style.overflow = '';
     }
 
-    // Auto-open if ?openSell=1
+    // Auto-open if ?openSell=1 (e.g. coming back from seller-terms.html)
     if (new URLSearchParams(window.location.search).get('openSell') === '1') {
       openSellModal();
     }
 
     var sellBtn = document.getElementById('sellOnUmzilaBtn');
-    if (sellBtn) sellBtn.addEventListener('click', function() { openSellModal(); });
+    if (sellBtn) sellBtn.addEventListener('click', function(e) { e.preventDefault(); openSellModal(); });
 
     document.getElementById('sellModalClose').addEventListener('click', closeSellModal);
     document.getElementById('sellModalCancelBtn').addEventListener('click', closeSellModal);
@@ -1455,103 +1440,85 @@
       if (e.target === this) closeSellModal();
     });
 
-    // "Read Terms" button — save draft then navigate
-    document.getElementById('sellReadTermsBtn').addEventListener('click', function() {
+    // "Seller Terms" link — save the draft, then read the terms
+    document.getElementById('sellReadTermsBtn').addEventListener('click', function(e) {
+      e.preventDefault();
       sellDraftSave();
       window.location.href = 'seller-terms.html';
     });
 
     document.getElementById('sellModalSubmitBtn').addEventListener('click', async function() {
-      var fullName   = document.getElementById('sellFullName').value.trim();
-      var email      = document.getElementById('sellEmail').value.trim().toLowerCase();
-      var phone      = document.getElementById('sellPhone').value.trim().replace(/\s/g, '');
-      // input-guard.js rules (typo check; phone → +27XXXXXXXXX)
-      var emOk = true, phOk = true;
-      if (window.UmzilaInput) {
-        var emR = UmzilaInput.check(document.getElementById('sellEmail'), { required: true }); emOk = emR.ok; if (emR.ok) email = emR.value;
-        var phR = UmzilaInput.check(document.getElementById('sellPhone'), { required: true }); phOk = phR.ok; if (phR.ok) phone = phR.value;
-      }
-      var shopName   = document.getElementById('sellShopName').value.trim();
-      var category   = document.getElementById('sellCategory').value;
-      var priceRange = document.getElementById('sellPriceRange').value;
-      var location   = document.getElementById('sellLocation').value.trim();
-      var delivery   = document.getElementById('sellDelivery').value;
-      var planToSell = document.getElementById('sellPlanToSell').value.trim();
-      var instagram  = document.getElementById('sellInstagram').value.trim();
-      var termsOk    = document.getElementById('sellTermsAgreement').checked;
-
-      var saPhoneRe = /^(\+27|0)[6-9][0-9]{8}$/;
-      var emailRe   = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-      /* clear previous errors */
+      var el = function(id) { return document.getElementById(id); };
       ['sellFullNameError','sellEmailError','sellPhoneError','sellShopNameError','sellCategoryError',
-       'sellPriceRangeError','sellLocationError','sellDeliveryError','sellPlanToSellError',
-       'sellTermsError','sellSubmitError','sellSubmitSuccess'].forEach(function(id) {
-        var el = document.getElementById(id); if (el) el.style.display = 'none';
+       'sellLocationError','sellPlanToSellError','sellTermsError','sellSubmitError','sellSubmitSuccess'].forEach(function(id) {
+        el(id).style.display = 'none';
       });
+      var fullName   = el('sellFullName').value.trim();
+      var shopName   = el('sellShopName').value.trim();
+      var location   = el('sellLocation').value.trim();
+      var planToSell = el('sellPlanToSell').value.trim();
+      // admin shows it as instagram.com/<handle>: keep just the handle
+      var instagram  = el('sellInstagram').value.trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@+/, '').replace(/[\/?#].*$/, '');
+      var termsOk    = el('sellTermsAgreement').checked;
+      var email = el('sellEmail').value.trim().toLowerCase(), phone = el('sellPhone').value.trim();
+      var emOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email), phOk = /^(\+27|0)[6-8][0-9]{8}$/.test(phone.replace(/\s/g, ''));
+      // input-guard.js rules (typo check; phone → +27XXXXXXXXX)
+      if (window.UmzilaInput) {
+        var emR = UmzilaInput.check(el('sellEmail'), { required: true }); emOk = emR.ok; if (emR.ok) email = emR.value;
+        var phR = UmzilaInput.check(el('sellPhone'), { required: true }); phOk = phR.ok; if (phR.ok) phone = phR.value;
+      }
 
-      var valid = true;
-      function showErr(id) { var el = document.getElementById(id); if (el) el.style.display = 'block'; valid = false; }
+      var first = null;
+      function bad(errId, fieldId) { el(errId).style.display = 'block'; if (!first) first = el(fieldId); }
+      if (!fullName)     bad('sellFullNameError', 'sellFullName');
+      if (!shopName)     bad('sellShopNameError', 'sellShopName');
+      if (!emOk)         bad('sellEmailError', 'sellEmail');
+      if (!phOk)         bad('sellPhoneError', 'sellPhone');
+      if (!sellCategory) bad('sellCategoryError', 'sellCategory');
+      if (!location)     bad('sellLocationError', 'sellLocation');
+      if (!planToSell)   bad('sellPlanToSellError', 'sellPlanToSell');
+      if (!termsOk)      bad('sellTermsError', 'sellTermsAgreement');
+      if (first) {
+        first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        try { first.focus({ preventScroll: true }); } catch(e) {}
+        return;
+      }
 
-      if (!fullName)                        showErr('sellFullNameError');
-      if (!emOk || !emailRe.test(email))    showErr('sellEmailError');
-      if (!phOk || (!window.UmzilaInput && !saPhoneRe.test(phone))) showErr('sellPhoneError');
-      if (!shopName)                        showErr('sellShopNameError');
-      if (!category)                        showErr('sellCategoryError');
-      if (!priceRange)                      showErr('sellPriceRangeError');
-      if (!location)                        showErr('sellLocationError');
-      if (!delivery)                        showErr('sellDeliveryError');
-      if (!planToSell)                      showErr('sellPlanToSellError');
-      if (!termsOk)                         showErr('sellTermsError');
-      if (!valid) return;
-
-      if (!window.supabase) {
-        document.getElementById('sellSubmitError').textContent = 'Service not ready yet. Please try again.';
-        document.getElementById('sellSubmitError').style.display = 'block';
+      var client = window.supabase && typeof window.supabase.from === 'function' ? window.supabase : null;
+      if (!client) {
+        el('sellSubmitError').textContent = 'Still connecting… please try again in a moment.';
+        el('sellSubmitError').style.display = 'block';
         return;
       }
 
       var btn = this;
       btn.disabled = true;
-      btn.textContent = 'Submitting…';
-
+      btn.textContent = 'Sending…';
+      var row = {
+        full_name: fullName, email: email, phone: phone, shop_name: shopName,
+        plan_to_sell: planToSell, instagram: instagram || null, category: sellCategory, location: location
+      };
       try {
-        var result = await window.supabase.from('seller_applications').insert({
-          full_name:       fullName,
-          email:           email,
-          phone:           phone,
-          shop_name:       shopName,
-          plan_to_sell:    planToSell,
-          instagram:       instagram || null,
-          category:        category,
-          price_range:     priceRange,
-          location:        location,
-          delivery_method: delivery
-        });
+        var result = await client.from('seller_applications').insert(row);
         if (result.error) throw result.error;
-        document.getElementById('sellSubmitSuccess').style.display = 'block';
-        document.getElementById('sellModalFooter').style.display = 'none';
+        // Only the thank-you note stays
+        sellShowForm(false);
+        el('sellSubmitSuccess').style.display = 'block';
+        el('sellModalFooter').style.display = 'none';
+        el('sellModalBody').scrollTop = el('sellModalBody').scrollHeight;
         sellFormReset();
         // Notify admin — fire-and-forget, don't block the success UX
         fetch('/.netlify/functions/notify-seller-application', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            full_name:       fullName,
-            email:           email,
-            phone:           phone,
-            shop_name:       shopName,
-            category:        category,
-            location:        location,
-            delivery_method: delivery
-          })
+          body: JSON.stringify(row)
         }).catch(function(){});
       } catch(err) {
-        var errEl = document.getElementById('sellSubmitError');
-        errEl.textContent = 'Something went wrong. Please try again.';
-        errEl.style.display = 'block';
+        console.error('seller application', err);
+        el('sellSubmitError').textContent = 'That didn’t go through. Please try again, or WhatsApp us on 079 766 2768.';
+        el('sellSubmitError').style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Submit Application';
+        btn.textContent = 'Send application';
       }
     });
 

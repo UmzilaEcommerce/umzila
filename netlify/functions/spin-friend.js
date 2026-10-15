@@ -41,6 +41,10 @@ exports.handler = async (event) => {
     const out = { spinSession: session, firstName: S.firstNameOf(name), emailMasked: st.emailMasked, state: st.state, lastOrder: null };
     if (st.gift) out.gift = st.gift;
     if (st.reason) out.reason = st.reason;
+    if (st.state === 'HAS_GIFT' || st.state === 'NEEDS_ORDER') {
+      out.shareCode = (st.gift && st.gift.shareCode) || await S.shareCodeFor(admin, { email, name, phone: ph.value });
+      if (out.gift) out.gift.shareCode = out.shareCode;
+    }
     return S.reply(200, out);
   } catch (e) {
     console.error('spin-friend', e);

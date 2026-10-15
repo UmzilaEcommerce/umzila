@@ -1227,22 +1227,44 @@ select.qty:focus, .size-select:focus{outline:none;border-color:var(--accent)}
   .hscroll .product-card { flex: 0 0 calc(62vw - 18px); }
 }
 
-/* Footer */
-footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;border-radius:16px}
-@media(max-width:768px){footer{padding:20px 16px}}
-.footer-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;align-items:start}
-@media(max-width:768px){.footer-grid{grid-template-columns:1fr;gap:20px}}
-.footer-col h4{margin:0 0 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,0.6)}
-.footer-col a{display:block;color:rgba(255,255,255,0.9);text-decoration:none;font-size:14px;margin-bottom:6px}
-.footer-col a:hover{color:#fff;text-decoration:underline}
-.footer-newsletter{display:flex;gap:6px;margin-top:8px}
-.footer-newsletter input{flex:1;padding:9px 12px;border-radius:999px;border:none;font-size:13px;min-width:0;outline:none}
-.footer-newsletter button{padding:9px 16px;border-radius:999px;border:none;background:var(--color-cta);color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;transition:background .15s ease-out}
-.footer-newsletter button:hover{background:#e2551c}
-.footer-tagline{color:rgba(255,255,255,0.75);font-size:13px;line-height:1.5;margin:4px 0 10px}
-.footer-copyright{font-size:12px;color:rgba(255,255,255,0.45);margin-top:12px;margin-bottom:0}
-.socials{display:flex;gap:10px;align-items:center}
-#footerLogo{height:46px;width:auto;display:block;margin-bottom:2px}
+/* Footer (index.html .site-footer) */
+.site-footer{margin-top:44px;position:relative;overflow:hidden;color:#fff;border-radius:24px;padding:30px 26px 18px;
+  background:radial-gradient(600px 220px at 100% 0,rgba(224,40,79,.22),transparent 70%),radial-gradient(500px 200px at 0 100%,rgba(255,194,26,.10),transparent 70%),linear-gradient(160deg,#0a2f66,#071f45)}
+.site-footer h4{margin:0 0 12px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.55)}
+.sf-top{display:grid;grid-template-columns:1.2fr 1fr;gap:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,.12)}
+.sf-top>*{min-width:0}
+/* umzila.webp is a 480px square with the navy wordmark in the middle: crop to it, shown white */
+.sf-logo{display:block;position:relative;width:124px;height:44px;overflow:hidden}
+.sf-logo img{position:absolute;width:225px;height:225px;left:-51px;top:-88px;max-width:none;filter:brightness(0) invert(1)}
+.sf-tagline{color:rgba(255,255,255,.75);font-size:14px;line-height:1.55;margin:10px 0 16px;max-width:34ch}
+.sf-contact{display:flex;flex-wrap:wrap;gap:8px}
+.sf-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:999px;background:rgba(255,255,255,.1);color:#fff;text-decoration:none;font-size:13.5px;font-weight:600;border:1px solid rgba(255,255,255,.14);transition:background .15s ease-out,transform .15s ease-out}
+.sf-pill:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
+.sf-pill svg{width:18px;height:18px;flex:none}
+.sf-wa{background:#25d366;border-color:#25d366;color:#fff}
+.sf-wa:hover{background:#1fb457}
+.sf-news{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:18px}
+.sf-news p{margin:-4px 0 12px;font-size:13.5px;color:rgba(255,255,255,.72);line-height:1.5}
+.sf-news-row{display:flex;gap:6px;background:#fff;border-radius:999px;padding:4px}
+.sf-news-row input{flex:1;min-width:0;border:0;outline:none;background:transparent;padding:9px 12px;font:inherit;font-size:14px;color:#14213d}
+.sf-news-row button{border:0;border-radius:999px;padding:9px 16px;background:var(--color-cta,#e0284f);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;white-space:nowrap;transition:filter .15s ease-out}
+.sf-news-row button:hover{filter:brightness(.92)}
+.sf-news .ug-hint{color:#ffd4dc}
+.sf-news-msg{margin:8px 4px 0;font-size:13px;color:#ffd4dc;min-height:1em}
+.sf-news-msg.ok{color:#a7f3c5}
+.sf-links{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;padding:24px 0}
+.sf-col a,.sf-col button{display:block;width:fit-content;padding:5px 0;color:rgba(255,255,255,.88);text-decoration:none;font-size:14px;background:none;border:0;font-family:inherit;text-align:left;cursor:pointer}
+.sf-col a:hover,.sf-col button:hover{color:#fff;text-decoration:underline;text-underline-offset:3px}
+.sf-col #sellOnUmzilaBtn{margin-top:6px;color:#ffc21a;font-weight:700}
+.sf-bottom{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.12);font-size:12.5px;color:rgba(255,255,255,.55)}
+.sf-secure{display:inline-flex;align-items:center;gap:6px}
+.sf-secure svg{width:14px;height:14px}
+@media(max-width:860px){.sf-links{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){
+  .site-footer{padding:24px 16px 16px;border-radius:20px}
+  .sf-top{grid-template-columns:1fr;gap:20px}
+  .sf-col a,.sf-col button{padding:7px 0}
+}
 
 /* reveal animation */
 .fade-up{opacity:0;transform:translateY(18px);transition:all .6s cubic-bezier(.2,.9,.2,1)}
@@ -2458,3 +2480,40 @@ footer{margin-top:40px;background:var(--accent);color:#fff;padding:28px 24px;bor
 .sk-line{height:12px;border-radius:6px;margin:12px 4px 0}
 .sk-line.short{width:45%;margin-top:8px}
 @keyframes skShimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+/* Sell on Umzila modal (index.html #sellModal) */
+.sell-card{max-width:640px}
+.sell-body{max-height:min(78vh,760px);overflow-y:auto}
+.sell-hero{background:linear-gradient(150deg,#0a2f66,#123f80);color:#fff;border-radius:16px;padding:18px 18px 16px}
+.sell-kicker{margin:0 0 4px;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ffc21a}
+.sell-hero h4{margin:0 0 6px;font-size:20px;line-height:1.2;color:#fff}
+.sell-hero p{margin:0;font-size:14px;line-height:1.55;color:rgba(255,255,255,.82)}
+.sell-steps{list-style:none;counter-reset:s;margin:16px 0 0;padding:0;display:grid;gap:10px}
+.sell-steps li{counter-increment:s;position:relative;padding:0 0 0 40px;font-size:14px;line-height:1.45;color:var(--muted)}
+.sell-steps li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:#fde8ed;color:#e0284f;font-weight:800;display:grid;place-items:center;font-size:13px}
+.sell-steps b{display:block;color:var(--accent);font-size:14.5px}
+.sell-fees{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:16px 0 4px}
+.sell-fees div{background:#f6f7fb;border-radius:12px;padding:10px;font-size:12.5px;line-height:1.35;color:var(--muted)}
+.sell-fees b{display:block;font-size:18px;color:var(--accent);margin-bottom:2px}
+.sell-form-title{margin:20px 0 10px;font-size:16px;color:var(--accent)}
+.sell-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+#sellForm .form-group{margin-bottom:14px}
+#sellForm textarea{width:100%;box-sizing:border-box}
+.sell-chips{display:flex;flex-wrap:wrap;gap:8px}
+.sell-chips button{border:1.5px solid #dde1ea;background:#fff;color:#1f2937;border-radius:999px;padding:8px 12px;font:inherit;font-size:13.5px;cursor:pointer;transition:border-color .15s,background .15s}
+.sell-chips button:hover{border-color:var(--accent)}
+.sell-chips button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sell-hint{font-size:12.5px;color:var(--muted);margin-top:5px}
+.sell-opt{font-weight:400;color:var(--muted)}
+.sell-terms{background:#f0f4ff;border-radius:12px;padding:12px 14px;margin:4px 0 12px}
+.sell-check{display:flex;gap:10px;align-items:flex-start;font-weight:400;font-size:14px;color:#1f2937;cursor:pointer}
+.sell-check input{width:18px;height:18px;margin:1px 0 0;flex:none}
+.sell-link{background:none;border:0;padding:0;font:inherit;color:var(--accent);font-weight:700;text-decoration:underline;cursor:pointer}
+.sell-success{font-size:14.5px;line-height:1.55;padding:16px;border-radius:12px}
+.sell-success b{display:block;font-size:17px;margin-bottom:4px}
+@media(max-width:560px){
+  .sell-grid{grid-template-columns:1fr}
+  .sell-fees{grid-template-columns:1fr}
+  .sell-fees div{display:flex;gap:10px;align-items:baseline}
+  .sell-fees b{margin:0;min-width:72px}
+}

@@ -20,7 +20,7 @@ exports.handler = async (event) => {
   const resultOf = async (spin, summary) => {
     const { data: dc } = await admin.from('discount_codes').select('code, expires_at').eq('id', spin.discount_code_id).maybeSingle();
     return {
-      gift: spin.gift_kind, code: dc && dc.code, expiresAt: dc && dc.expires_at, shareCode: spin.share_code,
+      gift: spin.gift_kind, code: dc && dc.code, expiresAt: dc && dc.expires_at, shareCode: spin.share_code || await S.shareCodeFor(admin, { email }),
       useUrl: S.useUrlFor(spin.gift_kind, summary), emailMasked: S.maskEmail(email), test: spin.test || undefined
     };
   };
@@ -36,11 +36,14 @@ exports.handler = async (event) => {
     if (!kind || (kind === 'friend') !== (p.v === 'friend')) return S.reply(409, { error: 'not_eligible', state: st.state });
 
     const test = await S.isStaff(admin, email);
+    // One invite link per person: keep the one they already have (earlier spin / home-page share row).
+    const { data: hadShare } = await admin.from('spins').select('share_code').ilike('email', email)
+      .in('outcome', ['won', 'share']).not('share_code', 'is', null).limit(1).maybeSingle();
     const rating = Number.isInteger(b.rating) && b.rating >= 1 && b.rating <= 5 ? b.rating : null;
     const ins = await admin.from('spins').insert({
       email, user_id: p.u || null, name: p.nm || (st.firstName || null), phone: p.ph || null,
       kind, order_id: kind === 'order' ? st.orderId : null, outcome: 'pending',
-      share_code: crypto.randomBytes(5).toString('hex'), referred_by_spin_id: kind === 'friend' ? (p.r || null) : null,
+      share_code: hadShare ? null : crypto.randomBytes(5).toString('hex'), referred_by_spin_id: kind === 'friend' ? (p.r || null) : null,
       rating, test
     }).select().single();
     if (ins.error) {
@@ -90,10 +93,11 @@ exports.handler = async (event) => {
       if (upErr) throw upErr;
 
       const useUrl = S.useUrlFor(giftKind, sum);
-      const sent = await S.sendGiftEmail('prize', email, { name: won.name || st.firstName, kind: giftKind, code: code.code, expiresAt: code.expires_at, useUrl, shareCode: won.share_code });
+      const shareCode = won.share_code || (hadShare && hadShare.share_code);
+      const sent = await S.sendGiftEmail('prize', email, { name: won.name || st.firstName, kind: giftKind, code: code.code, expiresAt: code.expires_at, useUrl, shareCode });
       if (sent) await admin.from('spins').update({ prize_email_at: new Date().toISOString() }).eq('id', spin.id);
 
-      return S.reply(200, { gift: giftKind, code: code.code, expiresAt: code.expires_at, shareCode: won.share_code, useUrl, emailMasked: S.maskEmail(email), test: test || undefined });
+      return S.reply(200, { gift: giftKind, code: code.code, expiresAt: code.expires_at, shareCode, useUrl, emailMasked: S.maskEmail(email), test: test || undefined });
     } catch (e) {
       // Nothing half-done: drop the pending row so they can tap again.
       await admin.from('spins').delete().eq('id', spin.id).eq('outcome', 'pending');

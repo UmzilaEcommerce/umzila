@@ -45,7 +45,7 @@ exports.handler = async () => {
 
   // ── 2. referral rewards ──
   const { data: friends } = await admin.from('spins')
-    .select('id, email, name, phone, discount_code_id, referred_by_spin_id')
+    .select('id, email, name, phone, discount_code_id, referred_by_spin_id, referral_reward_code_id')
     .eq('kind', 'friend').eq('outcome', 'won').eq('test', false)
     .not('referred_by_spin_id', 'is', null).is('referral_rewarded_at', null);
   for (const f of friends || []) {
@@ -53,6 +53,16 @@ exports.handler = async () => {
     if (!fdc || !fdc.used) continue; // not converted (yet)
     const { data: sharer } = await admin.from('spins').select('id, email, name, phone, user_id').eq('id', f.referred_by_spin_id).maybeSingle();
     const stamp = { referral_rewarded_at: now.toISOString() };
+    // Reward already made but its email didn't go out: retry just the email
+    // (referral_rewarded_at = "sharer told"; never a second code).
+    if (f.referral_reward_code_id) {
+      const { data: rc } = await admin.from('discount_codes').select('code, expires_at').eq('id', f.referral_reward_code_id).maybeSingle();
+      if (!rc || !sharer) { await admin.from('spins').update(stamp).eq('id', f.id); continue; }
+      if (await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, kind: 'r20', code: rc.code, expiresAt: rc.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) })) {
+        await admin.from('spins').update(stamp).eq('id', f.id);
+      }
+      continue;
+    }
     let ok = !!sharer && sharer.email.toLowerCase() !== f.email.toLowerCase();
     // same phone = same person
     if (ok && f.phone) {
@@ -66,7 +76,7 @@ exports.handler = async () => {
       const { data: mine } = await admin.from('spins').select('id').ilike('email', sharer.email);
       const ids = (mine || []).map(m => m.id);
       const { count } = ids.length ? await admin.from('spins').select('id', { count: 'exact', head: true })
-        .in('referred_by_spin_id', ids).not('referral_reward_code_id', 'is', null).gte('referral_rewarded_at', monthStart) : { count: 0 };
+        .in('referred_by_spin_id', ids).not('referral_reward_code_id', 'is', null).or(`referral_rewarded_at.gte.${monthStart},referral_rewarded_at.is.null`) : { count: 0 };
       if ((count || 0) >= S.REFERRAL_MONTHLY_CAP) ok = false;
     }
     if (ok) {
@@ -80,9 +90,10 @@ exports.handler = async () => {
         if (!error) code = dc; else if (error.code !== '23505') { console.error('referral code', error); break; }
       }
       if (!code) continue; // try again next run
-      stamp.referral_reward_code_id = code.id;
-      await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, kind: 'r20', code: code.code, expiresAt: code.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) });
+      await admin.from('spins').update({ referral_reward_code_id: code.id }).eq('id', f.id);
       rewards++;
+      const sent = await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, kind: 'r20', code: code.code, expiresAt: code.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) });
+      if (!sent) continue; // email retried next run
     }
     await admin.from('spins').update(stamp).eq('id', f.id);
   }

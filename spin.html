@@ -320,8 +320,8 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
       <h3>🎁 Send a friend a spin</h3>
       <p>If they order, you unlock a <b>mystery gift</b>.</p>
       <div class="stack" style="margin-top:0">
-        <a class="btn wa" id="shareWa" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
-        <button class="btn ghost" type="button" id="copyLink">Copy link</button>
+        <a class="btn wa js-wa" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
+        <button class="btn ghost js-copy" type="button">Copy link</button>
       </div>
     </div>
   </section>
@@ -334,6 +334,14 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
       <p class="lead">Your next Umzila order unlocks a new spin 🎡</p>
     </div>
     <div class="stack"><a class="btn primary" id="orderAgain" href="/">Order again →</a></div>
+    <div class="share" id="shareBox2" hidden>
+      <h3>🎁 Send a friend a spin</h3>
+      <p>They get a welcome gift on their first order. If they order, you unlock a <b>mystery gift</b>.</p>
+      <div class="stack" style="margin-top:0">
+        <a class="btn wa js-wa" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
+        <button class="btn ghost js-copy" type="button">Copy link</button>
+      </div>
+    </div>
     <div class="row-center"><button class="link notme" type="button">Not you?</button></div>
   </section>
 
@@ -384,6 +392,10 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
   function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
+  // ?share=1 (home-page "Give a friend a spin" for someone not signed in): after
+  // identifying, scroll to their invite link.
+  var WANT_SHARE = false;
+  try { WANT_SHARE = new URLSearchParams(location.search).get('share') === '1'; } catch (e) {}
   // Friend link (?ref=<share code>), kept for this visit.
   try {
     var qs = new URLSearchParams(location.search);
@@ -482,7 +494,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
 
   function identified(d) {
     S.session = d.spinSession; S.firstName = d.firstName || ''; S.emailMasked = d.emailMasked || '';
-    S.state = d.state; S.lastOrder = d.lastOrder || null; S.gift = d.gift || null; S.reason = d.reason || null; S.rating = null;
+    S.state = d.state; S.lastOrder = d.lastOrder || null; S.gift = d.gift || null; S.reason = d.reason || null; S.rating = null; S.shareCode = d.shareCode || null;
     if (S.state === 'HAS_GIFT') return showGift(S.gift, true);
     if (S.state === 'NEEDS_ORDER') return needsOrder();
     if (S.state === 'CAN_SPIN_FRIEND') return toSpin();
@@ -753,13 +765,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
       $('rLead').hidden = true;
     }
     if (g.code && g.expiresAt && !g.test) lsSet('umz_promo_code', JSON.stringify({ code: g.code, until: g.expiresAt, slug: 'spin' }));
-    var share = g.shareCode;
-    $('shareBox').hidden = !share;
-    if (share) {
-      var link = location.origin + '/spin?ref=' + encodeURIComponent(share);
-      $('shareWa').href = 'https://wa.me/?text=' + encodeURIComponent('I just spun the Umzila wheel 🎡 Here’s a spin for you, there’s a gift waiting: ' + link);
-      $('copyLink').onclick = function () { copy(link, $('copyLink'), 'Link copied ✓'); };
-    }
+    fillShare('shareBox', g.shareCode || S.shareCode);
     clearInterval(countTimer);
     var tickCount = function () {
       var ms = new Date(g.expiresAt) - Date.now();
@@ -771,6 +777,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
     var card = $('prizeCard'); card.classList.remove('flip'); void card.offsetWidth; if (!already) card.classList.add('flip');
     show('result');
     $('live').textContent = (already ? 'Your gift: ' : 'You got: ') + info.title + '. Code ' + (g.code || '') + '.';
+    if (WANT_SHARE && already && !$('shareBox').hidden) setTimeout(function () { $('shareBox').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' }); }, 400);
   }
   $('copyCode').onclick = function () { copy($('pCode').textContent, $('copyCode'), 'Copied ✓'); };
   function copy(text, btn, done) {
@@ -780,13 +787,22 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
     function fallback() { var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); ok(); } catch (e) {} t.remove(); }
   }
 
+  // "Send a friend a spin" box: their personal link umzila.store/spin?ref=<code>
+  function fillShare(boxId, code) {
+    var box = $(boxId); box.hidden = !code; if (!code) return;
+    var link = location.origin + '/spin?ref=' + encodeURIComponent(code);
+    box.querySelector('.js-wa').href = 'https://wa.me/?text=' + encodeURIComponent('Here’s a spin on the Umzila wheel for you 🎡 There’s a welcome gift waiting for your first order: ' + link);
+    var c = box.querySelector('.js-copy'); c.onclick = function () { copy(link, c, 'Link copied ✓'); };
+  }
   function needsOrder() {
     var hi = S.firstName ? ', ' + S.firstName : '';
     $('nTitle').textContent = S.reason === 'used' ? 'Your gift was used. Nice' + hi + '! 🙌' : S.reason === 'expired' ? 'Your last gift has ended' + hi + ' ⏳' : 'Hi' + (S.firstName ? ' ' + S.firstName : '') + ' 👋';
     var st = S.lastOrder && S.lastOrder.stores && S.lastOrder.stores[0];
     $('orderAgain').href = (st ? st.url : '/') + '?src=spin';
     $('orderAgain').textContent = st ? 'Order again from ' + st.name + ' →' : 'Order again →';
+    fillShare('shareBox2', S.shareCode);
     show('needs');
+    if (WANT_SHARE && S.shareCode) setTimeout(function () { $('shareBox2').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'center' }); }, 400);
   }
 
   // ── Sound (WebAudio, no files) ──

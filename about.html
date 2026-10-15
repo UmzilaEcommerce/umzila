@@ -282,7 +282,7 @@
         <h3>6. Shipping &amp; Fulfilment</h3>
         <p> manage picking, packing and dispatch. Shipping times are estimates and may vary with courier performance and location.</p>
 
-        <h3>7. Returns &amp; Refunds</h3>
+        <h3 id="returns">7. Returns &amp; Refunds</h3>
         <p>Due to the nature of our inventory:</p>
         <ul>
           <li><strong>Retail items:</strong> Returns accepted only for wrong or damaged goods — notify us within 48 hours and provide evidence.</li>
@@ -465,6 +465,17 @@
 
     if(openTermsBtn) openTermsBtn.addEventListener('click', (e)=>{ e.preventDefault(); openModal(termsOverlay); });
     if(openPrivacyBtn) openPrivacyBtn.addEventListener('click', (e)=>{ e.preventDefault(); openModal(privacyOverlay); });
+
+    // Links from the home footer: about.html#terms / #privacy / #returns open the right one
+    function openFromHash(){
+      const h = location.hash;
+      if (h === '#terms' || h === '#returns') {
+        openModal(termsOverlay);
+        if (h === '#returns') setTimeout(()=>{ const r = document.getElementById('returns'); if (r) r.scrollIntoView({ block: 'start' }); }, 80);
+      } else if (h === '#privacy') openModal(privacyOverlay);
+    }
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
 
     [termsCloseBtn, termsBackBtn, termsCloseFooter].forEach(btn=>{ if(btn) btn.addEventListener('click', ()=> closeModal(termsOverlay)); });
     [privacyCloseBtn, privacyBackBtn, privacyCloseFooter].forEach(btn=>{ if(btn) btn.addEventListener('click', ()=> closeModal(privacyOverlay)); });
