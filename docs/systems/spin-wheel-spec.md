@@ -1,6 +1,15 @@
 # Spin & Win: spec (thank-you card → spin page)
 
-Status (2026-10-15): **stage 1 built**: DB, server functions and `spin.html` (live at `/spin` once deployed). **Admin tab not built yet** (`spin-admin.js` exists). Founder decisions are final unless marked *open*.
+Status (2026-10-15): **built**: DB, server functions, `spin.html`, admin "Spin & Win" tab. Founder decisions are final unless marked *open*.
+
+**How it was built (differences from the spec below — the code is the truth):**
+- Gift catalogue lives in `netlify/functions/lib/spin.js GIFTS` (not `spin-gifts.js`), mirrored in `spin.html GIFTS`. All four gifts are on the wheel; there's no admin "on the wheel" toggle.
+- Spin sessions are HMAC-signed with a key derived from the service-role key (no separate `SPIN_SECRET`).
+- **Invites = this system.** The old sign-up referral (`process-referral.js`, 15% / R40 at sign-up) was retired on 2026-10-15 (abusable, see CHANGELOG). Every customer's invite link is `/spin?ref=<share_code>`. `spins.kind='share'` / `outcome='share'` rows hold a code for people who haven't spun (one per email, `lib/spin.js shareCodeFor()`, also the 26 carried-over old `profiles.referral_code` codes, lower-cased). A spin reuses an existing code (its own `share_code` stays null). The home banner gets the code from `spin-identify` mode `share` (Bearer); signed-out visitors go to `/spin?share=1`. Old `/?ref=CODE` links redirect to `/spin?ref=CODE` (script.js `checkUrlForReferral`).
+- Referral reward (`send-spin-emails.js`): the code is created and stored on the friend's row (`referral_reward_code_id`) first; `referral_rewarded_at` = "sharer was emailed". A failed email is retried on later runs, never a second code. Codes are `GIFT…`, R20 over R60, `multi_use` + max 1 (sign-in), email-locked, 30 days.
+- Low ratings: no separate admin alert; they're saved to `delivery_feedback` (complaint) and show in admin's Recent Feedback.
+- Staff spins: disabled codes, but still shown as the person's live gift so the flow can be tested.
+- "Paid order" for eligibility = `payment_status='paid'` and (`pf_payment_id` or total 0), not cancelled/refunded.
 `spin`, `wheel`, `gift`, `gifts`, `rewards` and `thanks` are in `seller_slug_reserved()`.
 
 ---

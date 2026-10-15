@@ -4160,7 +4160,7 @@ async function loadBuyNowItem() {
           return { ok: true };
         }
         const fullName = `${elements.firstName.value.trim()} ${elements.lastName.value.trim()}`.trim();
-        const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName }, emailRedirectTo: authReturnUrl() } });
+        const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName, anon_id: (function(){ try { return localStorage.getItem('ss_anon_id') || undefined; } catch (e) { return undefined; } })() }, emailRedirectTo: authReturnUrl() } }); // anon_id: see claim_guest_cart_on_confirm
         if (error && /already registered|already been registered|already exists/i.test(error.message || '')) {
           // Race: became registered between the live check and submit.
           state.emailExists = true;

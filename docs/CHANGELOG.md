@@ -4,6 +4,92 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-15: Invites merged into Spin & Win, admin Spin tab, new footer, sell-on-Umzila rework, stuck orders, guest baskets
+
+**1. "Share with friends" (home banner) was broken and could be abused. Now it's "Give a friend a spin".**
+- **Was broken:**
+  - `process-referral.js` needed no account. Anyone could call it with made-up emails and get a new R40 code each time (reproduced live: 2 calls, 2 codes).
+  - The R40 codes weren't locked to anyone, so a stranger could use one as a guest.
+  - The reward fired at sign-up: no order needed, email not even confirmed.
+  - The friend never saw the 15% offer; guest checkouts ignored the referral; "Copy code" copied a code that couldn't be typed anywhere.
+  - The emails linked to `/shop.html` and promised a link on the profile page, which doesn't exist.
+- **Now:** one referral system, the spin one (spec §11).
+  - Every customer has a personal `umzila.store/spin?ref=<code>`, held in `spins` as a `kind='share'` row (no gift). It comes from `lib/spin.js shareCodeFor()`: one link per person, and a spin reuses it.
+  - Signed in: the banner shows the link (`spin-identify` mode `share`). Signed out: it goes to `/spin?share=1`, which identifies them and scrolls to their link. The "needs an order" screen also offers it.
+  - The friend gets a first-order spin gift. The sharer gets R20 (over R60, sign-in, email-locked) only after the friend's first paid order with their code, max 5 a month (`send-spin-emails.js`).
+  - `send-spin-emails.js` used to mark the reward as given even when its email failed. It now stores the code first and retries just the email on later runs, never making a second code.
+  - The 26 old `profiles.referral_code` codes were copied into share rows (lower-case). Old `/?ref=CODE` links redirect to `/spin?ref=CODE`.
+- **Removed:**
+  - `process-referral.js` and `send-referral-email.js` (unused);
+  - the `referral_tracking` table (only test rows) and its update in `complete-order-payment.js`;
+  - `profiles.referral_code` and `profiles.referred_by`;
+  - the sign-up modal's hidden referral field and `pending_referral`.
+
+  The 6 test codes from reproducing the bug were deleted. No real unused R40 codes existed (the only real one had expired).
+
+**2. Admin "Spin & Win" tab** (Growth group, on `spin-admin.js`):
+- the gift being given right now;
+- default gift;
+- add slot (SAST start, minutes, max winners, overlap warning) and cancel slot;
+- results (spins, used, conversion, order value, discount, friend rewards);
+- latest spins.
+
+Tested live with a temporary admin, which was removed afterwards.
+
+**3. Home footer rebuilt** (`.site-footer` in style.css; about.html keeps its own).
+- **What was wrong:** dead `#` links (Returns, socials), emoji social icons, © 2025, a navy logo on navy.
+- **Now:**
+  - brand + WhatsApp/Email pills;
+  - "Specials in your inbox" with inline messages (no browser `alert()`s; it no longer reports success without saving);
+  - link columns: Eat & shop (`#section=` links using the See-more handler), Stores, Help (orders/tracking, spin, returns), Umzila (about, terms, privacy);
+  - © year from JS, "Secure card payments by PayFast".
+- `about.html#terms`, `#privacy` and `#returns` now open the right modal.
+
+No Umzila social accounts were found, so no social links. Add them when you have them.
+
+**4. Sell on Umzila rebuilt** for how Umzila works now.
+- **Pitch:**
+  - Before: R100 fee, "no commission, keep 100%".
+  - Now: free to join while free spots last, 15% per sale (matches seller-terms §24 and approve-seller's free slots), riders collect, store page at umzila.store/<slug>, and the 4 steps of what happens next.
+- **Questions:** name, business, email, WhatsApp, what you sell (chips), where you're based, about the business, Instagram, terms. Dropped "delivery method" and "price range"; old rows still show them in admin as "(old form)".
+- **Form behaviour:** the draft is kept while they read the terms, errors clear as you type, and the Instagram handle is cleaned so admin's link works.
+- **Admin side:** the notify email and admin detail now show category, location, about and Instagram.
+- **`seller_applications` RLS:**
+  - Before: every signed-in user could read every application (names, emails, phones).
+  - Admin "Reject" updated the row from the browser, which no policy allowed, so it silently did nothing.
+  - Anyone could insert an application already marked `approved`.
+  - Now: admins read and update everything; an applicant reads only their own row by `my_verified_email()`; public inserts must be `status='pending'`.
+
+**5. Logistics "pending for no reason" + test orders.**
+- **Cause:** 10 old checkout orders (Mar–Jul) were left at `order_status='paid'` with no `deliveries` row. They're from before the network existed, or tests from the founder's account with no PayFast ID. `orderState()` correctly showed them as "New — needs packing".
+- **Cleanup:** 17 test orders deleted with their deliveries, routes, rider-pay rows, events, offers, feedback and logs (founder-approved list):
+  - those 10;
+  - the three R5 "Delivery test item" orders;
+  - 4 test seller-fee / no-item rows.
+
+  Every `ORD-…` manual order was kept. Nothing is stuck in logistics now.
+
+**6. Seller dashboard: manual and cash orders no longer sit in New orders.**
+- **Cause:** for an order without a delivery row, `isPastOrder()` only counted the seller's own item rows (delivered + buyer-confirmed). That never happens for orders logistics enters by hand.
+- **Fix:** for those orders, logistics' status decides. Fulfilled, Delivered, Completed, Returned, Cancelled or Refunded means past.
+
+**7. Guest baskets stayed "anonymous" after the person signed up or signed in** (Asanda Mbhele: ice cream added as a guest, account created an hour later, guest basket still listed and nothing on the account).
+- **Cause 1 (`presence.js`):** it only re-synced when the basket or contact changed. Signing in changes neither, so `clear_guest_cart` never ran. Its signature now includes signed-in/out, it listens for `SIGNED_IN`/`SIGNED_OUT`, and a forced sync that arrives mid-sync is retried instead of dropped.
+- **Cause 2 (`script.js`):** the `onAuthStateChange` listener was registered at load, while `supabaseClient` was still `null`, so it never existed. Any sign-in outside the login pop-up never moved the basket onto the account, and `mergeAnonFavourites` never ran. It's now registered once the client is ready, and skips repeat events for the same user.
+- **Cause 3: email confirmation opens in another browser** (email apps), which has a different anonymous id and an empty basket.
+  - Every `signUp` now sends `anon_id` (ss_anon_id) in the user metadata.
+  - A new trigger `claim_guest_cart_on_confirm` on `auth.users` moves that browser's guest basket (or a guest basket carrying the now-verified email) onto the account the moment the email is confirmed. It merges if the account already has a basket. It never blocks sign-up and isn't callable by clients.
+- Asanda's basket was moved onto their account by hand.
+- **Tested:** in-page sign-in clears the guest row and the account gets the basket; trigger by browser id and by verified email with a merge. All test users, carts and subscriber rows were removed.
+
+**Also:**
+- `loadCartWithSync` uses `maybeSingle()` (no 406 for a new account).
+- "Now on umzila" video overlays (light / dark / clean transparent PNGs) were made for marketing, outside the repo.
+
+Files: `index.html`, `script.js`, `style.css`, `presence.js`, `spin.html`, `about.html`, `admin.html`, `checkout.html`, `seller-dashboard.html`, `netlify/functions/lib/spin.js`, `spin-identify.js`, `spin-friend.js`, `spin-play.js`, `send-spin-emails.js`, `notify-seller-application.js`, `lib/complete-order-payment.js` (dead referral block only), `lib/notify.js` (comment); deleted `process-referral.js`, `send-referral-email.js`. Migrations: `spin_share_rows`, `retire_signup_referral`, `seller_applications_rls_lockdown`, `seller_applications_insert_pending_only`, `claim_guest_cart_on_confirm`. See `docs/systems/spin-wheel-spec.md`.
+
+---
+
 ## 2026-10-15: Spin & Win, stage 1: the /spin page and its server functions (admin tab still to come)
 
 **Asked:** build the spin page the printed thank-you cards point at (spec: `docs/systems/spin-wheel-spec.md`).

@@ -1764,7 +1764,7 @@
       try {
         var client = (typeof supabaseClient !== 'undefined' && supabaseClient) ? supabaseClient : window.supabase;
         if (client && client.auth) {
-          var res = await client.auth.signUp({ email: currentEmail, password: pw, options: { emailRedirectTo: window.location.origin + '/' } });
+          var res = await client.auth.signUp({ email: currentEmail, password: pw, options: { data: { anon_id: (function(){ try { return localStorage.getItem('ss_anon_id') || undefined; } catch (e) { return undefined; } })() }, emailRedirectTo: window.location.origin + '/' } }); // anon_id: see claim_guest_cart_on_confirm
           if (!res.error && window.UmzilaAuthMail) UmzilaAuthMail.markSent(currentEmail); // the confirmation link just went out
           if (!res.error && res.data && res.data.user && res.data.user.id && client.from) {
             try {

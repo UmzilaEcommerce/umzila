@@ -955,6 +955,7 @@ document.addEventListener('supabase-ready', function(e) {
   if (typeof checkInitialAuthState === 'function') {
     checkInitialAuthState();
   }
+  listenForAuthChanges();
   if (typeof loadFilterOptions === 'function') {
     loadFilterOptions();
   }
@@ -1555,7 +1556,9 @@ if (modalSignupSubmit) {
         email,
         password,
         options: {
-          data: { full_name: name },
+          // anon_id: this browser's guest basket moves onto the account when the
+          // email is confirmed, even if the link opens in another browser (claim_guest_cart_on_confirm)
+          data: { full_name: name, anon_id: (function(){ try { return localStorage.getItem('ss_anon_id') || undefined; } catch (e) { return undefined; } })() },
           emailRedirectTo: window.location.origin + window.location.pathname + window.location.search
         }
       });
@@ -1859,14 +1862,23 @@ async function checkInitialAuthState() {
   }
 }
 
-// Listen for auth state changes
-if (supabaseClient && supabaseClient.auth) {
-  supabaseClient.auth.onAuthStateChange(async (event, session) => {
+// Listen for auth state changes. Registered from the supabase-ready handler:
+// at load time supabaseClient is still null, so this used to never run —
+// signing in anywhere but the login pop-up (e.g. the auth-mail panel) never
+// moved the basket onto the account or merged guest favourites.
+let authListenerOn = false;
+function listenForAuthChanges() {
+  if (authListenerOn || !supabaseClient || !supabaseClient.auth) return;
+  authListenerOn = true;
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event !== 'SIGNED_IN' && event !== 'SIGNED_OUT') return; // load is handled by checkInitialAuthState
     const user = session?.user || null;
-    updateAuthUI(user);
-    if (event === 'SIGNED_IN' && user) {
-      mergeAnonFavourites(user.id).catch(() => {});
-    }
+    if (event === 'SIGNED_IN' && currentUser && user && currentUser.id === user.id) return; // already set up (token refresh / repeat)
+    // outside the callback: supabase-js waits for it before finishing the sign-in
+    setTimeout(() => {
+      updateAuthUI(user);
+      if (event === 'SIGNED_IN' && user) mergeAnonFavourites(user.id).catch(() => {});
+    }, 0);
   });
 }
 

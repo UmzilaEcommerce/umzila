@@ -137,18 +137,24 @@
     }
     if (changed) try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contact)); } catch (e2) {}
   }
+  // The signature includes whether they're signed in: signing in changes
+  // neither the basket nor the contact, so without it the guest basket was
+  // never cleared after a sign-in (it stayed in Logistics → Baskets as an
+  // anonymous basket while the account had its own).
+  var retry = false;
   function syncGuestCart(force) {
-    if (!client || syncing || BOT) return; // test runs / crawlers never leave baskets
+    if (BOT || !client) return; // test runs / crawlers never leave baskets
+    if (syncing) { if (force) retry = true; return; } // run again once this one finishes
     tidyContact();
     var raw, anon = anonId();
     try { raw = localStorage.getItem('ss_cart') || '[]'; } catch (e) { return; }
     if (!anon) return;
-    var sig = raw + '|' + (contact ? JSON.stringify(contact) : '');
     var last = null; try { last = localStorage.getItem(SYNC_KEY); } catch (e) {}
-    if (!force && sig === last) return;
     syncing = true;
     client.auth.getSession().then(function (r) {
       var session = r && r.data && r.data.session;
+      var sig = (session ? 'S|' : 'G|') + raw + '|' + (contact ? JSON.stringify(contact) : '');
+      if (!force && sig === last) return;
       try { localStorage.setItem(SYNC_KEY, sig); } catch (e) {}
       if (session) return client.rpc('clear_guest_cart', { p_anon: anon });
       var items; try { items = JSON.parse(raw); } catch (e) { items = []; }
@@ -158,7 +164,10 @@
         p_anon: anon, p_items: items,
         p_email: contact && contact.email || null, p_name: contact && contact.name || null, p_phone: contact && contact.phone || null
       });
-    }).then(noop, noop).then(function () { syncing = false; });
+    }).then(noop, noop).then(function () {
+      syncing = false;
+      if (retry) { retry = false; syncGuestCart(true); }
+    });
   }
   // Merges: a later source only fills in / updates what it actually has
   // (the popup gives just an email; checkout adds name + phone).
@@ -176,7 +185,15 @@
   setInterval(function () { syncGuestCart(false); }, 5000);
   window.addEventListener('storage', function (e) { if (e.key === 'ss_cart') syncGuestCart(false); });
   var startOrig = window.umzilaPresence.start;
-  window.umzilaPresence.start = function (sb, label) { startOrig(sb, label); syncGuestCart(false); };
+  var authHooked = false;
+  window.umzilaPresence.start = function (sb, label) {
+    startOrig(sb, label); syncGuestCart(false);
+    // Signing in / out on this page (no reload): re-sync straight away.
+    if (!authHooked && sb && sb.auth && typeof sb.auth.onAuthStateChange === 'function') {
+      authHooked = true;
+      try { sb.auth.onAuthStateChange(function (ev) { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') setTimeout(function () { syncGuestCart(true); }, 0); }); } catch (e) {}
+    }
+  };
 
   // ── Page-switch feedback ──────────────────────────────────────────────
   // Tapping a link to another Umzila page (store ↔ home, back arrow, Check

@@ -3852,8 +3852,13 @@
     // orders sat in Active forever. Orders without a delivery row keep the
     // old rule. One predicate for both lists so an order is never in both.
     var DELIVERY_DONE = { DELIVERED: 'Delivered', CANCELLED: 'Cancelled', RETURNED: 'Returned' };
+    // Orders without a delivery row are the ones logistics entered by hand
+    // (cash / WhatsApp orders, ORD-…): logistics owns their status, so once it
+    // says handed over / delivered / returned they leave the seller's list.
+    var MANUAL_DONE = /^(fulfilled|delivered|completed|returned|cancelled|refunded)$/i;
     function isPastOrder(o) {
       if (o._deliveryStatus && DELIVERY_DONE[o._deliveryStatus]) return true;
+      if (!o._deliveryStatus && MANUAL_DONE.test(o.order_status || '')) return true;
       if (o.order_status === 'Returned') return true;
       return o._mySellerStatus === 'Delivered' && !!o._buyerAllConfirmed;
     }
