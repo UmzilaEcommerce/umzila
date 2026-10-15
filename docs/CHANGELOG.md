@@ -4,6 +4,30 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-15: Removed drink came back at checkout; checkout stuck on a blank loading screen
+
+**Reported:** on Isiqalo's page a drink was removed from the cart, "No thanks" on the drinks screen, yet checkout still showed the drink with no way to remove it. And checkout took long to appear, showing nothing while it loaded.
+
+**Root causes:**
+- **The account's saved cart went stale.** Store pages save the cart to the phone (`ss_cart`) at once and to the account's `carts` row in the background. Leaving for checkout straight away can cancel that background save, so the row kept the drink. Checkout (signed in) then either loaded that row (`loadCart` server path) or merged it into the phone's cart (`syncCartOnLogin` only ever adds lines). Either way the removed drink came back, and checkout saved it back to the account.
+- **No remove button at checkout.** The order summary only listed lines.
+- **Blank loading screen.** Before showing anything, checkout checked the saved code (`ss_coupon`) and the mystery-gift code with `validate-cart` (often a cold start), one after another, and again after sign-in.
+
+**Fix:**
+- `shop.html`: `saveCart()` keeps the latest save (`cartSaving`). "Check out" and the drinks screen's "No thanks / Continue" go through `goCheckout()`, which waits for it (max 2.5 s) before leaving.
+- `checkout.html`:
+  - A non-empty phone cart is the source when you arrive signed in. The account row is only read when the phone has no items, and is then brought up to date (`saveCartToServer`).
+  - The merge runs only for a sign-in made on the checkout page (`state.arrivedSignedIn`).
+  - An empty phone cart never overwrites a saved row that has items.
+  - Product lines (incl. house drinks) get a × in the order summary that removes them from checkout, the phone cart and the account, then re-prices (code re-checked). Services and bookings still change on their store page.
+  - The page shows as soon as cart + sign-in are known. Code checks run afterwards in the background; Pay re-validates server-side as before.
+- Tested locally (signed-in test account, deleted afterwards): slow-save remove → checkout shows no drink; stale saved row ignored and corrected; × updates total, phone and account; empty phone cart keeps the saved items; checkout shows in about 1.3 s with saved codes.
+
+Files: `shop.html`, `checkout.html`.
+
+---
+
+
 ## 2026-10-15: Invites merged into Spin & Win, admin Spin tab, new footer, sell-on-Umzila rework, stuck orders, guest baskets
 
 **1. "Share with friends" (home banner) was broken and could be abused. Now it's "Give a friend a spin".**

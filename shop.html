@@ -917,7 +917,15 @@ const CART_EXTRA_FIELDS = ['seller_id', 'listing_type', 'fulfillment_type', 'ser
 const lineKey = l => (l.id || l.product_id) + '|' + (l.size || '') + '|' + (l.booking_id || '');
 function getCart(){ try { const c = JSON.parse(localStorage.getItem('ss_cart') || '[]'); return Array.isArray(c) ? c : []; } catch (_) { return []; } }
 const qtyOf = l => Number(l.qty || l.quantity || 1);
-async function saveCart(cart){
+// The latest carts-row save; leaving for checkout waits for it (goCheckout),
+// or the page change cancels it and the saved row keeps a removed line.
+let cartSaving = Promise.resolve();
+function goCheckout(href){
+  if (window.umzilaNavigating) umzilaNavigating();
+  Promise.race([cartSaving.catch(() => {}), new Promise(r => setTimeout(r, 2500))]).then(() => { location.href = href; });
+}
+function saveCart(cart){ return (cartSaving = writeCart(cart)); }
+async function writeCart(cart){
   try { localStorage.setItem('ss_cart', JSON.stringify(cart)); } catch (_) {}
   // Signed in: the homepage and checkout read the carts row first, so it
   // must match (otherwise a removal here comes back on the next page).
@@ -1018,7 +1026,7 @@ function renderCart(){
 }
 $('#cartBody').addEventListener('click', e => {
   const go = e.target.closest('a[data-checkout]');
-  if (go && showAddons(go.href)) { e.preventDefault(); return; }
+  if (go) { e.preventDefault(); if (!showAddons(go.href)) goCheckout(go.href); return; }
   const b = e.target.closest('[data-inc],[data-dec],[data-rm],[data-edit]');
   if (!b) return;
   const key = b.dataset.inc || b.dataset.dec || b.dataset.rm || b.dataset.edit;
@@ -1253,7 +1261,7 @@ function showAddons(href){
   document.body.appendChild(ov);
   ov.addEventListener('click', e => {
     if (e.target.closest('[data-ad-back]')) { ov.remove(); try { sessionStorage.removeItem('umz_addons_seen_' + S.seller.id); } catch (_) {} openCart(); return; }
-    if (e.target.closest('[data-ad-go]')) { if (window.umzilaNavigating) umzilaNavigating(); location.href = href; return; }
+    if (e.target.closest('[data-ad-go]')) { goCheckout(href); return; }
     const c = e.target.closest('[data-ad]'); if (!c) return;
     const p = HOUSE.items.find(x => x.id === c.dataset.ad); if (!p) return;
     const cart = getCart(), line = cart.find(l => (l.id || l.product_id) === p.id);

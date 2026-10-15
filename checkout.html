@@ -2378,6 +2378,7 @@
         
         if (session?.user) {
           state.user = session.user;
+          state.arrivedSignedIn = true; // see syncCartOnLogin()
 
           // Verify profile exists (like in index.html)
           await verifyUserProfile(session.user.id);
@@ -2993,7 +2994,16 @@ async function syncCartOnLogin(user) {
     // and never for a Buy Now (which loadCart() may only now have detected).
     if (state.cartReady) { try { await state.cartReady; } catch (e) { /* loadCart handles its own errors */ } }
     if (state.isBuyNow) return;
-    
+
+    // Already signed in when the page opened: loadCart() used this browser's
+    // cart, which is the newest copy — just bring the saved row up to date.
+    // Merging here would bring back lines removed on the last page whose
+    // background save never finished. Merge only on a sign-in made here.
+    if (state.arrivedSignedIn && fullCart().length > 0) {
+        await saveCartToServer();
+        return;
+    }
+
     try {
         // Get localStorage cart
         const localCart = JSON.parse(localStorage.getItem('ss_cart') || '[]');
@@ -3630,7 +3640,16 @@ async function loadCart() {
             return;
         }
 
-        if (state.user && supabaseClient) {
+        // This browser's ss_cart is the newest copy whenever it exists: every
+        // page writes it first and mirrors it to the carts row in the
+        // background, and that mirror can be cut off by leaving the page (a
+        // drink removed on a store page came back here). The saved row is only
+        // the source on a browser with no cart yet.
+        // An empty local cart never counts: it must not hide (or, via
+        // syncCartOnLogin, overwrite) a saved row that has items.
+        let hasLocalCart = false;
+        try { const lc = JSON.parse(localStorage.getItem('ss_cart') || '[]'); hasLocalCart = Array.isArray(lc) && lc.length > 0; } catch (e) { /* storage blocked / bad JSON */ }
+        if (state.user && supabaseClient && !hasLocalCart) {
             // Load from Supabase server cart
             const { data, error } = await supabaseClient
                 .from('carts')
@@ -3841,10 +3860,13 @@ async function loadFromLocalStorage() {
             // a code applied on cart.html could have expired, hit its limit,
             // or (for a multi-use code) now need a sign-in check, by the time
             // the buyer reaches checkout.html.
+            // Applied by continueInitialization() once the page is showing and
+            // sign-in is known: a blocking validate-cart call here (cold function)
+            // kept the buyer on a blank loading screen for seconds.
             try {
                 const couponData = JSON.parse(savedCoupon);
-                if (couponData?.code) await applyCoupon(couponData.code);
-            } catch (e) { console.warn('Stored coupon re-validation failed', e); }
+                if (couponData?.code) state.storedCouponCode = couponData.code;
+            } catch (e) { /* bad JSON: no stored code */ }
         }
     } else {
         state.cart = [];
@@ -4344,16 +4366,20 @@ async function validateCheckout() {
         const image = item.image || item.img || 'https://via.placeholder.com/80x80?text=Product';
         const itemTotal = (item.price || 0) * qty;
         subtotal += itemTotal;
+        // Goods (incl. house drinks) can be dropped right here; services and
+        // bookings are changed on their store page (holds, intake).
+        const canRemove = !state.isBuyNow && (item.listing_type || 'product') !== 'service' && !item.booking_id;
         return `
-          <div class="order-item">
+          <div class="order-item" style="position:relative">
             <div class="item-image">
               <img src="${escapeHtmlLite(String(image).replace(/\.w1280\.webp/i, '.w480.webp'))}" decoding="async" alt="${escapeHtmlLite(name)}" onerror="this.src='https://via.placeholder.com/80x80?text=Product'">
             </div>
-            <div class="item-details">
+            <div class="item-details"${canRemove ? ' style="padding-right:30px"' : ''}>
               <div class="item-title">${escapeHtmlLite(name)}</div>
               <div class="item-variant">${lineDetail(item, qty)}</div>
               <div class="item-price">${formatCurrency(itemTotal)}</div>
             </div>
+            ${canRemove ? `<button type="button" data-remove-line="${state.cart.indexOf(item)}" aria-label="Remove ${escapeHtmlLite(name)}" style="position:absolute;top:4px;right:0;width:30px;height:30px;border:0;border-radius:50%;background:#f3f4f6;color:#6b7280;font-size:18px;line-height:1;cursor:pointer">×</button>` : ''}
           </div>
         `;
       }
@@ -5748,23 +5774,22 @@ async function submitToPayFast(cartItems, orderId, total) {
         await Promise.all([state.cartReady, checkAuth()]);
         useSavedAddressLocation(); // cart + profile both known now (either may have loaded first)
 
-        // The saved-coupon re-check inside loadCart() (above) ran before
-        // state.user was known — checkAuth() hasn't resolved at that point
-        // — so a multi-use code can come back stale-flagged "sign in to use
-        // this" even for someone who actually is signed in. Re-validate now
-        // that the real auth state is known, so the discount/label reflects
-        // it correctly.
-        if (state.couponCode) await applyCoupon(state.couponCode);
-
-        // Mystery-popup free-gift follow-through (see applyStoredFreeGiftCode)
-        // — for a signed-in buyer we already know their email now, so this
-        // can succeed immediately; guests retry on the email field's blur
-        // handler once they've typed theirs.
-        await applyStoredFreeGiftCode();
-
-        // Hide loading state
+        // Show the page now — code checks below go to validate-cart (often a
+        // cold start) and used to run before this, one after another, leaving
+        // a blank loading screen for several seconds.
         elements.loadingState.classList.add('hidden');
         goToStep('checkout');
+
+        // Saved code (ss_coupon, or a ?coupon= one already applied in
+        // loadCart) is checked now that sign-in is known, so a multi-use code
+        // isn't stale-flagged "sign in to use this". Then the mystery-popup
+        // free gift (see applyStoredFreeGiftCode) — guests retry on the email
+        // field's blur once they've typed theirs. Pay re-validates server-side.
+        (async () => {
+          const code = state.couponCode || state.storedCouponCode;
+          if (code) await applyCoupon(code);
+          await applyStoredFreeGiftCode();
+        })();
 
         // Now that the cart is loaded, set the delivery block's initial
         // visibility (service-only carts skip address/zone entirely) and
@@ -5824,6 +5849,23 @@ async function submitToPayFast(cartItems, orderId, total) {
      ********************/
     
     function setupEventListeners() {
+      // × on an order-summary line (see renderLine): drop it from this
+      // checkout and from the saved cart, then re-price.
+      elements.orderItems?.addEventListener('click', e => {
+        const btn = e.target.closest('[data-remove-line]');
+        if (!btn) return;
+        const i = Number(btn.dataset.removeLine);
+        if (!(i >= 0 && i < state.cart.length)) return;
+        state.cart.splice(i, 1);
+        state.validatedCart = null;
+        persistLocalCart();
+        saveCartToServer();
+        if (!state.cart.length) { showEmptyCart(); return; }
+        updateOrderSummary();
+        if (typeof renderCheckoutBlockers === 'function') renderCheckoutBlockers();
+        if (state.couponCode) applyCoupon(state.couponCode); // discount follows the new basket
+      });
+
       // Guest basket contact (presence.js save_guest_cart): once a guest types
       // their details, their saved basket carries them so Umzila can follow
       // up if the order isn't finished. Ignored server-side when signed in.
@@ -6082,6 +6124,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       elements.signOutInline.addEventListener('click', async () => {
         if (supabaseClient) await supabaseClient.auth.signOut();
         state.user = null;
+        state.arrivedSignedIn = false;
         state.profile = null;
         elements.customerEmail.value = '';
         updateAuthUI(null);
