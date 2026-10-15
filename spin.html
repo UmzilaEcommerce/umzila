@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spin &amp; Win · Umzila</title>
+<meta name="description" content="Scan your Umzila thank-you card, spin the wheel and get a gift for your next order.">
+<meta name="theme-color" content="#0a2f66">
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Poppins:wght@400;500;600;700;800&display=swap">
+<style>
+/* Spin & Win (docs/systems/spin-wheel.md). Printed thank-you card → /spin.
+   One screen at a time; every server decision comes from spin-identify /
+   spin-friend / spin-play. */
+:root{
+  --navy:#0a2f66; --navy-2:#123f80; --pink:#e0284f; --pink-d:#b81b3c; --yellow:#ffc21a; --cream:#fbf5ec;
+  --ink:#14213d; --muted:#5d6577; --line:#e8dfd0; --card:#ffffff; --ok:#0f8a4b; --bad:#c21f3a;
+  --r:22px; --shadow:0 10px 30px rgba(10,47,102,.12), 0 2px 6px rgba(10,47,102,.06);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+h1[tabindex]:focus,h2[tabindex]:focus{outline:none}
+html,body{margin:0;padding:0}
+body{background:var(--cream);color:var(--ink);font-family:Poppins,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;
+  min-height:100vh;min-height:100dvh;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(1200px 500px at 50% -180px, rgba(255,194,26,.28), transparent 60%),
+             radial-gradient(700px 400px at 110% 110%, rgba(224,40,79,.10), transparent 60%)}
+button{font:inherit;cursor:pointer}
+a{color:var(--navy)}
+.wrap{max-width:460px;margin:0 auto;padding:0 16px calc(28px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 0 6px}
+/* umzila.webp is a 480px square with the wordmark in the middle: show just the wordmark */
+.logo{display:block;position:relative;width:112px;height:40px;overflow:hidden}
+.logo img{position:absolute;width:203px;height:203px;left:-46px;top:-80px;max-width:none}
+.icon-btn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center;font-size:18px;color:var(--navy)}
+.icon-btn:focus-visible,.btn:focus-visible,.link:focus-visible,.star:focus-visible{outline:3px solid var(--yellow);outline-offset:2px}
+
+.screen{display:none;animation:in .35s ease both}
+.screen.on{display:block}
+@keyframes in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+h1,h2{font-family:Fraunces,Georgia,serif;color:var(--navy);letter-spacing:-.5px;margin:0}
+h1{font-size:clamp(30px,8.4vw,38px);line-height:1.08;font-weight:800}
+h2{font-size:24px;line-height:1.15;font-weight:800}
+.lead{color:var(--muted);font-size:16px;margin:10px 0 0}
+.hero{padding:22px 0 6px}
+.emoji-big{font-size:46px;line-height:1;margin-bottom:10px;display:block}
+.small{font-size:13.5px;color:var(--muted)}
+.center{text-align:center}
+
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:20px;margin-top:18px}
+.stack{display:grid;gap:12px;margin-top:22px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;border-radius:999px;border:0;padding:14px 22px;
+  font-weight:700;font-size:17px;text-decoration:none;transition:transform .12s ease, box-shadow .2s ease, background .2s}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--pink);color:#fff;box-shadow:0 8px 20px rgba(224,40,79,.32)}
+.btn.primary:hover{background:var(--pink-d)}
+.btn.navy{background:var(--navy);color:#fff;box-shadow:0 8px 20px rgba(10,47,102,.25)}
+.btn.ghost{background:#fff;color:var(--navy);border:1.5px solid var(--line)}
+.btn[disabled]{opacity:.6;pointer-events:none}
+.link{background:none;border:0;color:var(--navy);font-weight:600;text-decoration:underline;text-underline-offset:3px;padding:8px 4px;font-size:14.5px}
+.row-center{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+label.f{display:block;font-weight:600;font-size:14px;margin:14px 0 6px;color:var(--navy)}
+input.in,textarea.in{width:100%;border:1.5px solid var(--line);border-radius:14px;padding:14px 15px;font:inherit;font-size:17px;background:#fff;color:var(--ink);transition:border-color .2s, box-shadow .2s}
+textarea.in{font-size:15.5px;min-height:84px;resize:vertical}
+input.in:focus,textarea.in:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 4px rgba(10,47,102,.12)}
+.ug-bad{border-color:var(--bad)!important}
+.ug-hint{color:var(--bad);font-size:13px;margin-top:6px}
+.ug-hint button{margin-left:6px;border:0;background:var(--navy);color:#fff;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600}
+.msg{border-radius:14px;padding:12px 14px;font-size:14.5px;margin-top:14px;display:none}
+.msg.on{display:block}
+.msg.bad{background:#fdecef;color:#8d1730}
+.msg.info{background:#eef3fb;color:var(--navy)}
+
+/* PIN */
+.pin{display:flex;gap:12px;justify-content:center;margin-top:20px}
+.pin input{width:58px;height:66px;border-radius:16px;border:1.5px solid var(--line);background:#fff;text-align:center;font-size:28px;font-weight:700;color:var(--navy);font-family:Poppins,sans-serif}
+.pin input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 4px rgba(10,47,102,.12)}
+.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
+
+/* Stars */
+.stars{display:flex;justify-content:center;gap:6px;margin:16px 0 4px}
+.star{border:0;background:none;padding:4px;font-size:42px;line-height:1;color:#d8cfbf;transition:transform .15s, color .15s}
+.star.on{color:var(--yellow);text-shadow:0 2px 0 #e0a300}
+.star:active{transform:scale(1.25)}
+.order-chip{display:inline-flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted);margin-top:12px}
+
+/* Wheel */
+.wheel-zone{position:relative;width:min(88vw,380px);aspect-ratio:1;margin:18px auto 6px}
+.wheel-zone svg.face{width:100%;height:100%;display:block;overflow:visible}
+.pointer{position:absolute;left:50%;top:-14px;width:44px;height:54px;transform:translateX(-50%);transform-origin:50% 12px;z-index:2;filter:drop-shadow(0 4px 4px rgba(0,0,0,.25))}
+.pointer.flap{animation:flap .5s ease}
+@keyframes flap{0%{transform:translateX(-50%) rotate(0)}30%{transform:translateX(-50%) rotate(-14deg)}60%{transform:translateX(-50%) rotate(6deg)}100%{transform:translateX(-50%) rotate(0)}}
+.wheel-zone.spinning .bulb{animation:blink .5s infinite alternate}
+.wheel-zone.spinning .bulb:nth-child(odd){animation-delay:.25s}
+@keyframes blink{from{opacity:.35}to{opacity:1}}
+.spin-btn{position:relative;margin:18px auto 0;display:block;width:min(70vw,260px);height:72px;border-radius:999px;border:0;background:linear-gradient(180deg,#ff3d64,var(--pink));
+  color:#fff;font-family:Fraunces,serif;font-size:30px;font-weight:800;letter-spacing:2px;box-shadow:0 8px 0 var(--pink-d),0 14px 28px rgba(224,40,79,.4);transition:transform .1s, box-shadow .1s}
+.spin-btn::after{content:"";position:absolute;inset:-8px;border-radius:999px;border:3px solid rgba(255,194,26,.9);animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{from{opacity:.9;transform:scale(.96)}to{opacity:0;transform:scale(1.14)}}
+.spin-btn:active,.spin-btn.pressed{transform:translateY(6px);box-shadow:0 2px 0 var(--pink-d),0 6px 14px rgba(224,40,79,.35)}
+.spin-btn[disabled]{pointer-events:none}
+.spin-btn[disabled]::after{display:none}
+.shake-scr{animation:scrshake .45s}
+@keyframes scrshake{10%,50%,90%{transform:translate(-3px,1px)}30%,70%{transform:translate(3px,-1px)}}
+.flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:40}
+.flash.go{animation:flash .5s ease-out}
+@keyframes flash{from{opacity:.75}to{opacity:0}}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:41}
+
+/* Prize */
+.prize{perspective:1000px;margin-top:16px}
+.prize-inner{background:linear-gradient(160deg,var(--navy),var(--navy-2));color:#fff;border-radius:26px;padding:24px 20px 20px;text-align:center;box-shadow:0 18px 40px rgba(10,47,102,.35);position:relative;overflow:hidden}
+.prize-inner.flip{animation:flip .7s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes flip{from{transform:rotateY(90deg) scale(.9);opacity:0}to{transform:none;opacity:1}}
+.prize-inner::before{content:"";position:absolute;inset:-40% -20% auto;height:200px;background:radial-gradient(closest-side,rgba(255,194,26,.35),transparent);pointer-events:none}
+.prize .got{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+.prize .p-emoji{font-size:58px;line-height:1;margin:8px 0 4px}
+.prize .p-title{font-family:Fraunces,serif;font-size:30px;font-weight:800;line-height:1.1;margin:0}
+.prize .p-sub{color:#cfdcf2;font-size:14.5px;margin:6px 0 0}
+.code-box{margin:16px 0 0;background:#fff;color:var(--navy);border-radius:16px;padding:12px 12px 12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.code-box .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:24px;font-weight:800;letter-spacing:3px;overflow-wrap:anywhere;text-align:left}
+.code-box button{border:0;background:var(--yellow);color:var(--navy);font-weight:700;border-radius:999px;padding:10px 14px;font-size:14px;flex:none}
+.countdown{margin-top:12px;font-size:14px;color:#fff;font-weight:600}
+.countdown b{color:var(--yellow)}
+.test-note{margin-top:10px;background:var(--yellow);color:var(--navy);font-weight:700;font-size:12.5px;border-radius:10px;padding:6px 10px;display:inline-block}
+.share{background:#fff;border:2px dashed #f3b6c3;border-radius:22px;padding:18px;margin-top:18px;text-align:center}
+.share h3{margin:0;font-family:Fraunces,serif;color:var(--navy);font-size:20px}
+.share p{margin:6px 0 14px;color:var(--muted);font-size:14.5px}
+.btn.wa{background:#1fa855;color:#fff;box-shadow:0 8px 18px rgba(31,168,85,.3)}
+.loader{display:grid;place-items:center;min-height:60vh;text-align:center;color:var(--muted)}
+.loader .wheelmini{width:64px;height:64px;border-radius:50%;margin:0 auto 14px;
+  background:conic-gradient(var(--navy) 0 25%,var(--pink) 0 50%,var(--yellow) 0 75%,#fff 0);animation:rot 1s linear infinite;box-shadow:var(--shadow)}
+@keyframes rot{to{transform:rotate(360deg)}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ios-haptic{position:absolute;left:-9999px;top:0;opacity:0}
+footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
+@media (prefers-reduced-motion: reduce){
+  .screen{animation:none}
+  .spin-btn::after,.wheel-zone.spinning .bulb{animation:none}
+  .prize-inner.flip{animation:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <a class="logo" href="/" aria-label="Umzila home"><img src="/umzila.webp" alt="umzila" width="203" height="203"></a>
+    <button class="icon-btn" id="soundBtn" type="button" aria-label="Sound on" title="Sound">🔊</button>
+  </header>
+
+  <!-- Loading -->
+  <section class="screen on" id="s-loading" aria-busy="true">
+    <div class="loader"><div><div class="wheelmini" aria-hidden="true"></div>Getting your spin ready…</div></div>
+  </section>
+
+  <!-- 1. Welcome (unknown visitor) -->
+  <section class="screen" id="s-welcome">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true" id="wEmoji">🎡</span>
+      <h1 id="wTitle">Hey! 👋 Did you order from Umzila recently?</h1>
+      <p class="lead" id="wLead">Spin the wheel for a gift on your next order.</p>
+    </div>
+    <div class="msg info" id="wMsg"></div>
+    <div class="stack" id="wButtons">
+      <button class="btn primary" type="button" data-go="email">Yes, I ordered</button>
+      <button class="btn ghost" type="button" data-go="friend">No, a friend gave me this</button>
+    </div>
+    <p class="small center" style="margin-top:18px">The gifts on the wheel change throughout the day. Spin to see what's waiting for you 👀</p>
+  </section>
+
+  <!-- 2. Email -->
+  <section class="screen" id="s-email">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true">📧</span>
+      <h1>What email did you order with?</h1>
+      <p class="lead">We'll find your order.</p>
+    </div>
+    <form id="emailForm" novalidate>
+      <label class="f" for="emailIn">Email</label>
+      <input class="in" id="emailIn" type="email" name="email" autocomplete="email" placeholder="name@gmail.com" required>
+      <div class="msg bad" id="emailMsg"></div>
+      <div class="stack"><button class="btn primary" type="submit" id="emailGo">Find my order</button></div>
+    </form>
+    <div class="stack" id="emailNotFound" hidden>
+      <button class="btn ghost" type="button" id="tryAnother">Try another email</button>
+      <button class="btn navy" type="button" id="toFriend" hidden>Get a welcome gift instead</button>
+    </div>
+    <div class="row-center"><button class="link" type="button" data-go="welcome">‹ Back</button></div>
+  </section>
+
+  <!-- 3. Phone check -->
+  <section class="screen" id="s-pin">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true">🔒</span>
+      <h1>Quick check</h1>
+      <p class="lead">What are the last 4 digits of the phone number on your order?</p>
+    </div>
+    <form id="pinForm" novalidate>
+      <div class="pin" id="pinBoxes" role="group" aria-label="Last 4 digits of your phone number">
+        <input inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1">
+        <input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 2">
+        <input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 3">
+        <input inputmode="numeric" pattern="[0-9]*" maxlength="1" aria-label="Digit 4">
+      </div>
+      <div class="msg bad" id="pinMsg"></div>
+      <div class="stack"><button class="btn primary" type="submit" id="pinGo">Check</button></div>
+    </form>
+    <div class="row-center"><button class="link" type="button" data-go="email">‹ Use another email</button></div>
+  </section>
+
+  <!-- 4. Friend details -->
+  <section class="screen" id="s-friend">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true">🎁</span>
+      <h1 id="fTitle">Welcome to Umzila!</h1>
+      <p class="lead">Tell us where to send your gift. It works on your first order.</p>
+    </div>
+    <form id="friendForm" novalidate>
+      <label class="f" for="fName">Your name</label>
+      <input class="in" id="fName" type="text" autocomplete="given-name" placeholder="Thandi" maxlength="60" required>
+      <label class="f" for="fEmail">Email</label>
+      <input class="in" id="fEmail" type="email" autocomplete="email" placeholder="name@gmail.com" required>
+      <label class="f" for="fPhone">Phone</label>
+      <input class="in" id="fPhone" type="tel" autocomplete="tel" placeholder="083 123 4567" required>
+      <div class="msg bad" id="friendMsg"></div>
+      <div class="stack"><button class="btn primary" type="submit" id="friendGo">Get my spin 🎡</button></div>
+      <p class="small center" style="margin-top:12px">We'll email your gift and a reminder before it ends.</p>
+    </form>
+    <div class="row-center"><button class="link" type="button" data-go="email">I've ordered before</button></div>
+  </section>
+
+  <!-- 5. Hello + rating -->
+  <section class="screen" id="s-hello">
+    <div class="hero">
+      <h1 id="hTitle">Hi 👋</h1>
+      <p class="lead" id="hLine"></p>
+      <span class="order-chip" id="hChip" hidden></span>
+    </div>
+    <div class="card" id="rateCard" hidden>
+      <p style="margin:0;font-weight:600;color:var(--navy);text-align:center" id="rateQ">Tap to rate</p>
+      <div class="stars" id="stars" role="radiogroup" aria-label="Your rating">
+        <button class="star" type="button" role="radio" aria-checked="false" data-v="1" aria-label="1 star">★</button>
+        <button class="star" type="button" role="radio" aria-checked="false" data-v="2" aria-label="2 stars">★</button>
+        <button class="star" type="button" role="radio" aria-checked="false" data-v="3" aria-label="3 stars">★</button>
+        <button class="star" type="button" role="radio" aria-checked="false" data-v="4" aria-label="4 stars">★</button>
+        <button class="star" type="button" role="radio" aria-checked="false" data-v="5" aria-label="5 stars">★</button>
+      </div>
+      <p class="small center" id="rateNote" aria-live="polite" style="margin:4px 0 0;min-height:1em"></p>
+      <div id="commentWrap" hidden>
+        <label class="f" for="rateComment">Anything we should know? <span class="small">(optional)</span></label>
+        <textarea class="in" id="rateComment" maxlength="500" placeholder="Tell us more…"></textarea>
+      </div>
+    </div>
+    <p class="small center" id="notYetNote" hidden style="margin-top:16px">Rate it once it arrives. Your spin is ready now 🎡</p>
+    <div class="stack">
+      <button class="btn primary" type="button" id="helloNext">Next</button>
+    </div>
+    <div class="row-center">
+      <button class="link" type="button" id="rateSkip" hidden>Skip</button>
+      <button class="link notme" type="button">Not you?</button>
+    </div>
+  </section>
+
+  <!-- 6. Spin -->
+  <section class="screen" id="s-spin">
+    <div class="hero center" style="padding-top:12px">
+      <h2 id="spinTitle">Your spin is ready</h2>
+    </div>
+    <div class="wheel-zone" id="wheelZone">
+      <svg class="pointer" id="pointer" viewBox="0 0 44 54" aria-hidden="true">
+        <path d="M22 52 L4 14 A20 20 0 1 1 40 14 Z" fill="#ffc21a" stroke="#0a2f66" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="22" cy="18" r="6" fill="#0a2f66"/>
+      </svg>
+      <svg class="face" viewBox="-200 -200 400 400" role="img" aria-label="Prize wheel">
+        <defs>
+          <radialGradient id="hubG" cx="50%" cy="40%" r="60%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e9e2d6"/></radialGradient>
+        </defs>
+        <circle r="196" fill="#0a2f66"/>
+        <g id="bulbs"></g>
+        <g id="wheel"></g>
+        <circle r="38" fill="url(#hubG)" stroke="#0a2f66" stroke-width="5"/>
+        <text y="9" text-anchor="middle" font-family="Fraunces, serif" font-weight="800" font-size="27" fill="#e0284f">U</text>
+      </svg>
+    </div>
+    <button class="spin-btn" type="button" id="spinBtn">SPIN</button>
+    <div class="msg bad center" id="spinMsg"></div>
+    <div class="row-center"><button class="link notme" type="button">Not you?</button></div>
+  </section>
+
+  <!-- 7. Result / 9. Already have a gift -->
+  <section class="screen" id="s-result">
+    <div class="hero center" style="padding-top:10px">
+      <h2 id="rTitle">You got it! 🎉</h2>
+      <p class="lead" id="rLead" hidden></p>
+    </div>
+    <div class="prize" aria-live="polite">
+      <div class="prize-inner" id="prizeCard">
+        <div class="got" id="pGot">You got</div>
+        <div class="p-emoji" id="pEmoji" aria-hidden="true">🥤</div>
+        <p class="p-title" id="pTitle">A free cold drink</p>
+        <p class="p-sub" id="pSub"></p>
+        <div class="code-box"><span class="code" id="pCode">SPIN000000</span><button type="button" id="copyCode">Copy</button></div>
+        <div class="countdown" id="pCount"></div>
+        <div class="test-note" id="pTest" hidden>Staff test spin: this code is switched off</div>
+      </div>
+    </div>
+    <div class="stack"><a class="btn primary" id="useNow" href="/">Use it now →</a></div>
+    <p class="small center" id="pEmailed" style="margin-top:12px"></p>
+    <p class="small center" style="margin-top:2px">One code per order: use whichever saves you more.</p>
+    <p class="small center" id="pNext" hidden style="margin-top:8px">Your next order unlocks another spin 🎡</p>
+
+    <div class="share" id="shareBox" hidden>
+      <h3>🎁 Send a friend a spin</h3>
+      <p>If they order, you unlock a <b>mystery gift</b>.</p>
+      <div class="stack" style="margin-top:0">
+        <a class="btn wa" id="shareWa" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
+        <button class="btn ghost" type="button" id="copyLink">Copy link</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. Needs an order -->
+  <section class="screen" id="s-needs">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true">🎡</span>
+      <h1 id="nTitle">Your gift was used. Nice! 🙌</h1>
+      <p class="lead">Your next Umzila order unlocks a new spin 🎡</p>
+    </div>
+    <div class="stack"><a class="btn primary" id="orderAgain" href="/">Order again →</a></div>
+    <div class="row-center"><button class="link notme" type="button">Not you?</button></div>
+  </section>
+
+  <!-- Error -->
+  <section class="screen" id="s-error">
+    <div class="hero">
+      <span class="emoji-big" aria-hidden="true">😕</span>
+      <h1 id="eTitle">Something went wrong</h1>
+      <p class="lead" id="eLead">Please check your connection and try again.</p>
+    </div>
+    <div class="stack">
+      <button class="btn primary" type="button" id="eRetry">Try again</button>
+      <a class="btn ghost" href="https://wa.me/27797662768?text=Hi%20Umzila!%20I%20need%20help%20with%20my%20spin." target="_blank" rel="noopener">WhatsApp us</a>
+    </div>
+  </section>
+
+  <footer>Umzila · Durban's local favourites, delivered</footer>
+</div>
+
+<div class="flash" id="flash"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<label class="ios-haptic" id="hapticLabel" aria-hidden="true"><input type="checkbox" switch tabindex="-1"></label>
+<div class="sr" aria-live="assertive" id="live"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js" defer></script>
+<script src="/input-guard.js" defer></script>
+<script src="/presence.js" defer></script>
+<script>
+(function () {
+  'use strict';
+  // ── Gift labels (mirror of netlify/functions/lib/spin.js GIFTS: change both) ──
+  var GIFTS = {
+    drink:   { emoji: '🥤', label: 'Free drink', title: 'A free cold drink', sub: 'With any Workshop order (Isiqalo Kitchen or Velaphi).' },
+    pct10:   { emoji: '🏷️', label: '10% off', title: '10% off', sub: 'Your whole next order.' },
+    r20:     { emoji: '💸', label: 'R20 off', title: 'R20 off', sub: 'Your next order over R60.' },
+    food150: { emoji: '🤯', label: 'Food FREE', title: 'Your food, on us', sub: 'Up to R150 off your next order. You just pay delivery.' }
+  };
+  var WHEEL = ['drink', 'pct10', 'r20', 'food150', 'drink', 'pct10', 'r20', 'food150'];
+  var SLICE = 360 / WHEEL.length;
+  var FN = '/.netlify/functions/';
+  var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var S = { session: null, firstName: '', emailMasked: '', state: null, lastOrder: null, gift: null, reason: null,
+            rating: null, email: '', ref: '', skipAuto: false, sb: null };
+
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // Friend link (?ref=<share code>), kept for this visit.
+  try {
+    var qs = new URLSearchParams(location.search);
+    S.ref = (qs.get('ref') || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+    if (S.ref) sessionStorage.setItem('umz_spin_ref', S.ref); else S.ref = sessionStorage.getItem('umz_spin_ref') || '';
+  } catch (e) {}
+
+  // ── Screens ──
+  var current = 'loading';
+  function show(name) {
+    var prev = $('s-' + current); if (prev) prev.classList.remove('on');
+    current = name;
+    var el = $('s-' + name); el.classList.add('on');
+    window.scrollTo({ top: 0, behavior: REDUCED ? 'auto' : 'smooth' });
+    var h = el.querySelector('h1,h2'); if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function msg(id, text, kind) { var m = $(id); m.textContent = text || ''; m.className = 'msg ' + (kind || 'bad') + (text ? ' on' : ''); }
+  function busy(btn, on, label) {
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || 'One moment…'; btn.disabled = true; }
+    else { btn.textContent = btn.dataset.label || btn.textContent; btn.disabled = false; }
+  }
+  document.querySelectorAll('[data-go]').forEach(function (b) {
+    b.addEventListener('click', function () { unlockAudio(); go(b.getAttribute('data-go')); });
+  });
+  document.querySelectorAll('.notme').forEach(function (b) {
+    b.addEventListener('click', function () { S.session = null; S.skipAuto = true; go('email'); });
+  });
+  function go(name) {
+    if (name === 'email') {
+      $('emailNotFound').hidden = true; $('emailForm').hidden = false; msg('emailMsg', '');
+      if (!$('emailIn').value) { try { var gc = JSON.parse(lsGet('umz_guest_contact') || 'null') || {}; if (gc.email) $('emailIn').value = gc.email; } catch (e) {} }
+    }
+    if (name === 'friend') {
+      msg('friendMsg', '');
+      try { var c = JSON.parse(lsGet('umz_guest_contact') || 'null') || {};
+        if (c.name && !$('fName').value) $('fName').value = c.name.split(/\s+/)[0];
+        if (c.email && !$('fEmail').value) $('fEmail').value = c.email;
+        if (c.phone && !$('fPhone').value) $('fPhone').value = c.phone; } catch (e) {}
+    }
+    if (name === 'pin') { clearPin(); msg('pinMsg', ''); }
+    show(name);
+    if (name === 'pin') setTimeout(function () { pins[0].focus(); }, 60);
+  }
+
+  async function post(fn, body, headers) {
+    var r = await fetch(FN + fn, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}), body: JSON.stringify(body || {}) });
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    return { status: r.status, ok: r.ok, data: j };
+  }
+
+  // ── Who is scanning (server decides: session → this device's tracking links → ask) ──
+  async function boot() {
+    var signedInMiss = false;
+    var sb = await connect();
+    if (sb) {
+      try {
+        var res = await sb.auth.getSession();
+        var tok = res && res.data && res.data.session && res.data.session.access_token;
+        if (tok) {
+          var r = await post('spin-identify', { mode: 'session' }, { Authorization: 'Bearer ' + tok });
+          if (r.ok) return identified(r.data);
+          signedInMiss = r.status === 404;
+        }
+      } catch (e) {}
+    }
+    var links = [];
+    try { links = (JSON.parse(lsGet('ss_track_links') || '[]') || []).filter(function (l) { return l && l.o && l.t; }).map(function (l) { return { order: l.o, token: l.t }; }); } catch (e) {}
+    if (links.length) {
+      try { var t = await post('spin-identify', { mode: 'track', links: links }); if (t.ok) return identified(t.data); } catch (e) {}
+    }
+    welcome(signedInMiss);
+  }
+  async function connect() {
+    try {
+      var c = await fetch(FN + 'get-client-config'); var cfg = await c.json();
+      var url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey;
+      if (!url || !key || !window.supabase) return null;
+      S.sb = window.supabase.createClient(url, key);
+      if (window.umzilaPresence) umzilaPresence.start(S.sb, 'spin');
+      return S.sb;
+    } catch (e) { return null; }
+  }
+  function welcome(signedInMiss) {
+    if (S.ref) {
+      $('wEmoji').textContent = '🎁';
+      $('wTitle').textContent = 'A friend sent you a spin 🎁';
+      $('wLead').textContent = 'Spin the wheel for a welcome gift on your first Umzila order.';
+      $('wButtons').innerHTML = '<button class="btn primary" type="button" id="wFriend">Spin for my welcome gift</button>' +
+        '<button class="btn ghost" type="button" id="wOrdered">I\'ve ordered from Umzila before</button>';
+      $('wFriend').onclick = function () { unlockAudio(); go('friend'); };
+      $('wOrdered').onclick = function () { unlockAudio(); go('email'); };
+    }
+    if (signedInMiss) msg('wMsg', "We can't find a recent order on this account. Ordered with a different email? Tap “Yes, I ordered”.", 'info');
+    show('welcome');
+  }
+
+  function identified(d) {
+    S.session = d.spinSession; S.firstName = d.firstName || ''; S.emailMasked = d.emailMasked || '';
+    S.state = d.state; S.lastOrder = d.lastOrder || null; S.gift = d.gift || null; S.reason = d.reason || null; S.rating = null;
+    if (S.state === 'HAS_GIFT') return showGift(S.gift, true);
+    if (S.state === 'NEEDS_ORDER') return needsOrder();
+    if (S.state === 'CAN_SPIN_FRIEND') return toSpin();
+    return hello();
+  }
+
+  // ── Email + phone check ──
+  $('emailForm').addEventListener('submit', async function (e) {
+    e.preventDefault(); unlockAudio(); msg('emailMsg', '');
+    var email = window.UmzilaInput ? UmzilaInput.ok($('emailIn')) : $('emailIn').value.trim();
+    if (!email) return;
+    S.email = email.toLowerCase();
+    var b = $('emailGo'); busy(b, true, 'Looking…');
+    try {
+      var r = await post('spin-identify', { mode: 'email', email: S.email });
+      if (r.ok && r.data.needsPhoneCheck) return go('pin');
+      if (r.status === 404) {
+        msg('emailMsg', "We can't find a recent order for that email.");
+        $('emailForm').hidden = true; $('emailNotFound').hidden = false; $('toFriend').hidden = !r.data.canFriend;
+        return;
+      }
+      if (r.status === 429) return msg('emailMsg', 'Too many tries for that email. Try again later or WhatsApp us on 079 766 2768.');
+      msg('emailMsg', r.data.message || 'That email doesn’t look right.');
+    } catch (err) { msg('emailMsg', 'No connection. Check your internet and try again.'); }
+    finally { busy(b, false); }
+  });
+  $('tryAnother').onclick = function () { $('emailIn').value = ''; go('email'); $('emailIn').focus(); };
+  $('toFriend').onclick = function () { $('fEmail').value = S.email; go('friend'); };
+
+  var pins = Array.prototype.slice.call($('pinBoxes').querySelectorAll('input'));
+  function clearPin() { pins.forEach(function (p) { p.value = ''; }); }
+  function pinVal() { return pins.map(function (p) { return p.value; }).join(''); }
+  pins.forEach(function (p, i) {
+    p.addEventListener('input', function () {
+      var d = p.value.replace(/\D/g, '');
+      if (d.length > 1) { // pasted / autofilled several digits
+        d.slice(-4).split('').forEach(function (ch, k) { if (pins[k]) pins[k].value = ch; });
+        pins[Math.min(3, d.length - 1)].focus();
+      } else { p.value = d; if (d && pins[i + 1]) pins[i + 1].focus(); }
+      if (pinVal().length === 4) $('pinForm').requestSubmit ? $('pinForm').requestSubmit() : $('pinGo').click();
+    });
+    p.addEventListener('keydown', function (e) { if (e.key === 'Backspace' && !p.value && pins[i - 1]) { pins[i - 1].focus(); pins[i - 1].value = ''; } });
+    p.addEventListener('focus', function () { p.select(); });
+  });
+  var pinBusy = false;
+  $('pinForm').addEventListener('submit', async function (e) {
+    e.preventDefault(); if (pinBusy) return;
+    var v = pinVal(); if (v.length !== 4) return msg('pinMsg', 'Type all 4 digits.');
+    pinBusy = true; var b = $('pinGo'); busy(b, true, 'Checking…'); msg('pinMsg', '');
+    try {
+      var r = await post('spin-identify', { mode: 'verify', email: S.email, last4: v });
+      if (r.ok) { if (window.umzilaGuestContact) umzilaGuestContact({ email: S.email }); return identified(r.data); }
+      var box = $('pinBoxes'); box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake'); buzz([30, 40, 30]);
+      clearPin(); pins[0].focus();
+      if (r.status === 429 || r.data.error === 'rate_limited') msg('pinMsg', 'Too many tries. Try again later or WhatsApp us on 079 766 2768.');
+      else if (r.data.error === 'check_failed') msg('pinMsg', "That doesn't match the number on the order.");
+      else msg('pinMsg', 'Something went wrong. Try again.');
+    } catch (err) { msg('pinMsg', 'No connection. Check your internet and try again.'); }
+    finally { pinBusy = false; busy(b, false); }
+  });
+
+  // ── Friend path ──
+  $('friendForm').addEventListener('submit', async function (e) {
+    e.preventDefault(); unlockAudio(); msg('friendMsg', '');
+    var name = $('fName').value.trim();
+    if (!name) { msg('friendMsg', 'What should we call you?'); $('fName').focus(); return; }
+    var G = window.UmzilaInput;
+    var email = G ? G.ok($('fEmail')) : $('fEmail').value.trim(); if (!email) return;
+    var phone = G ? G.ok($('fPhone')) : $('fPhone').value.trim(); if (!phone) return;
+    var b = $('friendGo'); busy(b, true, 'One moment…');
+    try {
+      var r = await post('spin-friend', { name: name, email: email, phone: phone, ref: S.ref || undefined });
+      if (r.ok) {
+        S.email = email.toLowerCase();
+        if (window.umzilaGuestContact) umzilaGuestContact({ email: email, name: name, phone: phone });
+        return identified(r.data);
+      }
+      if (r.status === 409) { $('emailIn').value = email; go('email'); msg('emailMsg', "Looks like you've ordered before 👀 Find your order to spin.", 'info'); return; }
+      msg('friendMsg', r.data.message || 'Something went wrong. Try again.');
+    } catch (err) { msg('friendMsg', 'No connection. Check your internet and try again.'); }
+    finally { busy(b, false); }
+  });
+
+  // ── Hello + rating ──
+  function orderLine(o) {
+    var stores = (o && o.stores) || [], items = (o && o.items) || [];
+    if (stores.length > 1) return 'How was your order from ' + stores.map(function (s) { return s.name; }).join(' & ') + '?';
+    if (stores.length === 1) return 'How was your ' + (items.length === 1 ? items[0] : 'order') + ' from ' + stores[0].name + '?';
+    return 'How was your last order?';
+  }
+  function fmtDate(d) { try { return new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short' }).format(new Date(d)); } catch (e) { return ''; } }
+  function hello() {
+    var o = S.lastOrder, wb = S.state === 'CAN_SPIN_WELCOME_BACK';
+    $('hTitle').textContent = 'Hi' + (S.firstName ? ' ' + S.firstName : '') + ' 👋';
+    $('hLine').textContent = wb ? "It's been a while! Your favourites missed you 🔥" : orderLine(o);
+    var chip = $('hChip');
+    if (o && o.date) { chip.textContent = '🧾 Your order of ' + fmtDate(o.date); chip.hidden = false; } else chip.hidden = true;
+    var canRate = !wb && o && o.deliveryId && o.delivered;
+    $('rateCard').hidden = !canRate; $('rateSkip').hidden = !canRate || !!o.rated;
+    $('notYetNote').hidden = wb || !o || !o.deliveryId || o.delivered;
+    $('commentWrap').hidden = true; $('rateNote').textContent = '';
+    setStars(0);
+    if (canRate && o.rated) { setStars(o.rated); $('rateQ').textContent = 'Your rating'; $('rateNote').textContent = 'You gave us ' + o.rated + '⭐, thank you!'; }
+    else $('rateQ').textContent = 'Tap to rate';
+    $('helloNext').textContent = canRate ? 'Next' : 'Spin the wheel 🎡';
+    show('hello');
+  }
+  function setStars(v) {
+    document.querySelectorAll('#stars .star').forEach(function (s) {
+      var on = Number(s.dataset.v) <= v; s.classList.toggle('on', on); s.setAttribute('aria-checked', String(Number(s.dataset.v) === v));
+    });
+  }
+  document.querySelectorAll('#stars .star').forEach(function (s) {
+    s.addEventListener('click', function () {
+      unlockAudio();
+      var v = Number(s.dataset.v); S.rating = v; setStars(v); buzz(8); blip(900 + v * 120, 0.05);
+      $('rateNote').textContent = v <= 2 ? "Sorry it wasn't great, we'll look into it 🙏" : v === 3 ? 'Thanks! Tell us what would make it a 5.' : 'Yay, thank you! 💛';
+      $('commentWrap').hidden = false;
+    });
+  });
+  $('helloNext').onclick = function () { unlockAudio(); toSpin(); };
+  $('rateSkip').onclick = function () { S.rating = null; toSpin(); };
+
+  // ── The wheel ──
+  function polar(a, r) { var rad = a * Math.PI / 180; return [r * Math.sin(rad), -r * Math.cos(rad)]; }
+  var SLICE_COLORS = [['#0a2f66', '#ffffff'], ['#e0284f', '#ffffff'], ['#ffc21a', '#0a2f66'], ['#fbf5ec', '#0a2f66']];
+  (function drawWheel() {
+    var g = '', R = 182;
+    WHEEL.forEach(function (k, i) {
+      var a0 = i * SLICE - SLICE / 2, a1 = a0 + SLICE, p0 = polar(a0, R), p1 = polar(a1, R), c = SLICE_COLORS[i % 4], gift = GIFTS[k];
+      g += '<path d="M0 0 L' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) + ' A' + R + ' ' + R + ' 0 0 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2) + ' Z" fill="' + c[0] + '" stroke="#0a2f66" stroke-width="2"/>';
+      var words = gift.label.split(' ');
+      g += '<g transform="rotate(' + (i * SLICE) + ')"><text y="-138" text-anchor="middle" font-size="32">' + gift.emoji + '</text>' +
+           words.map(function (w, n) { return '<text y="' + (-106 + n * 19) + '" text-anchor="middle" font-family="Poppins, sans-serif" font-weight="800" font-size="17" fill="' + c[1] + '">' + esc(w) + '</text>'; }).join('') + '</g>';
+    });
+    $('wheel').innerHTML = g;
+    var b = '';
+    for (var i = 0; i < 24; i++) { var p = polar(i * 15, 189); b += '<circle class="bulb" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" fill="' + (i % 2 ? '#ffc21a' : '#ffffff') + '"/>'; }
+    $('bulbs').innerHTML = b;
+  })();
+  var angle = 0;
+  function setAngle(a) { angle = a; $('wheel').setAttribute('transform', 'rotate(' + (a % 360).toFixed(3) + ')'); }
+
+  function toSpin() {
+    var friend = S.state === 'CAN_SPIN_FRIEND';
+    $('spinTitle').textContent = friend ? 'Welcome to Umzila' + (S.firstName ? ', ' + S.firstName : '') + '! Here’s a spin on us 🎁'
+      : 'Your spin is ready' + (S.firstName ? ', ' + S.firstName : '') + '.';
+    $('spinBtn').disabled = false; $('spinBtn').textContent = 'SPIN'; msg('spinMsg', '');
+    show('spin');
+  }
+
+  var spinning = false;
+  $('spinBtn').addEventListener('click', function () {
+    unlockAudio();
+    if (S.mustReload) return location.reload();
+    if (!spinning) spin();
+  });
+
+  function spin() {
+    spinning = true;
+    var btn = $('spinBtn'); btn.disabled = true; btn.classList.add('pressed'); setTimeout(function () { btn.classList.remove('pressed'); }, 160);
+    msg('spinMsg', ''); $('wheelZone').classList.add('spinning');
+    whoosh(); buzz(20);
+    var VMAX = REDUCED ? 0.5 : 1.3;               // degrees per ms
+    var start = performance.now(), last = start, v = 0, phase = 'run', result = null, failed = false, abandoned = false, failResp = null;
+    var decel = null, lastBoundary = Math.floor((angle + SLICE / 2) / SLICE), lastTick = 0;
+
+    var req = callPlay();
+    req.then(function (r) { if (!abandoned) result = r; }, function () { failed = true; });
+
+    function frame(now) {
+      var dt = Math.min(48, now - last); last = now;
+      if (phase === 'run') {
+        var el = now - start;
+        v = REDUCED ? VMAX : Math.min(VMAX, VMAX * (el / 400));
+        setAngle(angle + v * dt);
+        if ((result || failed) && el >= (REDUCED ? 300 : 1200)) {
+          if (result && result.ok) beginLanding(result.data.gift, now);
+          else beginFail(now);
+        } else if (el > 10000) { failed = true; abandoned = true; beginFail(now); }
+      } else if (phase === 'land') {
+        var t = Math.min(1, (now - decel.t0) / decel.dur), e = 1 - Math.pow(1 - t, 3);
+        var prev = angle; setAngle(decel.a0 + decel.D * e);
+        v = (angle - prev) / Math.max(1, dt);
+        if (t >= 1) return landed();
+      }
+      var b = Math.floor((angle + SLICE / 2) / SLICE);
+      if (b !== lastBoundary) {
+        lastBoundary = b;
+        if (now - lastTick >= 40) { lastTick = now; tick(1 - Math.min(1, v / VMAX)); buzz(6, true); }
+      }
+      requestAnimationFrame(frame);
+    }
+    function beginLanding(kind, now) {
+      var slots = []; WHEEL.forEach(function (k, i) { if (k === kind) slots.push(i); });
+      if (!slots.length) slots = [0];
+      var i = slots[Math.floor(Math.random() * slots.length)];
+      var off = (Math.random() * 2 - 1) * 0.35 * SLICE;   // anywhere inside the slice: no fake near-misses
+      var want = ((-(i * SLICE) + off) % 360 + 360) % 360;
+      var turns = REDUCED ? 1 : 5 + Math.random();
+      var base = angle + turns * 360, target = base + (((want - base) % 360) + 360) % 360;
+      var D = target - angle;
+      var dur = REDUCED ? 1200 : Math.max(3800, Math.min(5500, 3 * D / Math.max(0.2, v)));
+      decel = { a0: angle, D: D, dur: dur, t0: now }; phase = 'land';
+    }
+    function beginFail(now) {
+      var D = 200 + Math.random() * 160;
+      decel = { a0: angle, D: D, dur: 1600, t0: now }; phase = 'land'; failResp = result; result = null; abandoned = true;
+    }
+    function landed() {
+      $('wheelZone').classList.remove('spinning');
+      spinning = false;
+      if (!result || !result.ok) return spinFailed(failResp);
+      var p = $('pointer'); p.classList.remove('flap'); void p.getBoundingClientRect(); p.classList.add('flap');
+      // the pointer "catches": a tiny bounce back
+      var a = angle; setTimeout(function () { setAngle(a - 2.5); }, 60); setTimeout(function () { setAngle(a); }, 220);
+      buzz([40, 60, 120]); chime();
+      setTimeout(function () {
+        if (!REDUCED) { var f = $('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+          var app = $('app'); app.classList.remove('shake-scr'); void app.offsetWidth; app.classList.add('shake-scr'); confetti(); }
+        setTimeout(function () { showGift(result.data, false); }, REDUCED ? 200 : 700);
+      }, 350);
+    }
+    requestAnimationFrame(frame);
+  }
+  function callPlay(retry) {
+    var body = { spinSession: S.session };
+    if (S.rating) { body.rating = S.rating; var c = $('rateComment').value.trim(); if (c) body.comment = c; }
+    return post('spin-play', body).then(function (r) {
+      if (r.status === 409 && r.data.error === 'busy' && !retry) return new Promise(function (res) { setTimeout(res, 1500); }).then(function () { return callPlay(true); });
+      return r;
+    });
+  }
+  function spinFailed(r) {
+    var btn = $('spinBtn'); btn.disabled = false; btn.textContent = 'TRY AGAIN';
+    if (r && r.status === 401) { msg('spinMsg', 'That took a while, so we need to check it’s you again.'); btn.textContent = 'CONTINUE'; S.mustReload = true; return; }
+    if (r && r.status === 409) {
+      // Eligibility changed (e.g. already spun in another tab): show where they stand.
+      msg('spinMsg', 'Looks like this spin was already used. Loading your gift…', 'info');
+      setTimeout(function () { location.reload(); }, 1600); return;
+    }
+    msg('spinMsg', "Couldn't spin, tap to try again.");
+  }
+
+  // ── Result / gift ──
+  var countTimer = null;
+  function showGift(g, already) {
+    var kind = g.gift || g.kind, info = GIFTS[kind] || GIFTS.drink;
+    $('pEmoji').textContent = info.emoji; $('pTitle').textContent = info.title; $('pSub').textContent = info.sub;
+    $('pCode').textContent = g.code || '';
+    $('pTest').hidden = !g.test;
+    var useUrl = (g.useUrl || '/'); useUrl += (useUrl.indexOf('?') > -1 ? '&' : '?') + 'src=spin';
+    if (useUrl.indexOf('#') > -1) { var parts = (g.useUrl || '/').split('#'); useUrl = parts[0] + (parts[0].indexOf('?') > -1 ? '&' : '?') + 'src=spin#' + parts[1]; }
+    $('useNow').href = useUrl;
+    $('pEmailed').textContent = S.emailMasked ? 'We\'ve emailed this to ' + S.emailMasked + ' too.' : '';
+    $('pNext').hidden = !already;
+    // whole SAST calendar days until the expiry day (the code ends 23:59 SAST that day)
+    var sastDay = function (d) { return Math.floor((new Date(d).getTime() + 2 * 36e5) / 864e5); };
+    var left = sastDay(g.expiresAt) - sastDay(Date.now());
+    if (already) {
+      $('pGot').textContent = 'Your gift';
+      $('rTitle').textContent = (g.orderDate ? 'You already spun for your ' + fmtDate(g.orderDate) + ' order 🎉' : 'You already spun 🎉');
+      $('rLead').hidden = false;
+      $('rLead').textContent = 'Your gift is still waiting: ' + (left <= 0 ? 'last day today!' : left === 1 ? '1 day left.' : left + ' days left.');
+    } else {
+      $('pGot').textContent = 'You got';
+      $('rTitle').textContent = 'You got it' + (S.firstName ? ', ' + S.firstName : '') + '! 🎉';
+      $('rLead').hidden = true;
+    }
+    if (g.code && g.expiresAt && !g.test) lsSet('umz_promo_code', JSON.stringify({ code: g.code, until: g.expiresAt, slug: 'spin' }));
+    var share = g.shareCode;
+    $('shareBox').hidden = !share;
+    if (share) {
+      var link = location.origin + '/spin?ref=' + encodeURIComponent(share);
+      $('shareWa').href = 'https://wa.me/?text=' + encodeURIComponent('I just spun the Umzila wheel 🎡 Here’s a spin for you, there’s a gift waiting: ' + link);
+      $('copyLink').onclick = function () { copy(link, $('copyLink'), 'Link copied ✓'); };
+    }
+    clearInterval(countTimer);
+    var tickCount = function () {
+      var ms = new Date(g.expiresAt) - Date.now();
+      if (!(ms > 0)) { $('pCount').innerHTML = 'This gift has ended'; return; }
+      var d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4);
+      $('pCount').innerHTML = 'Expires in <b>' + (d ? d + 'd ' : '') + h + 'h ' + m + 'm</b>';
+    };
+    tickCount(); countTimer = setInterval(tickCount, 30000);
+    var card = $('prizeCard'); card.classList.remove('flip'); void card.offsetWidth; if (!already) card.classList.add('flip');
+    show('result');
+    $('live').textContent = (already ? 'Your gift: ' : 'You got: ') + info.title + '. Code ' + (g.code || '') + '.';
+  }
+  $('copyCode').onclick = function () { copy($('pCode').textContent, $('copyCode'), 'Copied ✓'); };
+  function copy(text, btn, done) {
+    var orig = btn.textContent;
+    var ok = function () { btn.textContent = done; buzz(10); setTimeout(function () { btn.textContent = orig; }, 1800); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(ok, fallback); else fallback();
+    function fallback() { var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); ok(); } catch (e) {} t.remove(); }
+  }
+
+  function needsOrder() {
+    var hi = S.firstName ? ', ' + S.firstName : '';
+    $('nTitle').textContent = S.reason === 'used' ? 'Your gift was used. Nice' + hi + '! 🙌' : S.reason === 'expired' ? 'Your last gift has ended' + hi + ' ⏳' : 'Hi' + (S.firstName ? ' ' + S.firstName : '') + ' 👋';
+    var st = S.lastOrder && S.lastOrder.stores && S.lastOrder.stores[0];
+    $('orderAgain').href = (st ? st.url : '/') + '?src=spin';
+    $('orderAgain').textContent = st ? 'Order again from ' + st.name + ' →' : 'Order again →';
+    show('needs');
+  }
+
+  // ── Sound (WebAudio, no files) ──
+  var ac = null, soundOn = lsGet('umz_spin_sound') !== '0';
+  function paintSound() { $('soundBtn').textContent = soundOn ? '🔊' : '🔇'; $('soundBtn').setAttribute('aria-label', soundOn ? 'Sound on' : 'Sound off'); }
+  paintSound();
+  $('soundBtn').onclick = function () { soundOn = !soundOn; lsSet('umz_spin_sound', soundOn ? '1' : '0'); paintSound(); unlockAudio(); if (soundOn) blip(1200, 0.05); };
+  function unlockAudio() {
+    try {
+      if (!ac) { var C = window.AudioContext || window.webkitAudioContext; if (C) ac = new C(); }
+      if (ac && ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  function blip(freq, dur, type, vol, when) {
+    if (!soundOn || !ac) return;
+    try {
+      var t = (when || ac.currentTime), o = ac.createOscillator(), g = ac.createGain();
+      o.type = type || 'triangle'; o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol || 0.12, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+  function tick(slow) { blip(1500 + slow * 900, 0.03, 'square', 0.05); }
+  function whoosh() {
+    if (!soundOn || !ac) return;
+    try {
+      var len = ac.sampleRate * 0.6, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      var src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), t = ac.currentTime;
+      src.buffer = buf; f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(2400, t + 0.5);
+      g.gain.setValueAtTime(0.25, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+      src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+    } catch (e) {}
+  }
+  function chime() {
+    if (!soundOn || !ac) return;
+    var t = ac.currentTime;
+    [1046.5, 1318.5, 1568, 2093].forEach(function (f, i) { blip(f, 0.5, 'sine', 0.16, t + i * 0.09); });
+    blip(2093, 0.9, 'triangle', 0.06, t + 0.36);
+  }
+
+  // ── Haptics: Vibration API (Android); iOS 18+ switch-checkbox tap as a light fallback ──
+  var canVibrate = typeof navigator.vibrate === 'function', lastIos = 0;
+  function buzz(pattern, isTick) {
+    try {
+      if (canVibrate) { navigator.vibrate(pattern); return; }
+      var now = Date.now(); if (isTick && now - lastIos < 90) return; lastIos = now;
+      $('hapticLabel').click();
+    } catch (e) {}
+  }
+
+  // ── Confetti (canvas, ~2 s) ──
+  function confetti() {
+    var cv = $('confetti'), ctx = cv.getContext('2d'), dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+    var cols = ['#e0284f', '#ffc21a', '#0a2f66', '#ffffff', '#3cc3ff'], P = [];
+    for (var i = 0; i < 170; i++) P.push({ x: innerWidth / 2 + (Math.random() - .5) * 60, y: innerHeight * 0.38, vx: (Math.random() - .5) * 13, vy: -Math.random() * 13 - 4,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - .5) * 0.4, c: cols[i % cols.length] });
+    var t0 = performance.now();
+    (function f(now) {
+      var el = now - t0; ctx.clearRect(0, 0, innerWidth, innerHeight);
+      P.forEach(function (p) { p.vy += 0.38; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - el / 2400); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.r * 2))); ctx.restore(); });
+      if (el < 2400) requestAnimationFrame(f); else ctx.clearRect(0, 0, innerWidth, innerHeight);
+    })(t0);
+  }
+
+  // ── Error screen + start ──
+  $('eRetry').onclick = function () { location.reload(); };
+  function start() { boot().catch(function () { show('error'); }); }
+  if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
+})();
+</script>
+</body>
+</html>

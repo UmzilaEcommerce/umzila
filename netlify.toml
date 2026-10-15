@@ -13,6 +13,10 @@
 [functions."send-rating-requests"]
   schedule = "*/5 * * * *"
 
+# Spin & Win gift reminders (day 3, last day) + friend-referral rewards
+[functions."send-spin-emails"]
+  schedule = "*/30 * * * *"
+
 # Site images: browsers reuse them for a day and keep showing the cached copy
 # while re-checking in the background for a week (instant repeat visits). When
 # replacing one of these files with a different picture, give it a new name.
@@ -37,13 +41,12 @@
   [headers.values]
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 
-# Printed thank-you cards point at umzila.store/spin. Until the spin page is
-# built it sends people to the home page (counted as source "card").
-# Remove this when spin.html exists. ('spin' is in seller_slug_reserved().)
+# Spin & Win (printed thank-you cards → umzila.store/spin). Must come before
+# /:slug. ('spin' is in seller_slug_reserved().)
 [[redirects]]
   from = "/spin"
-  to = "/?src=card"
-  status = 302
+  to = "/spin.html"
+  status = 200
 
 # Clean store URLs: umzila.store/<slug> -> shop.html (URL stays clean).
 # Real files (cart.html, style.css, …) are always served first, so this only

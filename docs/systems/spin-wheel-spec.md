@@ -1,7 +1,7 @@
 # Spin & Win: spec (thank-you card → spin page)
 
-Status: **spec, not built yet** (written 2026-10-15). Founder decisions are final unless marked *open*.
-Printed thank-you cards already point at `umzila.store/spin`. Until this is built, `netlify.toml` redirects `/spin` to the home page (`?src=card`). Remove that redirect when `spin.html` ships. `spin`, `wheel`, `gift`, `gifts`, `rewards` and `thanks` are in `seller_slug_reserved()`.
+Status (2026-10-15): **stage 1 built**: DB, server functions and `spin.html` (live at `/spin` once deployed). **Admin tab not built yet** (`spin-admin.js` exists). Founder decisions are final unless marked *open*.
+`spin`, `wheel`, `gift`, `gifts`, `rewards` and `thanks` are in `seller_slug_reserved()`.
 
 ---
 

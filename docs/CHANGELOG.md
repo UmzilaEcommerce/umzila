@@ -4,6 +4,45 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-15: Spin & Win, stage 1: the /spin page and its server functions (admin tab still to come)
+
+**Asked:** build the spin page the printed thank-you cards point at (spec: `docs/systems/spin-wheel-spec.md`).
+
+**Built:**
+- **DB (live):** `spin_schedule`, `spins`, `claim_spin_gift()` (atomic gift pick: live slot, else the default), `spin_is_staff_email()`. Admin-only RLS; every buyer path goes through service-role functions.
+- **`netlify/functions/lib/spin.js`:** gift catalogue (`GIFTS`, mirrored in `spin.html`, so change both together), spin sessions (HMAC, 30 min), eligibility `getState()` (HAS_GIFT / CAN_SPIN_ORDER / CAN_SPIN_WELCOME_BACK / CAN_SPIN_FRIEND / NEEDS_ORDER), code rows and the gift emails.
+- **Functions:**
+  - `spin-identify.js`: signed-in account / this device's tracking links / email + last 4 phone digits, max 5 failed checks per email per hour.
+  - `spin-friend.js`: someone who never ordered; `subscribers` source `spin`.
+  - `spin-play.js`: rating → `delivery_feedback`, gift, a 5-day email-locked `SPIN…` code, prize email. Idempotent.
+  - `send-spin-emails.js`: scheduled every 30 min. Day-3 reminder, last-day email, and the friend-referral R20 reward.
+  - `spin-admin.js`: backend for the admin tab, not wired yet.
+- **`spin.html`:** one screen at a time, mobile-first, no Supabase keys in the page.
+  - Screens: welcome (a friend-link variant for `?ref=`), email, PIN, friend form, hello + one-tap rating, SPIN, result with code / countdown / "Use it now", WhatsApp share, already spun, needs an order.
+  - Wheel: SVG; it keeps spinning until the server answers, then lands with a long ease-out anywhere inside the won slice (no fake near-misses).
+  - Effects: WebAudio ticks / whoosh / chime with a mute toggle, Vibration API with an iOS 18 switch-checkbox fallback, confetti. Reduced-motion users get a short spin.
+  - The code is saved to `umz_promo_code` (slug `spin`, so store pages ignore it) for checkout to fill in.
+- **`netlify.toml`:** `/spin` now serves `spin.html` (it used to go to the home page). `send-spin-emails` runs every 30 min.
+- **Staff spins** (admins / logistics / drivers / ADMIN_EMAILS) create **disabled** codes. They still count as that person's live gift, so staff can test the "already spun" screen.
+
+**Bug fixed on the way: `lib/discounts.js` first-order-only.**
+- Root cause: the signed-in check counted earlier orders with `order_status = 'paid'`. Delivered orders move on to `Delivered` / `Fulfilled`, so a returning customer passed as a "first order".
+- Fix: both the signed-in check and the new guest-by-email check now use `payment_status = 'paid'`, which never changes after payment.
+
+**Tested locally:** `netlify dev` with Resend off, headless Chrome at 390 px, real functions and data.
+- Wrong / right PIN, staff test spin (disabled code, expiry 20 Oct 23:59 SAST, drinks-only scope), re-scan → "already spun".
+- Friend with an ordering email → sent to the email path. A new friend → spin → active first-order code, which `validateCode` accepts for that email and refuses for another.
+- Mocked: order spin with a 2-star rating + comment (sent with the spin), the network failing mid-spin ("Couldn't spin, tap to try again"), needs-order.
+- Landing angle checked against the won slice.
+- All test spins, codes and the test subscriber were deleted.
+- Not yet checked: real-phone vibration and sound (needs the founder's Android).
+
+**Still to do:** admin "Spin & Win" tab (schedule, live, log, totals) on `spin-admin.js`, then `docs/systems/spin-wheel.md` from the spec.
+
+Files: `spin.html`, `netlify/functions/lib/spin.js`, `netlify/functions/spin-identify.js`, `spin-friend.js`, `spin-play.js`, `spin-admin.js`, `send-spin-emails.js`, `netlify/functions/lib/discounts.js`, `netlify.toml`, `docs/systems/spin-wheel-spec.md`, `CLAUDE.md`.
+
+---
+
 ## 2026-10-15 — Home page: Isiqalo leads; one Workshop row with plates from both stores
 
 **Asked:**

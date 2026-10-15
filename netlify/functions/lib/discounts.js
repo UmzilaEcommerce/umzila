@@ -55,7 +55,16 @@ async function validateCode(supabase, { code, email, userId }) {
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('order_status', 'paid');
+      .eq('payment_status', 'paid'); // order_status moves on to Delivered/Fulfilled; payment_status stays 'paid'
+    if (count && count > 0) return { ok: false, reason: 'not_first_order' };
+  }
+  // Guests: same rule by email (spin-wheel friend gifts are first-order only).
+  if (codeRow.first_order_only && !userId && email) {
+    const { count } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact', head: true })
+      .ilike('customer_email', String(email).trim())
+      .eq('payment_status', 'paid');
     if (count && count > 0) return { ok: false, reason: 'not_first_order' };
   }
 
