@@ -1548,6 +1548,10 @@
                 <span>Subtotal</span>
                 <span id="subtotalAmount">R0.00</span>
               </div>
+              <div class="summary-row discount hidden" id="saleRow">
+                <span>Special price</span>
+                <span id="saleAmount">−R0.00</span>
+              </div>
               <div class="summary-row discount hidden" id="discountRow">
                 <span>Discount</span>
                 <span id="discountAmount">-R0.00</span>
@@ -3826,6 +3830,8 @@ async function refreshCartItemsFromProducts(items) {
         return {
             ...item,
             price: currentPrice,
+            // On special: the normal price, shown struck out with a "Special price" saving.
+            was_price: (product.sale && product.sale_price && Number(product.price) > Number(product.sale_price)) ? Number(product.price) : null,
             name: product.name || item.name,
             image: product.image || item.image,
             seller_id: product.seller_id || item.seller_id || null,
@@ -4267,7 +4273,9 @@ async function validateCheckout() {
 
         if (result.hasChanges) {
             // Update cart with validated data
-            state.cart = result.validatedCart;
+            const wasById = {};
+            state.cart.forEach(i => { if (i.was_price) wasById[i.id || i.product_id] = i.was_price; });
+            state.cart = result.validatedCart.map(i => wasById[i.id || i.product_id] ? { ...i, was_price: wasById[i.id || i.product_id] } : i);
             updateOrderSummary();
 
             // Show notification to user
@@ -4324,6 +4332,13 @@ async function validateCheckout() {
     }
     
     // Update order summary
+    // What a special saves on one line (normal price − special price) × qty.
+    // Display only — the charged price is still validate-cart's.
+    function lineSaving(item) {
+      const was = Number(item.was_price) || 0, now = Number(item.price) || 0;
+      return was > now ? Math.round((was - now) * (item.quantity || item.qty || 1) * 100) / 100 : 0;
+    }
+
     function updateOrderSummary() {
       refreshBrandingAmount();
       if (state.cart.length === 0) {
@@ -4377,7 +4392,7 @@ async function validateCheckout() {
             <div class="item-details"${canRemove ? ' style="padding-right:30px"' : ''}>
               <div class="item-title">${escapeHtmlLite(name)}</div>
               <div class="item-variant">${lineDetail(item, qty)}</div>
-              <div class="item-price">${formatCurrency(itemTotal)}</div>
+              <div class="item-price">${lineSaving(item) > 0 ? `<s class="was-amount">${formatCurrency(item.was_price * qty)}</s>` : ''}${formatCurrency(itemTotal)}</div>
             </div>
             ${canRemove ? `<button type="button" data-remove-line="${state.cart.indexOf(item)}" aria-label="Remove ${escapeHtmlLite(name)}" style="position:absolute;top:4px;right:0;width:30px;height:30px;border:0;border-radius:50%;background:#f3f4f6;color:#6b7280;font-size:18px;line-height:1;cursor:pointer">×</button>` : ''}
           </div>
@@ -4476,10 +4491,19 @@ async function validateCheckout() {
 
       // Subtotal: struck out with a green "Discount added" tag once a code applies
       // (the discount itself is its own red minus line below).
-      const discountLive = discount > 0 && !!state.couponCode && !state.appliedPromoCode?.requiresSignIn;
+      // Specials count as a discount too: subtotal at normal prices, struck out,
+      // and the saving as its own "Special price" minus line.
+      const saleSave = state.cart.reduce((s, i) => s + lineSaving(i), 0);
+      const codeLive = discount > 0 && !!state.couponCode && !state.appliedPromoCode?.requiresSignIn;
+      const discountLive = codeLive || saleSave > 0;
       elements.subtotalAmount.innerHTML = discountLive
-        ? '<span class="disc-tag">Discount added</span><s class="was-amount" style="margin-right:0">' + formatCurrency(subtotal) + '</s>'
+        ? '<span class="disc-tag">Discount added</span><s class="was-amount" style="margin-right:0">' + formatCurrency(subtotal + saleSave) + '</s>'
         : formatCurrency(subtotal);
+      const saleRow = document.getElementById('saleRow');
+      if (saleRow) {
+        saleRow.classList.toggle('hidden', !(saleSave > 0));
+        document.getElementById('saleAmount').textContent = '−' + formatCurrency(saleSave);
+      }
 
       // Nothing physical travels for a booking / online service / voucher —
       // don't show delivery maths or ask for a delivery-rep tip.
@@ -4564,7 +4588,7 @@ async function validateCheckout() {
       // Total: with a discount, the before-discount total struck out and the
       // amount to pay in green; without one, just the total.
       const before = document.getElementById('totalBefore');
-      if (before) { before.hidden = !discountLive; before.textContent = discountLive ? formatCurrency(total + discount) : ''; }
+      if (before) { before.hidden = !discountLive; before.textContent = discountLive ? formatCurrency(total + (codeLive ? discount : 0) + saleSave) : ''; }
       elements.totalAmount.classList.toggle('discounted', discountLive);
       setAmountText(elements.totalAmount, formatCurrency(total));
       updateSummaryHeaderMeta(formatCurrency(total));
