@@ -4,6 +4,14 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-10-16: Specials show as a discount at checkout
+
+**Reported:** an item on special (Isiqalo SPECIAL, R250 → R150) looked like a plain R150 at checkout, and the store's 10% promo code deliberately doesn't cover it, so the buyer saw no discount at all.
+**Change:** checkout.html refreshCartItemsFromProducts stores `was_price` (products.price when sale + a lower sale_price). The line shows the normal price struck out. The summary shows the subtotal at normal prices, struck with the "Discount added" tag, a red "Special price −R…" line (#saleRow) and the struck before-total. Display only: charged prices are unchanged (validate-cart is still the authority), and was_price is carried over when validate-cart replaces the cart.
+**Files:** checkout.html
+
+---
+
 ## 2026-10-15: Removed drink came back at checkout; checkout stuck on a blank loading screen
 
 **Reported:** on Isiqalo's page a drink was removed from the cart, "No thanks" on the drinks screen, yet checkout still showed the drink with no way to remove it. And checkout took long to appear, showing nothing while it loaded.
