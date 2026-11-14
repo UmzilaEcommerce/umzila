@@ -504,6 +504,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="service-orders"><span class="menu-icon">🔧</span><span class="menu-label">Service Orders</span></li>
           <li data-section="disputes"><span class="menu-icon">⚠️</span><span class="menu-label">Disputes</span></li>
           <li class="menu-group" role="presentation">Growth</li>
+          <li data-section="home"><span class="menu-icon">🏠</span><span class="menu-label">Home Page</span></li>
           <li data-section="ad-campaigns"><span class="menu-icon">📢</span><span class="menu-label">Ad Campaigns</span></li>
           <li data-section="marketing"><span class="menu-icon">🎟️</span><span class="menu-label">Marketing</span></li>
           <li data-section="spin"><span class="menu-icon">🎡</span><span class="menu-label">Spin &amp; Win</span></li>
@@ -945,6 +946,12 @@ const supabaseClient = supabase.createClient(
         </div>
 
         <div class="card">
+          <div class="section-top"><h2>🎁 Store promo pop-ups</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">A time-boxed % off for one store. While it runs, the store page shows a pop-up where each visitor gets their own one-off code (locked to their email, no account needed) — up to the max number of orders.</p>
+          <div id="storePromosMount"><p style="color:#6b7280">Loading…</p></div>
+        </div>
+
+        <div class="card">
           <div class="section-top"><h2>📬 Campaign Approval Queue</h2></div>
           <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Every seller-submitted promotional email needs approval here before it sends. Approving sends it immediately.</p>
           <div id="mcQueue"><p style="color:#6b7280">Loading campaigns…</p></div>
@@ -1178,6 +1185,38 @@ const supabaseClient = supabase.createClient(
           <button class="small-btn" type="button" onclick="window.loadSpinAdmin?.()">↻ Refresh</button>
         </div>
         <div id="spinAdminMount"><p style="color:#6b7280">Loading…</p></div>
+      </section>
+
+      <!-- Home Page (site_settings key 'home' → get-catalog.js → script.js
+           applyHomeSettings) + "Drinks before checkout" (sellers.offer_house_addons).
+           Writes go straight to Supabase; RLS lets only admins write. -->
+      <section id="section-home" style="display:none">
+        <style>
+          #section-home .hp-card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin-bottom:14px}
+          #section-home .hp-card h3{margin:0 0 4px;font-size:15px;font-weight:800;color:#0a2f66}
+          #section-home .hp-help{font-size:12.5px;color:#6b7280;margin:0 0 12px;line-height:1.5}
+          #section-home .hp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+          #section-home label.hp-l{display:block;font-size:12px;font-weight:700;color:#374151;margin-bottom:4px}
+          #section-home input[type=text],#section-home input[type=number],#section-home select{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #d1d5db;border-radius:8px;font:inherit;font-size:14px}
+          #section-home .hp-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+          #section-home .hp-item{display:flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;flex-wrap:wrap}
+          #section-home .hp-item .hp-name{flex:1;min-width:120px;font-weight:600;font-size:14px}
+          #section-home .hp-ib{border:1px solid #d1d5db;background:#fff;border-radius:8px;min-width:34px;height:34px;cursor:pointer;font-size:15px}
+          #section-home .hp-ib:disabled{opacity:.35;cursor:default}
+          #section-home .hp-slide{display:grid;grid-template-columns:120px 1fr auto;gap:10px;align-items:start;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px}
+          #section-home .hp-slide img{width:120px;height:68px;object-fit:cover;border-radius:8px;background:#e5e7eb;display:block}
+          #section-home .hp-slide .hp-btns{display:flex;flex-direction:column;gap:4px}
+          @media(max-width:560px){#section-home .hp-slide{grid-template-columns:1fr}#section-home .hp-slide img{width:100%;height:auto;aspect-ratio:16/9}#section-home .hp-slide .hp-btns{flex-direction:row}}
+          #section-home .hp-save{position:sticky;bottom:70px;z-index:5;display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:12px 16px;box-shadow:0 6px 20px -8px rgba(0,0,0,.2)}
+          @media(min-width:769px){#section-home .hp-save{bottom:12px}}
+          #section-home .hp-msg{font-size:13px}
+          #section-home .hp-chk{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;cursor:pointer}
+        </style>
+        <div class="section-top">
+          <h2>🏠 Home Page</h2>
+          <button class="small-btn" type="button" onclick="window.loadHomeAdmin?.()">↻ Refresh</button>
+        </div>
+        <div id="homeAdminMount"><p style="color:#6b7280">Loading…</p></div>
       </section>
 
       <section id="section-settings" style="display:none">
@@ -2297,7 +2336,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'deliveries': document.getElementById('section-deliveries'),
     'delivery-pricing': document.getElementById('section-delivery-pricing'),
     'delivery-analytics': document.getElementById('section-delivery-analytics'),
-    'spin': document.getElementById('section-spin')
+    'spin': document.getElementById('section-spin'),
+    'home': document.getElementById('section-home')
   };
   menuItems.forEach(it => {
     it.addEventListener('click', ()=> {
@@ -2938,6 +2978,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="marketing"]')?.addEventListener('click', () => {
     if (!platformCodesLoaded) { platformCodesLoaded = true; loadPlatformCodes(); }
     if (!mcQueueLoaded) { mcQueueLoaded = true; loadMcQueue(); }
+    window.loadStorePromosAdmin?.();
     loadMcCodeSelect();
     if (document.getElementById('deResults') && !document.getElementById('deResults').dataset.loaded) {
       document.getElementById('deResults').dataset.loaded = '1';
@@ -2992,6 +3033,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
   document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
   document.querySelector('[data-section="spin"]')?.addEventListener('click', () => window.loadSpinAdmin?.());
+  document.querySelector('[data-section="home"]')?.addEventListener('click', () => window.loadHomeAdmin?.());
   document.querySelector('[data-section="delivery-analytics"]')?.addEventListener('click', () => window.loadDeliveryAnalytics?.());
 
   // Manage-shops sub-tabs
@@ -5137,9 +5179,56 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       return ['Scheduled', '#dbeafe', '#1e40af'];
     }
 
+    // What a gift gives, in words (mirrors lib/spin.js codeRowFor).
+    function giftWhat(g){
+      const R = n => 'R' + Number(n).toLocaleString('en-ZA');
+      if (g.gift_type === 'free_drink') return 'A free Umzila drink (their dearest drink, up to its price)';
+      let t = g.gift_type === 'fixed' ? R(g.amount) + ' off' : Number(g.amount) + '% off';
+      if (g.max_discount_amount) t += ', up to ' + R(g.max_discount_amount);
+      if (g.min_order_amount) t += ', orders over ' + R(g.min_order_amount);
+      return t;
+    }
+    let giftEdit = null;
+    function giftsCard(d){
+      const rows = d.giftRows || [];
+      const g = giftEdit;
+      const inp = 'padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font:inherit;font-size:14px;width:100%;box-sizing:border-box';
+      const lab = t => '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:4px">' + t + '</label>';
+      const val = v => escapeHtml(v == null ? '' : String(v));
+      return `<div class="spa-card" style="margin-bottom:14px">
+        <h3>Gifts on the wheel</h3>
+        <p style="font-size:12.5px;color:#6b7280;margin:0 0 10px">Every gift that is <b>on</b> gets a slice on the wheel (up to 8). Changes apply to gifts won from now on: codes already given out keep their value. A gift can't be switched off while it's the default or in a running/upcoming slot.</p>
+        <div class="spa-scroll"><table class="spa-table"><thead><tr><th>Gift</th><th>What it gives</th><th>Wheel</th><th></th></tr></thead><tbody>
+          ${rows.map(r => `<tr><td>${escapeHtml(r.emoji + ' ' + r.label)}<div style="color:#6b7280;font-size:12px">${escapeHtml(r.title)}</div></td>
+            <td>${escapeHtml(giftWhat(r))}</td>
+            <td>${r.active ? '<span class="spa-pill" style="background:#bbf7d0;color:#065f46">On</span>' : '<span class="spa-pill" style="background:#e5e7eb;color:#374151">Off</span>'}</td>
+            <td style="white-space:nowrap"><button class="small-btn" type="button" data-gedit="${escapeHtml(r.kind)}">Edit</button></td></tr>`).join('')}
+        </tbody></table></div>
+        ${g ? `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-top:12px;background:#fafafa">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+            <div>${lab('Emoji')}<input id="gEmoji" maxlength="8" style="${inp}" value="${val(g.emoji || '🎁')}"></div>
+            <div>${lab('Wheel label (short)')}<input id="gLabel" maxlength="20" style="${inp}" value="${val(g.label)}" placeholder="R30 off"></div>
+            <div>${lab('What it is')}<select id="gType" style="${inp}">
+              <option value="percentage" ${g.gift_type === 'percentage' ? 'selected' : ''}>% off</option>
+              <option value="fixed" ${g.gift_type === 'fixed' ? 'selected' : ''}>Rand off</option>
+              <option value="free_drink" ${g.gift_type === 'free_drink' ? 'selected' : ''}>Free drink</option></select></div>
+            <div class="gNum">${lab('Amount (% or R)')}<input id="gAmount" type="number" min="1" style="${inp}" value="${val(g.amount)}"></div>
+            <div class="gNum">${lab('Min order R (optional)')}<input id="gMin" type="number" min="0" style="${inp}" value="${val(g.min_order_amount)}"></div>
+            <div class="gNum">${lab('Max discount R (optional)')}<input id="gMaxD" type="number" min="0" style="${inp}" value="${val(g.max_discount_amount)}"></div>
+            <div>${lab('Order on the wheel')}<input id="gSort" type="number" style="${inp}" value="${val(g.sort_order ?? rows.length + 1)}"></div>
+          </div>
+          <div style="margin-top:10px">${lab('Title (shown when they win)')}<input id="gTitle" maxlength="60" style="${inp}" value="${val(g.title)}" placeholder="R30 off your next order"></div>
+          <div style="margin-top:10px">${lab('Description (page + emails)')}<input id="gSub" maxlength="160" style="${inp}" value="${val(g.sub)}" placeholder="Your next order over R80."></div>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="gActive" ${g.active !== false ? 'checked' : ''}> On the wheel</label>
+          <div class="spa-row" style="margin-top:10px"><button class="small-btn" type="button" id="gSave">${g.kind ? 'Save gift' : 'Add gift'}</button><button class="small-btn" type="button" id="gCancel">Cancel</button></div>
+          <div class="spa-msg" id="gMsg"></div>
+        </div>` : '<button class="small-btn" type="button" id="gNew" style="margin-top:10px">+ Add a gift</button>'}
+      </div>`;
+    }
+
     function render(){
       const d = spinData, mount = document.getElementById('spinAdminMount');
-      const opts = sel => Object.keys(d.gifts).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${escapeHtml(giftName(k))}</option>`).join('');
+      const opts = sel => Object.keys(d.gifts).filter(k => d.gifts[k].active || k === sel).map(k => `<option value="${k}" ${k === sel ? 'selected' : ''}>${escapeHtml(giftName(k))}</option>`).join('');
       const live = d.live || {};
       const t = d.totals || {};
       const conv = t.spins ? Math.round(100 * (t.used || 0) / t.spins) : 0;
@@ -5173,8 +5262,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
             <button class="small-btn" type="button" id="spaAdd">Add slot</button>
           </div>
           <div class="spa-msg" id="spaAddMsg"></div>
-          <p style="font-size:12.5px;color:#6b7280;margin:8px 0 0">When a slot ends or its winners are used up, spins go back to the default gift automatically. Every gift on the wheel (${Object.values(d.gifts).map(g => g.emoji).join(' ')}) should be given away in some slot from time to time.</p>
+          <p style="font-size:12.5px;color:#6b7280;margin:8px 0 0">When a slot ends or its winners are used up, spins go back to the default gift automatically. Every gift on the wheel (${Object.values(d.gifts).filter(g => g.active).map(g => g.emoji).join(' ')}) should be given away in some slot from time to time.</p>
         </div>
+
+        ${giftsCard(d)}
 
         <div class="spa-card" style="margin-bottom:14px">
           <h3>Slots (last 7 days and upcoming)</h3>
@@ -5230,12 +5321,407 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         try { await call({ action: 'add_slot', gift: document.getElementById('spaGift').value, startsAt, minutes, maxWinners: max || null }); say('spaAddMsg', 'Slot added ✓', true); window.loadSpinAdmin(); }
         catch (e) { say('spaAddMsg', e.message); }
       };
+      mount.querySelectorAll('[data-gedit]').forEach(b => b.onclick = () => { giftEdit = Object.assign({}, (d.giftRows || []).find(r => r.kind === b.dataset.gedit)); render(); });
+      const gNew = document.getElementById('gNew');
+      if (gNew) gNew.onclick = () => { giftEdit = { gift_type: 'fixed', active: true }; render(); };
+      const gType = document.getElementById('gType');
+      if (gType) {
+        const syncType = () => mount.querySelectorAll('.gNum').forEach(x => { x.style.display = gType.value === 'free_drink' ? 'none' : ''; });
+        gType.onchange = syncType; syncType();
+        document.getElementById('gCancel').onclick = () => { giftEdit = null; render(); };
+        document.getElementById('gSave').onclick = async () => {
+          const v = id => document.getElementById(id).value;
+          const body = { action: 'save_gift', kind: giftEdit.kind || '', emoji: v('gEmoji'), label: v('gLabel'), title: v('gTitle'), sub: v('gSub'),
+            gift_type: v('gType'), amount: v('gAmount'), min_order_amount: v('gMin'), max_discount_amount: v('gMaxD'), sort_order: v('gSort'),
+            active: document.getElementById('gActive').checked };
+          const btn = document.getElementById('gSave'); btn.disabled = true;
+          try { await call(body); giftEdit = null; showToast('Gift saved ✓'); window.loadSpinAdmin(); }
+          catch (e) { btn.disabled = false; say('gMsg', e.message); }
+        };
+      }
       mount.querySelectorAll('[data-cancel]').forEach(b => b.onclick = async () => {
         if (!confirm('Cancel this slot? Spins go back to the default gift.')) return;
         b.disabled = true;
         try { await call({ action: 'cancel_slot', id: b.dataset.cancel }); window.loadSpinAdmin(); }
         catch (e) { b.disabled = false; showToast('Cancel failed: ' + e.message); }
       });
+    }
+  })();
+
+  // ── Home Page (admin tab) — site_settings 'home' + sellers.offer_house_addons ──
+  // The home page (script.js applyHomeSettings) reads these through
+  // get-catalog.js, so a save shows for visitors within about a minute.
+  (function(){
+    let H = null, stores = [], cats = [], dirty = false, savedAt = null;
+    const clone = o => JSON.parse(JSON.stringify(o || {}));
+    const storeName = slug => { const s = stores.find(x => x.slug === slug); return s ? s.shop_name : slug + ' (not found)'; };
+    const activeStores = () => stores.filter(s => s.status === 'active');
+
+    function normalise(v){
+      const h = clone(v);
+      h.starStores = Array.isArray(h.starStores) ? h.starStores : [];
+      h.star = Object.assign({ title: '', sub: '', linkText: '' }, h.star || {});
+      h.experienceStore = typeof h.experienceStore === 'string' ? h.experienceStore : '';
+      h.experience = Object.assign({ title: '', sub: '', linkText: '' }, h.experience || {});
+      h.complement = Object.assign({ title: '', sub: '', linkText: '' }, h.complement || {});
+      h.complementCategories = Array.isArray(h.complementCategories) ? h.complementCategories : [];
+      h.boost = h.boost && typeof h.boost === 'object' ? h.boost : {};
+      h.heroSlides = Array.isArray(h.heroSlides) ? h.heroSlides : [];
+      return h;
+    }
+
+    window.loadHomeAdmin = async function(){
+      const mount = document.getElementById('homeAdminMount');
+      if (!mount) return;
+      if (!supabaseClient) { mount.innerHTML = '<p style="color:#6b7280">Supabase not available</p>'; return; }
+      if (dirty && !confirm('You have unsaved Home Page changes. Reload and lose them?')) return;
+      if (!H) mount.innerHTML = '<p style="color:#6b7280">Loading…</p>';
+      const [st, se, ca] = await Promise.all([
+        supabaseClient.from('site_settings').select('value, updated_at').eq('key', 'home').maybeSingle(),
+        supabaseClient.from('sellers').select('id, shop_name, slug, status, is_house, offer_house_addons').order('shop_name'),
+        supabaseClient.from('categories').select('name').order('name')
+      ]);
+      if (st.error || se.error) { mount.innerHTML = `<p style="color:#dc2626">Couldn't load the Home Page settings: ${escapeHtml((st.error || se.error).message)}</p>`; return; }
+      H = normalise(st.data && st.data.value);
+      savedAt = st.data && st.data.updated_at;
+      stores = (se.data || []).filter(s => !s.is_house && s.slug);
+      cats = [...new Set(((ca && ca.data) || []).map(c => c.name).filter(Boolean))];
+      dirty = false;
+      render();
+    };
+
+    function textRow(prefix, t, ph){
+      return `<div class="hp-grid">
+        <div><label class="hp-l">Row title</label><input type="text" maxlength="80" data-bind="${prefix}.title" value="${escapeHtml(t.title)}" placeholder="${escapeHtml(ph[0])}"></div>
+        <div><label class="hp-l">Line under the title</label><input type="text" maxlength="140" data-bind="${prefix}.sub" value="${escapeHtml(t.sub)}" placeholder="${escapeHtml(ph[1])}"></div>
+        <div><label class="hp-l">"See all" link text</label><input type="text" maxlength="30" data-bind="${prefix}.linkText" value="${escapeHtml(t.linkText)}" placeholder="${escapeHtml(ph[2])}"></div>
+      </div>`;
+    }
+    function orderedList(listKey, items, nameOf){
+      return `<div class="hp-list">${items.map((it, i) => `<div class="hp-item"><span class="hp-name">${escapeHtml(nameOf(it))}</span>
+        <button class="hp-ib" type="button" title="Move up" data-mv="${listKey}" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button class="hp-ib" type="button" title="Move down" data-mv="${listKey}" data-i="${i}" data-d="1" ${i === items.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="hp-ib" type="button" title="Remove" data-rm="${listKey}" data-i="${i}">✕</button></div>`).join('') || '<p class="hp-help" style="margin:0">Nothing yet.</p>'}</div>`;
+    }
+    function addSelect(listKey, options, label){
+      return options.length ? `<div style="display:flex;gap:8px;max-width:440px"><select data-addsel="${listKey}"><option value="">${escapeHtml(label)}</option>${options.map(o => `<option value="${escapeHtml(o[0])}">${escapeHtml(o[1])}</option>`).join('')}</select>
+        <button class="small-btn" type="button" data-add="${listKey}">Add</button></div>` : '';
+    }
+
+    function render(){
+      const mount = document.getElementById('homeAdminMount');
+      const h = H;
+      const storeOpts = exclude => activeStores().filter(s => !exclude.includes(s.slug)).map(s => [s.slug, s.shop_name]);
+      const boostSlugs = Object.keys(h.boost);
+      mount.innerHTML = `
+        <div class="hp-card">
+          <h3>🖼️ Banner slides (top of the home page)</h3>
+          <p class="hp-help">Shown in this order, changing every few seconds. Wide photos work best (about 16:9). Tapping a slide opens its link: a store link like <code>/isiqalokitchen</code>, or <code>#section=workshop</code> for a home row.</p>
+          <div class="hp-list">${h.heroSlides.map((x, i) => `<div class="hp-slide">
+            <img src="${escapeHtml(x.image || '')}" alt="">
+            <div class="hp-grid" style="grid-template-columns:1fr">
+              <div><label class="hp-l">Opens</label><input type="text" maxlength="200" data-bind="heroSlides.${i}.link" value="${escapeHtml(x.link || '')}" placeholder="/storeslug"></div>
+              <div><label class="hp-l">Description (for screen readers)</label><input type="text" maxlength="120" data-bind="heroSlides.${i}.label" value="${escapeHtml(x.label || '')}" placeholder="Isiqalo Kitchen — order plates"></div>
+              <div><label class="hp-l">Photo</label><input type="file" accept="image/*" data-slideimg="${i}"></div>
+            </div>
+            <div class="hp-btns">
+              <button class="hp-ib" type="button" data-mv="heroSlides" data-i="${i}" data-d="-1" ${i === 0 ? 'disabled' : ''}>↑</button>
+              <button class="hp-ib" type="button" data-mv="heroSlides" data-i="${i}" data-d="1" ${i === h.heroSlides.length - 1 ? 'disabled' : ''}>↓</button>
+              <button class="hp-ib" type="button" data-rm="heroSlides" data-i="${i}">✕</button>
+            </div></div>`).join('') || '<p class="hp-help" style="margin:0">No slides: the page keeps its built-in ones.</p>'}</div>
+          <label class="small-btn" style="display:inline-block;cursor:pointer">+ Add a slide (pick a photo)<input type="file" accept="image/*" id="hpNewSlide" style="display:none"></label>
+          <span class="hp-msg" id="hpUpMsg"></span>
+        </div>
+
+        <div class="hp-card">
+          <h3>⭐ Star row</h3>
+          <p class="hp-help">The first row on the home page: every item from these stores, mixed together (cheapest first). The first store leads. No stores = the row is hidden.</p>
+          ${textRow('star', h.star, ['🔥 Workshop Shisanyama', 'Mix plates from both, one delivery', 'See all plates →'])}
+          <label class="hp-l" style="margin-top:12px">Stores in this row</label>
+          ${orderedList('starStores', h.starStores, storeName)}
+          ${addSelect('starStores', storeOpts(h.starStores), 'Add a store…')}
+        </div>
+
+        <div class="hp-card">
+          <h3>🏍️ Experience row</h3>
+          <p class="hp-help">The second row: one store's items. Choose "No experience row" to hide it.</p>
+          <div style="max-width:440px;margin-bottom:10px"><label class="hp-l">Store</label>
+            <select data-bind="experienceStore"><option value="">No experience row</option>${activeStores().map(s => `<option value="${escapeHtml(s.slug)}" ${s.slug === h.experienceStore ? 'selected' : ''}>${escapeHtml(s.shop_name)}</option>`).join('')}
+            ${h.experienceStore && !activeStores().some(s => s.slug === h.experienceStore) ? `<option value="${escapeHtml(h.experienceStore)}" selected>${escapeHtml(storeName(h.experienceStore))} (not active)</option>` : ''}</select></div>
+          ${textRow('experience', h.experience, ['🏍️ Xperience of a lifetime', 'Book a ride or gift one', 'Book a ride →'])}
+        </div>
+
+        <div class="hp-card">
+          <h3>🥤 "Goes with your plate" row</h3>
+          <p class="hp-help">Items under R100 from the star stores, then from these categories in this order.</p>
+          ${textRow('complement', h.complement, ['🥤 Under R100 — goes with your plate', 'Drinks, desserts and snacks', 'See more →'])}
+          <label class="hp-l" style="margin-top:12px">Categories</label>
+          ${orderedList('complementCategories', h.complementCategories, c => c)}
+          ${addSelect('complementCategories', cats.filter(c => !h.complementCategories.includes(c)).map(c => [c, c]), 'Add a category…')}
+        </div>
+
+        <div class="hp-card">
+          <h3>📈 Store boost</h3>
+          <p class="hp-help">Added to every ranking on the home page and in search. 1000 or more puts a store's items ahead of everything else; leave a store out for normal ranking.</p>
+          <div class="hp-list">${boostSlugs.map(slug => `<div class="hp-item"><span class="hp-name">${escapeHtml(storeName(slug))}</span>
+            <input type="number" min="0" max="5000" step="50" style="width:110px" data-boost="${escapeHtml(slug)}" value="${escapeHtml(String(h.boost[slug]))}">
+            <button class="hp-ib" type="button" title="Remove" data-unboost="${escapeHtml(slug)}">✕</button></div>`).join('') || '<p class="hp-help" style="margin:0">No boosted stores.</p>'}</div>
+          ${addSelect('boost', storeOpts(boostSlugs), 'Boost a store…')}
+        </div>
+
+        <div class="hp-save">
+          <button class="small-btn" type="button" id="hpSave" style="background:#0a2f66;color:#fff">Save Home Page</button>
+          <span class="hp-msg" id="hpMsg">${dirty ? 'Unsaved changes' : savedAt ? 'Last saved ' + escapeHtml(new Date(savedAt).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg' })) : ''}</span>
+        </div>
+
+        <div class="hp-card" style="margin-top:14px">
+          <h3>🥤 Drinks before checkout</h3>
+          <p class="hp-help">On these stores, tapping Check out first offers Umzila Drinks (sold by the house store, delivered with the order). The free-drink Spin &amp; Win gift sends people to these stores too. Saves as soon as you tick.</p>
+          <div class="hp-grid">${activeStores().map(s => `<label class="hp-chk"><input type="checkbox" data-addon="${s.id}" ${s.offer_house_addons ? 'checked' : ''}> ${escapeHtml(s.shop_name)}</label>`).join('')}</div>
+          <span class="hp-msg" id="hpAddonMsg"></span>
+        </div>`;
+      wire(mount);
+    }
+
+    function setPath(path, val){
+      const parts = path.split('.'); let o = H;
+      for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
+      o[parts[parts.length - 1]] = val;
+    }
+    function markDirty(){ dirty = true; const m = document.getElementById('hpMsg'); if (m) { m.textContent = 'Unsaved changes'; m.style.color = '#92400e'; } }
+    const say = (id, txt, ok) => { const m = document.getElementById(id); if (m) { m.textContent = txt; m.style.color = ok ? '#065f46' : '#b91c1c'; } };
+
+    async function uploadSlide(file){
+      if (!file || !/^image\//.test(file.type)) throw new Error('Pick a photo.');
+      if (file.size > 15 * 1024 * 1024) throw new Error('That photo is too big (max 15 MB).');
+      const base = 'site/hero-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+      const up = await umzilaImages.upload(supabaseClient.storage, 'shop-assets', base, file, 'banner');
+      if (!up || !up.publicUrl) throw new Error('Upload failed');
+      return up.publicUrl;
+    }
+
+    function wire(mount){
+      mount.querySelectorAll('[data-bind]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+        setPath(el.dataset.bind, el.value); markDirty();
+      }));
+      mount.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => {
+        const list = H[b.dataset.mv], i = +b.dataset.i, j = i + (+b.dataset.d);
+        if (j < 0 || j >= list.length) return;
+        [list[i], list[j]] = [list[j], list[i]]; markDirty(); render();
+      });
+      mount.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { H[b.dataset.rm].splice(+b.dataset.i, 1); markDirty(); render(); });
+      mount.querySelectorAll('[data-add]').forEach(b => b.onclick = () => {
+        const key = b.dataset.add, v = mount.querySelector(`[data-addsel="${key}"]`).value;
+        if (!v) return;
+        if (key === 'boost') H.boost[v] = 500; else H[key].push(v);
+        markDirty(); render();
+      });
+      mount.querySelectorAll('[data-boost]').forEach(el => el.addEventListener('input', () => { H.boost[el.dataset.boost] = el.value === '' ? 0 : Number(el.value); markDirty(); }));
+      mount.querySelectorAll('[data-unboost]').forEach(b => b.onclick = () => { delete H.boost[b.dataset.unboost]; markDirty(); render(); });
+      mount.querySelectorAll('[data-slideimg]').forEach(inp => inp.onchange = async () => {
+        const i = +inp.dataset.slideimg; say('hpUpMsg', 'Uploading…', true);
+        try { H.heroSlides[i].image = await uploadSlide(inp.files[0]); markDirty(); render(); say('hpUpMsg', 'Photo changed — remember to Save.', true); }
+        catch (e) { say('hpUpMsg', e.message); }
+      });
+      const ns = document.getElementById('hpNewSlide');
+      if (ns) ns.onchange = async () => {
+        say('hpUpMsg', 'Uploading…', true);
+        try { const url = await uploadSlide(ns.files[0]); H.heroSlides.push({ image: url, link: '', label: '' }); markDirty(); render(); say('hpUpMsg', 'Slide added — set where it opens, then Save.', true); }
+        catch (e) { say('hpUpMsg', e.message); }
+      };
+      mount.querySelectorAll('[data-addon]').forEach(cb => cb.onchange = async () => {
+        cb.disabled = true;
+        const { error } = await supabaseClient.from('sellers').update({ offer_house_addons: cb.checked }).eq('id', cb.dataset.addon);
+        cb.disabled = false;
+        if (error) { cb.checked = !cb.checked; say('hpAddonMsg', 'Couldn’t save: ' + error.message); return; }
+        const s = stores.find(x => x.id === cb.dataset.addon); if (s) s.offer_house_addons = cb.checked;
+        say('hpAddonMsg', 'Saved ✓ — live on the store page within about a minute.', true);
+      });
+      document.getElementById('hpSave').onclick = save;
+    }
+
+    function validate(h){
+      for (const [k, name] of [['star', 'Star row'], ['experience', 'Experience row'], ['complement', '"Goes with your plate" row']]) {
+        if (!h[k].title.trim() && (k !== 'experience' || h.experienceStore) && (k !== 'star' || h.starStores.length)) return name + ' needs a title.';
+      }
+      for (const [i, s] of h.heroSlides.entries()) {
+        if (!s.image) return 'Slide ' + (i + 1) + ' has no photo.';
+        const l = (s.link || '').trim();
+        if (l && !/^(\/|#)/.test(l) && !/^https:\/\//.test(l)) return 'Slide ' + (i + 1) + ': the link must start with / (a page on Umzila), # or https://';
+      }
+      for (const [slug, n] of Object.entries(h.boost)) if (!(n >= 0 && n <= 5000)) return 'Boost for ' + storeName(slug) + ' must be between 0 and 5000.';
+      return null;
+    }
+
+    async function save(){
+      const h = clone(H);
+      ['star', 'experience', 'complement'].forEach(k => Object.keys(h[k]).forEach(f => { h[k][f] = String(h[k][f] || '').trim(); }));
+      h.heroSlides = h.heroSlides.map(s => ({ image: s.image, link: String(s.link || '').trim(), label: String(s.label || '').trim() }));
+      Object.keys(h.boost).forEach(k => { h.boost[k] = Number(h.boost[k]) || 0; if (!h.boost[k]) delete h.boost[k]; });
+      const err = validate(h);
+      if (err) return say('hpMsg', err);
+      const btn = document.getElementById('hpSave'); btn.disabled = true; say('hpMsg', 'Saving…', true);
+      const { data: { user } = {} } = await supabaseClient.auth.getUser();
+      const { data, error } = await supabaseClient.from('site_settings')
+        .upsert({ key: 'home', value: h, updated_at: new Date().toISOString(), updated_by: user ? user.id : null })
+        .select('updated_at').single();
+      btn.disabled = false;
+      if (error) return say('hpMsg', 'Couldn’t save: ' + error.message);
+      H = normalise(h); dirty = false; savedAt = data.updated_at;
+      render();
+      say('hpMsg', 'Saved ✓ — the home page shows it within about a minute.', true);
+    }
+  })();
+
+  // ── Store promo pop-ups (Marketing tab) — public.store_promos ──
+  // shop.html shows the running promo's pop-up (via get-store.js) and
+  // claim-store-promo.js hands each visitor their own one-off code. Writes go
+  // straight to Supabase (admins-only RLS); the store_promos_guard trigger
+  // blocks overlapping promos and changes that would orphan issued codes.
+  (function(){
+    let promos = [], stores = [], editing = null, prodCache = {};
+    const fmt = d => d ? new Date(d).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const toLocal = d => new Date(new Date(d).getTime() + 2 * 3600e3).toISOString().slice(0, 16); // SAST wall clock for datetime-local
+    const fromLocal = v => new Date(v + ':00+02:00').toISOString();
+    const say = (txt, ok) => { const m = document.getElementById('spmMsg'); if (m) { m.textContent = txt; m.style.color = ok ? '#065f46' : '#b91c1c'; } };
+    const prefixFor = slug => (String(slug || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'PROMO');
+
+    window.loadStorePromosAdmin = async function(){
+      const mount = document.getElementById('storePromosMount');
+      if (!mount || !supabaseClient) return;
+      const [pr, se] = await Promise.all([
+        supabaseClient.from('store_promos').select('*').order('ends_at', { ascending: false }).limit(50),
+        supabaseClient.from('sellers').select('id, shop_name, slug, status, is_house').eq('status', 'active').eq('is_house', false).order('shop_name')
+      ]);
+      if (pr.error || se.error) { mount.innerHTML = `<p style="color:#dc2626">Couldn't load store promos: ${escapeHtml((pr.error || se.error).message)}</p>`; return; }
+      promos = pr.data || []; stores = se.data || [];
+      // Codes given out / used per promo (store_promo_stats, admins only)
+      const { data: stats } = await supabaseClient.rpc('store_promo_stats');
+      const byId = Object.fromEntries((stats || []).map(x => [x.promo_id, x]));
+      promos.forEach(p => { p._claimed = (byId[p.id] || {}).claimed || 0; p._used = (byId[p.id] || {}).used || 0; });
+      render();
+    };
+
+    function stateOf(p){
+      const now = Date.now();
+      if (!p.active) return ['Off', '#e5e7eb', '#374151'];
+      if (new Date(p.ends_at) <= now) return ['Ended', '#e5e7eb', '#374151'];
+      if (p._used >= p.max_orders) return ['Full', '#fde68a', '#92400e'];
+      if (new Date(p.starts_at) <= now) return ['Running', '#bbf7d0', '#065f46'];
+      return ['Upcoming', '#dbeafe', '#1e40af'];
+    }
+
+    async function productsOf(sellerId){
+      if (!sellerId) return [];
+      if (!prodCache[sellerId]) {
+        const { data } = await supabaseClient.from('products').select('id, name, price, sale, sale_price').eq('seller_id', sellerId).order('name');
+        prodCache[sellerId] = data || [];
+      }
+      return prodCache[sellerId];
+    }
+
+    async function render(){
+      const mount = document.getElementById('storePromosMount');
+      const nameOf = id => (stores.find(s => s.id === id) || {}).shop_name || 'Store';
+      const e = editing;
+      let formHtml = '';
+      if (e) {
+        const locked = e.id && e._claimed > 0;
+        const prods = await productsOf(e.seller_id);
+        formHtml = `<div style="border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fafafa;margin-bottom:16px">
+          <h4 style="margin:0 0 10px">${e.id ? 'Edit promo' : 'New promo'}</h4>
+          ${locked ? '<p style="font-size:12.5px;color:#92400e;background:#fef3c7;border-radius:8px;padding:8px 10px;margin:0 0 10px">Codes have already been given out, so the store, end time and code start are locked. Changing the % only affects codes given out from now on.</p>' : ''}
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
+            <div><label class="spm-l">Store</label><select id="spmStore" ${locked ? 'disabled' : ''}><option value="">Pick a store…</option>${stores.map(s => `<option value="${s.id}" ${s.id === e.seller_id ? 'selected' : ''}>${escapeHtml(s.shop_name)}</option>`).join('')}</select></div>
+            <div><label class="spm-l">% off</label><input id="spmPct" type="number" min="1" max="90" value="${escapeHtml(String(e.percent || ''))}"></div>
+            <div><label class="spm-l">Starts (SAST)</label><input id="spmStart" type="datetime-local" value="${e.starts_at ? toLocal(e.starts_at) : ''}"></div>
+            <div><label class="spm-l">Ends (SAST)</label><input id="spmEnd" type="datetime-local" value="${e.ends_at ? toLocal(e.ends_at) : ''}" ${locked ? 'disabled' : ''}></div>
+            <div><label class="spm-l">Max orders</label><input id="spmMax" type="number" min="1" value="${escapeHtml(String(e.max_orders || 100))}"></div>
+            <div><label class="spm-l">Codes start with</label><input id="spmPrefix" type="text" maxlength="12" style="text-transform:uppercase" value="${escapeHtml(e.code_prefix || '')}" ${locked ? 'disabled' : ''}></div>
+            <div><label class="spm-l">The thing they buy</label><input id="spmThing" type="text" maxlength="30" placeholder="plate / order / ride" value="${escapeHtml(e.thing || 'order')}"></div>
+          </div>
+          <div style="margin-top:10px"><label class="spm-l">Extra line in the pop-up (optional)</label><input id="spmNote" type="text" maxlength="200" placeholder="Not on the SPECIAL — it’s already on special." value="${escapeHtml(e.note || '')}"></div>
+          <div style="margin-top:10px"><label class="spm-l">Items the code must NOT discount (e.g. already on special)</label>
+            <div id="spmEx" style="max-height:170px;overflow:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;padding:6px 10px">${e.seller_id ? (prods.length ? prods.map(p => `<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0"><input type="checkbox" value="${p.id}" ${(e.exclude_product_ids || []).includes(p.id) ? 'checked' : ''}> ${escapeHtml(p.name || 'Item')} <span style="color:#6b7280">R${escapeHtml(String(p.sale && p.sale_price ? p.sale_price : p.price))}</span></label>`).join('') : '<span style="font-size:13px;color:#6b7280">This store has no items.</span>') : '<span style="font-size:13px;color:#6b7280">Pick a store first.</span>'}</div>
+            <p style="font-size:12px;color:#6b7280;margin:4px 0 0">Items added to the store after a code is given out aren't covered by that code.</p></div>
+          <div style="margin-top:10px"><label class="spm-l">How the email describes the exclusion (optional)</label><input id="spmExNote" type="text" maxlength="120" placeholder="except the SPECIAL (already on special)" value="${escapeHtml(e.exclusion_note || '')}"></div>
+          <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px"><input type="checkbox" id="spmActive" ${e.active !== false ? 'checked' : ''}> On (shows on the store page while it runs)</label>
+          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap">
+            <button class="small-btn" type="button" id="spmSave" style="background:#0a2f66;color:#fff">${e.id ? 'Save changes' : 'Create promo'}</button>
+            <button class="small-btn" type="button" id="spmCancel">Cancel</button>
+            <span id="spmMsg" style="font-size:13px"></span>
+          </div></div>`;
+      }
+      mount.innerHTML = `${formHtml}
+        ${e ? '' : '<button class="small-btn" type="button" id="spmNew" style="margin-bottom:12px">+ New store promo</button>'}
+        ${promos.length ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:#6b7280;font-size:11.5px;text-transform:uppercase">
+          <th style="padding:8px">Store</th><th style="padding:8px">Offer</th><th style="padding:8px">Runs</th><th style="padding:8px">Codes</th><th style="padding:8px">Status</th><th></th></tr></thead><tbody>
+          ${promos.map(p => { const [lbl, bg, fg] = stateOf(p); const live = p.active && new Date(p.ends_at) > Date.now();
+            return `<tr style="border-top:1px solid #f1f5f9"><td style="padding:8px">${escapeHtml(nameOf(p.seller_id))}</td>
+              <td style="padding:8px">${p.percent}% off the ${escapeHtml(p.thing)}${(p.exclude_product_ids || []).length ? ` <span style="color:#6b7280">(${p.exclude_product_ids.length} item${p.exclude_product_ids.length > 1 ? 's' : ''} excluded)</span>` : ''}</td>
+              <td style="padding:8px;white-space:nowrap">${escapeHtml(fmt(p.starts_at))}<br>→ ${escapeHtml(fmt(p.ends_at))}</td>
+              <td style="padding:8px">${p._claimed} given · ${p._used}/${p.max_orders} used</td>
+              <td style="padding:8px"><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:700;background:${bg};color:${fg}">${lbl}</span></td>
+              <td style="padding:8px;white-space:nowrap"><button class="small-btn" type="button" data-spm-edit="${p.id}">Edit</button>
+                ${live ? `<button class="small-btn" type="button" data-spm-off="${p.id}">Switch off</button>` : ''}</td></tr>`; }).join('')}
+          </tbody></table></div>` : '<p style="color:#6b7280;font-size:13px">No store promos yet.</p>'}`;
+
+      mount.querySelectorAll('.spm-l').forEach(l => l.style.cssText = 'display:block;font-size:12px;color:#6b7280;margin-bottom:4px');
+      mount.querySelectorAll('#storePromosMount input[type=text], #storePromosMount input[type=number], #storePromosMount input[type=datetime-local], #storePromosMount select').forEach(i => i.style.cssText += ';width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font:inherit');
+      const nb = document.getElementById('spmNew');
+      if (nb) nb.onclick = () => {
+        const start = new Date(); start.setUTCSeconds(0, 0);
+        editing = { percent: 10, starts_at: start.toISOString(), ends_at: new Date(start.getTime() + 7 * 864e5).toISOString(), max_orders: 100, thing: 'order', active: true, exclude_product_ids: [] };
+        render();
+      };
+      mount.querySelectorAll('[data-spm-edit]').forEach(b => b.onclick = () => { editing = Object.assign({}, promos.find(p => p.id === b.dataset.spmEdit)); render(); });
+      mount.querySelectorAll('[data-spm-off]').forEach(b => b.onclick = async () => {
+        if (!confirm('Switch this promo off now? The pop-up disappears; codes already given out still work until they expire.')) return;
+        b.disabled = true;
+        const { error } = await supabaseClient.from('store_promos').update({ active: false }).eq('id', b.dataset.spmOff);
+        if (error) { b.disabled = false; showToast('Couldn’t switch it off: ' + error.message); return; }
+        window.loadStorePromosAdmin();
+      });
+      if (e) {
+        const keep = () => { // keep what was typed when the form re-renders
+          e.percent = document.getElementById('spmPct').value; e.max_orders = document.getElementById('spmMax').value;
+          e.thing = document.getElementById('spmThing').value; e.note = document.getElementById('spmNote').value;
+          e.exclusion_note = document.getElementById('spmExNote').value; e.active = document.getElementById('spmActive').checked;
+          const sv = document.getElementById('spmStart').value, ev = document.getElementById('spmEnd').value;
+          if (sv) e.starts_at = fromLocal(sv); if (ev) e.ends_at = fromLocal(ev);
+          e.code_prefix = document.getElementById('spmPrefix').value.toUpperCase().trim();
+          e.exclude_product_ids = [...document.querySelectorAll('#spmEx input:checked')].map(i => i.value);
+        };
+        document.getElementById('spmStore').onchange = ev => {
+          keep(); e.seller_id = ev.target.value || null; e.exclude_product_ids = [];
+          const st = stores.find(s => s.id === e.seller_id);
+          if (st && !e.id) e.code_prefix = prefixFor(st.slug);
+          render();
+        };
+        document.getElementById('spmCancel').onclick = () => { editing = null; render(); };
+        document.getElementById('spmSave').onclick = async () => {
+          keep();
+          const pct = parseInt(e.percent, 10), max = parseInt(e.max_orders, 10);
+          if (!e.seller_id) return say('Pick a store.');
+          if (!(pct >= 1 && pct <= 90)) return say('% off must be between 1 and 90.');
+          if (!(max >= 1)) return say('Max orders must be 1 or more.');
+          if (!e.starts_at || !e.ends_at || !(new Date(e.ends_at) > new Date(e.starts_at))) return say('The end must be after the start.');
+          if (!e.id && new Date(e.ends_at) <= Date.now()) return say('The end time is already past.');
+          if (!/^[A-Z0-9]{2,12}$/.test(e.code_prefix || '')) return say('"Codes start with" needs 2–12 letters/numbers.');
+          if (!String(e.thing || '').trim()) return say('Say what they buy (e.g. plate, order).');
+          const row = { seller_id: e.seller_id, percent: pct, starts_at: e.starts_at, ends_at: e.ends_at, max_orders: max, code_prefix: e.code_prefix,
+            thing: String(e.thing).trim(), note: String(e.note || '').trim() || null, exclude_product_ids: e.exclude_product_ids || [],
+            exclusion_note: String(e.exclusion_note || '').trim() || null, active: !!e.active };
+          const btn = document.getElementById('spmSave'); btn.disabled = true; say('Saving…', true);
+          let res;
+          if (e.id) res = await supabaseClient.from('store_promos').update(row).eq('id', e.id);
+          else { const { data: { user } = {} } = await supabaseClient.auth.getUser(); res = await supabaseClient.from('store_promos').insert(Object.assign(row, { created_by: user ? user.id : null })); }
+          btn.disabled = false;
+          if (res.error) return say(res.error.message);
+          editing = null; showToast('Store promo saved ✓ — shows on the store page within about a minute.');
+          window.loadStorePromosAdmin();
+        };
+      }
     }
   })();
 

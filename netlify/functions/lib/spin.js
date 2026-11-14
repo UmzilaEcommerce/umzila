@@ -2,9 +2,10 @@
 // Used by spin-identify.js, spin-friend.js, spin-play.js, send-spin-emails.js
 // and spin-admin.js.
 //
-// - GIFTS: the gift catalogue. spin.html mirrors the labels; every gift is
-//   an ordinary discount_codes row, so checkout / validate-cart / PayFast
-//   redeem it like any other code.
+// - Gifts: the catalogue is public.spin_gifts (admin.html → Spin & Win →
+//   Gifts on the wheel; every active gift is a wheel slice). spin.html reads
+//   the same table. Every gift is an ordinary discount_codes row, so
+//   checkout / validate-cart / PayFast redeem it like any other code.
 // - Spin sessions: a short-lived HMAC-signed token proving who the spinner is
 //   (set by identify / friend, required by play).
 // - getState(): eligibility. A paid order in the last 30 days unlocks one spin,
@@ -14,15 +15,12 @@ const crypto = require('crypto');
 const { mailFrom } = require('./mail');
 const { unsubscribeUrl, unsubscribeHeaders } = require('./unsubscribe');
 
-const GIFTS = {
-  drink:   { emoji: '🥤', label: 'Free drink', title: 'A free cold drink', sub: 'With any Workshop order (Isiqalo Kitchen or Velaphi).' },
-  pct10:   { emoji: '🏷️', label: '10% off', title: '10% off', sub: 'Your whole next order.' },
-  r20:     { emoji: '💸', label: 'R20 off', title: 'R20 off', sub: 'Your next order over R60.' },
-  food150: { emoji: '🤯', label: 'Food FREE', title: 'Your food, on us', sub: 'Up to R150 off your next order. You just pay delivery.' }
-};
+// Shown if a gift row is missing (e.g. a spin made before a gift was renamed).
+const FALLBACK_GIFT = { kind: 'gift', emoji: '🎁', label: 'Gift', title: 'Your gift', sub: 'Use it on your next order.', gift_type: 'percentage', amount: 10 };
+// The sharer's reward (send-spin-emails.js) is its own fixed code, not a wheel gift.
+const REFERRAL_GIFT = { kind: 'referral', emoji: '🎁', label: 'R20 off', title: 'R20 off', sub: 'Your next order over R60.' };
 const RECENT_DAYS = 30;
 const GIFT_DAYS = 5;
-const WORKSHOP = ['isiqalokitchen', 'velaphishisanyama']; // stores with the drinks screen (shop.html ADDON_STORES)
 const REFERRAL_MONTHLY_CAP = 5;
 
 const SITE = () => (process.env.SITE_BASE_URL || '').replace(/\/$/, '');
@@ -96,9 +94,30 @@ async function orderSummary(admin, order) {
   };
 }
 
-function useUrlFor(kind, summary) {
+// ── Gift catalogue (public.spin_gifts), cached 60 s per function instance ──
+let giftCache = null, giftAt = 0;
+async function loadGifts(admin, fresh) {
+  if (!fresh && giftCache && Date.now() - giftAt < 60000) return giftCache;
+  const { data, error } = await admin.from('spin_gifts').select('*').order('sort_order', { ascending: true }).order('kind', { ascending: true });
+  if (error) throw error;
+  giftCache = Object.fromEntries((data || []).map(g => [g.kind, g])); giftAt = Date.now();
+  return giftCache;
+}
+async function giftInfo(admin, kind) { return (await loadGifts(admin))[kind] || FALLBACK_GIFT; }
+// Stores showing the Umzila Drinks screen (sellers.offer_house_addons, admin → Home Page).
+async function addonStoreSlugs(admin) {
+  const { data } = await admin.from('sellers').select('slug').eq('offer_house_addons', true).eq('status', 'active').order('slug');
+  return (data || []).map(s => s.slug);
+}
+
+async function useUrlFor(admin, kind, summary) {
   const slugs = (summary && summary.stores || []).map(s => s.slug);
-  if (kind === 'drink') return '/' + (slugs.find(s => WORKSHOP.includes(s)) || WORKSHOP[0]);
+  const g = await giftInfo(admin, kind);
+  if (g.gift_type === 'free_drink') {
+    const addon = await addonStoreSlugs(admin);
+    const s = slugs.find(x => addon.includes(x)) || addon[0];
+    if (s) return '/' + s;
+  }
   return slugs[0] ? '/' + slugs[0] : '/#section=workshop';
 }
 
@@ -124,7 +143,7 @@ async function getState(admin, { email, userId, name }) {
     if (dc && !dc.used && (dc.status === 'active' || s.test) && new Date(dc.expires_at) > new Date()) {
       const sum = s.order_id ? await orderSummary(admin, orders.find(o => o.id === s.order_id) || { id: s.order_id, created_at: s.created_at }) : await orderSummary(admin, newest);
       return { ...base, state: 'HAS_GIFT', lastOrder: sum,
-        gift: { kind: s.gift_kind, code: dc.code, expiresAt: dc.expires_at, useUrl: useUrlFor(s.gift_kind, sum), orderDate: s.order_id ? (sum && sum.date) : null, shareCode: s.share_code, test: s.test || undefined } };
+        gift: { kind: s.gift_kind, code: dc.code, expiresAt: dc.expires_at, useUrl: await useUrlFor(admin, s.gift_kind, sum), orderDate: s.order_id ? (sum && sum.date) : null, shareCode: s.share_code, test: s.test || undefined } };
     }
   }
   const lastSpin = spins[0] || null;
@@ -169,16 +188,21 @@ async function shareCodeFor(admin, { email, userId, name, phone }) {
   return null;
 }
 
-// The discount_codes row for a gift.
+// The discount_codes row for a gift (its spin_gifts row decides the shape).
 async function codeRowFor(admin, kind, { email, friend, test }) {
+  const g = await giftInfo(admin, kind);
   const row = {
     code: randomCode('SPIN', 6), email, type: 'percentage', amount: 10, scope: 'order',
     expires_at: giftExpiry().toISOString(), multi_use: false, per_user_limit: 1,
     first_order_only: !!friend, status: test ? 'disabled' : 'active'
   };
-  if (kind === 'r20') Object.assign(row, { type: 'fixed', amount: 20, min_order_amount: 60 });
-  if (kind === 'food150') Object.assign(row, { amount: 100, max_discount_amount: 150 });
-  if (kind === 'drink') {
+  const num = v => (v == null || v === '' ? null : Number(v));
+  if (g.gift_type === 'fixed') Object.assign(row, { type: 'fixed', amount: num(g.amount) });
+  if (g.gift_type === 'percentage') Object.assign(row, { amount: num(g.amount) });
+  if (g.gift_type !== 'free_drink') {
+    if (num(g.min_order_amount)) row.min_order_amount = num(g.min_order_amount);
+    if (num(g.max_discount_amount)) row.max_discount_amount = num(g.max_discount_amount);
+  } else {
     const { data: house } = await admin.from('sellers').select('id').eq('is_house', true);
     const ids = (house || []).map(h => h.id);
     const { data: drinks } = ids.length ? await admin.from('products').select('id, price, sale, sale_price').in('seller_id', ids).eq('visible', true) : { data: [] };
@@ -191,8 +215,9 @@ async function codeRowFor(admin, kind, { email, friend, test }) {
 
 // ── Emails ──
 const fmtDay = d => new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(d));
-function giftEmail(variant, { name, email, kind, code, expiresAt, useUrl, shareCode, friendName }) {
-  const site = SITE(), g = GIFTS[kind] || GIFTS.drink, hi = firstNameOf(name);
+// gift = its spin_gifts row (giftInfo); the referral email uses REFERRAL_GIFT.
+function giftEmail(variant, { name, email, gift, code, expiresAt, useUrl, shareCode, friendName }) {
+  const site = SITE(), g = gift || (variant === 'referral' ? REFERRAL_GIFT : FALLBACK_GIFT), hi = firstNameOf(name);
   const use = site + (useUrl || '/') + ((useUrl || '/').includes('?') ? '&' : '?') + 'src=spin-email';
   const subj = {
     prize: `${g.emoji} ${hi ? hi + ', your' : 'Your'} ${g.label.toLowerCase()} is waiting`,
@@ -257,7 +282,7 @@ const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const reply = (code, body) => ({ statusCode: code, headers: CORS, body: JSON.stringify(body) });
 
 module.exports = {
-  GIFTS, WORKSHOP, REFERRAL_MONTHLY_CAP, esc, firstNameOf, maskEmail, digits,
+  FALLBACK_GIFT, REFERRAL_GIFT, loadGifts, giftInfo, addonStoreSlugs, REFERRAL_MONTHLY_CAP, esc, firstNameOf, maskEmail, digits,
   signSession, readSession, giftExpiry, randomCode, isStaff, paidOrders, orderSummary, useUrlFor,
   getState, shareCodeFor, codeRowFor, giftEmail, sendGiftEmail, reply, CORS
 };

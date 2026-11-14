@@ -35,7 +35,7 @@ A house item rides along in the order of whichever store it was added to:
 
 ### On the store page (`shop.html`)
 
-- **`ADDON_STORES`** (store slugs, currently Velaphi and Isiqalo Kitchen) decides where the add-ons screen appears.
+- **`sellers.offer_house_addons`** (admin-only; admin.html → Home Page → Drinks before checkout, currently Velaphi and Isiqalo Kitchen) decides where the add-ons screen appears. shop.html gets it with the store from get-store.js. (Was the hardcoded `ADDON_STORES` list until 2026-11-14.)
 - **`loadHouseAddons`** loads house sellers (anon read of `sellers.is_house`) and in-stock add-on products.
 - **Cart scope:** `storeLines()` includes house lines, so drinks stay in that store's cart and checkout.
 - **Checkout tap:** in the cart sheet, `a[data-checkout]` first opens **"Complete your order"** (`showAddons`), once per visit. It shows:
@@ -57,5 +57,5 @@ A house item rides along in the order of whichever store it was added to:
 ## Gotchas
 
 - **Any new code that counts stores** in an order (fees, pickups, readiness, banners, "multi-store" logic) must ignore `sellers.is_house`.
-- **To offer add-ons on another store,** add its slug to `ADDON_STORES` in `shop.html`.
+- **To offer add-ons on another store,** tick it in admin.html → Home Page → Drinks before checkout (no code change).
 - **Data visibility:** a store can still technically read the full `orders.items` JSON of its orders through the API (existing RLS). Only the UI and emails are per store.

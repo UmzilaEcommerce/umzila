@@ -1166,7 +1166,7 @@ async function boot(){
   $('#stLoading').hidden = true;
   $('#storeView').hidden = false;
   renderHero(); renderCats(); renderCatalog(); renderAbout(); syncCart(false); syncSaved();
-  setTimeout(() => showStorePromo(seller), 1800);
+  loadStorePromo(seller, cachedStore).then(() => setTimeout(() => showStorePromo(seller), 1800));
   loadHouseAddons(seller).then(() => syncCart(false));
   if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
 
@@ -1194,15 +1194,16 @@ async function boot(){
    Drinks"), never by the store you're on: the store never sees them, the
    rider brings them from Umzila stock, and they ride in the same delivery
    (no extra pickup or store fee — validate-cart / get-delivery-quote).
-   On stores listed in ADDON_STORES, tapping Check out first shows a grid of
-   drinks (+ to add, "No thanks" / "Continue to checkout"). */
-const ADDON_STORES = ['velaphishisanyama', 'isiqalokitchen'];
+   On stores with sellers.offer_house_addons (admin → Home Page → Drinks before
+   checkout), tapping Check out first shows a grid of drinks (+ to add,
+   "No thanks" / "Continue to checkout"). */
+const offersAddons = seller => !!(seller && seller.offer_house_addons);
 const HOUSE = { ids: new Set(), items: [] };
 async function loadHouseAddons(seller){
   try {
     const { data: hs } = await sb.from('sellers').select('id').eq('is_house', true).eq('status', 'active');
     (hs || []).forEach(h => HOUSE.ids.add(h.id));
-    if (!HOUSE.ids.size || !ADDON_STORES.includes(seller.slug)) return;
+    if (!HOUSE.ids.size || !offersAddons(seller)) return;
     const { data: rows } = await sb.from('products').select('*, product_images!fk_product_images_product(*)')
       .in('seller_id', [...HOUSE.ids]).eq('visible', true).gt('stock', 0).order('price', { ascending: true });
     // metadata.popular → the green "Popular" badge (set per product in the DB)
@@ -1210,7 +1211,7 @@ async function loadHouseAddons(seller){
   } catch (e) { /* add-ons are optional — never block the store */ }
 }
 function showAddons(href){
-  if (!HOUSE.items.length || !ADDON_STORES.includes(S.seller.slug)) return false;
+  if (!HOUSE.items.length || !offersAddons(S.seller)) return false;
   if (sessionStorage.getItem('umz_addons_seen_' + S.seller.id)) return false; // once per visit
   try { sessionStorage.setItem('umz_addons_seen_' + S.seller.id, '1'); } catch (e) {}
   if (cartDlg.open) cartDlg.close();
@@ -1282,18 +1283,34 @@ function showAddons(href){
    A time-boxed offer for one store: the visitor gives their email and gets
    their own one-off code on screen (and by email) from
    claim-store-promo.js, which holds the real rules (dates, cap, one code per
-   email). Shown every visit until they claim a code; never after `until`, so it
-   disappears by itself. Keep the dates in sync with PROMOS in that function. */
-const STORE_PROMOS = {
-  velaphishisanyama: { until: '2026-10-10T18:00:00+02:00', pct: 10, untilLabel: 'Sat 10 Oct, 6pm', thing: 'plate' },
-  isiqalokitchen: { until: '2026-10-19T23:59:00+02:00', pct: 10, untilLabel: 'Monday 19 Oct', thing: 'plate', note: 'Not on the SPECIAL — it’s already on special.' }
-};
+   email). The promo is a public.store_promos row, set up by an admin
+   (admin.html → Marketing → Store promo pop-ups); the page gets the running
+   one from get-store.js (or reads it directly if that failed). Shown every
+   visit until they claim a code; never after it ends. */
+let STORE_PROMO = null; // { until, pct, untilLabel, thing, note, maxOrders } for this store, or null
+function setStorePromo(row) {
+  if (!row || !row.ends_at || Date.now() >= new Date(row.ends_at).getTime()) { STORE_PROMO = null; return; }
+  const until = new Date(row.ends_at);
+  const day = until.toLocaleDateString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short' });
+  const hm = until.toLocaleTimeString('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false });
+  STORE_PROMO = { until: until.toISOString(), pct: row.percent, untilLabel: hm === '23:59' ? day : day + ', ' + hm,
+    thing: row.thing || 'order', note: row.note || '', maxOrders: row.max_orders || 0 };
+}
+async function loadStorePromo(seller, cached) {
+  if (cached && 'promo' in cached) return setStorePromo(cached.promo);
+  try {
+    const now = new Date().toISOString();
+    const { data } = await sb.from('store_promos').select('percent, starts_at, ends_at, max_orders, thing, note')
+      .eq('seller_id', seller.id).eq('active', true).lte('starts_at', now).gt('ends_at', now).order('ends_at', { ascending: false }).limit(1);
+    setStorePromo((data || [])[0]);
+  } catch (e) { STORE_PROMO = null; } // a promo is optional — never block the store
+}
 // Small floating "🎁 Get 10% off" / "🎁 Your 10% code" button, so a visitor
 // who closed the pop-up can open it again any time (until the promo ends or
 // their code is used). Tapping it opens the pop-up regardless of the
 // once-per-visit rules (force).
 function promoPill(seller, hasCode) {
-  const p = STORE_PROMOS[seller.slug];
+  const p = STORE_PROMO;
   let b = document.getElementById('spPill');
   if (!p || Date.now() >= new Date(p.until).getTime()) { if (b) b.remove(); return; }
   if (!b) {
@@ -1308,7 +1325,7 @@ function promoPill(seller, hasCode) {
 }
 
 async function showStorePromo(seller, force) {
-  const p = STORE_PROMOS[seller.slug];
+  const p = STORE_PROMO;
   if (!p || Date.now() >= new Date(p.until).getTime() || document.getElementById('spOverlay')) return;
   const seenKey = 'umz_promo_seen_' + seller.slug + '_' + p.until.slice(0, 10);
   const heldKey = 'umz_promo_held_' + seller.slug + '_' + p.until.slice(0, 10);
@@ -1380,7 +1397,7 @@ async function showStorePromo(seller, force) {
   ov.innerHTML = '<div id="spCard" role="dialog" aria-modal="true" aria-labelledby="spTitle"><button class="sp-x" type="button" aria-label="Close">×</button>' +
     '<div style="font-size:40px">🔥</div><div class="sp-k">' + esc(seller.shop_name) + ' · limited offer</div>' +
     '<h3 id="spTitle">' + p.pct + '% off your ' + esc(p.thing) + '</h3>' +
-    '<p>Get your own one-off code for the next 100 orders — until ' + esc(p.untilLabel) + '. No account needed.' + (p.note ? ' ' + esc(p.note) : '') + '</p>' +
+    '<p>Get your own one-off code' + (p.maxOrders ? ' for the next ' + p.maxOrders + ' orders' : '') + ' — until ' + esc(p.untilLabel) + '. No account needed.' + (p.note ? ' ' + esc(p.note) : '') + '</p>' +
     '<div id="spForm"><input type="email" id="spEmail" placeholder="Your email" autocomplete="email"' + (user && user.email ? ' value="' + esc(user.email) + '"' : '') + '>' +
     '<button class="sp-btn" type="button" id="spGo">Get my code</button><div class="sp-err" id="spErr"></div></div>' +
     '<p class="sp-small">Store closed? Order anyway — your order is prepared first when they open.</p></div>';

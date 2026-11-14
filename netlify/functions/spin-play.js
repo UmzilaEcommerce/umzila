@@ -21,7 +21,7 @@ exports.handler = async (event) => {
     const { data: dc } = await admin.from('discount_codes').select('code, expires_at').eq('id', spin.discount_code_id).maybeSingle();
     return {
       gift: spin.gift_kind, code: dc && dc.code, expiresAt: dc && dc.expires_at, shareCode: spin.share_code || await S.shareCodeFor(admin, { email }),
-      useUrl: S.useUrlFor(spin.gift_kind, summary), emailMasked: S.maskEmail(email), test: spin.test || undefined
+      useUrl: await S.useUrlFor(admin, spin.gift_kind, summary), emailMasked: S.maskEmail(email), test: spin.test || undefined
     };
   };
 
@@ -79,7 +79,8 @@ exports.handler = async (event) => {
       const { data: g, error: gErr } = await admin.rpc('claim_spin_gift', { p_test: test });
       if (gErr) throw gErr;
       const pick = (Array.isArray(g) ? g[0] : g) || { gift_kind: 'drink', schedule_id: null };
-      const giftKind = S.GIFTS[pick.gift_kind] ? pick.gift_kind : 'drink';
+      const gifts = await S.loadGifts(admin);
+      const giftKind = gifts[pick.gift_kind] ? pick.gift_kind : (Object.keys(gifts)[0] || 'drink');
       let code = null;
       for (let i = 0; i < 4 && !code; i++) {
         const row = await S.codeRowFor(admin, giftKind, { email, friend: kind === 'friend', test });
@@ -92,9 +93,9 @@ exports.handler = async (event) => {
       }).eq('id', spin.id).select().single();
       if (upErr) throw upErr;
 
-      const useUrl = S.useUrlFor(giftKind, sum);
+      const useUrl = await S.useUrlFor(admin, giftKind, sum);
       const shareCode = won.share_code || (hadShare && hadShare.share_code);
-      const sent = await S.sendGiftEmail('prize', email, { name: won.name || st.firstName, kind: giftKind, code: code.code, expiresAt: code.expires_at, useUrl, shareCode });
+      const sent = await S.sendGiftEmail('prize', email, { name: won.name || st.firstName, gift: gifts[giftKind], code: code.code, expiresAt: code.expires_at, useUrl, shareCode });
       if (sent) await admin.from('spins').update({ prize_email_at: new Date().toISOString() }).eq('id', spin.id);
 
       return S.reply(200, { gift: giftKind, code: code.code, expiresAt: code.expires_at, shareCode, useUrl, emailMasked: S.maskEmail(email), test: test || undefined });

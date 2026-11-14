@@ -1179,6 +1179,10 @@ async function loadProducts() {
   try {
     let data = null;
     const cat = await catalogPromise;
+    // Home Page settings ride with the catalogue; read them directly if it failed.
+    if (cat && cat.home) applyHomeSettings(cat.home);
+    else supabaseClient.from('site_settings').select('value').eq('key', 'home').maybeSingle()
+      .then(({ data }) => { if (data && data.value) { applyHomeSettings(data.value); if (state.products && state.products.length) applyFilters(); } }, () => {});
     if (cat && Array.isArray(cat.products) && Array.isArray(cat.variants)) {
       setProductVariants(cat.variants);
       data = cat.products;
@@ -1967,15 +1971,18 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [   
-  `hero-isiqalo-kitchen.webp`,
-  `hero-nceks-quad-biking.webp`,
-  `hero-velaphi-shisanyama.webp`,
+  `/hero-isiqalo-kitchen.webp`,
+  `/hero-nceks-quad-biking.webp`,
+  `/hero-velaphi-shisanyama.webp`,
   `thumbnail1.webp`  // 4th slide fallback
 ];
-Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
+// The slides themselves come from the admin's Home Page settings (heroSlides,
+// applied by applyHomeSettings → setHeroSlides); index.html ships the same
+// line-up so the first paint doesn't wait for them.
+function initSlide(el, img, idx){
   // First slide now (it's preloaded in index.html <head>); the rest once the
   // page has loaded, so they don't compete with the products for bandwidth.
-  const setBg = () => { el.style.backgroundImage = `url("${heroPlaceholders[idx]}")`; };
+  const setBg = () => { el.style.backgroundImage = `url("${img}")`; };
   if (idx === 0 || document.readyState === 'complete') setBg(); else window.addEventListener('load', setBg, { once: true });
   el.style.backgroundSize='cover';
   el.style.backgroundPosition='center';
@@ -2005,9 +2012,31 @@ Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>{
       window.location.href = section;
     }
   });
-});
+}
+Array.from(document.querySelectorAll('.slide')).forEach((el,idx)=>initSlide(el, heroPlaceholders[idx], idx));
+// Replace the slides with the admin's list [{ image, link, label }] (only if it differs).
+function setHeroSlides(list){
+  if (!slides || !Array.isArray(list)) return;
+  list = list.filter(x => x && typeof x.image === 'string' && x.image);
+  if (!list.length) return;
+  const cur = Array.from(slides.children).map((el, i) => (el.dataset.href || '') + '|' + (heroPlaceholders[i] || '')).join(',');
+  if (cur === list.map(x => (x.link || '') + '|' + x.image).join(',')) return;
+  slides.innerHTML = '';
+  list.forEach((x, i) => {
+    const el = document.createElement('div');
+    el.className = 'slide';
+    if (x.link) el.dataset.href = x.link;
+    if (x.label) el.setAttribute('aria-label', x.label);
+    heroPlaceholders[i] = x.image;
+    slides.appendChild(el);
+    initSlide(el, x.image, i);
+  });
+  slideCount = list.length;
+  if (dots) dots.innerHTML = '';
+  makeDots(); goToSlide(0);
+}
 
-let slideIndex = 0; const slideCount = slides ? slides.children.length : 0;
+let slideIndex = 0; let slideCount = slides ? slides.children.length : 0;
 function makeDots(){ if(!dots) return; for(let i=0;i<slideCount;i++){ const d=document.createElement('div'); d.className='dot'; if(i===0) d.classList.add('active'); d.addEventListener('click',()=>goToSlide(i)); dots.appendChild(d);} }
 function goToSlide(i){ slideIndex = i; if(slides) slides.style.transform = 'translateX('+(-i*100)+'%)'; Array.from(dots ? dots.children : []).forEach((d,idx)=>d.classList.toggle('active', idx===i)); }
 makeDots(); let heroTimer = setInterval(()=>goToSlide((slideIndex+1)%slideCount),4500);
@@ -2643,12 +2672,14 @@ function getUserPreferenceCategories() {
  * New products blend toward the neutral prior (pop×0.5) until they have
  * enough volume to be trusted at full weight.
  ********************/
-// ── Home curation (founder 2026-10-05) — what Umzila is pushing right now.
+// ── Home curation — what Umzila is pushing right now. Set by the admin in
+// admin.html → Home Page, stored in public.site_settings (key 'home'), served
+// with the catalogue (get-catalog.js) and applied by applyHomeSettings().
+// The values below are only the stand-in until then (same line-up).
 // Stores are identified by their permanent link name (sellers.slug — never
 // changes on rename). storeBoost is added to EVERY ranking (home rows, search,
 // categories, "See all"), so these stores lead and everything else sits lower.
-// Change the line-up here; the home page's star/experience rows follow it.
-const HOME_CURATION = {
+let HOME_CURATION = {
   // 🔥 Workshop Shisanyama — the star row: every plate from these stores in
   // one row (they sit side by side at the Workshop, Durban, so a mixed basket
   // is one delivery). First store = preferred: it leads the row and ranks first.
@@ -2659,6 +2690,43 @@ const HOME_CURATION = {
   complementCategories: ['Drinks', 'Desserts', 'Snacks'],
   complementOrder: { Desserts: 0, Drinks: 1, Snacks: 2 }
 };
+// Apply the admin's Home Page settings: curation, row texts/links, hero slides.
+// Tolerant of missing/odd fields — anything unusable keeps the stand-in.
+function applyHomeSettings(h) {
+  if (!h || typeof h !== 'object') return;
+  const strs = a => Array.isArray(a) ? a.filter(x => typeof x === 'string' && x) : null;
+  const c = Object.assign({}, HOME_CURATION);
+  if (strs(h.starStores)) c.starStores = strs(h.starStores);
+  if (typeof h.experienceStore === 'string') c.experienceStore = h.experienceStore;
+  if (h.boost && typeof h.boost === 'object') {
+    c.boost = {};
+    Object.keys(h.boost).forEach(k => { const n = Number(h.boost[k]); if (isFinite(n)) c.boost[k] = n; });
+  }
+  if (strs(h.complementCategories)) {
+    c.complementCategories = strs(h.complementCategories);
+    c.complementOrder = {}; c.complementCategories.forEach((cat, i) => { c.complementOrder[cat] = i; });
+  }
+  HOME_CURATION = c;
+  const setRow = (sectionId, linkId, t, href) => {
+    const sec = document.getElementById(sectionId); if (!sec || !t || typeof t !== 'object') return;
+    const h2 = sec.querySelector('.section-header h2'), sub = sec.querySelector('.section-header .section-sub');
+    if (h2 && t.title) h2.textContent = t.title;
+    if (sub && typeof t.sub === 'string') { sub.textContent = t.sub; sub.style.display = t.sub ? '' : 'none'; }
+    const a = linkId ? document.getElementById(linkId) : sec.querySelector('.section-see-more');
+    if (a && t.linkText) a.textContent = t.linkText;
+    if (a && href) a.setAttribute('href', href);
+  };
+  setRow('shisanyamaSection', 'shisanyamaLink', h.star);
+  setRow('experienceSection', 'experienceLink', h.experience, c.experienceStore ? '/' + c.experienceStore : null);
+  setRow('underR100Section', null, h.complement);
+  if (h.star && h.star.title) {
+    const plain = String(h.star.title).replace(/^[^A-Za-z0-9]+/, '').trim();
+    SECTION_KEY_MAP.workshop.title = plain + ' — all';
+    document.querySelectorAll('.sf-sec[data-section="workshop"]').forEach(a => { a.textContent = 'All ' + plain; });
+  }
+  if (h.complement && h.complement.title) SECTION_KEY_MAP.underR100.title = String(h.complement.title).replace(/^[^A-Za-z0-9]+/, '').trim();
+  setHeroSlides(h.heroSlides);
+}
 function storeSlugOf(p) { return (p && p.seller && p.seller.slug) || ''; }
 function storeBoost(p) { return HOME_CURATION.boost[storeSlugOf(p)] || 0; }
 function effectivePrice(p) { return p.sale && p.salePrice ? p.salePrice : p.price; }

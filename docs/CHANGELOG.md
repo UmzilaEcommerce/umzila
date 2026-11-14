@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-14: Store promos, home curation, drinks screen and spin gifts are now run from the admin portal
+
+**Why:** new standing rule in CLAUDE.md ("Admin-manageable by default"): anything built must be runnable by the admin in the portal, not by editing code. Four things were hardcoded lists that only a code change could update.
+
+**What moved where:**
+- **Store promo pop-ups** (were `shop.html STORE_PROMOS` + `claim-store-promo.js PROMOS`, kept in sync by hand) → new table `public.store_promos`. **Admin → Marketing → Store promo pop-ups**: create/edit/switch off, pick excluded items, see codes given/used. `get-store.js` returns the running promo; `shop.html` builds the pop-up from it (end-date label worked out in SAST, "next N orders" from max_orders); `claim-store-promo.js` reads the same row. Trigger `store_promos_guard`: no two active promos overlapping on one store, and store/end time/prefix lock once codes exist (codes are matched to a promo by seller + prefix + expires_at). `store_promo_stats()` (admins only) counts codes. The two old promos (both ended) were copied in for history.
+- **Home curation** (was `script.js HOME_CURATION` + hero slides + row titles in index.html) → `public.site_settings` key `home` (new small key→jsonb table for public, non-secret settings; everyone can read, admins write). **Admin → Home Page** (new tab): banner slides (upload/reorder/link), star row stores + texts, experience store + texts, "goes with your plate" categories + texts, per-store boost. Served with the catalogue by `get-catalog.js` (`home`), applied by `script.js applyHomeSettings()` (direct read if the catalogue failed; the old values stay as the stand-in so nothing flashes).
+- **Drinks before checkout** (was `shop.html ADDON_STORES`; lib/spin.js had its own copy `WORKSHOP`) → `sellers.offer_house_addons` (admin-only via `sellers_guard_admin_columns`). **Admin → Home Page → Drinks before checkout** (checkboxes, save instantly). The free-drink spin gift links to these stores.
+- **Spin & Win gifts** (were `lib/spin.js GIFTS` + `spin.html GIFTS`, with the code shapes hardcoded per gift) → `public.spin_gifts`. **Admin → Spin & Win → Gifts on the wheel**: add/edit (emoji, wheel label, title, description, % / R off / free drink, min order, max discount, order) and switch on/off via `spin-admin.js save_gift`. `spin_schedule.gift_kind` is now a foreign key to it; `claim_spin_gift()` skips switched-off gifts. spin.html draws the wheel from the table (stand-in until it loads). The 4 existing gifts were copied in with identical behaviour.
+
+**Tested locally (netlify dev):** get-store/get-catalog return the new data; a 15-minute test promo on the Umzila Store page showed the pop-up from the DB, claim/same-code-again/status worked, overlap + locked-field changes were blocked by the trigger (test promo switched off and its code disabled afterwards — both had expired by 15:27 SAST the same day). Home page renders identically from the settings and responds to changed settings (rows, hidden experience row, rebuilt slides/dots). Spin wheel loads its 8 slices from spin_gifts. codeRowFor/useUrlFor unit-checked with a stub: same codes as before. No console errors. **Not clicked through:** the three admin screens themselves (needs an admin login; creating a temporary admin account on the live database was not allowed) — check them once in admin.html.
+
+**Files:** admin.html, shop.html, script.js, index.html, spin.html, netlify/functions/{claim-store-promo,get-store,get-catalog,spin-admin,spin-play,send-spin-emails}.js, netlify/functions/lib/spin.js, CLAUDE.md, docs/systems/{house-addons,spin-wheel-spec}.md. Database: migrations `admin_managed_home_promos_addons_spin_gifts`, `store_promos_guard`, `store_promo_stats`.
+
+---
+
 ## 2026-10-16: Specials show as a discount at checkout
 
 **Reported:** an item on special (Isiqalo SPECIAL, R250 → R150) looked like a plain R150 at checkout, and the store's 10% promo code deliberately doesn't cover it, so the buyer saw no discount at all.

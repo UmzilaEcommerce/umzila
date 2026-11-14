@@ -9,6 +9,7 @@
 //   availability  its opening/booking hours (seller_availability rows)
 //   hours         get_store_hours_status() at fetch time (open/closed now)
 //   sponsored     product ids with a running sponsored-product ad
+//   promo         the store's running promo pop-up (store_promos), or null
 // Cached at the edge for 60 s per slug (then refreshed in the background).
 // Stock/booking capacity are always re-checked live (validate-cart,
 // get_booking_load, hold-service-booking) — never trusted from here. The
@@ -18,7 +19,8 @@ const { createClient } = require('@supabase/supabase-js');
 // Every column the store pages read from sellers — nothing private.
 const SELLER_COLS = 'id, shop_name, slug, status, description, about_story, owner_story, location, logo_url, banner_url, '
   + 'turnaround_time, years_operating, return_policy, theme_color, self_arranged_radius_km, booking_capacity, '
-  + 'booking_start_interval_minutes, social_instagram, social_tiktok, whatsapp_number, support_email, delivery_method, free_delivery';
+  + 'booking_start_interval_minutes, social_instagram, social_tiktok, whatsapp_number, support_email, delivery_method, free_delivery, '
+  + 'offer_house_addons';
 
 exports.handler = async function (event) {
   const headers = { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' };
@@ -41,11 +43,14 @@ exports.handler = async function (event) {
     if (sellerRes.error) throw sellerRes.error;
     const seller = (sellerRes.data || [])[0] || null;
     if (!seller) return { statusCode: 200, headers: cached, body: JSON.stringify({ seller: null }) };
-    const [prods, avail, hours, ads] = await Promise.all([
+    const nowIso = new Date().toISOString();
+    const [prods, avail, hours, ads, promo] = await Promise.all([
       sb.from('products').select('*, product_images!fk_product_images_product(*)').eq('seller_id', seller.id).eq('visible', true).order('created_at', { ascending: false }),
       sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', seller.id),
       sb.rpc('get_store_hours_status', { p_seller_ids: [seller.id] }),
-      sb.from('ad_campaigns').select('product_id').eq('type', 'sponsored_product').eq('status', 'active').gt('ends_at', new Date().toISOString())
+      sb.from('ad_campaigns').select('product_id').eq('type', 'sponsored_product').eq('status', 'active').gt('ends_at', nowIso),
+      sb.from('store_promos').select('percent, starts_at, ends_at, max_orders, thing, note').eq('seller_id', seller.id).eq('active', true)
+        .lte('starts_at', nowIso).gt('ends_at', nowIso).order('ends_at', { ascending: false }).limit(1)
     ]);
     if (prods.error) throw prods.error;
     return {
@@ -57,6 +62,7 @@ exports.handler = async function (event) {
         availability: avail.error ? null : (avail.data || []),
         hours: hours.error ? null : ((hours.data || [])[0] || null),
         sponsored: ads.error ? [] : (ads.data || []).map(a => a.product_id).filter(id => (prods.data || []).some(p => p.id === id)),
+        promo: promo.error ? null : ((promo.data || [])[0] || null),
         at: new Date().toISOString()
       })
     };

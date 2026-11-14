@@ -1,4 +1,6 @@
-// Store promo pop-up (shop.html STORE_PROMOS) → one personal, one-off code.
+// Store promo pop-up (shop.html) → one personal, one-off code.
+// The promos live in public.store_promos (admin.html → Marketing → Store promo
+// pop-ups): store, % off, start/end, order cap, code prefix, excluded items.
 // POST { slug, email } → { code, until } (and emails the code).
 //
 // One code per email per promo (asking again returns the same code), locked
@@ -13,28 +15,6 @@ const crypto = require('crypto');
 const { checkEmail } = require('./lib/contact-check');
 const { mailFrom } = require('./lib/mail');
 
-// slug → promo. Keep the dates in sync with shop.html STORE_PROMOS.
-const PROMOS = {
-  velaphishisanyama: {
-    percent: 10,
-    ends: '2026-10-10T18:00:00+02:00',
-    maxOrders: 100,          // codes actually used across this promo
-    prefix: 'VELAPHI',
-    label: 'Workshop Shisanyama'
-  },
-  isiqalokitchen: {
-    percent: 10,
-    ends: '2026-10-19T23:59:00+02:00',
-    maxOrders: 100,
-    prefix: 'ISIQALO',
-    label: 'Isiqalo Kitchen',
-    // Already-discounted items the code must not reduce further. The code is
-    // then scoped to the store's other products (scope 'products').
-    excludeProductIds: ['36e126a7-a77b-4a55-bd0f-e7b5b5e31eb9'], // SPECIAL
-    exclusionNote: 'except the SPECIAL (already on special)'
-  }
-};
-
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' };
 const reply = (code, body) => ({ statusCode: code, headers: CORS, body: JSON.stringify(body) });
 const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -45,14 +25,29 @@ exports.handler = async (event) => {
   let b; try { b = JSON.parse(event.body || '{}'); } catch { return reply(400, { error: 'Invalid request' }); }
 
   const slug = String(b.slug || '').toLowerCase();
-  const promo = PROMOS[slug];
-  if (!promo) return reply(404, { error: 'No promo here.' });
-  const ends = new Date(promo.ends);
-  if (Date.now() >= ends.getTime()) return reply(410, { error: 'This promo has ended.' });
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return reply(404, { error: 'No promo here.' });
 
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const { data: seller, error: sErr } = await admin.from('sellers').select('id, shop_name').eq('slug', slug).maybeSingle();
-  if (sErr || !seller) return reply(500, { error: 'Something went wrong — please try again.' });
+  if (sErr) return reply(500, { error: 'Something went wrong — please try again.' });
+  if (!seller) return reply(404, { error: 'No promo here.' });
+
+  // The store's promo that has started (latest end first). Codes are matched
+  // to it by seller + prefix + expires_at = its end, as before.
+  const { data: row, error: prErr } = await admin.from('store_promos')
+    .select('percent, ends_at, max_orders, code_prefix, exclude_product_ids, exclusion_note')
+    .eq('seller_id', seller.id).eq('active', true).lte('starts_at', new Date().toISOString())
+    .order('ends_at', { ascending: false }).limit(1).maybeSingle();
+  if (prErr) return reply(500, { error: 'Something went wrong — please try again.' });
+  if (!row) return reply(404, { error: 'No promo here.' });
+  const promo = {
+    percent: row.percent, ends: row.ends_at, maxOrders: row.max_orders, prefix: row.code_prefix,
+    // Already-discounted items the code must not reduce further: the code is
+    // then scoped to the store's other products (scope 'products').
+    excludeProductIds: row.exclude_product_ids || [], exclusionNote: row.exclusion_note || ''
+  };
+  const ends = new Date(promo.ends);
+  if (Date.now() >= ends.getTime()) return reply(410, { error: 'This promo has ended.' });
 
   const promoCodes = (cols, opts) => admin.from('discount_codes').select(cols, opts)
     .eq('seller_id', seller.id).eq('type', 'percentage').eq('expires_at', ends.toISOString()).like('code', promo.prefix + '%');

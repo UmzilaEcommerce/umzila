@@ -372,14 +372,18 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
 <script>
 (function () {
   'use strict';
-  // ── Gift labels (mirror of netlify/functions/lib/spin.js GIFTS: change both) ──
+  // ── Gifts: public.spin_gifts (admin → Spin & Win → Gifts on the wheel), read
+  // in connect(). These are only the stand-in until that read arrives. ──
   var GIFTS = {
     drink:   { emoji: '🥤', label: 'Free drink', title: 'A free cold drink', sub: 'With any Workshop order (Isiqalo Kitchen or Velaphi).' },
     pct10:   { emoji: '🏷️', label: '10% off', title: '10% off', sub: 'Your whole next order.' },
     r20:     { emoji: '💸', label: 'R20 off', title: 'R20 off', sub: 'Your next order over R60.' },
     food150: { emoji: '🤯', label: 'Food FREE', title: 'Your food, on us', sub: 'Up to R150 off your next order. You just pay delivery.' }
   };
-  var WHEEL = ['drink', 'pct10', 'r20', 'food150', 'drink', 'pct10', 'r20', 'food150'];
+  var FALLBACK_GIFT = { emoji: '🎁', label: 'Gift', title: 'Your gift', sub: 'Use it on your next order.' };
+  // Every active gift is a slice, repeated round the wheel (about 8 slices).
+  function wheelOf(kinds) { var reps = Math.max(1, Math.round(8 / kinds.length)), w = []; for (var r = 0; r < reps; r++) w = w.concat(kinds); return w; }
+  var WHEEL = wheelOf(Object.keys(GIFTS));
   var SLICE = 360 / WHEEL.length;
   var FN = '/.netlify/functions/';
   var REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -474,6 +478,14 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
       var url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey;
       if (!url || !key || !window.supabase) return null;
       S.sb = window.supabase.createClient(url, key);
+      try {
+        var gr = await S.sb.from('spin_gifts').select('kind, emoji, label, title, sub').eq('active', true).order('sort_order', { ascending: true }).order('kind', { ascending: true });
+        if (!gr.error && gr.data && gr.data.length) {
+          var all = {}; gr.data.forEach(function (g) { all[g.kind] = g; });
+          Object.keys(GIFTS).forEach(function (k) { if (!all[k]) all[k] = GIFTS[k]; }); // older gifts still show on the result screen
+          GIFTS = all; WHEEL = wheelOf(gr.data.map(function (g) { return g.kind; })); SLICE = 360 / WHEEL.length; drawWheel();
+        }
+      } catch (e) { /* keep the stand-in wheel */ }
       if (window.umzilaPresence) umzilaPresence.start(S.sb, 'spin');
       return S.sb;
     } catch (e) { return null; }
@@ -621,10 +633,10 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
   // ── The wheel ──
   function polar(a, r) { var rad = a * Math.PI / 180; return [r * Math.sin(rad), -r * Math.cos(rad)]; }
   var SLICE_COLORS = [['#0a2f66', '#ffffff'], ['#e0284f', '#ffffff'], ['#ffc21a', '#0a2f66'], ['#fbf5ec', '#0a2f66']];
-  (function drawWheel() {
+  function drawWheel() {
     var g = '', R = 182;
     WHEEL.forEach(function (k, i) {
-      var a0 = i * SLICE - SLICE / 2, a1 = a0 + SLICE, p0 = polar(a0, R), p1 = polar(a1, R), c = SLICE_COLORS[i % 4], gift = GIFTS[k];
+      var a0 = i * SLICE - SLICE / 2, a1 = a0 + SLICE, p0 = polar(a0, R), p1 = polar(a1, R), c = SLICE_COLORS[(WHEEL.length % 4 === 1 && i === WHEEL.length - 1) ? 1 : i % 4], gift = GIFTS[k] || FALLBACK_GIFT;
       g += '<path d="M0 0 L' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) + ' A' + R + ' ' + R + ' 0 0 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2) + ' Z" fill="' + c[0] + '" stroke="#0a2f66" stroke-width="2"/>';
       var words = gift.label.split(' ');
       g += '<g transform="rotate(' + (i * SLICE) + ')"><text y="-138" text-anchor="middle" font-size="32">' + gift.emoji + '</text>' +
@@ -634,7 +646,8 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
     var b = '';
     for (var i = 0; i < 24; i++) { var p = polar(i * 15, 189); b += '<circle class="bulb" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="4" fill="' + (i % 2 ? '#ffc21a' : '#ffffff') + '"/>'; }
     $('bulbs').innerHTML = b;
-  })();
+  }
+  drawWheel();
   var angle = 0;
   function setAngle(a) { angle = a; $('wheel').setAttribute('transform', 'rotate(' + (a % 360).toFixed(3) + ')'); }
 
@@ -742,7 +755,7 @@ footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
   // ── Result / gift ──
   var countTimer = null;
   function showGift(g, already) {
-    var kind = g.gift || g.kind, info = GIFTS[kind] || GIFTS.drink;
+    var kind = g.gift || g.kind, info = GIFTS[kind] || FALLBACK_GIFT;
     $('pEmoji').textContent = info.emoji; $('pTitle').textContent = info.title; $('pSub').textContent = info.sub;
     $('pCode').textContent = g.code || '';
     $('pTest').hidden = !g.test;

@@ -36,7 +36,7 @@ exports.handler = async () => {
     if (!variant) continue;
     let summary = null;
     if (s.order_id) { const { data: o } = await admin.from('orders').select('id, created_at').eq('id', s.order_id).maybeSingle(); summary = await S.orderSummary(admin, o); }
-    const ok = await S.sendGiftEmail(variant, s.email, { name: s.name, kind: s.gift_kind, code: dc.code, expiresAt: dc.expires_at, useUrl: S.useUrlFor(s.gift_kind, summary), shareCode: s.share_code });
+    const ok = await S.sendGiftEmail(variant, s.email, { name: s.name, gift: await S.giftInfo(admin, s.gift_kind), code: dc.code, expiresAt: dc.expires_at, useUrl: await S.useUrlFor(admin, s.gift_kind, summary), shareCode: s.share_code });
     if (ok) {
       await admin.from('spins').update(variant === 'final' ? { final_email_at: now.toISOString(), reminder_email_at: s.reminder_email_at || now.toISOString() } : { reminder_email_at: now.toISOString() }).eq('id', s.id);
       variant === 'final' ? finals++ : reminders++;
@@ -58,7 +58,7 @@ exports.handler = async () => {
     if (f.referral_reward_code_id) {
       const { data: rc } = await admin.from('discount_codes').select('code, expires_at').eq('id', f.referral_reward_code_id).maybeSingle();
       if (!rc || !sharer) { await admin.from('spins').update(stamp).eq('id', f.id); continue; }
-      if (await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, kind: 'r20', code: rc.code, expiresAt: rc.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) })) {
+      if (await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, gift: S.REFERRAL_GIFT, code: rc.code, expiresAt: rc.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) })) {
         await admin.from('spins').update(stamp).eq('id', f.id);
       }
       continue;
@@ -92,7 +92,7 @@ exports.handler = async () => {
       if (!code) continue; // try again next run
       await admin.from('spins').update({ referral_reward_code_id: code.id }).eq('id', f.id);
       rewards++;
-      const sent = await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, kind: 'r20', code: code.code, expiresAt: code.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) });
+      const sent = await S.sendGiftEmail('referral', sharer.email, { name: sharer.name, gift: S.REFERRAL_GIFT, code: code.code, expiresAt: code.expires_at, useUrl: '/', friendName: S.firstNameOf(f.name) });
       if (!sent) continue; // email retried next run
     }
     await admin.from('spins').update(stamp).eq('id', f.id);

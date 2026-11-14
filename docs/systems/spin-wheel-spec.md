@@ -3,7 +3,7 @@
 Status (2026-10-15): **built**: DB, server functions, `spin.html`, admin "Spin & Win" tab. Founder decisions are final unless marked *open*.
 
 **How it was built (differences from the spec below — the code is the truth):**
-- Gift catalogue lives in `netlify/functions/lib/spin.js GIFTS` (not `spin-gifts.js`), mirrored in `spin.html GIFTS`. All four gifts are on the wheel; there's no admin "on the wheel" toggle.
+- Gift catalogue lives in the `public.spin_gifts` table (since 2026-11-14; before that a `GIFTS` constant in lib/spin.js + spin.html). Admin → Spin & Win → "Gifts on the wheel" adds/edits them and switches them on/off (spin-admin.js `save_gift`). Every active gift is a slice (repeated round the wheel to about 8 slices; max 8 gifts). Types: `percentage` (amount %, optional max discount R / min order R), `fixed` (R off, optional min order), `free_drink` (100% off the house drinks, capped at the dearest drink). lib/spin.js `codeRowFor()` turns the row into the discount code; edits only affect gifts won afterwards. A gift can't be switched off while it is the default or in a running/upcoming slot; claim_spin_gift skips switched-off gifts anyway.
 - Spin sessions are HMAC-signed with a key derived from the service-role key (no separate `SPIN_SECRET`).
 - **Invites = this system.** The old sign-up referral (`process-referral.js`, 15% / R40 at sign-up) was retired on 2026-10-15 (abusable, see CHANGELOG). Every customer's invite link is `/spin?ref=<share_code>`. `spins.kind='share'` / `outcome='share'` rows hold a code for people who haven't spun (one per email, `lib/spin.js shareCodeFor()`, also the 26 carried-over old `profiles.referral_code` codes, lower-cased). A spin reuses an existing code (its own `share_code` stays null). The home banner gets the code from `spin-identify` mode `share` (Bearer); signed-out visitors go to `/spin?share=1`. Old `/?ref=CODE` links redirect to `/spin?ref=CODE` (script.js `checkUrlForReferral`).
 - Referral reward (`send-spin-emails.js`): the code is created and stored on the friend's row (`referral_reward_code_id`) first; `referral_rewarded_at` = "sharer was emailed". A failed email is retried on later runs, never a second code. Codes are `GIFT…`, R20 over R60, `multi_use` + max 1 (sign-in), email-locked, 30 days.
@@ -66,7 +66,7 @@ Gift kinds live in code (`netlify/functions/lib/spin-gifts.js`). Each kind maps 
 
 As with every promo code, services/bookings are never discounted (`computeDiscount`).
 
-**The free drink:** drinks can only be added on stores in `ADDON_STORES` (Velaphi and Isiqalo). The prize screen says *"with any Workshop order"*, and "Use it now" goes to the Workshop store they last ordered from (or Isiqalo).
+**The free drink:** drinks can only be added on stores with `sellers.offer_house_addons` (Velaphi and Isiqalo; admin → Home Page → Drinks before checkout). The prize screen says *"with any Workshop order"*, and "Use it now" goes to the Workshop store they last ordered from (or Isiqalo).
 
 **What the wheel shows:** only gifts that admin marks "on the wheel" (`spin-gifts.js` `onWheel`), currently `drink`, `pct10`, `r20` and `food150`. **Rule for admin:** anything on the wheel must really be given away in some slot. For example, schedule a "Your food FREE" slot from time to time, otherwise remove it from the wheel.
 
