@@ -21,9 +21,20 @@
 //     possible, except a stop that delays it by ≤ MAX_DELAY_MIN may go first
 //     ("quickly drop the close one first"); the new order itself must arrive
 //     within MAX_NEW_ORDER_WAIT_MIN.
+// RUN MODE (delivery timeslots, 2026-11-14, founder decision 1+2): when the added
+// order and an order already on the trip share a delivery run (orders.slot_id +
+// slot_run_date, timeslots on) they were promised the same window, so those run-mates
+// are NOT protected from each other (no 8-min rule among them, and the 60-min
+// new-customer wait cap is waived) — the trip is planned fastest overall. Priority
+// run-mates are still delivered before non-priority run-mates (when a sequence
+// allows it). Orders of other runs / no run on the trip keep every rule above.
+// The 5-order cap is unchanged (non-relaxed: trip_full -> another rider; relaxed:
+// appended at the end) so planning stays instant. Without a run on the added order
+// nothing here runs and the result is exactly the pre-timeslots plan.
 // Pure planning — never writes. respond-to-driver-offer.js applies the result
 // with apply_route_sequence().
 const { getRoadMatrix } = require('./road-distance');
+const { getRunKeys } = require('./dispatch');
 
 const MAX_DELIVERIES_PER_TRIP = 5;   // founder 2026-10-05 (can grow later — nothing else assumes 5)
 const MAX_DELAY_MIN = 8;             // founder 2026-10-05
@@ -63,6 +74,14 @@ async function planTrip(supabase, input, add, opts = {}) {
              order: open.map(s => ({ id: s.id })).concat([{ new: 'pickup' }, { new: 'drop' }]),
              addedMin: null, addedKm: null, afterName: last ? (last.customer || null) : null, newArrivalMin: null, totalMin: null };
   }
+  // Run mode: which orders already on the trip share the added order's run?
+  const runMates = new Set();
+  if (add) {
+    const keys = await getRunKeys(supabase, [add.deliveryId, ...openDeliveries]);
+    const k = keys && keys.get(add.deliveryId);
+    if (k) for (const dl of openDeliveries) if (keys.get(dl) === k) runMates.add(dl);
+  }
+  const runMode = runMates.size > 0;
   if (open.some(s => !Number.isFinite(s.lat) || !Number.isFinite(s.lon))) return { ok: false, reason: 'stop_without_location' };
 
   const locked = open.filter(s => s.status === 'active' || s.status === 'arriving');
@@ -146,11 +165,29 @@ async function planTrip(supabase, input, add, opts = {}) {
   // priority"); customers who bought priority themselves are always protected.
   const priorityByDelivery = {};
   nodes.forEach(nd => { if (nd.type === 'drop') priorityByDelivery[nd.delivery] = nd.priority; });
-  const protectedDrops = Object.keys(base.arrival).filter(dl => !(add && add.priority) || priorityByDelivery[dl]);
+  const protectedDrops = Object.keys(base.arrival).filter(dl => (!(add && add.priority) || priorityByDelivery[dl]) && !runMates.has(dl));
   let feasible = results.filter(r =>
     protectedDrops.every(dl => r.arrival[dl] <= base.arrival[dl] + MAX_DELAY_MIN + 1e-9) &&
-    (!add || relaxed || r.arrival[add.deliveryId] <= MAX_NEW_ORDER_WAIT_MIN));
+    (!add || relaxed || runMode || r.arrival[add.deliveryId] <= MAX_NEW_ORDER_WAIT_MIN));
   if (!feasible.length) return { ok: false, reason: 'too_much_delay' };
+
+  // Run mode: priority run-mates are sequenced before non-priority run-mates when possible.
+  if (runMode) {
+    const mates = new Set([...runMates, add.deliveryId]);
+    const isPrio = dl => dl === add.deliveryId ? !!add.priority : !!priorityByDelivery[dl];
+    const okSeq = r => {
+      let sawNonPrio = false;
+      for (const i of r.seq) {
+        const nd = nodes[i];
+        if (nd.type !== 'drop' || !mates.has(nd.delivery)) continue;
+        if (!isPrio(nd.delivery)) sawNonPrio = true;
+        else if (sawNonPrio) return false;
+      }
+      return true;
+    };
+    const ordered = feasible.filter(okSeq);
+    if (ordered.length) feasible = ordered;
+  }
 
   // Priority orders: no later than MAX_DELAY_MIN after their earliest possible arrival.
   const priorityDeliveries = [...new Set(nodes.filter(nd => nd.priority && nd.type === 'drop').map(nd => nd.delivery))];
@@ -179,7 +216,8 @@ async function planTrip(supabase, input, add, opts = {}) {
     addedKm: Math.max(0, Math.round((best.d - base.d) * 10) / 10),
     afterName,
     newArrivalMin: add ? Math.round(best.arrival[add.deliveryId]) : null,
-    totalMin: Math.round(best.t)
+    totalMin: Math.round(best.t),
+    ...(runMode ? { runMode: true } : {})
   };
 }
 function sumArrivals(r) { return Object.values(r.arrival).reduce((s, v) => s + v, 0); }

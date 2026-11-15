@@ -1139,7 +1139,7 @@
             var tr = await sb.rpc('get_delivery_tracking', { p_order_id: links[j].o, p_token: links[j].t });
             var row = tr && Array.isArray(tr.data) ? tr.data[0] : (tr && tr.data);
             if (row && row.delivery_id && row.status !== 'DELIVERED') {
-              d = { order_id: links[j].o, status: row.status, delivered_at: null };
+              d = { order_id: links[j].o, status: row.status, delivered_at: null, slot: row.slot_window_start ? row : null };
               href = 'track.html?order=' + encodeURIComponent(links[j].o) + '&t=' + encodeURIComponent(links[j].t);
             }
           }
@@ -1149,6 +1149,33 @@
         var TERMINAL_HIDE = ['CANCELLED', 'FAILED', 'RETURNED']; // not part of §50's widget states
         if (TERMINAL_HIDE.indexOf(d.status) !== -1) return;
 
+        // Delivery timeslots: an order with a run is described by its window
+        // (Confirmed / Preparing / Out for delivery), never "with a driver".
+        // get_delivery_tracking is asked once per order (cached 5 min) and only
+        // when the order is still before the door; no run = today's wording.
+        var slotRow = d.slot || null;
+        if (!slotRow && d.status !== 'DELIVERED' && ['ARRIVING', 'PIN_REQUIRED'].indexOf(d.status) === -1) {
+          var cached = window.__adwSlot && window.__adwSlot[d.order_id];
+          if (cached && Date.now() - cached.at < 300000) { slotRow = cached.row; }
+          else {
+            try {
+              var sr = await sb.rpc('get_delivery_tracking', { p_order_id: d.order_id, p_token: null });
+              var srow = sr && Array.isArray(sr.data) ? sr.data[0] : (sr && sr.data);
+              slotRow = (srow && srow.slot_window_start) ? srow : null;
+            } catch (e) { slotRow = null; }
+            window.__adwSlot = window.__adwSlot || {};
+            window.__adwSlot[d.order_id] = { at: Date.now(), row: slotRow };
+          }
+        }
+        var slotText = null;
+        if (slotRow && slotRow.slot_window_start && !slotRow.slot_needs_attention && ['PENDING', 'READY_FOR_DISPATCH', 'OFFERED', 'REASSIGNING', 'ASSIGNED', 'DRIVER_AT_PICKUP', 'PARTIALLY_PICKED_UP', 'PICKED_UP', 'IN_ROUTE', 'NEXT_STOP'].indexOf(d.status) !== -1) {
+          var hm = function(v) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)); };
+          var cut = slotRow.slot_cutoff_at ? new Date(slotRow.slot_cutoff_at).getTime() : new Date(slotRow.slot_window_start).getTime() - 15 * 60000;
+          if (d.status === 'IN_ROUTE' || d.status === 'NEXT_STOP') slotText = 'Out for delivery — arrives by ' + hm(slotRow.slot_window_end);
+          else if (Date.now() < cut) slotText = 'Order confirmed — arriving ' + hm(slotRow.slot_window_start) + ' to ' + hm(slotRow.slot_window_end);
+          else slotText = 'Preparing — arriving ' + hm(slotRow.slot_window_start) + ' to ' + hm(slotRow.slot_window_end);
+        }
+
         var statusEl = document.getElementById('adwStatus');
         var iconEl = document.getElementById('adwIcon');
         var PREPARING = ['PENDING', 'READY_FOR_DISPATCH', 'OFFERED', 'REASSIGNING'];
@@ -1156,7 +1183,10 @@
         var TRAVELLING = ['IN_ROUTE', 'NEXT_STOP'];
         var ARRIVING = ['ARRIVING', 'PIN_REQUIRED'];
 
-        if (d.status === 'DELIVERED') {
+        if (slotText) {
+          statusEl.textContent = slotText;
+          iconEl.textContent = (d.status === 'IN_ROUTE' || d.status === 'NEXT_STOP') ? '🛵' : '📦';
+        } else if (d.status === 'DELIVERED') {
           // "Delivered" shows for 5 minutes after the PIN is confirmed, then
           // the widget goes away (founder 2026-10-04) — also on a page that
           // stays open past that point.

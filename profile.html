@@ -1154,6 +1154,16 @@
         const { data: deliveryRows } = await sb.from('deliveries').select('order_id, status').in('order_id', deliveryOrderIds);
         (deliveryRows || []).forEach(d => { deliveryStatusCache[d.order_id] = d.status; });
       }
+      // Delivery timeslots: orders with a run show their window (see slotBadge).
+      // Cut-off minutes + the server clock come from the one public config call,
+      // made only when an order actually has a run.
+      slotClock = { offset: 0, cutoff: 15 };
+      if (orders.some(o => o.slot_window_start)) {
+        try {
+          const { data: tc } = await sb.rpc('timeslot_public_config');
+          if (tc && tc.server_now) slotClock = { offset: new Date(tc.server_now).getTime() - Date.now(), cutoff: Number(tc.cutoff_minutes) || 15 };
+        } catch (_) {}
+      }
 
       // Fetch product images
       const productIds = [...new Set(orders.flatMap(o => (o.items||[]).map(i => i.product_id||i.id).filter(Boolean)))];
@@ -1397,6 +1407,18 @@
   // en route to the customer into "Paid" (not "Fulfilled"/"Packaging"), since
   // those in-between states are store/dispatch mechanics the customer never
   // needs to track. Only DELIVERED is ever "Delivered" here.
+  let slotClock = { offset: 0, cutoff: 15 };
+  // Run wording for a paid, not-yet-on-the-road order: Confirmed (before the
+  // cut-off) / Preparing (from it), with the window. null = today's badge.
+  function slotBadge(o) {
+    if (!o.slot_window_start || !o.slot_window_end) return null;
+    const hm = iso => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
+    if (o.slot_needs_attention) return `<span class="order-badge badge-pending">Confirmed · we'll contact you</span>`;
+    const cutoffMs = new Date(o.slot_window_start).getTime() - slotClock.cutoff * 60000;
+    const label = (Date.now() + slotClock.offset) < cutoffMs ? 'Confirmed' : 'Preparing';
+    return `<span class="order-badge badge-paid">${label} · ${hm(o.slot_window_start)}–${hm(o.slot_window_end)}</span>`;
+  }
+
   function deliveryHeaderStatus(deliveryStatus) {
     if (deliveryStatus === 'DELIVERED') return 'Delivered';
     if (['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED'].includes(deliveryStatus)) return 'Out for Delivery';
@@ -1515,7 +1537,7 @@
         </div>
         <div class="order-right">
           <div class="order-amount">${fmt(o.total||0)}</div>
-          ${statusBadge(headerStatus)}
+          ${(isDeliveryNetwork && headerStatus === 'paid' && slotBadge(o)) || statusBadge(headerStatus)}
         </div>
         <div class="order-chevron">&#8964;</div>
       </div>

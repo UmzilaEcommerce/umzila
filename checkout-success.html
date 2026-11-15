@@ -264,6 +264,33 @@
                     }
                   } catch (_) {}
                 }
+                // Delivery timeslots: an order with a run promises its window
+                // (never an instant driver). order.run only exists for orders
+                // placed while the feature is on.
+                if (order.run && order.hasPhysical) {
+                  try {
+                    const sast = (iso, o) => new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'Africa/Johannesburg' }, o)).format(new Date(iso));
+                    const hm = iso => sast(iso, { hour: '2-digit', minute: '2-digit', hour12: false });
+                    const dayKey = iso => sast(iso, { year: 'numeric', month: '2-digit', day: '2-digit' });
+                    const dayWord = iso => dayKey(iso) === dayKey(Date.now()) ? 'today'
+                      : dayKey(iso) === dayKey(Date.now() + 86400000) ? 'tomorrow'
+                      : sast(iso, { weekday: 'short', day: 'numeric', month: 'short' });
+                    const r = order.run;
+                    let msg;
+                    if (r.needs_attention || !r.window_start) {
+                      msg = 'Order confirmed. Your payment reached us after your delivery time had closed, so Umzila will contact you shortly to arrange a new time.';
+                    } else {
+                      msg = 'Order confirmed. Arriving ' + dayWord(r.window_start) + ' between ' + hm(r.window_start) + ' and ' + hm(r.window_end) + '.';
+                      if (r.moved_from && r.moved_from.window_start) {
+                        msg += ' Your payment arrived after ' + dayWord(r.moved_from.window_start) + '’s ' + hm(r.moved_from.window_start) + ' run closed, so we moved you to this one.'
+                          + (r.cutoff_at ? ' Not suitable? Cancel for a full refund until ' + hm(r.cutoff_at) + ' — reply to your confirmation email or WhatsApp us.' : '');
+                      }
+                    }
+                    document.getElementById('successSub').textContent = msg;
+                    document.getElementById('shipNote').textContent = order.trackPath ? 'You can follow your order below.' : '';
+                    const cn = document.getElementById('closedNote'); if (cn) cn.style.display = 'none';
+                  } catch (_) {}
+                }
                 // Nothing ships in a service-only order (a booking, a voucher…)
                 if (!order.hasPhysical) {
                   const onlyVouchers = (order.services || []).length && order.services.every(sv => sv.is_voucher);

@@ -23,7 +23,7 @@ exports.handler = async function (event) {
   }
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const { data: order } = await supabase.from('orders')
-    .select('id, payment_status, items').eq('m_payment_id', m).maybeSingle();
+    .select('id, payment_status, items, slot_id, slot_run_date, slot_window_start, slot_window_end, slot_needs_attention').eq('m_payment_id', m).maybeSingle();
   if (!order) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Order not found' }) };
 
   const items = Array.isArray(order.items) ? order.items : [];
@@ -53,5 +53,30 @@ exports.handler = async function (event) {
     const { data: delivery } = await supabase.from('deliveries').select('tracking_token').eq('order_id', order.id).maybeSingle();
     if (delivery && delivery.tracking_token) trackPath = `/track.html?order=${order.id}&t=${delivery.tracking_token}`;
   }
-  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services, trackPath }) };
+  // Delivery timeslots: the run this order is in (null for orders without one, e.g. placed
+  // while the feature was off, or services). moved_from = the window it was first sold.
+  let run = null;
+  if (order.slot_id && order.payment_status === 'paid') {
+    let cutoffMin = 15;
+    try {
+      const { data: st } = await supabase.from('site_settings').select('value').eq('key', 'timeslots').maybeSingle();
+      if (st && st.value && Number(st.value.cutoff_minutes) > 0) cutoffMin = Number(st.value.cutoff_minutes);
+    } catch (_) {}
+    let movedFrom = null;
+    try {
+      const { data: mv } = await supabase.from('delivery_run_moves').select('from_window_start, from_window_end, reason')
+        .eq('order_id', order.id).order('created_at', { ascending: true }).limit(1);
+      if (mv && mv[0] && mv[0].from_window_start) movedFrom = { window_start: mv[0].from_window_start, window_end: mv[0].from_window_end, reason: mv[0].reason };
+    } catch (_) {}
+    const ws = order.slot_window_start;
+    run = {
+      run_date: order.slot_run_date,
+      window_start: order.slot_needs_attention ? null : ws,
+      window_end: order.slot_needs_attention ? null : order.slot_window_end,
+      cutoff_at: ws ? new Date(new Date(ws).getTime() - cutoffMin * 60000).toISOString() : null,
+      needs_attention: !!order.slot_needs_attention,
+      moved_from: movedFrom
+    };
+  }
+  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services, trackPath, run }) };
 };

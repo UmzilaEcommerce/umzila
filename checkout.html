@@ -812,6 +812,21 @@
     .prio-help { position: relative; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #f59e0b; background: #fff; color: #b45309; font-weight: 900; font-size: 14px; cursor: pointer; flex-shrink: 0; font-family: inherit; }
     .prio-tip { display: none; position: absolute; right: 0; bottom: calc(100% + 8px); width: 220px; background: #1f2937; color: #fff; font-size: 12.5px; font-weight: 500; line-height: 1.4; padding: 9px 11px; border-radius: 10px; text-align: left; z-index: 20; box-shadow: 0 8px 20px rgba(0,0,0,.2); }
     .prio-help:hover .prio-tip, .prio-help:focus .prio-tip, .prio-help.open .prio-tip { display: block; }
+    /* Delivery-time picker (timeslots) — only rendered while the admin switch is on. */
+    .ts-picker { margin-bottom: 16px; padding: 12px; border-radius: 14px; background: #eef2f8; color: var(--accent); }
+    .ts-picker .ts-title { font-size: 14px; font-weight: 800; margin: 0 0 8px; }
+    .ts-picker .ts-day { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 6px; }
+    .ts-picker .ts-run { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; margin-bottom: 6px; border: 2px solid #dbe3f0; background: #fff; border-radius: 12px; cursor: pointer; text-align: left; font: inherit; color: #1a1a2e; min-height: 48px; }
+    .ts-picker .ts-run.on { border-color: var(--accent); background: #f3f7ff; }
+    .ts-picker .ts-radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #9aa7bd; flex: 0 0 auto; position: relative; }
+    .ts-picker .ts-run.on .ts-radio { border-color: var(--accent); }
+    .ts-picker .ts-run.on .ts-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+    .ts-picker .ts-win { font-size: 15px; font-weight: 700; }
+    .ts-picker .ts-by { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+    .ts-picker .ts-warn { display: block; font-size: 12.5px; font-weight: 700; color: var(--color-danger); }
+    .ts-picker .ts-note { font-size: 13px; font-weight: 600; margin: 0 0 8px; padding: 9px 11px; border-radius: 10px; background: #fff7e0; color: #78350f; line-height: 1.4; }
+    .ts-picker .ts-note.bad { background: #fef2f2; color: #991b1b; }
+    .ts-picker .ts-how { font-size: 12.5px; font-weight: 500; color: var(--muted); margin-top: 6px; }
     .eta-strip .eta-sub { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-top: 1px; }
     .eta-dot {
       flex: 0 0 auto;
@@ -2594,8 +2609,9 @@
       if (sub) sub.textContent = state.user
         ? 'Pay in one tap next time.'
         : 'Pay in one tap next time you sign in with this email.';
-      const savedLabel = card ? `Agree & pay with ${paymentMethodLabel(card)}` : 'Agree & pay';
-      const newLabel = 'Agree & pay';
+      const tsLbl = typeof tsPayLabel === 'function' ? tsPayLabel() : null; // timeslots: Pay button names the window
+      const savedLabel = tsLbl || (card ? `Agree & pay with ${paymentMethodLabel(card)}` : 'Agree & pay');
+      const newLabel = tsLbl || 'Agree & pay';
       const savedGroup = document.getElementById('savedCardGroup');
       if (savedGroup) savedGroup.style.display = useSaved ? '' : 'none';
       document.querySelector('.pay-now-inline-wrapper')?.classList.toggle('hidden', useSaved);
@@ -2603,8 +2619,16 @@
       const sBtn = document.getElementById('payWithSavedCardBtn'); if (sBtn && !busy(sBtn)) sBtn.textContent = savedLabel;
       if (elements.payNowBtn && !busy(elements.payNowBtn)) elements.payNowBtn.textContent = newLabel;
       const sM = document.getElementById('payWithSavedCardBtnMobile'), nM = document.getElementById('payNowBtnMobile');
-      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!busy(sM)) sM.textContent = card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'; }
+      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!busy(sM)) sM.textContent = tsLbl || (card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'); }
       if (nM) { nM.classList.toggle('hidden', useSaved); if (!busy(nM)) nM.textContent = newLabel; }
+      // Timeslots: no open delivery time = no payment (R9). Only ever touches
+      // buttons this block itself disabled, so the off path is untouched.
+      const noRun = !!tsLbl && !TS.selRun;
+      [sBtn, elements.payNowBtn, sM, nM].forEach(b => {
+        if (!b || busy(b)) return;
+        if (noRun) { b.disabled = true; b.dataset.tsOff = '1'; }
+        else if (b.dataset.tsOff) { b.disabled = false; delete b.dataset.tsOff; }
+      });
     }
     // Pressing Pay is the agreement to the Terms (the line sits right above
     // the button) — tick the kept checkbox so validation + terms_accepted_at
@@ -4592,6 +4616,8 @@ async function validateCheckout() {
       elements.totalAmount.classList.toggle('discounted', discountLive);
       setAmountText(elements.totalAmount, formatCurrency(total));
       updateSummaryHeaderMeta(formatCurrency(total));
+      state.lastTotal = total;
+      if (tsActive()) syncPayChoice(); // Pay button label carries the amount
     }
 
     /********************
@@ -4639,6 +4665,151 @@ async function validateCheckout() {
     // ~20 min rider-to-store + collection; the drive itself matched km × 2).
     // Uses the live quote's road route (store → this address, the same
     // distance the price uses); a target we aim for, never a guarantee.
+    /********************
+     * DELIVERY TIMESLOTS (docs/plans/delivery-timeslots-plan.md)
+     * Everything here is behind the admin master switch (site_settings
+     * 'timeslots' → enabled), read via the timeslot_runs_for_cart RPC. With the
+     * switch off (or the RPC missing/failing) tsActive() is false and checkout
+     * behaves exactly as before. All times come from the server: countdowns
+     * run off the RPC's server_now plus performance.now() — never Date.now().
+     ********************/
+    const TS = { enabled: false, key: '', runs: [], nextOpen: null, base: 0, t0: 0, sel: null, selRun: null, notice: null, timer: null, lastFetch: 0, busy: false, wired: false };
+    const tsKeyOf = r => r.slot_id + '|' + r.run_date;
+    function tsNow() { return TS.base + (performance.now() - TS.t0); }
+    function tsGoodsSellerIds() {
+      return [...new Set((state.cart || []).filter(waitsForOpenStore).map(i => i.seller_id).filter(id => id && !HOUSE_IDS.has(id)))].sort();
+    }
+    function tsActive() { return TS.enabled && cartHasProducts(state.cart || []) && tsGoodsSellerIds().length > 0; }
+    const tsFmt = (iso, o) => new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'Africa/Johannesburg' }, o)).format(new Date(iso));
+    const tsT = iso => tsFmt(iso, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const tsWin = r => tsT(r.window_start) + ' to ' + tsT(r.window_end);
+    const tsDate = ms => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg' }).format(new Date(ms));
+    function tsDayWord(r) {
+      const n = tsNow();
+      if (r.run_date === tsDate(n)) return 'Today';
+      if (r.run_date === tsDate(n + 86400000)) return 'Tomorrow';
+      return tsFmt(r.window_start, { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+    // "14:00 to 15:00" when on the same day as ref, else "tomorrow, 12:00 to 13:00".
+    function tsPhrase(r, ref) {
+      if (!ref || r.run_date === ref.run_date) return tsWin(r);
+      const d = tsDayWord(r);
+      return (d === 'Tomorrow' ? 'tomorrow' : d) + ', ' + tsWin(r);
+    }
+    function tsOpenRuns() {
+      const n = tsNow();
+      return TS.runs.filter(r => r.state === 'open' && Date.parse(r.cutoff_at) > n)
+        .sort((a, b) => Date.parse(a.window_start) - Date.parse(b.window_start));
+    }
+    function tsReselect() {
+      const open = tsOpenRuns();
+      const cur = open.find(r => tsKeyOf(r) === TS.sel);
+      if (cur) { TS.selRun = cur; return; }
+      const prev = TS.selRun, nxt = open[0] || null;
+      if (prev && TS.sel) {
+        const head = tsWin(prev) + ' closed at ' + tsT(prev.cutoff_at) + '.';
+        TS.notice = nxt ? head + ' The next delivery time is ' + tsPhrase(nxt, prev) + '.' : head + ' No other delivery times are open right now.';
+      }
+      TS.sel = nxt ? tsKeyOf(nxt) : null;
+      TS.selRun = nxt;
+    }
+    async function tsRefresh() {
+      if (!supabaseClient || TS.busy) return;
+      try { await ensureHouseIds(); } catch (_) {}
+      const ids = tsGoodsSellerIds();
+      if (!ids.length || !cartHasProducts(state.cart || [])) return;
+      TS.busy = true;
+      const key = ids.join(',');
+      try {
+        const { data, error } = await supabaseClient.rpc('timeslot_runs_for_cart', { p_seller_ids: ids });
+        if (error || !data) throw (error || new Error('empty response'));
+        TS.key = key;
+        const sn = Date.parse(data.server_now);
+        if (!data.enabled || isNaN(sn)) { TS.enabled = false; }
+        else {
+          TS.enabled = true;
+          TS.runs = data.runs || [];
+          TS.nextOpen = data.next_open || null;
+          TS.base = sn; TS.t0 = performance.now();
+          tsReselect();
+          tsStart();
+        }
+      } catch (e) {
+        TS.key = key; // never retried from refreshEstimatedTime(); the timer retries while the picker is on
+        console.warn('Delivery times unavailable:', e && e.message || e);
+      } finally {
+        TS.busy = false; TS.lastFetch = performance.now();
+      }
+      refreshEstimatedTime();
+      if (typeof syncPayChoice === 'function') syncPayChoice();
+    }
+    // Called from refreshEstimatedTime(): refetch only when the cart's store set changes.
+    function tsSync() {
+      if (!supabaseClient || TS.busy) return;
+      const ids = tsGoodsSellerIds();
+      if (ids.length && ids.join(',') !== TS.key) tsRefresh();
+    }
+    function tsStart() {
+      if (TS.timer) return;
+      TS.timer = setInterval(tsTick, 5000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && tsActive()) tsRefresh(); });
+    }
+    function tsTick() {
+      if (!tsActive()) return;
+      const before = TS.sel;
+      tsReselect();
+      if (TS.sel !== before) { refreshEstimatedTime(); syncPayChoice(); tsRefresh(); return; }
+      if (performance.now() - TS.lastFetch >= 30000) { tsRefresh(); return; }
+      refreshEstimatedTime(); // countdown text
+    }
+    function tsPayLabel() {
+      if (!tsActive()) return null;
+      if (!TS.selRun) return 'No delivery time available';
+      const amt = typeof state.lastTotal === 'number' ? ' ' + formatCurrency(state.lastTotal) : '';
+      return 'Pay' + amt + ' · ' + tsDayWord(TS.selRun) + ' ' + tsWin(TS.selRun);
+    }
+    function tsRenderPicker(el) {
+      if (!TS.wired) {
+        TS.wired = true;
+        el.addEventListener('click', e => {
+          const b = e.target.closest('[data-ts]');
+          if (!b || !tsActive()) return;
+          TS.sel = b.dataset.ts; TS.notice = null;
+          tsReselect();
+          refreshEstimatedTime(); syncPayChoice();
+        });
+      }
+      const open = tsOpenRuns();
+      const now = tsNow();
+      let h = '<p class="ts-title">Choose your delivery time</p>';
+      if (TS.notice) h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(TS.notice) + '</div>';
+      if (!open.length) {
+        const blocked = TS.runs.find(r => r.state === 'store_closed' && r.blocking_store);
+        h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(blocked
+          ? blocked.blocking_store + ' is closed at those times, so no delivery times are available right now.'
+          : 'No delivery times are available right now. Please try again later.') + '</div>';
+      } else {
+        if (!open.some(r => r.run_date === tsDate(now))) {
+          h += '<div class="ts-note">Deliveries are closed for today. The next delivery time is ' + escapeHtmlLite(tsPhrase(open[0], { run_date: tsDate(now) })) + '.</div>';
+        }
+        let day = null;
+        open.forEach(r => {
+          if (r.run_date !== day) { day = r.run_date; h += '<div class="ts-day">' + escapeHtmlLite(tsDayWord(r)) + '</div>'; }
+          const ms = Date.parse(r.cutoff_at) - now, mins = Math.max(1, Math.ceil(ms / 60000));
+          const by = ms <= 3600000 ? 'Order in the next ' + mins + ' min' : 'Order by ' + tsT(r.cutoff_at);
+          const on = tsKeyOf(r) === TS.sel;
+          h += '<button type="button" class="ts-run' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" data-ts="' + escapeHtmlLite(tsKeyOf(r)) + '">' +
+            '<span class="ts-radio" aria-hidden="true"></span><span><span class="ts-win">' + tsWin(r) + '</span><span class="ts-by"> · ' + by + '</span>' +
+            (ms <= 300000 ? '<span class="ts-warn">Pay in the next ' + mins + ' min to get this time.</span>' : '') + '</span></button>';
+        });
+        if (TS.selRun) h += '<div class="ts-how">Order by ' + tsT(TS.selRun.cutoff_at) + ' and get it between ' + tsT(TS.selRun.window_start) + ' and ' + tsT(TS.selRun.window_end) + '.</div>';
+      }
+      const fresh = !el.classList.contains('ts-picker') || el._tsHtml !== h;
+      el.className = 'ts-picker';
+      el.setAttribute('role', 'radiogroup');
+      if (fresh) { el.innerHTML = h; el._tsHtml = h; }
+    }
+
     const ETA_MIN_PER_KM = 2;
     const ETA_BASE_MIN = 45;
     function formatEtaMinutes(m) {
@@ -4657,6 +4828,11 @@ async function validateCheckout() {
       card.classList.toggle('hidden', !show);
       if (!show) return;
       document.getElementById('priorityFeeLabel').textContent = '+' + formatCurrency(q.priorityFee);
+      // Timeslots on: priority = first in your delivery window (same fee as today).
+      const pSmall = card.querySelector('.prio-text small'), pTip = card.querySelector('.prio-tip');
+      if (pSmall && !pSmall.dataset.orig) { pSmall.dataset.orig = pSmall.textContent; if (pTip) pTip.dataset.orig = pTip.textContent; }
+      if (pSmall) pSmall.textContent = tsActive() ? 'Delivered first in your delivery window' : pSmall.dataset.orig;
+      if (pTip && pTip.dataset.orig) pTip.textContent = tsActive() ? 'Delivered first in your delivery window.' : pTip.dataset.orig;
       document.getElementById('priorityToggle').checked = !!state.priorityDelivery;
       card.classList.toggle('on', !!state.priorityDelivery);
     }
@@ -4665,6 +4841,10 @@ async function validateCheckout() {
       if (!el) return;
       if (!cartHasProducts(state.cart || [])) { el.classList.add('hidden'); return; } // services only — nothing to deliver
       el.classList.remove('hidden');
+
+      tsSync(); // timeslots: refetch only if the cart's stores changed (no-op once checked)
+      if (tsActive()) { tsRenderPicker(el); return; } // the delivery window replaces the "about N min" promise
+      if (el.getAttribute('role') === 'radiogroup') el.removeAttribute('role');
 
       const q = typeof activeQuote === 'function' ? activeQuote() : null;
       // A closed store: no "about 35 min" promise — say when it's made instead.
@@ -5393,6 +5573,16 @@ async function submitToPayFast(cartItems, orderId, total) {
             return null;
         }
 
+        // Timeslots: make sure the delivery list matches this cart's stores,
+        // and never go on without a chosen run (the server re-checks at insert).
+        if (TS.enabled) {
+          if (tsGoodsSellerIds().join(',') !== TS.key) await tsRefresh();
+          if (tsActive() && !TS.selRun) {
+            showError(elements.paymentError, 'There is no delivery time available right now. Please try again later.');
+            return null;
+          }
+        }
+
         // A store outside its opening hours: the buyer may still order, but
         // only after agreeing to the delay (bookings already pick a time).
         if (!(await confirmClosedStores())) return null;
@@ -5553,10 +5743,46 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // always 0 today. Wired through now so nothing needs revisiting when it lands.
                 priority_fee: (state.quote && state.quote.priority && state.appliedDeliveryQuoteId === state.quote.id) ? state.quote.priorityFee : 0
             };
+            // Timeslots: the chosen run. The server re-checks it atomically with
+            // this insert and stamps the window itself (client copies are ignored).
+            if (tsActive() && TS.selRun) {
+                orderData.slot_id = TS.selRun.slot_id;
+                orderData.slot_run_date = TS.selRun.run_date;
+            }
 
             const { error } = await supabaseClient
                 .from('orders')
                 .insert([orderData]);
+
+            if (error && (error.message === 'TIMESLOT_CLOSED' || error.message === 'TIMESLOT_REQUIRED')) {
+                // The chosen run closed (or none was sent — e.g. the run list
+                // failed to load while the switch is on): say so, select the
+                // next one and STOP — the buyer must press Pay again. Never
+                // switch the run and charge in one go.
+                const refused = TS.selRun;
+                let d = null; try { d = JSON.parse(error.details || 'null'); } catch (_) {}
+                await tsRefresh();
+                const open = tsOpenRuns();
+                const wanted = d && d.next_open ? open.find(r => r.slot_id === d.next_open.slot_id && r.run_date === d.next_open.run_date) : null;
+                const nxt = wanted || open[0] || null;
+                TS.sel = nxt ? tsKeyOf(nxt) : null; TS.selRun = nxt;
+                let msg;
+                if (error.message === 'TIMESLOT_REQUIRED' || !refused) msg = 'Please choose a delivery time.';
+                else {
+                    const closedAt = d && d.closed_at ? d.closed_at : refused.cutoff_at;
+                    const head = d && d.reason && d.reason !== 'closed'
+                        ? tsWin(refused) + ' is no longer available.'
+                        : tsWin(refused) + ' closed at ' + tsT(closedAt) + '.';
+                    msg = nxt ? head + ' The next delivery time is ' + tsPhrase(nxt, refused) + '.' : head + ' No other delivery times are open right now.';
+                }
+                TS.notice = msg;
+                refreshEstimatedTime(); syncPayChoice();
+                showError(elements.paymentError, msg);
+                triggerBtn.disabled = false;
+                triggerBtn.classList.remove('is-processing');
+                if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
+                return null;
+            }
 
             if (error) {
                 console.error('Error saving order:', error);
@@ -5609,6 +5835,7 @@ async function submitToPayFast(cartItems, orderId, total) {
     }
     async function confirmClosedStores() {
         if (state.closedStoresAck || !supabaseClient) return true;
+        if (tsActive()) return true; // timeslots: a run is only offered when every store is open for it — no after-hours popup
         const ids = [...new Set(state.cart.filter(waitsForOpenStore).map(i => i.seller_id).filter(Boolean))];
         if (!ids.length) return true;
         const { data, error } = await supabaseClient.rpc('get_store_hours_status', { p_seller_ids: ids });

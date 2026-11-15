@@ -197,6 +197,21 @@
     .oc-item { display: flex; align-items: baseline; gap: 8px; font-size: 17px; font-weight: 700; line-height: 1.3; }
     .oc-qty { color: var(--primary, #0a2f66); font-weight: 900; min-width: 30px; }
     .oc-size { font-size: 13px; font-weight: 600; color: var(--muted); }
+    /* Delivery timeslots: orders grouped by run (only when orders carry a run) */
+    .run-group { margin: 0 0 18px; }
+    .run-head { padding: 12px 14px; border-radius: 14px 14px 0 0; background: #0a2f66; color: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; justify-content: space-between; }
+    .run-head-title { font-weight: 800; font-size: 14px; line-height: 1.35; flex: 1 1 220px; }
+    .run-head-date { display: block; font-weight: 600; font-size: 12px; opacity: .75; }
+    .run-state { font-size: 12px; font-weight: 800; padding: 4px 12px; border-radius: 999px; white-space: nowrap; }
+    .run-state.wait { background: #fef3c7; color: #92400e; }
+    .run-state.now { background: #dcfce7; color: #14532d; }
+    .run-body { border: 1px solid #e6e8ef; border-top: 0; border-radius: 0 0 14px 14px; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: #f8faff; }
+    .run-summary { background: #fff; border: 1px solid #bfd0f0; border-radius: 12px; padding: 12px 14px; font-size: 13px; }
+    .run-summary h4 { margin: 0 0 6px; font-size: 13px; color: #0a2f66; }
+    .run-summary .rs-line { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid #eef1f7; }
+    .run-summary .rs-line b { white-space: nowrap; }
+    .run-summary .rs-add { margin-top: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; border-radius: 8px; padding: 6px 10px; font-weight: 600; }
+    .run-hold { font-size: 12px; font-weight: 700; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 6px 10px; }
     .oc-note { margin-top: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; border-radius: 10px; padding: 7px 10px; font-size: 13px; font-weight: 600; }
     .oc-meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
     .oc .order-status-row { border-top: 1px solid #f0f1f5; padding-top: 10px; margin-top: 10px; }
@@ -3692,8 +3707,40 @@
         var { data: dRows } = await SD.sb.from('deliveries').select('order_id, status').in('order_id', orderIds);
         deliveryRows = dRows || [];
       }
+      // Delivery timeslots (additive): which run each order is in. Any failure —
+      // e.g. the feature's columns not existing yet — just means "no runs":
+      // every order then renders exactly as it always has.
+      var slotById = {};
+      SD._slotNotifs = [];
+      if (orderIds.length) {
+        try {
+          var rsl = await SD.sb.from('orders')
+            .select('id, slot_id, slot_run_date, slot_window_start, slot_window_end, slot_needs_attention')
+            .in('id', orderIds);
+          if (!rsl.error) (rsl.data || []).forEach(function(r) { if (r.slot_id && r.slot_window_start) slotById[r.id] = r; });
+        } catch (e) { slotById = {}; }
+        if (Object.keys(slotById).length) {
+          try {
+            var cfg = await SD.sb.rpc('timeslot_public_config');
+            var c = cfg && cfg.data;
+            if (c && c.server_now) SD._slotClock = { offset: new Date(c.server_now).getTime() - Date.now(), cutoff: Number(c.cutoff_minutes) || 15 };
+          } catch (e) {}
+          if (!SD._slotClock) SD._slotClock = { offset: 0, cutoff: 15 };
+          try {
+            var nr = await SD.sb.from('seller_notifications')
+              .select('id, type, title, body, metadata, created_at')
+              .eq('seller_id', SD.seller.id).in('type', ['run_summary', 'run_addition'])
+              .order('created_at', { ascending: true }).limit(200);
+            if (!nr.error) SD._slotNotifs = nr.data || [];
+          } catch (e) {}
+        }
+      }
       var deliveryByOrder = {};
       deliveryRows.forEach(function(d) { deliveryByOrder[d.order_id] = d.status; });
+      myOrders.forEach(function(o) {
+        var s = slotById[o.id];
+        o._slot = s ? { id: s.slot_id, runDate: s.slot_run_date, start: s.slot_window_start, end: s.slot_window_end, needsAttention: !!s.slot_needs_attention } : null;
+      });
       myOrders.forEach(function(o) {
         o._deliveryStatus = deliveryByOrder.hasOwnProperty(o.id) ? deliveryByOrder[o.id] : null;
       });
@@ -3794,6 +3841,12 @@
       if (fulfillStatus === 'Returned') return label + '<span class="payment-pill cancelled">Returned</span>';
       var iAmReady = fulfillStatus === 'Fulfilled' || fulfillStatus === 'Delivered';
       if (!iAmReady && (order._deliveryStatus === null || order._deliveryStatus === 'PENDING')) {
+        // Delivery timeslots: before the run's cut-off the store must not start
+        // (and cannot mark ready); from the cut-off it is "Prepare now".
+        if (slotHold(order)) {
+          return label + '<span class="run-hold">' + (order._slot.needsAttention ? 'Do not prepare — Umzila is confirming a delivery time' : 'Do not prepare yet') + '</span>';
+        }
+        if (order._slot) label += '<span class="run-state now">Prepare now</span>';
         return label + '<button class="btn primary sm" data-order-id="' + order.id + '" onclick="markOrderReady(this)">Mark Ready for Pickup</button>';
       }
       var st = order._deliveryStatus && order._deliveryStatus !== 'PENDING' ? SELLER_DELIVERY_LABEL[order._deliveryStatus] : null;
@@ -3809,6 +3862,7 @@
     window.markOrderReady = async function(btn) {
       var orderId = btn.dataset.orderId;
       var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
+      if (order && slotHold(order)) { toast('Please wait — this run is not ready to prepare yet.'); return; }
       btn.disabled = true;
       btn.textContent = 'Marking ready…';
 
@@ -3863,6 +3917,53 @@
       return o._mySellerStatus === 'Delivered' && !!o._buyerAllConfirmed;
     }
 
+    // ── Delivery timeslots: runs (all SAST; server clock via timeslot_public_config) ──
+    function slotNow() { return Date.now() + ((SD._slotClock && SD._slotClock.offset) || 0); }
+    function slotCutoffMs(sl) { return new Date(sl.start).getTime() - ((SD._slotClock && SD._slotClock.cutoff) || 15) * 60000; }
+    function slotHold(order) { return !!(order._slot && (order._slot.needsAttention || slotNow() < slotCutoffMs(order._slot))); }
+    function sastTime(v) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)); }
+    function sastDay(v) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(v)); }
+    function sastDayLabel(v) {
+      var today = sastDay(slotNow());
+      if (sastDay(v) === today) return 'Today';
+      if (sastDay(v) === sastDay(slotNow() + 86400000)) return 'Tomorrow';
+      return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(v));
+    }
+    // This seller's item totals for a group of orders: [{name,size,qty}]
+    function runTotals(orders, myProductIds) {
+      var map = {}, order = [];
+      orders.forEach(function(o) {
+        (Array.isArray(o.items) ? o.items : []).filter(function(i) { return myProductIds.includes(i.id || i.product_id); }).forEach(function(i) {
+          var name = i.title || i.name || i.product_name || 'Product';
+          var size = i.size && i.size !== 'One Size' ? i.size : '';
+          var k = name + '||' + size;
+          if (!map[k]) { map[k] = { name: name, size: size, qty: 0 }; order.push(k); }
+          map[k].qty += Number(i.qty || i.quantity || 1);
+        });
+      });
+      return order.map(function(k) { return map[k]; });
+    }
+    // The run summary card: totals (from the cut-off summary we were sent, else
+    // worked out live from the orders below) + any "Add to the run" messages.
+    function runSummaryHtml(g, myProductIds) {
+      if (slotNow() < slotCutoffMs({ start: g.start })) return '';
+      var notifs = (SD._slotNotifs || []).filter(function(n) {
+        var m = n.metadata || {};
+        return m.slot_id === g.slotId && String(m.run_date || '') === String(g.runDate || '');
+      });
+      var summary = notifs.filter(function(n) { return n.type === 'run_summary'; }).pop();
+      var adds = notifs.filter(function(n) { return n.type === 'run_addition'; });
+      var totals = (summary && summary.metadata && Array.isArray(summary.metadata.totals) && summary.metadata.totals.length)
+        ? summary.metadata.totals : runTotals(g.orders, myProductIds);
+      var lines = totals.map(function(t) {
+        return '<div class="rs-line"><span>' + escapeHtmlLite(t.name || 'Item') + (t.size ? ' / ' + escapeHtmlLite(t.size) : '') + '</span><b>' + escapeHtmlLite(String(t.qty)) + '×</b></div>';
+      }).join('');
+      var addHtml = adds.map(function(n) {
+        return '<div class="rs-add">➕ ' + escapeHtmlLite(n.title || 'Add to the ' + sastTime(g.start) + ' run') + (n.body ? ' — ' + escapeHtmlLite(n.body) : '') + '</div>';
+      }).join('');
+      return '<div class="run-summary"><h4>Run summary — total to prepare</h4>' + lines + addHtml + '</div>';
+    }
+
     function renderOrders(orders, myProductIds) {
       var list  = document.getElementById('ordersList');
       var empty = document.getElementById('ordersEmpty');
@@ -3872,7 +3973,7 @@
       if (!activeOrders.length) { list.innerHTML = ''; empty.style.display = ''; return; }
       empty.style.display = 'none';
 
-      list.innerHTML = activeOrders.map(function(order) {
+      var cardHtml = function(order) {
         var rawItems = Array.isArray(order.items) ? order.items : [];
         var items = rawItems.filter(function(i) {
           return myProductIds.includes(i.id || i.product_id);
@@ -3937,8 +4038,49 @@
             renderFulfillmentControl(order, fulfillStatus) +
           '</div>' +
         '</div>';
+      };
+
+      // Orders without a run (timeslots off, services, older orders) render
+      // exactly as before; orders with a run are grouped under their run.
+      var plain = activeOrders.filter(function(o) { return !o._slot; });
+      var groups = {}, groupKeys = [];
+      activeOrders.filter(function(o) { return o._slot; }).forEach(function(o) {
+        var k = o._slot.needsAttention ? 'attn' : (o._slot.runDate + '|' + o._slot.start);
+        if (!groups[k]) { groups[k] = { key: k, slotId: o._slot.id, runDate: o._slot.runDate, start: o._slot.start, end: o._slot.end, attn: !!o._slot.needsAttention, orders: [] }; groupKeys.push(k); }
+        groups[k].orders.push(o);
+      });
+      groupKeys.sort(function(a, b) {
+        if (groups[a].attn !== groups[b].attn) return groups[a].attn ? 1 : -1;
+        return new Date(groups[a].start) - new Date(groups[b].start);
+      });
+      var html = groupKeys.map(function(k) {
+        var g = groups[k];
+        if (g.attn) {
+          return '<div class="run-group"><div class="run-head" style="background:#92400e"><div class="run-head-title">Waiting for a delivery time</div><span class="run-state wait">Do not prepare yet</span></div>' +
+            '<div class="run-body">' + g.orders.map(cardHtml).join('') + '</div></div>';
+        }
+        var cutoffMs = slotCutoffMs({ start: g.start });
+        var prep = slotNow() >= cutoffMs;
+        var title = sastTime(g.start) + ' run · start preparing at ' + sastTime(cutoffMs) + ' · collection about ' + sastTime(g.start);
+        return '<div class="run-group"><div class="run-head"><div class="run-head-title">' + escapeHtmlLite(title) +
+            '<span class="run-head-date">' + escapeHtmlLite(sastDayLabel(g.start)) + ' · ' + escapeHtmlLite(sastTime(g.start) + ' to ' + sastTime(g.end)) + ' · ' + g.orders.length + ' order' + (g.orders.length === 1 ? '' : 's') + '</span></div>' +
+            '<span class="run-state ' + (prep ? 'now' : 'wait') + '">' + (prep ? 'Prepare now' : 'Do not prepare yet') + '</span></div>' +
+          '<div class="run-body">' + runSummaryHtml(g, myProductIds) + g.orders.map(cardHtml).join('') + '</div></div>';
       }).join('');
+      if (groupKeys.length && plain.length) html += '<div style="font-size:12px;font-weight:700;color:var(--muted);margin:4px 2px 8px">Other orders</div>';
+      html += plain.map(cardHtml).join('');
+      list.innerHTML = html;
     }
+
+    // Re-draw when a run crosses its cut-off while the page is open (the
+    // server clock offset is applied in slotNow, never the device clock).
+    setInterval(function() {
+      if (!SD.orders || !SD.orders.some(function(o) { return o._slot; })) return;
+      var sig = SD.orders.filter(function(o) { return o._slot; }).map(function(o) { return slotHold(o) ? 1 : 0; }).join('');
+      if (sig === SD._slotSig) return;
+      SD._slotSig = sig;
+      renderOrders(SD.orders, SD.products.map(function(p) { return p.id; }));
+    }, 30000);
 
     // Render past orders (delivered / cancelled / returned — isPastOrder)
     function renderPastOrders() {

@@ -16,6 +16,10 @@
 // used for a regular buyer product/service order.
 const { computeDiscount } = require('./discounts');
 const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to @umzila.store
+// Delivery timeslots: window wording (SAST). Guarded so a problem in the timeslot lib can
+// never stop a PayFast completion — without it the email just uses today's wording.
+let slotWindowLabel = () => '', slotHhmm = () => '', slotDayWord = () => '';
+try { ({ windowLabel: slotWindowLabel, hhmm: slotHhmm, dayWord: slotDayWord } = require('./timeslot-mail')); } catch (_) { /* today's email wording */ }
 
 function esc(str) {
     return String(str || '')
@@ -200,8 +204,19 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
             // Goods from a store that is closed right now are made when it
             // opens — say so in the email (2026-10-05). Courtesy only: any
             // failure here just leaves the note out.
+            // Delivery timeslots: when the order has a run, its window (as the
+            // trigger finally placed it — it may have moved on a late payment)
+            // goes in the subject + first line. Additive read; any failure
+            // (e.g. columns not there yet) just means "no slot" = today's email.
+            let slotRun = null;
+            try {
+                const { data: so, error: soErr } = await supabase.from('orders')
+                    .select('slot_id, slot_window_start, slot_window_end, slot_needs_attention').eq('id', existingOrder.id).maybeSingle();
+                if (!soErr && so && so.slot_id) slotRun = { window_start: so.slot_window_start, window_end: so.slot_window_end, needs_attention: !!so.slot_needs_attention };
+            } catch (_) { slotRun = null; }
             let closedStores = [];
             try {
+                if (slotRun) throw new Error('slot order: stores are open at the run, no closed-store note');
                 const goodsSellerIds = [...new Set((Array.isArray(existingOrder.items) ? existingOrder.items : [])
                     .filter(i => (i.listing_type || 'product') !== 'service').map(i => i.seller_id).filter(Boolean))];
                 if (goodsSellerIds.length) {
@@ -222,8 +237,10 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                     body: JSON.stringify({
                         ...mailFrom('Umzila', 'orders'),
                         to:      [existingOrder.customer_email],
-                        subject: `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
-                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores)
+                        subject: (slotRun && !slotRun.needs_attention && slotRun.window_start)
+                            ? `Order confirmed — arriving ${slotWindowLabel(slotRun)} — ${existingOrder.order_number || mPaymentId}`
+                            : `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
+                        html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores, slotRun)
                     })
                 });
                 if (!emailRes.ok) {
@@ -246,6 +263,16 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         await issueGiftVouchers(supabase, existingOrder, siteUrl).catch(
             e => console.error('completeOrderPayment: gift voucher issue error', e)
         );
+
+        // ── Delivery timeslots: grace additions, run-changed / needs-attention, busy alert (no-op without a run) ──
+        try {
+            const ts = require('./timeslots');
+            if (ts && typeof ts.timeslotAfterPaid === 'function') {
+                await Promise.resolve(ts.timeslotAfterPaid(supabase, existingOrder.id, siteUrl)).catch(
+                    e => console.error('completeOrderPayment: timeslot after-paid error', e)
+                );
+            }
+        } catch (_) { /* timeslots lib not deployed yet — nothing to do */ }
 
         // ── Send per-seller new order notification emails ──
         await sendSellerOrderNotifications(supabase, existingOrder, mPaymentId, siteUrl).catch(
@@ -773,7 +800,7 @@ function buildSellerOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl) 
 }
 
 // ── Order confirmation email builder ─────────────────────────────────────────
-function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackToken, closedStores) {
+function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackToken, closedStores, slotRun) {
     const site      = siteUrl || '';
     const orderRef  = order.order_number || mPaymentId || 'N/A';
     const firstName = (order.customer_name || pfData.name_first || 'there').split(/\s+/)[0];
@@ -859,6 +886,12 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
     // Opening line: only talk about delivery when something is delivered.
     const hasPhysical = items.some(i => (i.listing_type || 'product') !== 'service');
     const onlyVouchers = serviceItems.length > 0 && !hasPhysical && serviceItems.every(i => serviceKind(i) === 'voucher');
+    // Delivery timeslots: an order with a run promises its window, never an instant driver.
+    const slotIntro = (slotRun && hasPhysical)
+        ? (slotRun.needs_attention
+            ? 'Order confirmed. Your payment reached us after your delivery time had closed, so Umzila will contact you shortly to arrange a new delivery time.'
+            : 'Order confirmed. Arriving ' + slotDayWord(slotRun.window_start) + ' between ' + slotHhmm(slotRun.window_start) + ' and ' + slotHhmm(slotRun.window_end) + '. Your payment is received and each store prepares its items for your delivery window; our logistics team delivers them to you.')
+        : '';
     const introText = hasPhysical
         ? 'We\'ve received your payment and your order is being prepared. Your items may come from one or more local stores — each seller prepares their items and our logistics team delivers them to you.'
         : onlyVouchers
@@ -919,7 +952,7 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
   </div>
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
-    <p>${introText}</p>
+    <p>${slotIntro || introText}</p>
     ${(closedStores || []).length ? `<div style="background:#fff7e6;border:1px solid #f5d38a;border-radius:10px;padding:12px 14px;margin:0 0 16px;color:#6b4a0e;font-size:14px;line-height:1.5">🕘 ${closedStores.map(c => `<strong>${esc(c.name)}</strong> is closed right now${c.opensAt ? ' and opens ' + esc(sastWhen(c.opensAt)) : ''}`).join('; ')}. Your order is made when the store opens, and then delivered — we'll email you when it's on the way.</div>` : ''}
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>

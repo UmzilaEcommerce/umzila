@@ -18,11 +18,18 @@
 // Single-store orders only — an order from 2 stores always gets a fresh trip
 // from an idle rider (lib/dispatch.js).
 //
+// Delivery timeslots (2026-11-14): a delivery whose order has a run is not offered
+// before that run's cut-off (isHeldForRun, lib/dispatch.js — the one rule every offer
+// path asks), and once released, same-run orders are grouped: while one run-mate has
+// an unanswered fresh-trip offer, the others wait (they then batch onto that rider's
+// trip when it is accepted — respond-to-driver-offer re-sweeps). Orders without a run
+// (or timeslots off) take none of these branches.
+//
 // Every delivery status change goes through transitionDelivery().
 const { transitionDelivery } = require('./delivery-state');
 const { estimatePayout } = require('./payout-formula');
 const { planTrip, MAX_DELIVERIES_PER_TRIP } = require('./route-insertion');
-const { dispatchDelivery } = require('./dispatch');
+const { dispatchDelivery, getRunInfo, isHeldForRun } = require('./dispatch');
 
 const DRIVER_STALENESS_SECONDS = 90; // same constant as dispatch.js/track.html
 const OFFER_TTL_MINUTES = 2;         // same as dispatch.js
@@ -41,6 +48,8 @@ async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
   const { data: point, error: pointError } = await supabase.rpc('get_delivery_plan_point', { p_delivery_id: deliveryId });
   if (pointError || !point) return { batched: false, reason: 'not_ready', detail: pointError && pointError.message };
   if (point.status !== 'READY_FOR_DISPATCH') return { batched: false, reason: 'not_ready' };
+  const held = await isHeldForRun(supabase, deliveryId);
+  if (held) return { batched: false, reason: 'waiting_for_run', detail: held.cutoffAt };
   if (point.seller_count !== 1) return { batched: false, reason: 'multi_seller_unsupported' };
   if (!point.pickup || !point.drop || !point.seller_geo) return { batched: false, reason: 'no_pickup_location' };
 
@@ -100,6 +109,24 @@ async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
   return { batched: true, offerId: offer.id, routeId: best.candidate.route_id, driverId: best.candidate.driver_id, plan: best.plan };
 }
 
+// True when another delivery of the same run has a pending new_route offer.
+async function runMateHasPendingNewRoute(supabase, deliveryId, run) {
+  try {
+    const { data: orders } = await supabase.from('orders').select('id')
+      .eq('slot_id', run.slotId).eq('slot_run_date', run.runDate);
+    const orderIds = (orders || []).map(o => o.id);
+    if (!orderIds.length) return false;
+    const { data: ds } = await supabase.from('deliveries').select('id').in('order_id', orderIds).neq('id', deliveryId);
+    const ids = (ds || []).map(d => d.id);
+    if (!ids.length) return false;
+    const { data: offers } = await supabase.from('driver_offers').select('id')
+      .in('delivery_id', ids).eq('status', 'pending').eq('offer_type', 'new_route').limit(1);
+    return !!(offers && offers.length);
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
  * Offer one waiting delivery, in this order:
  *  1. onto a rider's trip where it fits the normal rules;
@@ -110,8 +137,14 @@ async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
  *     for the rider.
  */
 async function offerDelivery(supabase, deliveryId) {
+  const run = await getRunInfo(supabase, deliveryId);
+  if (run && run.held) return { dispatched: false, reason: 'waiting_for_run', detail: run.cutoffAt };
   let r = await evaluateBatchCandidates(supabase, deliveryId).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
   if (r.batched) return r;
+  // Run mode: a run-mate already has a fresh-trip offer out — wait for that rider's answer.
+  if (run && await runMateHasPendingNewRoute(supabase, deliveryId, run)) {
+    return { dispatched: false, reason: 'waiting_for_run_mate' };
+  }
   const d = await dispatchDelivery(supabase, deliveryId).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
   if (d.dispatched || d.reason !== 'no_drivers_online') return d;
   r = await evaluateBatchCandidates(supabase, deliveryId, { relaxed: true }).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
@@ -127,10 +160,18 @@ async function offerDelivery(supabase, deliveryId) {
 async function sweepWaitingDeliveries(supabase, { limit = 5 } = {}) {
   const out = [];
   try {
-    const { data: waiting } = await supabase.from('deliveries').select('id')
-      .eq('status', 'READY_FOR_DISPATCH').order('created_at', { ascending: true }).limit(limit);
-    for (const w of waiting || []) {
-      out.push({ id: w.id, result: await offerDelivery(supabase, w.id) });
+    // Deliveries held for a run's cut-off don't count toward the limit (they'd otherwise
+    // starve ready ones behind them); page on until `limit` real attempts or the end.
+    let attempted = 0;
+    for (let from = 0; attempted < limit && from < 50; from += limit) {
+      const { data: waiting } = await supabase.from('deliveries').select('id')
+        .eq('status', 'READY_FOR_DISPATCH').order('created_at', { ascending: true }).range(from, from + limit - 1);
+      for (const w of waiting || []) {
+        const result = await offerDelivery(supabase, w.id);
+        out.push({ id: w.id, result });
+        if (!result || (result.reason !== 'waiting_for_run' && result.reason !== 'waiting_for_run_mate')) attempted++;
+      }
+      if (!waiting || waiting.length < limit) break;
     }
   } catch (e) {
     console.warn('sweepWaitingDeliveries failed', e && e.message);

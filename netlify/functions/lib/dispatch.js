@@ -30,6 +30,72 @@ const OFFER_TTL_MINUTES = 2;
 // real formula and why this is only an ESTIMATE (the actual payout is
 // computed from the route's real final stats once it's completed).
 
+// ---------------------------------------------------------------------------
+// Delivery timeslots (2026-11-14, docs/plans/delivery-timeslots-plan.md, founder
+// decision 1): a delivery whose order belongs to a run is held until that run's
+// cut-off (orders.slot_window_start - site_settings 'timeslots'.cutoff_minutes).
+// Every offer path (dispatchDelivery, evaluateBatchCandidates, offerDelivery,
+// sweepWaitingDeliveries) asks this ONE function. Timeslots off, no run on the
+// order, or the slot columns/settings unreadable => null => today's behaviour.
+// ---------------------------------------------------------------------------
+const DEFAULT_CUTOFF_MINUTES = 15;
+
+async function getRunInfo(supabase, deliveryId, opts = {}) {
+  try {
+    const { data: d } = await supabase.from('deliveries').select('order_id').eq('id', deliveryId).maybeSingle();
+    if (!d || !d.order_id) return null;
+    const { data: o, error } = await supabase.from('orders')
+      .select('slot_id, slot_run_date, slot_window_start').eq('id', d.order_id).maybeSingle();
+    if (error || !o || !o.slot_id || !o.slot_window_start) return null;
+    const { data: s } = await supabase.from('site_settings').select('value').eq('key', 'timeslots').maybeSingle();
+    const cfg = s && s.value;
+    if (!cfg || cfg.enabled !== true) return null;
+    const cm = Number(cfg.cutoff_minutes);
+    const cutoffMinutes = Number.isFinite(cm) && cm >= 0 ? cm : DEFAULT_CUTOFF_MINUTES;
+    const cutoffAt = new Date(new Date(o.slot_window_start).getTime() - cutoffMinutes * 60000);
+    const now = opts.now ? new Date(opts.now) : new Date();
+    return {
+      orderId: d.order_id, slotId: o.slot_id, runDate: o.slot_run_date,
+      runKey: o.slot_id + '|' + o.slot_run_date,
+      windowStart: o.slot_window_start, cutoffAt: cutoffAt.toISOString(),
+      held: now.getTime() < cutoffAt.getTime()
+    };
+  } catch (e) {
+    console.warn('getRunInfo failed (treated as no run)', e && e.message);
+    return null;
+  }
+}
+
+// Run keys ("slot|date") for several deliveries at once, for trip planning's run mode.
+// Returns null when timeslots are off (or nothing is readable); otherwise a Map of
+// deliveryId -> runKey for the deliveries whose order has a run.
+async function getRunKeys(supabase, deliveryIds) {
+  try {
+    const ids = [...new Set((deliveryIds || []).filter(Boolean))];
+    if (!ids.length) return null;
+    const { data: s } = await supabase.from('site_settings').select('value').eq('key', 'timeslots').maybeSingle();
+    if (!s || !s.value || s.value.enabled !== true) return null;
+    const { data: ds } = await supabase.from('deliveries').select('id, order_id').in('id', ids);
+    const orderIds = (ds || []).map(d => d.order_id).filter(Boolean);
+    if (!orderIds.length) return null;
+    const { data: os, error } = await supabase.from('orders').select('id, slot_id, slot_run_date').in('id', orderIds);
+    if (error || !os) return null;
+    const byOrder = new Map(os.filter(o => o.slot_id && o.slot_run_date).map(o => [o.id, o.slot_id + '|' + o.slot_run_date]));
+    const out = new Map();
+    for (const d of ds) if (byOrder.has(d.order_id)) out.set(d.id, byOrder.get(d.order_id));
+    return out;
+  } catch (e) {
+    console.warn('getRunKeys failed (treated as no runs)', e && e.message);
+    return null;
+  }
+}
+
+// Returns the run info when the delivery must NOT be offered yet (before its run's cut-off), else null.
+async function isHeldForRun(supabase, deliveryId, opts) {
+  const info = await getRunInfo(supabase, deliveryId, opts);
+  return info && info.held ? info : null;
+}
+
 /**
  * Attempts to dispatch a single READY_FOR_DISPATCH delivery to the nearest
  * eligible, currently-online driver.
@@ -43,7 +109,8 @@ const OFFER_TTL_MINUTES = 2;
  *     | 'multi_seller_unsupported'  -- quote spans >1 seller (deferred, tracked TODO)
  *     | 'no_pickup_location'        -- seller has no pickup_geo configured yet
  *     | 'no_drivers_online'         -- zero eligible drivers right now
- *     | 'transition_failed'         -- offer inserted but the OFFERED transition
+ *     | 'waiting_for_run'           -- order's delivery-timeslot run hasn't reached its cut-off yet
+     | 'transition_failed'         -- offer inserted but the OFFERED transition
  *                                      didn't go through; the offer is rolled back
  *   , detail? }
  */
@@ -65,6 +132,8 @@ async function dispatchDelivery(supabase, deliveryId) {
   if (!delivery || delivery.status !== 'READY_FOR_DISPATCH') {
     return { dispatched: false, reason: 'not_ready' };
   }
+  const held = await isHeldForRun(supabase, deliveryId);
+  if (held) return { dispatched: false, reason: 'waiting_for_run', detail: held.cutoffAt };
 
   // Don't create a second pending offer for a delivery that already has one
   // in flight. (A unique partial index on driver_offers(delivery_id) WHERE
@@ -207,4 +276,4 @@ async function dispatchDelivery(supabase, deliveryId) {
   return { dispatched: true, offerId: offer.id, driverId: nearest.driver_id };
 }
 
-module.exports = { dispatchDelivery, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };
+module.exports = { dispatchDelivery, getRunInfo, getRunKeys, isHeldForRun, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };
