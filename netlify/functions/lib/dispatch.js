@@ -32,13 +32,17 @@ const OFFER_TTL_MINUTES = 2;
 
 // ---------------------------------------------------------------------------
 // Delivery timeslots (2026-11-14, docs/plans/delivery-timeslots-plan.md, founder
-// decision 1): a delivery whose order belongs to a run is held until that run's
-// cut-off (orders.slot_window_start - site_settings 'timeslots'.cutoff_minutes).
+// decision 1, updated 2026-11-15): a delivery whose order belongs to a run is held
+// until the run's RIDER NOTICE time (orders.slot_window_start - site_settings
+// 'timeslots'.rider_notice_minutes, default 30 — e.g. 11:30 for the 12:00 run), so
+// riders get the trip with time to get to the store ("be at the store by 12:00");
+// orders paid after that (until the cut-off + grace) are added onto those trips.
 // Every offer path (dispatchDelivery, evaluateBatchCandidates, offerDelivery,
 // sweepWaitingDeliveries) asks this ONE function. Timeslots off, no run on the
 // order, or the slot columns/settings unreadable => null => today's behaviour.
 // ---------------------------------------------------------------------------
 const DEFAULT_CUTOFF_MINUTES = 15;
+const DEFAULT_RIDER_NOTICE_MINUTES = 30;
 
 async function getRunInfo(supabase, deliveryId, opts = {}) {
   try {
@@ -53,12 +57,15 @@ async function getRunInfo(supabase, deliveryId, opts = {}) {
     const cm = Number(cfg.cutoff_minutes);
     const cutoffMinutes = Number.isFinite(cm) && cm >= 0 ? cm : DEFAULT_CUTOFF_MINUTES;
     const cutoffAt = new Date(new Date(o.slot_window_start).getTime() - cutoffMinutes * 60000);
+    const rn = Number(cfg.rider_notice_minutes);
+    const noticeMinutes = Number.isFinite(rn) && rn >= 0 && cfg.rider_notice_minutes !== null ? rn : DEFAULT_RIDER_NOTICE_MINUTES;
+    const releaseAt = new Date(new Date(o.slot_window_start).getTime() - noticeMinutes * 60000);
     const now = opts.now ? new Date(opts.now) : new Date();
     return {
       orderId: d.order_id, slotId: o.slot_id, runDate: o.slot_run_date,
       runKey: o.slot_id + '|' + o.slot_run_date,
-      windowStart: o.slot_window_start, cutoffAt: cutoffAt.toISOString(),
-      held: now.getTime() < cutoffAt.getTime()
+      windowStart: o.slot_window_start, cutoffAt: cutoffAt.toISOString(), releaseAt: releaseAt.toISOString(),
+      held: now.getTime() < releaseAt.getTime()
     };
   } catch (e) {
     console.warn('getRunInfo failed (treated as no run)', e && e.message);
@@ -90,7 +97,7 @@ async function getRunKeys(supabase, deliveryIds) {
   }
 }
 
-// Returns the run info when the delivery must NOT be offered yet (before its run's cut-off), else null.
+// Returns the run info when the delivery must NOT be offered yet (before its run's rider-notice time), else null.
 async function isHeldForRun(supabase, deliveryId, opts) {
   const info = await getRunInfo(supabase, deliveryId, opts);
   return info && info.held ? info : null;
@@ -109,7 +116,7 @@ async function isHeldForRun(supabase, deliveryId, opts) {
  *     | 'multi_seller_unsupported'  -- quote spans >1 seller (deferred, tracked TODO)
  *     | 'no_pickup_location'        -- seller has no pickup_geo configured yet
  *     | 'no_drivers_online'         -- zero eligible drivers right now
- *     | 'waiting_for_run'           -- order's delivery-timeslot run hasn't reached its cut-off yet
+ *     | 'waiting_for_run'           -- order's delivery-timeslot run hasn't reached its rider-notice time yet
      | 'transition_failed'         -- offer inserted but the OFFERED transition
  *                                      didn't go through; the offer is rolled back
  *   , detail? }
@@ -133,7 +140,7 @@ async function dispatchDelivery(supabase, deliveryId) {
     return { dispatched: false, reason: 'not_ready' };
   }
   const held = await isHeldForRun(supabase, deliveryId);
-  if (held) return { dispatched: false, reason: 'waiting_for_run', detail: held.cutoffAt };
+  if (held) return { dispatched: false, reason: 'waiting_for_run', detail: held.releaseAt };
 
   // Don't create a second pending offer for a delivery that already has one
   // in flight. (A unique partial index on driver_offers(delivery_id) WHERE

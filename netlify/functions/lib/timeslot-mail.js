@@ -11,8 +11,11 @@
 // ALWAYS South African time (Africa/Johannesburg, R21) — formatted here from
 // the ISO instants the server stores. Chrome = notify.js emailShell/esc.
 //
-// Wording rule (brief): never promise an instant driver. Customer emails say
-// "arriving between 12:00 and 13:00"; stores are told to PREPARE for the run.
+// Wording rule (founder decision 2026-11-15): customers are NEVER promised an
+// arrival time or window. A 12:00–13:00 run is shown to customers only as
+// "dispatched by 12:00" (the window START) — no end time, no "between", no
+// "arrives by". Customer builders use dispatchLabel() only; store/admin
+// builders may keep the full window (timeRange/windowLabel).
 
 const { emailShell, esc } = require('./notify');
 
@@ -45,6 +48,9 @@ function dayWord(v, now) {
 function timeRange(run) { return run ? `${hhmm(run.window_start)} to ${hhmm(run.window_end)}` : ''; }
 // "today 12:00 to 13:00" / "tomorrow …" / "Sun 16 Nov 12:00 to 13:00"
 function windowLabel(run, now) { return run ? `${dayWord(run.window_start, now)} ${timeRange(run)}` : ''; }
+// CUSTOMER wording: "dispatched today by 12:00" / "dispatched tomorrow by 12:00"
+// / "dispatched Sun 16 Nov by 12:00". Never mentions the window end.
+function dispatchLabel(run, now) { return run && run.window_start ? `dispatched ${dayWord(run.window_start, now)} by ${hhmm(run.window_start)}` : ''; }
 function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function longDate(v) {
   const d = _d(v); if (!d) return '';
@@ -153,15 +159,15 @@ function adminRunAddition({ shopName, run, order, siteUrl }) {
 }
 
 // ---------- CUSTOMER: run changed ----------
-// fromRun/toRun = { window_start, window_end }; cutoffAt = the NEW run's cut-off.
+// fromRun/toRun = { window_start, window_end } (customers only see the start, as "dispatched by"); cutoffAt = the NEW run's cut-off.
 function customerRunChanged({ firstName, orderNumber, fromRun, toRun, cutoffAt, siteUrl, orderId }) {
   const hi = firstName ? `Hi ${esc(firstName)}, ` : 'Hi, ';
-  const newLbl = windowLabel(toRun);
+  const newLbl = dispatchLabel(toRun);
   const body =
     p(`${hi}your delivery time for order <strong>${esc(orderNumber || '')}</strong> has changed.`) +
-    box(`<div style="font-size:13px;color:#6b7280">Was</div><div style="font-size:16px;text-decoration:line-through;color:#6b7280">${esc(fromRun ? windowLabel(fromRun) : 'your chosen time')}</div>
-         <div style="font-size:13px;color:#6b7280;margin-top:10px">Now arriving</div><div style="font-size:20px;font-weight:800;color:${NAVY}">${esc(newLbl)}</div>`) +
-    p(`Your order will arrive between ${esc(hhmm(toRun.window_start))} and ${esc(hhmm(toRun.window_end))}.`) +
+    box(`<div style="font-size:13px;color:#6b7280">Was</div><div style="font-size:16px;text-decoration:line-through;color:#6b7280">${esc(fromRun ? cap(dispatchLabel(fromRun)) : 'your chosen time')}</div>
+         <div style="font-size:13px;color:#6b7280;margin-top:10px">Now</div><div style="font-size:20px;font-weight:800;color:${NAVY}">${esc(cap(newLbl))}</div>`) +
+    p(`Your order will now be ${esc(newLbl)}.`) +
     p(`<strong>Not suitable?</strong> You can cancel for a full refund until <strong>${esc(hhmm(cutoffAt))}</strong>. Reply to this email or WhatsApp us on <a href="https://wa.me/${SUPPORT_WA}" style="color:${NAVY}">+27 79 766 2768</a> with your order number and we will cancel it and refund you.`);
   return {
     subject: `Your delivery time changed — now ${newLbl} — ${orderNumber || ''}`.trim(),
@@ -205,8 +211,8 @@ function adminBusy({ run, paidCount, busyAt, siteUrl }) {
 function customerRunningLate({ firstName, orderNumber, run, minutes, siteUrl }) {
   const m = Number(minutes) || 0;
   const body =
-    p(`${firstName ? 'Hi ' + esc(firstName) + ', ' : 'Hi, '}a quick update on order <strong>${esc(orderNumber || '')}</strong>: your <strong>${esc(timeRange(run))}</strong> delivery is running about <strong>${m} minute${m === 1 ? '' : 's'}</strong> late.`) +
-    p(`We are sorry for the wait &mdash; your order is still on its way and we will get it to you as soon as we can.`);
+    p(`${firstName ? 'Hi ' + esc(firstName) + ', ' : 'Hi, '}a quick update on order <strong>${esc(orderNumber || '')}</strong>: the dispatch of your order is running about <strong>${m} minute${m === 1 ? '' : 's'}</strong> late (it was due to leave by ${esc(hhmm(run && run.window_start))}).`) +
+    p(`We are sorry for the wait &mdash; we will get your order on the road as soon as we can.`);
   return {
     subject: `Running about ${m} min late — ${orderNumber || ''}`.trim(),
     html: emailShell(siteUrl, 'Running a little late', body, ''),
@@ -231,5 +237,6 @@ module.exports = {
   customerRunChanged, customerNeedsAttention, adminNeedsAttention,
   adminBusy, customerRunningLate, customerRefunded,
   // helpers other files may reuse (wording consistency)
-  hhmm, dayWord, windowLabel, timeRange, SUPPORT_EMAIL,
+  // windowLabel/timeRange = full window, STORE/ADMIN text only; dispatchLabel = customer text.
+  hhmm, dayWord, windowLabel, timeRange, dispatchLabel, SUPPORT_EMAIL,
 };

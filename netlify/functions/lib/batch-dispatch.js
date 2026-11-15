@@ -49,7 +49,7 @@ async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
   if (pointError || !point) return { batched: false, reason: 'not_ready', detail: pointError && pointError.message };
   if (point.status !== 'READY_FOR_DISPATCH') return { batched: false, reason: 'not_ready' };
   const held = await isHeldForRun(supabase, deliveryId);
-  if (held) return { batched: false, reason: 'waiting_for_run', detail: held.cutoffAt };
+  if (held) return { batched: false, reason: 'waiting_for_run', detail: held.releaseAt };
   if (point.seller_count !== 1) return { batched: false, reason: 'multi_seller_unsupported' };
   if (!point.pickup || !point.drop || !point.seller_geo) return { batched: false, reason: 'no_pickup_location' };
 
@@ -138,7 +138,7 @@ async function runMateHasPendingNewRoute(supabase, deliveryId, run) {
  */
 async function offerDelivery(supabase, deliveryId) {
   const run = await getRunInfo(supabase, deliveryId);
-  if (run && run.held) return { dispatched: false, reason: 'waiting_for_run', detail: run.cutoffAt };
+  if (run && run.held) return { dispatched: false, reason: 'waiting_for_run', detail: run.releaseAt };
   let r = await evaluateBatchCandidates(supabase, deliveryId).catch(e => ({ batched: false, reason: 'error', detail: e.message }));
   if (r.batched) return r;
   // Run mode: a run-mate already has a fresh-trip offer out — wait for that rider's answer.
@@ -159,6 +159,7 @@ async function offerDelivery(supabase, deliveryId) {
  */
 async function sweepWaitingDeliveries(supabase, { limit = 5 } = {}) {
   const out = [];
+  await releasePendingDeliveries(supabase);
   try {
     // Deliveries held for a run's cut-off don't count toward the limit (they'd otherwise
     // starve ready ones behind them); page on until `limit` real attempts or the end.
@@ -179,4 +180,60 @@ async function sweepWaitingDeliveries(supabase, { limit = 5 } = {}) {
   return out;
 }
 
-module.exports = { evaluateBatchCandidates, offerDelivery, sweepWaitingDeliveries, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };
+// ---------------------------------------------------------------------------
+// No "Mark Ready" (founder 2026-11-15): stores are quick, and a button someone
+// forgets to tap only held riders back. A paid order's delivery (created PENDING by
+// create_delivery_on_payment) is made READY_FOR_DISPATCH by the server itself —
+// right after payment (completeOrderPayment's after-paid hook → releaseOrderDelivery,
+// release only) and on every sweep, which also does the offering (rider heartbeat, offer answers, the once-a-minute
+// timeslot-tick) as the safety net. The one exception: while a goods store on the
+// order is closed (order_closed_store — the after-hours rule) the delivery stays
+// PENDING until it opens, so no rider is sent to a shut store. Run orders are then
+// still held for their rider-notice time by isHeldForRun (lib/dispatch.js).
+// ---------------------------------------------------------------------------
+async function releaseDelivery(supabase, delivery) {
+  try {
+    const { data: closed, error } = await supabase.rpc('order_closed_store', { p_order_id: delivery.order_id });
+    if (error) return { released: false, reason: 'closed_check_failed' };
+    if (closed && closed.length) return { released: false, reason: 'store_closed' };
+    const r = await transitionDelivery(supabase, delivery.id, 'READY_FOR_DISPATCH', { type: 'system' },
+      { eventType: 'ORDER_READY', metadata: { order_id: delivery.order_id, auto: true } });
+    return { released: !!r.ok, reason: r.ok ? null : r.reason };
+  } catch (e) {
+    return { released: false, reason: 'error' };
+  }
+}
+
+// Every PENDING delivery whose order is paid (oldest first). Best-effort; never throws.
+async function releasePendingDeliveries(supabase, { limit = 20 } = {}) {
+  let released = 0;
+  try {
+    const { data: rows } = await supabase.from('deliveries').select('id, order_id, orders!inner(payment_status)')
+      .eq('status', 'PENDING').eq('orders.payment_status', 'paid')
+      .order('created_at', { ascending: true }).limit(limit);
+    for (const d of rows || []) if ((await releaseDelivery(supabase, d)).released) released++;
+  } catch (e) {
+    console.warn('releasePendingDeliveries failed', e && e.message);
+  }
+  return released;
+}
+
+// Right after one order is paid: release its delivery. Offering is left to the sweep
+// (rider heartbeat every 30 s, the minute job) unless offer: true — so the payment
+// path never waits on route planning.
+async function releaseOrderDelivery(supabase, orderId, { offer = false } = {}) {
+  try {
+    const { data: d } = await supabase.from('deliveries').select('id, order_id, status').eq('order_id', orderId).maybeSingle();
+    if (!d) return { skipped: 'no_delivery' };
+    if (d.status === 'PENDING') {
+      const r = await releaseDelivery(supabase, d);
+      if (!r.released) return { skipped: r.reason };
+    } else if (d.status !== 'READY_FOR_DISPATCH') return { skipped: 'already_moving' };
+    return offer ? await offerDelivery(supabase, d.id) : { released: true };
+  } catch (e) {
+    console.warn('releaseOrderDelivery failed', e && e.message);
+    return { skipped: 'error' };
+  }
+}
+
+module.exports = { evaluateBatchCandidates, offerDelivery, sweepWaitingDeliveries, releasePendingDeliveries, releaseOrderDelivery, DRIVER_STALENESS_SECONDS, OFFER_TTL_MINUTES };

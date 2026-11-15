@@ -2371,16 +2371,19 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   });
   // ── Live now (dashboard) — get_ops_board(), refreshed every 30 s ──
   let liveOpsTimer = null;
-  const LIVE_LABEL = { PENDING:'Waiting for store', READY_FOR_DISPATCH:'Finding a rider', OFFERED:'Offered to a rider', REASSIGNING:'Finding a new rider',
+  const LIVE_LABEL = { PENDING:'Preparing', READY_FOR_DISPATCH:'Finding a rider', OFFERED:'Offered to a rider', REASSIGNING:'Finding a new rider',
     ASSIGNED:'Rider heading to store', DRIVER_AT_PICKUP:'Rider at store', PARTIALLY_PICKED_UP:'Rider at store', PICKED_UP:'Collected',
     IN_ROUTE:'On the way', NEXT_STOP:'On the way', ARRIVING:'Arriving', PIN_REQUIRED:'At the door' };
   function liveMins(iso){ return iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime())/60000)) : 0; }
   function liveWhy(d){
     const m = liveMins(d.since);
     if (d.pin_locked) return 'PIN locked';
-    if (['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return 'No rider for ' + m + ' min';
+    // Delivery-run orders wait for riders until about 30 min before the run (not a problem).
+    const runWait = d.run_window_start && Date.now() < new Date(d.run_window_start).getTime() - 25 * 60000;
+    if (['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3 && !runWait) return 'No rider for ' + m + ' min';
     if (d.status === 'OFFERED' && m >= 3) return 'Offer unanswered ' + m + ' min';
-    if (d.status === 'PENDING' && m >= 45 && !d.store_closed) return 'Store not ready after ' + m + ' min'; // after-hours orders wait for opening time
+    // No Mark Ready (2026-11-15): paid orders go to riders by themselves within a minute.
+    if (d.status === 'PENDING' && m >= 5 && !d.store_closed) return 'Not sent to riders after ' + m + ' min'; // after-hours orders wait for opening time
     if (['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return 'Pickup taking ' + m + ' min';
     if (['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return 'On the road ' + m + ' min';
     return null;

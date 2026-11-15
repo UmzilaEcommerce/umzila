@@ -21,7 +21,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---------- settings / formatting ----------
 async function getSettings(supabase) {
-  const d = { enabled: false, cutoff_minutes: 15, grace_minutes: 5, days_ahead: 1, busy_alert_at: 6 };
+  const d = { enabled: false, cutoff_minutes: 15, grace_minutes: 5, days_ahead: 1, busy_alert_at: 6, rider_notice_minutes: 30 };
   try {
     const { data } = await supabase.from('site_settings').select('value').eq('key', 'timeslots').maybeSingle();
     const v = (data && data.value) || {};
@@ -30,7 +30,8 @@ async function getSettings(supabase) {
       cutoff_minutes: Number.isFinite(+v.cutoff_minutes) && v.cutoff_minutes !== null ? +v.cutoff_minutes : d.cutoff_minutes,
       grace_minutes: Number.isFinite(+v.grace_minutes) && v.grace_minutes !== null ? +v.grace_minutes : d.grace_minutes,
       days_ahead: Number.isFinite(+v.days_ahead) && v.days_ahead !== null ? +v.days_ahead : d.days_ahead,
-      busy_alert_at: Number.isFinite(+v.busy_alert_at) && v.busy_alert_at !== null ? +v.busy_alert_at : d.busy_alert_at
+      busy_alert_at: Number.isFinite(+v.busy_alert_at) && v.busy_alert_at !== null ? +v.busy_alert_at : d.busy_alert_at,
+      rider_notice_minutes: Number.isFinite(+v.rider_notice_minutes) && v.rider_notice_minutes !== null ? +v.rider_notice_minutes : d.rider_notice_minutes
     };
   } catch (_) { return d; }
 }
@@ -327,19 +328,30 @@ async function maybeBusy(supabase, siteUrl, st, slotId, runDate) {
 // Called by complete-order-payment.js after the order is marked paid (guarded, never throws to the caller).
 // No-op for orders with no run.
 async function timeslotAfterPaid(supabase, orderId, siteUrl) {
+  // No Mark Ready (2026-11-15): every paid order's delivery goes to riders by itself —
+  // with or without a run, timeslots on or off (lib/batch-dispatch.js releaseOrderDelivery).
+  let dispatch = null;
+  try { dispatch = await require('./batch-dispatch').releaseOrderDelivery(supabase, orderId); }
+  catch (e) { console.warn('timeslotAfterPaid: release delivery failed', e && e.message); }
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).maybeSingle();
-  if (!order || !order.slot_id) return { skipped: true };
+  if (!order || !order.slot_id) return { skipped: true, dispatch };
   const st = await getSettings(supabase);
   const sent = await processOrder(supabase, siteUrl, st, order);
   const busy = await maybeBusy(supabase, siteUrl, st, order.slot_id, order.slot_run_date);
-  return { sent, busy };
+  return { sent, busy, dispatch };
 }
 
 // ---------- the job ----------
 async function runTick(supabase, siteUrl) {
+  // Safety net for the no-Mark-Ready flow (runs whether timeslots are on or off):
+  // paid deliveries still PENDING (store was closed, a hook failed) are released and
+  // waiting ones offered — this is also what releases a run's trips at its rider-notice time.
+  let swept = 0;
+  try { swept = (await require('./batch-dispatch').sweepWaitingDeliveries(supabase, { limit: 5 })).length; }
+  catch (e) { console.warn('runTick: dispatch sweep failed', e && e.message); }
   const st = await getSettings(supabase);
-  if (!st.enabled) return { skipped: 'disabled' };                    // cheap early return: nothing else is read
-  const out = { summaries: 0, orderEvents: 0, busy: 0 };
+  if (!st.enabled) return { skipped: 'disabled', swept };
+  const out = { summaries: 0, orderEvents: 0, busy: 0, swept };
   out.summaries = await sendSummaries(supabase, siteUrl, st);
 
   // sweep: recent paid orders with a run — grace additions + unsent run-changed / needs-attention mails

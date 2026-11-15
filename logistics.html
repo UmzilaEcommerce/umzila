@@ -1110,7 +1110,7 @@ document.addEventListener('sb-ready', function(e){
   ═══════════════════════════════════════════ */
   let OPS = null, opsTimer = null, opsLoading = null;
   const DSTATE = {
-    PENDING:            { label:'Waiting for store',   lane:'store', bucket:'active' },
+    PENDING:            { label:'Preparing',   lane:'store', bucket:'active' },
     READY_FOR_DISPATCH: { label:'Finding a rider',     lane:'rider', bucket:'action' },
     OFFERED:            { label:'Offered to a rider',  lane:'rider', bucket:'action' },
     REASSIGNING:        { label:'Finding a new rider', lane:'rider', bucket:'action' },
@@ -1139,10 +1139,13 @@ document.addEventListener('sb-ready', function(e){
     const m = minsSince(d.since);
     if(d.pin_locked) return 'PIN locked — call the customer';
     if(d.status==='FAILED') return 'Delivery failed' + (d.failure_reason ? ' — ' + d.failure_reason : '');
-    if(['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3) return `No rider for ${agoLabel(d.since)}`;
+    // Delivery-run orders wait for riders until about 30 min before the run (not a problem).
+    const runWait = d.run_window_start && Date.now() < new Date(d.run_window_start).getTime() - 25 * 60000;
+    if(['READY_FOR_DISPATCH','REASSIGNING'].includes(d.status) && m >= 3 && !runWait) return `No rider for ${agoLabel(d.since)}`;
     if(d.status==='OFFERED' && m >= 3) return `Offer unanswered for ${agoLabel(d.since)}`;
     // Ordered while the store was closed: it's made when the store opens (not a problem).
-    if(d.status==='PENDING' && m >= 45 && !d.store_closed) return `Store hasn't marked ready (${agoLabel(d.since)})`;
+    // No Mark Ready (2026-11-15): a paid order is released to riders automatically within a minute.
+    if(d.status==='PENDING' && m >= 5 && !d.store_closed) return `Not sent to riders yet (${agoLabel(d.since)})`;
     if(['ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP'].includes(d.status) && m >= 40) return `Pickup taking long (${agoLabel(d.since)})`;
     if(['IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','PICKED_UP'].includes(d.status) && m >= 60) return `On the road for ${agoLabel(d.since)}`;
     return null;
@@ -2744,6 +2747,8 @@ document.addEventListener('sb-ready', function(e){
       listEl.innerHTML = `<div class="rd-empty"><div class="rd-empty-ico rd-pulse">📡</div>No offers right now.<br>We'll buzz this phone the moment one comes in.</div>`;
       return;
     }
+    // Delivery runs (2026-11-15): "be at the store by 12:00" (SAST) when the order has a run.
+    const byTime = iso => iso ? new Intl.DateTimeFormat('en-GB', { timeZone:'Africa/Johannesburg', hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date(iso)) : '';
     listEl.innerHTML = offers.map(o=>{
       const stores = (o.stores||[]).join(' + ') || 'Umzila store';
       const batch = o.offer_type === 'batch_addition';
@@ -2760,7 +2765,7 @@ document.addEventListener('sb-ready', function(e){
         </div>
         ${batch ? `<div class="rd-fit">On your way${o.after ? ` · drop-off after <strong>${esc(o.after)}</strong>` : ' · first drop-off'}</div>` : ''}
         <div class="rd-legs">
-          <div class="rd-leg"><span class="rd-leg-dot a"></span><div><div class="rd-leg-k">Pick up</div><div class="rd-leg-v">${esc(stores)}</div>${o.store_area?`<div class="rd-leg-s">${esc(o.store_area)}</div>`:''}</div></div>
+          <div class="rd-leg"><span class="rd-leg-dot a"></span><div><div class="rd-leg-k">Pick up</div><div class="rd-leg-v">${esc(stores)}</div>${o.store_area?`<div class="rd-leg-s">${esc(o.store_area)}</div>`:''}${o.collect_by?`<div class="rd-leg-s"><strong>Be at the store by ${esc(byTime(o.collect_by))}</strong></div>`:''}</div></div>
           <div class="rd-leg"><span class="rd-leg-dot b"></span><div><div class="rd-leg-k">Drop off</div><div class="rd-leg-v">${esc(o.drop_area || 'Customer address')}</div></div></div>
         </div>
         <div class="rd-chips">${chips.filter(Boolean).map(c=>`<span>${c}</span>`).join('')}</div>
@@ -2863,7 +2868,9 @@ document.addEventListener('sb-ready', function(e){
           ${itemsList(g.items, active, g.id)}
           ${(g.house_items||[]).length ? `<div class="rd-hint" style="margin-top:8px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:8px 10px">🥤 <strong>Also bring from Umzila stock:</strong> ${g.house_items.map(h=>`${esc(String(h.qty||1))}× ${esc(h.name)}`).join(', ')}</div>` : ''}
         </div>`).join('');
-      body = storeCard + (group.length > 1 ? `<div class="rd-hint">Keep each order in its own bag, labelled with the customer's name.</div>` : '') + bags;
+      const collectBy = group.map(g=>g.collect_by).filter(Boolean).sort()[0];
+      const byHint = collectBy ? `<div class="rd-hint"><strong>Be at the store by ${esc(new Intl.DateTimeFormat('en-GB', { timeZone:'Africa/Johannesburg', hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date(collectBy)))}.</strong> The store is preparing the orders for this run.</div>` : '';
+      body = storeCard + byHint + (group.length > 1 ? `<div class="rd-hint">Keep each order in its own bag, labelled with the customer's name.</div>` : '') + bags;
       if(!active){
         action = `<button class="rd-btn primary big" data-route-action="start_route" data-stop-id="${esc(cur.id)}">I'm at the store</button>`;
       } else {

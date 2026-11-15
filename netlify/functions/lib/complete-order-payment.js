@@ -18,8 +18,8 @@ const { computeDiscount } = require('./discounts');
 const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to @umzila.store
 // Delivery timeslots: window wording (SAST). Guarded so a problem in the timeslot lib can
 // never stop a PayFast completion — without it the email just uses today's wording.
-let slotWindowLabel = () => '', slotHhmm = () => '', slotDayWord = () => '';
-try { ({ windowLabel: slotWindowLabel, hhmm: slotHhmm, dayWord: slotDayWord } = require('./timeslot-mail')); } catch (_) { /* today's email wording */ }
+let slotDispatchLabel = () => '', slotHhmm = () => '', slotDayWord = () => '';
+try { ({ dispatchLabel: slotDispatchLabel, hhmm: slotHhmm, dayWord: slotDayWord } = require('./timeslot-mail')); } catch (_) { /* today's email wording */ }
 
 function esc(str) {
     return String(str || '')
@@ -238,7 +238,7 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                         ...mailFrom('Umzila', 'orders'),
                         to:      [existingOrder.customer_email],
                         subject: (slotRun && !slotRun.needs_attention && slotRun.window_start)
-                            ? `Order confirmed — arriving ${slotWindowLabel(slotRun)} — ${existingOrder.order_number || mPaymentId}`
+                            ? `Order confirmed — ${slotDispatchLabel(slotRun)} — ${existingOrder.order_number || mPaymentId}`
                             : `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
                         html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores, slotRun)
                     })
@@ -886,11 +886,11 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
     // Opening line: only talk about delivery when something is delivered.
     const hasPhysical = items.some(i => (i.listing_type || 'product') !== 'service');
     const onlyVouchers = serviceItems.length > 0 && !hasPhysical && serviceItems.every(i => serviceKind(i) === 'voucher');
-    // Delivery timeslots: an order with a run promises its window, never an instant driver.
+    // Delivery timeslots: an order with a run is promised its dispatch time (never an arrival time or an instant driver).
     const slotIntro = (slotRun && hasPhysical)
         ? (slotRun.needs_attention
             ? 'Order confirmed. Your payment reached us after your delivery time had closed, so Umzila will contact you shortly to arrange a new delivery time.'
-            : 'Order confirmed. Arriving ' + slotDayWord(slotRun.window_start) + ' between ' + slotHhmm(slotRun.window_start) + ' and ' + slotHhmm(slotRun.window_end) + '. Your payment is received and each store prepares its items for your delivery window; our logistics team delivers them to you.')
+            : 'Order confirmed. Dispatched ' + slotDayWord(slotRun.window_start) + ' by ' + slotHhmm(slotRun.window_start) + '. Your payment is received and each store prepares its items for your run; our logistics team delivers them to you.')
         : '';
     const introText = hasPhysical
         ? 'We\'ve received your payment and your order is being prepared. Your items may come from one or more local stores — each seller prepares their items and our logistics team delivers them to you.'

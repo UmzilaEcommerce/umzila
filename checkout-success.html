@@ -264,8 +264,9 @@
                     }
                   } catch (_) {}
                 }
-                // Delivery timeslots: an order with a run promises its window
-                // (never an instant driver). order.run only exists for orders
+                // Delivery timeslots: an order with a run is promised only its
+                // dispatch time ("dispatched by <window start>") — never an end
+                // time or arrival window (founder decision 2026-11-15). order.run only exists for orders
                 // placed while the feature is on.
                 if (order.run && order.hasPhysical) {
                   try {
@@ -280,9 +281,9 @@
                     if (r.needs_attention || !r.window_start) {
                       msg = 'Order confirmed. Your payment reached us after your delivery time had closed, so Umzila will contact you shortly to arrange a new time.';
                     } else {
-                      msg = 'Order confirmed. Arriving ' + dayWord(r.window_start) + ' between ' + hm(r.window_start) + ' and ' + hm(r.window_end) + '.';
+                      msg = 'Order confirmed. Dispatched ' + dayWord(r.window_start) + ' by ' + hm(r.window_start) + '.';
                       if (r.moved_from && r.moved_from.window_start) {
-                        msg += ' Your payment arrived after ' + dayWord(r.moved_from.window_start) + '’s ' + hm(r.moved_from.window_start) + ' run closed, so we moved you to this one.'
+                        msg += ' Your payment arrived after orders closed for ' + dayWord(r.moved_from.window_start) + '’s ' + hm(r.moved_from.window_start) + ' dispatch, so we moved you to this one.'
                           + (r.cutoff_at ? ' Not suitable? Cancel for a full refund until ' + hm(r.cutoff_at) + ' — reply to your confirmation email or WhatsApp us.' : '');
                       }
                     }

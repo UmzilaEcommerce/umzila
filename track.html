@@ -283,14 +283,15 @@
   function slotWording(row, stepIdx, pickedUp) {
     if (!row.slot_window_start || !row.slot_window_end) return null;
     if (row.slot_needs_attention) return { label: 'Confirmed', title: 'Order confirmed', sub: 'Umzila will contact you shortly to arrange your delivery time.' };
-    const a = slotHm(row.slot_window_start), b = slotHm(row.slot_window_end);
+    // Customers are promised only the dispatch time (window start), never an end/arrival time.
+    const a = slotHm(row.slot_window_start);
     const cutoff = row.slot_cutoff_at ? new Date(row.slot_cutoff_at).getTime() : new Date(row.slot_window_start).getTime() - 15 * 60000;
     if (stepIdx === 0 || (stepIdx === 1 && !pickedUp)) {
       return Date.now() < cutoff
-        ? { label: 'Confirmed', title: 'Order confirmed', sub: 'Arriving ' + slotDay(row.slot_window_start) + ' between ' + a + ' and ' + b + '.' }
-        : { label: 'Preparing', title: 'The store is preparing your order', sub: 'Arriving between ' + a + ' and ' + b + '.' };
+        ? { label: 'Confirmed', title: 'Order confirmed', sub: 'Dispatched ' + slotDay(row.slot_window_start) + ' by ' + a + '.' }
+        : { label: 'Preparing', title: 'The store is preparing your order', sub: 'Dispatched by ' + a + '.' };
     }
-    if (stepIdx === 2) return { label: 'Out for delivery', title: 'Your order is on the way', sub: 'It arrives by ' + b + '.' };
+    if (stepIdx === 2) return { label: 'Out for delivery', title: 'Your order is on the way', sub: 'Your order has left the store.' };
     return null; // collected / arriving / at the door / delivered: the live wording is already true
   }
 

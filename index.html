@@ -1171,9 +1171,9 @@
         if (slotRow && slotRow.slot_window_start && !slotRow.slot_needs_attention && ['PENDING', 'READY_FOR_DISPATCH', 'OFFERED', 'REASSIGNING', 'ASSIGNED', 'DRIVER_AT_PICKUP', 'PARTIALLY_PICKED_UP', 'PICKED_UP', 'IN_ROUTE', 'NEXT_STOP'].indexOf(d.status) !== -1) {
           var hm = function(v) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)); };
           var cut = slotRow.slot_cutoff_at ? new Date(slotRow.slot_cutoff_at).getTime() : new Date(slotRow.slot_window_start).getTime() - 15 * 60000;
-          if (d.status === 'IN_ROUTE' || d.status === 'NEXT_STOP') slotText = 'Out for delivery — arrives by ' + hm(slotRow.slot_window_end);
-          else if (Date.now() < cut) slotText = 'Order confirmed — arriving ' + hm(slotRow.slot_window_start) + ' to ' + hm(slotRow.slot_window_end);
-          else slotText = 'Preparing — arriving ' + hm(slotRow.slot_window_start) + ' to ' + hm(slotRow.slot_window_end);
+          if (d.status === 'IN_ROUTE' || d.status === 'NEXT_STOP') slotText = 'Your order is on the way.';
+          else if (Date.now() < cut) slotText = 'Order confirmed — dispatched by ' + hm(slotRow.slot_window_start);
+          else slotText = 'Preparing — dispatched by ' + hm(slotRow.slot_window_start);
         }
 
         var statusEl = document.getElementById('adwStatus');

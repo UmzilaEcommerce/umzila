@@ -26,8 +26,12 @@
 // slot_run_date, timeslots on) they were promised the same window, so those run-mates
 // are NOT protected from each other (no 8-min rule among them, and the 60-min
 // new-customer wait cap is waived) — the trip is planned fastest overall. Priority
-// run-mates are still delivered before non-priority run-mates (when a sequence
-// allows it). Orders of other runs / no run on the trip keep every rule above.
+// works exactly as everywhere else (founder 2026-11-15): a priority order is
+// delivered as early as possible, but slips down the stop order — by at most
+// MAX_DELAY_MIN — when going to it first would send the rider out of the way and
+// slow the trip. There is no "must arrive by the window end" rule: customers are
+// promised only that the run is dispatched by its start time. Orders of other
+// runs / no run on the trip keep every rule above.
 // The 5-order cap is unchanged (non-relaxed: trip_full -> another rider; relaxed:
 // appended at the end) so planning stays instant. Without a run on the added order
 // nothing here runs and the result is exactly the pre-timeslots plan.
@@ -170,24 +174,6 @@ async function planTrip(supabase, input, add, opts = {}) {
     protectedDrops.every(dl => r.arrival[dl] <= base.arrival[dl] + MAX_DELAY_MIN + 1e-9) &&
     (!add || relaxed || runMode || r.arrival[add.deliveryId] <= MAX_NEW_ORDER_WAIT_MIN));
   if (!feasible.length) return { ok: false, reason: 'too_much_delay' };
-
-  // Run mode: priority run-mates are sequenced before non-priority run-mates when possible.
-  if (runMode) {
-    const mates = new Set([...runMates, add.deliveryId]);
-    const isPrio = dl => dl === add.deliveryId ? !!add.priority : !!priorityByDelivery[dl];
-    const okSeq = r => {
-      let sawNonPrio = false;
-      for (const i of r.seq) {
-        const nd = nodes[i];
-        if (nd.type !== 'drop' || !mates.has(nd.delivery)) continue;
-        if (!isPrio(nd.delivery)) sawNonPrio = true;
-        else if (sawNonPrio) return false;
-      }
-      return true;
-    };
-    const ordered = feasible.filter(okSeq);
-    if (ordered.length) feasible = ordered;
-  }
 
   // Priority orders: no later than MAX_DELAY_MIN after their earliest possible arrival.
   const priorityDeliveries = [...new Set(nodes.filter(nd => nd.priority && nd.type === 'drop').map(nd => nd.delivery))];

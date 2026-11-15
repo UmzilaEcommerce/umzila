@@ -1409,14 +1409,15 @@
   // needs to track. Only DELIVERED is ever "Delivered" here.
   let slotClock = { offset: 0, cutoff: 15 };
   // Run wording for a paid, not-yet-on-the-road order: Confirmed (before the
-  // cut-off) / Preparing (from it), with the window. null = today's badge.
+  // cut-off) / Preparing (from it), with the dispatch time only (never the window
+  // end — founder decision 2026-11-15). null = today's badge.
   function slotBadge(o) {
     if (!o.slot_window_start || !o.slot_window_end) return null;
     const hm = iso => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
     if (o.slot_needs_attention) return `<span class="order-badge badge-pending">Confirmed · we'll contact you</span>`;
     const cutoffMs = new Date(o.slot_window_start).getTime() - slotClock.cutoff * 60000;
     const label = (Date.now() + slotClock.offset) < cutoffMs ? 'Confirmed' : 'Preparing';
-    return `<span class="order-badge badge-paid">${label} · ${hm(o.slot_window_start)}–${hm(o.slot_window_end)}</span>`;
+    return `<span class="order-badge badge-paid">${label} · dispatched by ${hm(o.slot_window_start)}</span>`;
   }
 
   function deliveryHeaderStatus(deliveryStatus) {

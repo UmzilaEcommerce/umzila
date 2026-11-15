@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-15: No more "Mark Ready"; riders get run trips 30 min early; customers promised a dispatch time only; priority ladder kept in runs
+
+**Why (founder, after reading the timeslots build):** (1) stores are quick and semi-formal — the Mark Ready button only held riders back whenever someone forgot to tap it; (2) for a 12:00 run riders only heard about orders when stores tapped Mark Ready (from 11:45), too late to be at the store by 12:00; (3) "things happen" on the road, so customers must not be promised an arrival window — only that the order is dispatched by the run's start; (4) the timeslots build had forced priority orders strictly first among same-run orders, which broke the rule that a priority order slips back a little (max 8 min) when going to it first would slow everyone else.
+
+**What changed:**
+- **No Mark Ready, for every order (live as soon as deployed, not behind the timeslots switch).** The seller dashboard no longer has the button; it shows "Prepare now" (or "Do not prepare yet" before a run's cut-off) and the rider's status. The server releases every paid order's delivery to riders by itself: `lib/batch-dispatch.js releaseOrderDelivery()` from the after-paid hook (`timeslotAfterPaid` in `complete-order-payment.js`, release only so the PayFast path never waits on route planning) and `releasePendingDeliveries()` at the start of every sweep (rider heartbeat every 30 s, offer answers, and `timeslot-tick` every minute — which now sweeps even with timeslots off). A delivery whose goods store is closed (`order_closed_store`) waits until it opens. Staff screens: PENDING reads "Preparing", flagged "Not sent to riders" after 5 min.
+- **Rider notice.** Run deliveries are released at `slot_window_start − rider_notice_minutes` (default 30 → 11:30 for 12:00) instead of at the cut-off; later payments (until cut-off + grace) are added onto those trips. New setting **Admin → Delivery → Delivery Times → Settings → "Tell riders (minutes before)"**. The rider app shows **"Be at the store by 12:00"** on the offer and the pickup stop (`get_driver_board` `collect_by`). Stores still start preparing at the cut-off.
+- **Customer wording = dispatch time.** Checkout picker / Pay button ("Pay R142 · Today, dispatched by 12:00"), success page, tracking, home widget, profile badge, confirmation email ("Order confirmed — dispatched today by 12:00 — …") and the run-changed / running-late emails no longer mention a window end or arrival time. Store/admin emails keep the full window. Helper: `timeslot-mail.js dispatchLabel()`.
+- **Priority in run mode:** the strict "priority run-mates first" filter is removed; the normal rule applies (as early as possible, may slip back up to 8 min for a faster trip). No "must arrive by the window end" rule was added, by decision.
+
+**Tested:** rider-notice hold boundaries with a stubbed client (held at 11:29:59, released at 11:30:00, 45-min setting, switch off = no run); Fable's dispatch suite (14 pass; the 2 "held until cut-off" cases now fail by design because release moved to 11:30); `node --check` on every changed function; inline scripts parse; `complete-order-payment` loads. **Not tested end to end:** auto-release with a live rider online (watch the first orders after deploy: they should show "Finding a rider" within ~30 s of payment without anyone at the store tapping anything).
+
+**Files:** seller-dashboard.html, logistics.html, admin.html, timeslots-admin.js, checkout.html, checkout-success.html, track.html, index.html, profile.html, netlify/functions/lib/{batch-dispatch,dispatch,route-insertion,timeslots,timeslot-mail,complete-order-payment}.js, CLAUDE.md, docs/systems/{delivery-timeslots,ops-panels}.md. Database: migration `timeslots_rider_notice_collect_by` (copy: docs/plans/sql/5_timeslots_rider_notice_collect_by.sql).
+
+---
+
 ## 2026-11-14: Delivery timeslots — customers choose a delivery window; whole system built behind a master switch (OFF)
 
 **Why:** the site told buyers "a driver is on it" the moment they paid, which was not true (one car, deliveries took over an hour). The founder's brief (delivery timeslots developer brief, 2026-11-14) replaces that with one promise that is always true: order before the cut-off and it arrives inside the window you chose. Plan: `docs/plans/delivery-timeslots-plan.md` (its FOUNDER DECISIONS block overrides the rest). Full prose: **`docs/systems/delivery-timeslots.md`**.

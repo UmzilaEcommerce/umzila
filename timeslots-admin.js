@@ -9,7 +9,7 @@
   'use strict';
   var TZ = 'Africa/Johannesburg';
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var DEFAULTS = { enabled: false, cutoff_minutes: 15, grace_minutes: 5, days_ahead: 1, busy_alert_at: 6 };
+  var DEFAULTS = { enabled: false, cutoff_minutes: 15, grace_minutes: 5, days_ahead: 1, busy_alert_at: 6, rider_notice_minutes: 30 };
   var STATE_LABEL = { taking_orders: 'Taking orders', preparing: 'Preparing', out_for_delivery: 'Out for delivery', done: 'Done', skipped: 'Skipped', paused: 'Paused', off: 'Slot off' };
 
   var S = { slots: [], settings: Object.assign({}, DEFAULTS), settingsRow: null, exceptions: [], alerts: [], sheet: [], attention: [], affected: null, loaded: false, busy: false, undo: null, msgs: {} };
@@ -148,6 +148,7 @@
       f('tsSetGrace', 'Payment grace minutes', st.grace_minutes, 0, 60, 'After the cut-off, a payment started in time can still arrive this long.') +
       f('tsSetDays', 'Days ahead', st.days_ahead, 0, 6, '1 = customers can order for today and tomorrow.') +
       f('tsSetBusy', 'Busy alert at (orders)', st.busy_alert_at, 1, 500, 'Paid orders in one run that trigger the admin alert (once per run).') +
+      f('tsSetRider', 'Tell riders (minutes before)', st.rider_notice_minutes, 0, 180, 'How long before the run starts riders are offered its trips (30 = 11:30 for the 12:00 run). Orders paid after that are added to their trips. Riders are told to be at the store by the start time.') +
       '</div><div class="ts-actions"><button type="button" class="ts-btn primary" data-act="settings-save">Save settings</button></div>' +
       '<p class="ts-sub">Changing the cut-off applies to every run whose cut-off hasn’t passed. A run whose summary has been sent never reopens. The “Timeslots on” switch is at the top of this page.</p>' + msg('settings');
   }
@@ -298,12 +299,13 @@
 
   async function settingsSave() {
     function n(id) { var v = $(id).value.trim(); return /^\d+$/.test(v) ? parseInt(v, 10) : NaN; }
-    var v = { cutoff_minutes: n('tsSetCut'), grace_minutes: n('tsSetGrace'), days_ahead: n('tsSetDays'), busy_alert_at: n('tsSetBusy') };
+    var v = { cutoff_minutes: n('tsSetCut'), grace_minutes: n('tsSetGrace'), days_ahead: n('tsSetDays'), busy_alert_at: n('tsSetBusy'), rider_notice_minutes: n('tsSetRider') };
     var bad = null;
     if (!(v.cutoff_minutes >= 0 && v.cutoff_minutes <= 240)) bad = 'Cut-off minutes must be a whole number from 0 to 240.';
     else if (!(v.grace_minutes >= 0 && v.grace_minutes <= 60)) bad = 'Payment grace must be a whole number from 0 to 60.';
     else if (!(v.days_ahead >= 0 && v.days_ahead <= 6)) bad = 'Days ahead must be a whole number from 0 to 6.';
     else if (!(v.busy_alert_at >= 1 && v.busy_alert_at <= 500)) bad = 'Busy alert must be at least 1.';
+    else if (!(v.rider_notice_minutes >= 0 && v.rider_notice_minutes <= 180)) bad = 'Tell riders must be a whole number of minutes from 0 to 180.';
     if (bad) { setMsg('settings', bad, false); render(); return; }
     if (S.settings.enabled && v.cutoff_minutes !== Number(S.settings.cutoff_minutes)) {
       var ok = await confirmBox('Change the cut-off?', '<p>Timeslots are live. The new cut-off applies at once to every run whose cut-off hasn’t passed (a run whose summary was already sent never reopens).</p>', 'Save', false);

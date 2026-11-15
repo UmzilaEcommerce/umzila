@@ -3836,67 +3836,22 @@
       PICKED_UP: 'Collected', IN_ROUTE: 'Out for delivery', NEXT_STOP: 'Out for delivery', ARRIVING: 'Out for delivery',
       PIN_REQUIRED: 'Out for delivery', DELIVERED: 'Delivered to customer', CANCELLED: 'Cancelled', FAILED: 'Delivery failed', RETURNED: 'Returned'
     };
+    // No "Mark Ready" (founder 2026-11-15): stores prepare as soon as an order comes
+    // in (or, for a delivery run, from the run's cut-off) and Umzila sends the rider by
+    // itself — the server releases every paid order's delivery (lib/batch-dispatch.js
+    // releasePendingDeliveries). The store only sees what to do and where the rider is.
     function renderFulfillmentControl(order, fulfillStatus) {
       var label = '<span style="font-size:12px;font-weight:600;color:var(--muted)">Pickup:</span>';
       if (fulfillStatus === 'Returned') return label + '<span class="payment-pill cancelled">Returned</span>';
-      var iAmReady = fulfillStatus === 'Fulfilled' || fulfillStatus === 'Delivered';
-      if (!iAmReady && (order._deliveryStatus === null || order._deliveryStatus === 'PENDING')) {
-        // Delivery timeslots: before the run's cut-off the store must not start
-        // (and cannot mark ready); from the cut-off it is "Prepare now".
-        if (slotHold(order)) {
-          return label + '<span class="run-hold">' + (order._slot.needsAttention ? 'Do not prepare — Umzila is confirming a delivery time' : 'Do not prepare yet') + '</span>';
-        }
-        if (order._slot) label += '<span class="run-state now">Prepare now</span>';
-        return label + '<button class="btn primary sm" data-order-id="' + order.id + '" onclick="markOrderReady(this)">Mark Ready for Pickup</button>';
+      if (order._slot && slotHold(order)) {
+        return label + '<span class="run-hold">' + (order._slot.needsAttention ? 'Do not prepare — Umzila is confirming a delivery time' : 'Do not prepare yet') + '</span>';
       }
-      var st = order._deliveryStatus && order._deliveryStatus !== 'PENDING' ? SELLER_DELIVERY_LABEL[order._deliveryStatus] : null;
-      return label + '<span class="payment-pill paid">✓ Ready for Pickup</span>' +
+      if (order._deliveryStatus === null) return ''; // self-arranged / manual orders: no Umzila rider
+      var st = order._deliveryStatus === 'PENDING' ? null : SELLER_DELIVERY_LABEL[order._deliveryStatus];
+      var early = !st || st === 'Finding a rider' || st === 'Rider on the way to you';
+      return label + (early ? '<span class="run-state now">Prepare now</span>' : '') +
         (st ? ' <span style="font-size:12px;color:var(--muted);margin-left:6px">' + escapeHtmlLite(st) + '</span>' : '');
     }
-
-    // Binary "not ready -> ready" toggle for delivery-network orders (plan
-    // §40, "no logistics controls are needed"). This is one-way and does not
-    // gate biker pickup acceptance at all -- advance-route.js's complete_pickup
-    // never checks this, so a biker who shows up before the seller clicks
-    // this button still gets accepted (Fix C, advance-route.js).
-    window.markOrderReady = async function(btn) {
-      var orderId = btn.dataset.orderId;
-      var order = (SD.orders||[]).find(function(o){ return o.id === orderId; });
-      if (order && slotHold(order)) { toast('Please wait — this run is not ready to prepare yet.'); return; }
-      btn.disabled = true;
-      btn.textContent = 'Marking ready…';
-
-      // Same per-item write the old 'Fulfilled' dropdown option made (kept so
-      // seller past-orders / order_item_statuses-based views elsewhere still
-      // work) -- but this path can never write 'delivered'; only the driver's
-      // real PIN confirmation (confirm-delivery-pin.js) may do that.
-      if (order) {
-        var myProductIds = SD.products.map(function(p){ return p.id; });
-        var myItems = (Array.isArray(order.items)?order.items:[]).filter(function(i){ return myProductIds.includes(i.id||i.product_id); });
-        for (var idx = 0; idx < myItems.length; idx++) {
-          var it = myItems[idx];
-          var itemIdx = (Array.isArray(order.items)?order.items:[]).indexOf(it);
-          var { data: existing } = await SD.sb.from('order_item_statuses').select('id').eq('order_id',orderId).eq('item_index',itemIdx).maybeSingle();
-          if (existing) {
-            await SD.sb.from('order_item_statuses').update({ status:'fulfilled', seller_confirmed_at:new Date().toISOString(), updated_at:new Date().toISOString() }).eq('id',existing.id);
-          } else {
-            await SD.sb.from('order_item_statuses').insert([{ order_id:orderId, item_index:itemIdx, product_id:it.product_id||it.id||null, seller_id:SD.seller.id, status:'fulfilled', seller_confirmed_at:new Date().toISOString() }]);
-          }
-        }
-      }
-
-      try {
-        await fetch('/.netlify/functions/advance-delivery-on-fulfillment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId: orderId })
-        });
-      } catch (e) { console.warn('advance-delivery-on-fulfillment failed:', e); }
-
-      toast('Marked ready for pickup ✓');
-      ordersLoaded = false;
-      await loadOrders();
-    };
 
     // Active vs past (fixed 2026-10-05): an order is finished once Umzila's
     // rider delivered it (PIN confirmed → deliveries.status DELIVERED) or the
