@@ -6589,11 +6589,28 @@ function postPayFastForm(actionUrl, params) {
     function deviceClass() {
       const ua = navigator.userAgent || '';
       try { if (window.ApplePaySession && ApplePaySession.canMakePayments()) return 'apple'; } catch (_) {}
-      if (/SamsungBrowser/i.test(ua)) return 'samsung';
+      // Samsung phones: Samsung Internet, a Samsung model in the UA (older browsers), or
+      // Chrome's model hint (Chrome hides the model in the UA; probeSamsungModel()).
+      if (/SamsungBrowser/i.test(ua) || /Android[^;)]*;\s*(SM-|SAMSUNG|GT-)/i.test(ua) || samsungModel) return 'samsung';
       if (/Android/i.test(ua)) return 'android';
       if (/iPhone|iPad|iPod|Mobi/i.test(ua)) return 'other';
       return 'desktop';
     }
+    var samsungModel = false; // var: deviceClass() may run before this line executes
+    // Chrome on Android only gives the phone model through userAgentData (async). Samsung
+    // models start with SM- (e.g. SM-S918B). Re-draw the options once known.
+    (function probeSamsungModel() {
+      try {
+        const uad = navigator.userAgentData;
+        if (!uad || !uad.mobile || typeof uad.getHighEntropyValues !== 'function') return;
+        uad.getHighEntropyValues(['model']).then(v => {
+          if (v && /^(SM-|SAMSUNG|GT-)/i.test(v.model || '')) {
+            samsungModel = true;
+            try { renderPayOptions(); } catch (_) {}
+          }
+        }).catch(() => {});
+      } catch (_) {}
+    })();
     function deviceAllows(rule) {
       if (!rule) return true;
       const d = deviceClass();
