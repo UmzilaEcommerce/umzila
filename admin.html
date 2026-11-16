@@ -494,6 +494,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
           <li data-section="delivery-times"><span class="menu-icon">🕒</span><span class="menu-label">Delivery Times</span></li>
           <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
+          <li data-section="payments"><span class="menu-icon">💳</span><span class="menu-label">Payments</span></li>
           <li data-section="delivery-analytics"><span class="menu-icon">📈</span><span class="menu-label">Delivery Analytics</span></li>
           <li class="menu-group" role="presentation">Sellers</li>
           <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
@@ -519,6 +520,8 @@ const supabaseClient = supabase.createClient(
     <main>
       <!-- Dashboard -->
       <section id="section-dashboard">
+        <!-- "Payments: N flagged" — filled by payments-admin.js (admin_payment_flagged), hidden when 0 -->
+        <a id="paymentsFlagBadge" href="#" hidden></a>
         <!-- Live now — same get_ops_board() the logistics Today board uses -->
         <div class="live-ops" id="liveOps">
           <div class="live-ops-h"><span><i></i>Live now</span><button class="btn" id="liveOpsOpen">Delivery Ops →</button></div>
@@ -1159,6 +1162,15 @@ const supabaseClient = supabase.createClient(
            netlify/functions/spin-admin.js (admins table check server-side). -->
       <!-- Delivery Times (delivery timeslots console): slots, settings, date controls, run sheet,
            alert emails. All logic in /timeslots-admin.js (docs/plans/delivery-timeslots-plan.md). -->
+      <!-- Payments (payment method picker): options + master switch, flagged "paid twice" orders,
+           report per option. All logic in /payments-admin.js (docs/plans/payment-picker-checkout-plan.md §7). -->
+      <section id="section-payments" style="display:none">
+        <div class="section-top">
+          <h2>💳 Payments</h2>
+        </div>
+        <div id="paymentsMount"><p style="color:#6b7280">Loading…</p></div>
+      </section>
+
       <section id="section-delivery-times" style="display:none">
         <div class="section-top">
           <h2>🕒 Delivery Times</h2>
@@ -2347,6 +2359,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'delivery-pricing': document.getElementById('section-delivery-pricing'),
     'delivery-analytics': document.getElementById('section-delivery-analytics'),
     'delivery-times': document.getElementById('section-delivery-times'),
+    'payments': document.getElementById('section-payments'),
     'spin': document.getElementById('section-spin'),
     'home': document.getElementById('section-home')
   };
@@ -3047,6 +3060,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
   document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
   document.querySelector('[data-section="delivery-times"]')?.addEventListener('click', () => window.loadTimeslotsAdmin?.());
+  document.querySelector('[data-section="payments"]')?.addEventListener('click', () => window.loadPaymentsAdmin?.());
+  document.querySelector('[data-section="dashboard"]')?.addEventListener('click', () => window.loadPaymentsBadge?.());
   document.querySelector('[data-section="spin"]')?.addEventListener('click', () => window.loadSpinAdmin?.());
   document.querySelector('[data-section="home"]')?.addEventListener('click', () => window.loadHomeAdmin?.());
   document.querySelector('[data-section="delivery-analytics"]')?.addEventListener('click', () => window.loadDeliveryAnalytics?.());
@@ -6011,5 +6026,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 })();
 </script>
 <script src="/timeslots-admin.js"></script>
+<script src="/payments-admin.js"></script>
 </body>
 </html>

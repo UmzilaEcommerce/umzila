@@ -341,6 +341,23 @@ async function timeslotAfterPaid(supabase, orderId, siteUrl) {
   return { sent, busy, dispatch };
 }
 
+// ---------- payment picker: no-answer sweep ----------
+// One idempotent statement; minutes = site_settings 'payments'.no_answer_minutes (default 30).
+async function expirePaymentAttempts(supabase) {
+  let mins = 30;
+  try {
+    const { data } = await supabase.from('site_settings').select('value').eq('key', 'payments').maybeSingle();
+    const n = Number(data && data.value && data.value.no_answer_minutes);
+    if (Number.isFinite(n) && n >= 5 && n <= 1440) mins = n;
+  } catch (_) {}
+  const cutoff = new Date(Date.now() - mins * 60000).toISOString();
+  const { data, error } = await supabase.from('payment_attempts')
+    .update({ status: 'no_answer', ended_at: new Date().toISOString() })
+    .eq('status', 'started').lt('started_at', cutoff).select('id');
+  if (error) throw error;
+  return (data || []).length;
+}
+
 // ---------- the job ----------
 async function runTick(supabase, siteUrl) {
   // Safety net for the no-Mark-Ready flow (runs whether timeslots are on or off):
@@ -349,9 +366,14 @@ async function runTick(supabase, siteUrl) {
   let swept = 0;
   try { swept = (await require('./batch-dispatch').sweepWaitingDeliveries(supabase, { limit: 5 })).length; }
   catch (e) { console.warn('runTick: dispatch sweep failed', e && e.message); }
+  // Payment picker: attempts with no PayFast answer after N minutes → 'no_answer' (runs
+  // whether timeslots are on or off; a late COMPLETE ITN still confirms the order).
+  let noAnswer = 0;
+  try { noAnswer = await expirePaymentAttempts(supabase); }
+  catch (e) { console.warn('runTick: payment attempt sweep failed', e && e.message); }
   const st = await getSettings(supabase);
-  if (!st.enabled) return { skipped: 'disabled', swept };
-  const out = { summaries: 0, orderEvents: 0, busy: 0, swept };
+  if (!st.enabled) return { skipped: 'disabled', swept, noAnswer };
+  const out = { summaries: 0, orderEvents: 0, busy: 0, swept, noAnswer };
   out.summaries = await sendSummaries(supabase, siteUrl, st);
 
   // sweep: recent paid orders with a run — grace additions + unsent run-changed / needs-attention mails
@@ -376,5 +398,5 @@ async function runTick(supabase, siteUrl) {
 
 module.exports = {
   getSettings, fmtWindow, runLabel, loadRunOrders, itemTotals, sellerRecipients, adminAlertEmails,
-  logOnce, unlog, sendMail, timeslotAfterPaid, runTick, firstName, cutoffOf, graceEndOf, runObj, sastDate
+  logOnce, unlog, sendMail, timeslotAfterPaid, runTick, expirePaymentAttempts, firstName, cutoffOf, graceEndOf, runObj, sastDate
 };

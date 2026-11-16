@@ -72,6 +72,8 @@
     <div class="order-details">
       <div><strong>Order ID:</strong> <span id="orderId">Loading...</span></div>
       <div><strong>Status:</strong> <span id="payStatus" style="color: #b45309;">Confirming payment…</span></div>
+      <!-- Payment picker: "Paid R210 with Capitec Pay" (order-status paidWith). -->
+      <div id="paidWith" style="display:none"></div>
       <div><strong>You will receive:</strong> Order confirmation email shortly</div>
     </div>
     
@@ -194,6 +196,52 @@
       else localStorage.removeItem('ss_cart');
     }
 
+    // ── Payment picker (docs/systems/payment-picker.md) ──────────────────
+    // "Paid R210 with Capitec Pay" — order-status.js paidWith = { option_key,
+    // name, amount_gross } for orders paid while the picker was on (null otherwise).
+    function showPaidWith(order) {
+      const pw = order && order.paidWith;
+      const el = document.getElementById('paidWith');
+      if (!el || !pw || !pw.name) return;
+      const n = Number(pw.amount_gross);
+      const amount = isFinite(n) && n > 0 ? ' R' + (Math.round(n * 100) % 100 ? n.toFixed(2) : n.toFixed(0)) : '';
+      const via = pw.option_key === 'more' ? ' on PayFast'
+        : ' with ' + (String(pw.name).toLowerCase() === 'card' ? 'card' : pw.name);
+      el.textContent = 'Paid' + amount + via;
+      el.style.display = '';
+    }
+    // Checkout's storage for the pay retry flow:
+    //  sessionStorage umz_pending_order — the pending order checkout reuses
+    //    when the buyer comes back from PayFast without paying. Once paid it
+    //    must never be reused, so it goes.
+    //  localStorage umz_pay_option — guests' remembered option, written by
+    //    checkout when it sends them to PayFast. Kept only if the order paid
+    //    (brief: "after a successful payment, remember the option").
+    function pendingOrderFor(m) {
+      try {
+        const p = JSON.parse(sessionStorage.getItem('umz_pending_order') || 'null');
+        return p && (!p.m || p.m === m) ? p : null;
+      } catch (_) { return null; }
+    }
+    function payOptionBelongsTo(m) {
+      // Accept both shapes checkout may write: a bare key ("capitec") or
+      // { key, m }. A value tagged with another order is left alone.
+      let raw = null;
+      try { raw = localStorage.getItem('umz_pay_option'); } catch (_) {}
+      if (!raw) return false;
+      try { const v = JSON.parse(raw); if (v && typeof v === 'object' && v.m && v.m !== m) return false; } catch (_) {}
+      return true;
+    }
+    function settlePickerStorage(paid) {
+      try {
+        if (paid) {
+          if (pendingOrderFor(mPaymentId)) sessionStorage.removeItem('umz_pending_order');
+        } else if (payOptionBelongsTo(mPaymentId)) {
+          localStorage.removeItem('umz_pay_option');
+        }
+      } catch (_) {}
+    }
+
     // Read seller enrollment data saved in sessionStorage on enroll-seller.html
     const enrollData = JSON.parse(sessionStorage.getItem('seller_enrollment') || '{}');
 
@@ -245,6 +293,8 @@
               if (order && order.paymentStatus === 'paid') {
                 const ps = document.getElementById('payStatus');
                 if (ps) { ps.textContent = 'Paid'; ps.style.color = '#28a745'; }
+                showPaidWith(order);
+                settlePickerStorage(true);
                 if (order.trackPath) {
                   document.getElementById('trackBtn').href = order.trackPath;
                   document.getElementById('trackBox').style.display = '';
@@ -332,6 +382,7 @@
                 console.warn('checkout-success: ITN not yet confirmed after polling, clearing cart optimistically');
                 const ps = document.getElementById('payStatus');
                 if (ps) ps.textContent = 'Still confirming with PayFast — your confirmation email follows as soon as it does';
+                settlePickerStorage(false);
                 finishPaidCart();
                 localStorage.removeItem('ss_coupon');
               }

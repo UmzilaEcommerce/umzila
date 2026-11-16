@@ -43,6 +43,34 @@ exports.handler = async function(event, context) {
             return immediateResponse;
         }
 
+        // ── Payment picker (additive) ──────────────────────────────────
+        // Only while site_settings 'payments'.enabled is true: PayFast's server
+        // confirmation (/eng/query/validate). Off = exactly today's path.
+        // A valid-host (source IP) check is deliberately NOT added — see
+        // docs/plans/payment-picker-checkout-plan.md §4.4 before "fixing" that.
+        let pickerOn = false;
+        let pickerCfg = null;
+        try {
+            const { data: ps } = await supabase.from('site_settings').select('value').eq('key', 'payments').maybeSingle();
+            pickerCfg = (ps && ps.value) || null;
+            pickerOn = !!(pickerCfg && pickerCfg.enabled === true);
+        } catch (e) { console.warn('ITN: payments settings read failed', e && e.message); }
+        const attemptRef = UUID_RE.test(pfData.custom_str3 || '') ? pfData.custom_str3 : null;
+
+        if (pickerOn && pfData.payment_status === 'COMPLETE' && pickerCfg.itn_validate !== false) {
+            const verdict = await pfServerConfirm(rawBody);
+            if (verdict === 'INVALID') {
+                console.error('ITN: PayFast says INVALID — not completing', pfData.m_payment_id);
+                if (attemptRef) {
+                    const { error: aErr } = await supabase.from('payment_attempts')
+                        .update({ status: 'failed', ended_at: new Date().toISOString(), note: 'ITN rejected by PayFast validate (INVALID)' })
+                        .eq('id', attemptRef).eq('m_payment_id', pfData.m_payment_id).eq('status', 'started');
+                    if (aErr) console.warn('ITN: attempt INVALID mark failed', aErr.message);
+                }
+                return immediateResponse;
+            }
+        }
+
         if (pfData.payment_status === 'COMPLETE') {
             const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
 
@@ -53,7 +81,8 @@ exports.handler = async function(event, context) {
                 mPaymentId: pfData.m_payment_id,
                 pfPaymentId: pfData.pf_payment_id,
                 pfResponse: pfData,
-                siteUrl: SITE_BASE_URL
+                siteUrl: SITE_BASE_URL,
+                pickerOn
             }).catch(e => console.error('ITN: completeOrderPayment error', e));
 
             // ── Seller enrollment activation ───────────────────────────────
@@ -79,6 +108,13 @@ exports.handler = async function(event, context) {
 
             if (error) {
                 console.error('ITN: error cancelling order:', error);
+            }
+            // Payment picker: the attempt that carried this payment ends as cancelled.
+            if (attemptRef) {
+                const { error: aErr } = await supabase.from('payment_attempts')
+                    .update({ status: 'cancelled', ended_at: new Date().toISOString() })
+                    .eq('id', attemptRef).eq('m_payment_id', pfData.m_payment_id).eq('status', 'started');
+                if (aErr) console.warn('ITN: attempt cancel mark failed', aErr.message);
             }
         }
 
@@ -193,6 +229,40 @@ async function activateSellerEnrollment(supabase, pfData) {
 }
 
 // ── PayFast signature verification ───────────────────────────────────────────
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ── PayFast server confirmation (payment picker, picker-on only) ─────────────
+// POSTs the ITN's parameter string (without the signature, as PayFast's docs
+// do) back to /eng/query/validate. Returns 'VALID', 'INVALID' or 'UNKNOWN'
+// (network error / timeout / odd reply). Only an explicit INVALID stops the
+// order completing — the passphrase signature has already passed, and a real
+// payment must never be dropped because the validate endpoint hiccupped.
+async function pfServerConfirm(rawBody) {
+    const SANDBOX = (process.env.PAYFAST_SANDBOX || 'true').toLowerCase() !== 'false';
+    const pfHost = SANDBOX ? 'sandbox.payfast.co.za' : 'www.payfast.co.za';
+    const paramString = rawBody.split('&').filter(p => !p.startsWith('signature=')).join('&');
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 4000) : null;
+    try {
+        const res = await fetch(`https://${pfHost}/eng/query/validate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: paramString,
+            signal: ctl ? ctl.signal : undefined
+        });
+        const text = String(await res.text()).trim().toUpperCase();
+        if (text === 'VALID') return 'VALID';
+        if (text === 'INVALID') return 'INVALID';
+        console.warn('ITN: PayFast validate gave an unexpected reply', res.status, text.slice(0, 80));
+        return 'UNKNOWN';
+    } catch (e) {
+        console.warn('ITN: PayFast validate unreachable — continuing on the signature', e && e.message);
+        return 'UNKNOWN';
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
 // Uses the raw POST body to avoid re-encoding discrepancies between PHP urlencode
 // and JS encodeURIComponent. PayFast signs the URL-encoded parameter string as-is.
 function verifySignature(rawBody, passphrase = '') {

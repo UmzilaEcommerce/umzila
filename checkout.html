@@ -648,51 +648,13 @@
          of buttons, not a second payment path — which is why the ORIGINAL
          inline Pay Now wrapper and saved-card button group must be hidden
          below: otherwise both sets render at once on mobile. */
-      body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
+      /* One-page checkout (2026-11-15): the pay dock (#payDock) is the fixed
+         bottom bar — see the ONE-PAGE CHECKOUT block at the end. Only one of
+         the desktop / phone Pay button pairs shows at a time. */
       .pay-now-inline-wrapper,
       #savedCardGroup {
         display: none !important;
       }
-      /* Equivalent of the "Secured by PayFast" trust line that lived inside
-         the now-hidden .pay-now-inline-wrapper, re-shown next to the sticky bar. */
-      .mobile-pay-trust {
-        display: block;
-        text-align: center;
-        font-size: 12px;
-        color: var(--muted);
-        padding: 6px 16px 2px;
-      }
-      .mobile-pay-bar {
-        position: fixed;
-        left: 0; right: 0; bottom: 0;
-        z-index: 1000;
-        background: #fff;
-        box-shadow: 0 -4px 12px rgba(16,24,40,0.08);
-        padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
-      .mobile-pay-bar-total {
-        font-family: 'Playfair Display', serif;
-        font-weight: 700;
-        font-size: 18px;
-        color: var(--accent);
-        font-variant-numeric: tabular-nums;
-      }
-      .mobile-pay-bar #payNowBtnMobile,
-      .mobile-pay-bar #payWithSavedCardBtnMobile {
-        flex: 1;
-        padding: 13px 16px;
-        font-size: 15px;
-        min-height: 44px;
-      }
-      /* Once a saved card exists, payNowBtnMobile is no longer hidden — it's
-         the mobile equivalent of the demoted desktop "different card" link.
-         Wraps onto its own row underneath the total + primary button so it
-         never competes for width. Confirmed real gap: before this rule,
-         mobile buyers had zero path to pay with a new card once one was
-         already saved. */
       .pay-secure-line { display: none; }
     }
     @media (min-width: 769px) {
@@ -1176,120 +1138,411 @@
       .tip-pill{transition:none}
       .addr-confirm-scrim{transition:none}
     }
+
+    /* ================= ONE-PAGE CHECKOUT (2026-11-15) =================
+       Numbered steps (number → tick when complete), order summary + pay dock.
+       Phone-first: one column, the pay dock is a fixed bottom bar. From
+       769px: steps left, one sticky summary card right. Design: the
+       checkout mockups (Main.dc / Desktop.dc). Plan: §6 of
+       docs/plans/payment-picker-checkout-plan.md. */
+    :root {
+      --bg: #f6f4f0;
+      --ink: #16181d;
+      --muted: #6d6a63;
+      --line: #e9e6df;
+      --line-2: #f0eee9;
+      --field: #d8d5cd;
+      --tint: #eef2f8;
+      --ok: #15803d;
+      --warn: #b45309;
+      --dock-h: 190px;
+    }
+    html, body { height: auto; }
+    body { background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.45; }
+    .sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+    .opt { color: var(--muted); font-weight: 400; }
+
+    /* Header */
+    .co-header { padding: 0; box-shadow: none; border-bottom: 1px solid var(--line); background: #fff; }
+    .co-header-inner { max-width: 1120px; margin: 0 auto; height: 56px; padding: 0 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .co-back { min-width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 12px; color: var(--ink); font-weight: 600; font-size: 14px; padding: 0 6px; }
+    .co-back-text { display: none; }
+    .co-logo { gap: 6px; font-family: 'Playfair Display', Georgia, serif; font-size: 20px; font-weight: 700; color: var(--accent); }
+    .co-logo img { height: 34px; width: auto; border-radius: 0; }
+    .co-logo span { display: inline; }
+    .co-logo img { display: none; } /* the square file is mostly white space at this size — the wordmark reads better */
+    #orderItems .btn { display: inline-block; text-decoration: none; }
+    .co-header-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 76px; padding-right: 6px; }
+    .co-auth-btn { background: none; border: 0; color: var(--accent); font-weight: 600; font-size: 13px; min-height: 44px; padding: 0 8px; cursor: pointer; font-family: inherit; }
+    .co-secure { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+    .co-secure svg { width: 14px; height: 14px; }
+    .co-secure-long { display: none; }
+
+    /* Page grid — phone: one column; the aside dissolves (display:contents)
+       so the summary sits on top, the totals + reassurance under the steps. */
+    .co-wrap { max-width: 1120px; margin: 0 auto; padding: 12px 14px calc(var(--dock-h) + 16px); }
+    .co-grid { display: flex; flex-direction: column; gap: 12px; }
+    .co-grid.hidden { display: none !important; }
+    .co-title { display: none; }
+    .co-aside { display: contents; }
+    .co-brand { order: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #fff; border: 1px solid var(--line); border-radius: 16px; }
+    .co-brand.hidden { display: none !important; }
+    .co-brand-logo { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; background: var(--accent); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 13px; }
+    .co-brand-eyebrow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .co-brand-name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 15px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .co-brand-amount { flex: 0 0 auto; font-size: 13px; color: var(--muted); }
+    #orderSummaryCard { order: 1; }
+    .co-steps { order: 2; }
+    .co-totals { order: 3; }
+    .co-reassure { order: 4; }
+
+    /* Steps */
+    .co-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; }
+    .co-step { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; scroll-margin-top: 72px; }
+    .co-step.hidden { display: none !important; }
+    .step-head { display: flex; align-items: center; gap: 10px; }
+    .step-num { width: 24px; height: 24px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; background: var(--tint); color: var(--accent); }
+    .step-num svg { width: 13px; height: 13px; }
+    .co-step.done .step-num { background: var(--accent); color: #fff; }
+    .step-title { margin: 0; font-size: 16px; font-weight: 600; flex: 1; color: var(--ink); }
+    .step-body { display: flex; flex-direction: column; gap: 12px; }
+    .step-body > *, #step1Page > *, #contactFormFull > *, #addressSection > *, #addressFormFull > * { margin-top: 0; margin-bottom: 0; }
+    #step1Page, #contactFormFull, #addressFormFull, #addressSection, #addrMetaFields, #addressCompactCard { display: flex; flex-direction: column; gap: 12px; }
+    #step1Page.hidden, #contactFormFull.hidden, #addressFormFull.hidden, #addrMetaFields.hidden, #addressCompactCard.hidden { display: none !important; }
+    .step-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-left: 34px; font-size: 14px; }
+    .step-summary .ss-name { display: block; font-weight: 500; color: var(--ink); }
+    .step-summary .ss-sub { display: block; color: var(--muted); overflow-wrap: anywhere; }
+    .step-change { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 14px; padding: 0 4px; min-height: 44px; margin: -12px -4px; cursor: pointer; font-family: inherit; flex: none; }
+    .step-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 14px; padding: 0 2px; cursor: pointer; align-self: flex-start; font-family: inherit; }
+    .inline-link { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 13px; padding: 4px 2px; cursor: pointer; font-family: inherit; text-decoration: underline; }
+    .co-continue { align-self: stretch; min-height: 48px; border-radius: 12px; border: 1px solid var(--accent); background: #fff; color: var(--accent); font-weight: 700; font-size: 15px; cursor: pointer; font-family: inherit; }
+    .co-continue:hover { background: var(--tint); }
+    #stepDetails.guest-collapsed #quickSigninCard { display: none; }
+    #authCardWrap { margin-bottom: 0; }
+
+    /* Fields */
+    .co-step .form-group { margin-bottom: 0; display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .co-step .form-label { margin: 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+    .co-step .form-control { height: 48px; border: 1px solid var(--field); border-radius: 12px; padding: 0 14px; font-size: 16px; background: #fff; color: var(--ink); }
+    .co-step select.form-control { padding-right: 8px; }
+    .co-step textarea.form-control { height: auto; padding: 12px 14px; }
+    .co-step .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(10,47,102,.1); }
+    .co-step .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 0; }
+    .field-hint { display: block; font-size: 12px; color: var(--muted); }
+    .form-control.is-invalid { border-color: var(--color-danger) !important; box-shadow: 0 0 0 3px rgba(220,38,38,.12) !important; }
+    .field-err { font-size: 13px; color: var(--color-danger); font-weight: 500; }
+    .is-invalid-group .field-hint { color: var(--color-danger); }
+    .co-step .error-message { margin-bottom: 0; padding: 10px 12px; font-size: 13px; border-radius: 10px; }
+    .co-step .auth-card { margin-bottom: 0; border-radius: 12px; }
+
+    /* Address */
+    .addr-saved { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 2px solid var(--accent); background: var(--tint); }
+    .ring { width: 18px; height: 18px; border-radius: 999px; flex: none; box-sizing: border-box; border: 2px solid #b8b4aa; background: #fff; }
+    .ring.on { border: 6px solid var(--accent); }
+    .addr-saved-text { flex: 1; min-width: 0; font-size: 13px; color: var(--muted); }
+    .addr-saved-text strong { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+    .addr-saved-text span { display: block; overflow-wrap: anywhere; }
+    .addr-meta { font-size: 13px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .addr-meta-line { font-size: 13px; color: var(--muted); }
+    .zone-line { margin: 0; font-size: 13px; color: var(--muted); }
+    #quoteNoticeBlock { margin: 0 !important; }
+    .co-step .eta-strip { margin: 0; }
+    .co-step .prio-card { margin: 0; }
+    .co-step .addr-confirm-callout { margin: -4px 0 0; }
+
+    /* Delivery-time picker inside step 3 (tsRenderPicker output) */
+    #stepTime .ts-picker { margin: 0; padding: 0; background: none; color: var(--ink); display: flex; flex-direction: column; gap: 10px; }
+    #stepTime .ts-picker .ts-title { display: none; }
+    #stepTime .ts-picker .ts-note { margin: 0; }
+    .ts-days { display: flex; gap: 8px; }
+    .ts-daychip { flex: 1; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px; font: inherit; cursor: pointer; }
+    .ts-daychip .d1 { font-weight: 600; font-size: 14px; }
+    .ts-daychip .d2 { font-size: 12px; color: var(--muted); }
+    .ts-daychip[aria-pressed="true"] { border: 2px solid var(--accent); background: var(--accent); color: #fff; }
+    .ts-daychip[aria-pressed="true"] .d2 { color: #dfe7f8; }
+    .ts-runs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    #stepTime .ts-picker .ts-run { min-height: 72px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; border: 1px solid var(--line); margin: 0; padding: 10px 12px; border-radius: 12px; color: var(--ink); }
+    #stepTime .ts-picker .ts-run.on { border: 2px solid var(--accent); background: var(--tint); padding: 9px 11px; }
+    #stepTime .ts-picker .ts-run .ts-k { font-size: 12px; color: var(--muted); font-weight: 500; }
+    #stepTime .ts-picker .ts-win { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #stepTime .ts-picker .ts-by { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+    #stepTime .ts-picker .ts-by.urgent { color: var(--warn); }
+    #stepTime .ts-picker .ts-warn { font-size: 12px; }
+    #stepTime .ts-picker .ts-how { margin: 0; font-size: 13px; display: flex; gap: 8px; }
+
+    /* Payment options (picker) */
+    .pay-panel { margin-top: 0; border-top: 0; padding-top: 0; }
+    .pay-options { display: flex; flex-direction: column; gap: 8px; border-radius: 12px; }
+    .pay-options.hidden { display: none !important; }
+    .pay-options.is-invalid { outline: 2px solid var(--color-danger); outline-offset: 4px; }
+    .pay-opt { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); min-height: 60px; font: inherit; cursor: pointer; }
+    .pay-opt:hover { border-color: #c9c5bc; }
+    .pay-opt[aria-checked="true"] { border: 2px solid var(--accent); background: var(--tint); padding: 11px 13px; }
+    .pay-opt[aria-checked="true"] .ring { border: 6px solid var(--accent); }
+    .pay-opt-text { flex: 1; min-width: 0; }
+    .pay-opt-text strong { display: block; font-weight: 600; font-size: 14px; }
+    .pay-opt-text small { display: block; font-size: 13px; color: var(--muted); }
+    .pay-opt-tag { font-size: 11px; font-weight: 600; color: var(--accent); background: var(--tint); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+    .pay-opt[aria-checked="true"] .pay-opt-tag { background: #fff; }
+    .pay-ico { flex: none; width: 22px; height: 22px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .card-sub { display: flex; flex-direction: column; gap: 8px; }
+    #payOptions .card-sub { margin: 0 0 4px 12px; padding-left: 12px; border-left: 2px solid var(--tint); }
+    .card-sub .pay-choices, .card-sub .new-card-box { margin-bottom: 0; }
+    .card-sub .pay-choices.hidden, .card-sub .new-card-box.hidden { display: none !important; }
+    .new-card-box { border-radius: 12px; }
+    .pay-choice { border-radius: 12px; border-width: 1px; border-color: var(--line); }
+    .pay-choice.selected { border-width: 2px; padding: 12px 13px; background: var(--tint); }
+    .co-step .promo-code-section.promo-visible { margin: 0; border-radius: 12px; border-color: var(--line); background: #fbfaf7; }
+    .co-step .optin-row { padding: 0; }
+
+    /* Summary card */
+    #orderSummaryCard { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 0; margin: 0; box-shadow: none; overflow: hidden; }
+    #orderSummaryCard .summary-header { min-height: 56px; padding: 10px 16px; margin: 0; border: 0; font-size: 15px; color: var(--ink); gap: 10px; font-weight: 600; }
+    .sum-ico { width: 36px; height: 36px; border-radius: 10px; background: var(--tint); color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
+    .sum-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .sum-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #orderSummaryCard .summary-header-meta { margin: 0; font-size: 13px; font-weight: 400; color: var(--muted); }
+    .sum-total { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+    #orderSummaryCard .summary-chevron { margin-left: 0; color: var(--muted); }
+    #orderSummaryBody { border-top: 1px solid var(--line-2); padding: 4px 16px 8px; }
+    #orderSummaryCard .order-items { margin: 0; max-height: none; }
+    #orderSummaryCard .order-item { border-bottom-color: var(--line-2); }
+    #orderSummaryCard .item-image { width: 48px; height: 48px; border-radius: 12px; }
+    #orderSummaryCard .item-title { font-size: 14px; margin-bottom: 2px; }
+    #orderSummaryCard .item-variant { font-size: 13px; margin-bottom: 2px; }
+    #orderSummaryCard .item-price { color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+    /* Totals */
+    .co-totals { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .co-totals-h { font-size: 16px; font-weight: 600; margin: 0; }
+    .co-totals .summary-totals { margin: 0; padding: 0; border: 0; font-variant-numeric: tabular-nums; }
+    .co-totals .summary-row { font-size: 14px; margin-bottom: 8px; }
+    .co-totals .summary-row > span:first-child { color: var(--muted); }
+    .co-totals .summary-row.total { font-size: 17px; color: var(--ink); border-top: 1px solid var(--line-2); padding-top: 10px; margin-top: 4px; margin-bottom: 0; }
+    .co-totals .summary-row.total > span:first-child { color: var(--ink); }
+    .sum-note { font-size: 11px; color: var(--muted); text-align: right; margin: -4px 0 6px; }
+    .save-line { font-size: 13px; color: var(--ok); font-weight: 600; text-align: right; }
+    .save-line.hidden { display: none !important; }
+    .co-totals .tip-section { margin: 0; padding-top: 12px; border-top: 1px solid var(--line-2); }
+    .co-totals .tip-section-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+    .vat-note { font-size: 12px; color: var(--muted); text-align: center; }
+
+    /* Pay dock — phone: fixed bottom bar */
+    .pay-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fff; border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; box-shadow: 0 -8px 24px rgba(16,24,40,.08); }
+    .dock-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+    .dock-lines { display: flex; flex-direction: column; min-width: 0; }
+    .dock-dispatch { font-size: 12px; color: var(--muted); }
+    .dock-save { text-align: left; }
+    .pay-dock .mobile-pay-bar-total { font-size: 20px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; font-family: inherit; }
+    .dock-when { display: none; }
+    .bar-error { font-size: 13px; color: var(--color-danger); font-weight: 500; }
+    .bar-error.hidden { display: none !important; }
+    .pay-dock .mobile-pay-bar { position: static; display: flex; gap: 8px; padding: 0; box-shadow: none; background: none; }
+    .pay-dock .mobile-pay-bar .btn { flex: 1; }
+    .pay-dock .pay-main-btn, .pay-dock .mobile-pay-bar .btn { min-height: 54px; padding: 12px 16px !important; border-radius: 14px !important; background: var(--cta) !important; color: var(--ink) !important; font-weight: 700 !important; font-size: 17px !important; width: 100%; }
+    .pay-dock .pay-main-btn:hover { filter: brightness(1.04); }
+    .pay-dock .btn.is-paying { color: var(--ink) !important; }
+    .pay-dock .btn.is-paying::before { border-color: rgba(22,24,29,.25); border-top-color: var(--ink); }
+    .pay-dock .terms-line { margin: 0; font-size: 11px; line-height: 1.35; }
+    .pay-dock .terms-line a { color: var(--accent); text-decoration: underline; }
+    .co-reassure { list-style: none; margin: 0; padding: 4px 6px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--muted); }
+    .co-reassure li { display: flex; gap: 8px; align-items: flex-start; }
+    .co-reassure li.hidden { display: none !important; }
+    .co-reassure svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+
+    @media (max-width: 768px) {
+      .pay-dock .pay-dock-desktop-only { display: none; }
+    }
+    @media (max-width: 360px) {
+      .co-step .form-row { grid-template-columns: 1fr; }
+      .ts-runs { grid-template-columns: 1fr; }
+    }
+
+    /* Desktop: steps left, one sticky summary card right */
+    @media (min-width: 769px) {
+      .co-header-inner { height: 64px; padding: 0 24px; }
+      .co-back-text { display: inline; }
+      .co-logo img { height: 44px; }
+      .co-secure { font-size: 13px; }
+      .co-secure-long { display: inline; }
+      .co-wrap { padding: 28px 24px 56px; }
+      .co-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); column-gap: 24px; row-gap: 14px; align-items: start; }
+      .co-title { display: block; grid-column: 1; margin: 0 0 4px; font-family: 'Playfair Display', Georgia, serif; font-size: 34px; font-weight: 700; color: var(--accent); }
+      .co-brand { grid-column: 1; }
+      .co-steps { grid-column: 1; gap: 14px; }
+      .co-step { padding: 20px; gap: 14px; }
+      .step-num { width: 26px; height: 26px; }
+      .step-title { font-size: 17px; }
+      .step-summary { padding-left: 36px; }
+      .co-aside { display: flex; flex-direction: column; gap: 16px; grid-column: 2; grid-row: 1 / span 3; position: sticky; top: 84px; background: #fff; border: 1px solid var(--line); border-radius: 20px; padding: 22px; box-shadow: 0 2px 4px rgba(16,24,40,.04), 0 10px 24px rgba(16,24,40,.08); }
+      #orderSummaryCard { order: 1; border: 0; border-radius: 0; overflow: visible; }
+      .co-totals { order: 2; }
+      .pay-dock { order: 3; }
+      .co-reassure { order: 4; }
+      #orderSummaryCard .summary-header { padding: 0; min-height: 0; cursor: default; pointer-events: none; }
+      #orderSummaryCard .summary-chevron, .sum-total { display: none; }
+      .order-summary:not(.expanded) #orderSummaryBody, #orderSummaryBody { display: block; border-top: 0; padding: 4px 0 0; }
+      #orderSummaryCard .order-items { max-height: 300px; overflow-y: auto; }
+      .co-totals { border: 0; border-top: 1px solid var(--line-2); border-radius: 0; padding: 14px 0 0; }
+      .co-totals-h { display: none; }
+      .co-totals .summary-row.total > span:last-child { font-size: 24px; }
+      .pay-dock { position: static; padding: 0; border: 0; box-shadow: none; background: none; gap: 10px; }
+      .pay-dock .mobile-pay-bar, .pay-dock .mobile-pay-bar-total, .pay-dock .dock-top { display: none; }
+      .dock-when { display: flex; align-items: center; gap: 8px; background: var(--tint); color: var(--accent); border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 500; }
+      .dock-when.hidden { display: none; }
+      .dock-when svg { flex: none; }
+      .pay-dock .pay-main-btn { min-height: 56px; }
+      .pay-dock .terms-line { font-size: 12px; }
+      .co-reassure { padding: 0; }
+      .pay-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: dense; gap: 10px; }
+      .pay-opt { min-height: 64px; }
+      #payOptions .card-sub { grid-column: 1 / -1; margin: 0; }
+      .ts-runs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    /* Empty cart: only the (open) summary card with "Continue shopping". */
+    .co-grid.co-empty .co-steps, .co-grid.co-empty .co-totals, .co-grid.co-empty .pay-dock, .co-grid.co-empty .co-reassure, .co-grid.co-empty .co-brand { display: none !important; }
+    .co-grid.co-empty #orderSummaryBody { display: block; }
+    .co-wrap:has(.co-empty) { padding-bottom: 24px; }
+    @media (min-width: 769px) { .co-grid.co-empty { display: block; max-width: 560px; margin: 0 auto; } .co-grid.co-empty .co-aside { position: static; } }
+    @media (min-width: 769px) and (max-width: 1000px) {
+      .ts-runs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pay-options { grid-template-columns: 1fr; }
+    }
   </style>
   <!-- Include Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/auth-mail.js"></script><script src="/product-sheet.js"></script>
 </head>
 <body>
-  <!-- Header -->
-  <header class="checkout-header">
-    <div class="container">
-      <div class="header-inner">
-        <a href="index.html" class="logo">
-          <img src="umzila.webp" alt="Umzila Logo">
-          <span>Umzila</span>
-        </a>
-        <div class="header-actions">
-          <button id="authBtn" class="btn ghost">Sign In</button>
-          <a href="index.html" class="btn ghost">Continue Shopping</a>
-        </div>
+  <!-- Header (one-page checkout, 2026-11-15): back · logo · sign in + secure -->
+  <header class="checkout-header co-header">
+    <div class="co-header-inner">
+      <a href="index.html" id="coBackLink" class="co-back" aria-label="Back to shopping">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+        <span class="co-back-text">Back to shopping</span>
+      </a>
+      <a href="index.html" class="logo co-logo"><img src="umzila.webp" alt=""><span>Umzila</span></a>
+      <div class="co-header-right">
+        <button type="button" id="authBtn" class="co-auth-btn">Sign In</button>
+        <span class="co-secure"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure<span class="co-secure-long"> checkout</span></span>
       </div>
     </div>
   </header>
 
-  <!-- Main Checkout Content -->
-  <div class="container">
-    <div class="checkout-layout">
-      <!-- Left Column - Forms -->
-      <div class="checkout-forms">
-        <!-- Loading State -->
-        <div id="loadingState" class="loading">
-          <div class="loading-spinner"></div>
-          <p>Loading checkout...</p>
+  <main class="co-wrap" id="coWrap">
+    <!-- Loading State -->
+    <div id="loadingState" class="loading">
+      <div class="loading-spinner"></div>
+      <p>Loading checkout...</p>
+    </div>
+
+    <!-- ONE-PAGE CHECKOUT (2026-11-15, docs/plans/payment-picker-checkout-plan.md §6).
+         Four numbered steps on the left (one column on a phone), the order
+         summary + pay dock on the right (a fixed bottom bar on a phone).
+         Every element id the script uses is kept; #step1Page and
+         #step2DeliveryPayment are now plain wrappers that are never hidden. -->
+    <section id="checkoutSection" class="co-grid hidden" aria-labelledby="coTitle">
+      <h1 class="co-title" id="coTitle">Checkout</h1>
+
+      <!-- Shop-branding banner — only for a single-seller cart. Populated by
+           renderShopBrandingBanner(). -->
+      <div id="shopBrandingBanner" class="hidden co-brand">
+        <div id="shopBrandingLogo" class="co-brand-logo"></div>
+        <div style="flex:1;min-width:0">
+          <div class="co-brand-eyebrow">Ordering from</div>
+          <div id="shopBrandingName" class="co-brand-name"></div>
         </div>
+        <div id="shopBrandingAmount" class="co-brand-amount"></div>
+      </div>
 
-        <!-- Unified checkout — contact + delivery + payment, all one view.
-             No popup, no multi-step wizard: a guest fills this in once and
-             hits Pay Now; a returning buyer sees everything pre-filled and
-             collapsed. Signing in is a self-contained inline option, never
-             a blocking modal. -->
-        <section id="checkoutSection" class="checkout-section hidden">
-          <div class="section-header">
-            <h2>Checkout</h2>
+      <ol class="co-steps" id="step2DeliveryPayment">
+        <!-- ============ STEP 1 — Your details ============ -->
+        <li class="co-step" id="stepDetails" data-step="details" aria-labelledby="stepDetailsTitle">
+          <div class="step-head">
+            <span class="step-num" aria-hidden="true">1</span>
+            <h2 class="step-title" id="stepDetailsTitle">Your details</h2>
+            <span class="sr-only step-state"></span>
           </div>
-
-          <!-- Shop-branding banner — only for a single-seller cart (e.g.
-               reached via a shop's "Buy Now"), so a purchase from one
-               shop doesn't feel like a generic detour through "the main
-               site's checkout." Never shown for a mixed-seller cart.
-               Populated by renderShopBrandingBanner(). -->
-          <div id="shopBrandingBanner" class="hidden" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:16px;background:#fff;border:1px solid var(--color-border,#e5e7eb);border-radius:var(--radius-md)">
-            <div id="shopBrandingLogo" style="flex:0 0 auto;width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Ordering from</div>
-              <div id="shopBrandingName" style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div class="step-body">
+            <!-- Collapsed state: signed-in buyer with a complete profile, or a
+                 guest after Continue / with remembered details. -->
+            <div id="contactSummary" class="hidden step-summary">
+              <div class="step-summary-text" id="contactSummaryText"></div>
+              <button type="button" id="editContactBtn" class="step-change" aria-label="Change your details">Change</button>
             </div>
-            <div id="shopBrandingAmount" style="flex:0 0 auto;font-size:13px;color:var(--muted)"></div>
-          </div>
 
-          <!-- ============ PAGE 1 — Your details ============
-               #step1Page wraps the heading, the auth/sign-in cards
-               (#authCardWrap, inside #step1ContactAccount), AND the full
-               contact fields (#contactFormFull) as ONE single-page-app-style
-               "page" — only ever one of #step1Page / #step2DeliveryPayment
-               is visible at a time (see showCheckoutPage(), updateAuthUI(),
-               advanceToStep2(), goBackToStep1()). A signed-in buyer with a
-               complete contact on file (see hasCompleteContact()) skips this
-               entire page — not even collapsed — since there's nothing left
-               for them to do here; their contact info instead shows via the
-               #contactSummary chip at the top of #step2DeliveryPayment. -->
-          <div id="step1Page">
-          <div id="step1Heading" class="field-group-label">Step 1 of 2 — Your details</div>
-          <div id="step1ContactAccount">
-            <!-- Unified auth panel — one visual component, five JS-driven
-                 states (guest/untyped, guest/known-email, guest/new-email,
-                 signed-in/complete, signed-in/partial). The state machine
-                 below (checkEmailDebounced/setAccountCardState/updateAuthUI)
-                 is unchanged — only markup grouping + styling changed here. -->
-            <div id="authCardWrap">
-              <!-- Path A: explicit "I already have an account" shortcut — fully
-                   self-contained (its own email field), works even if nothing
-                   else on the page has been touched yet. De-emphasizes itself
-                   once the buyer starts typing into the form below instead. -->
-              <div id="quickSigninCard" class="auth-card">
-                <button type="button" id="inlineSigninToggle" class="auth-row-btn">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  <span>Already have an account? <strong>Sign in</strong></span>
-                  <svg class="auth-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-                <div id="inlineSigninForm" class="hidden auth-inline-form">
-                  <div class="form-group" style="margin-bottom:8px">
-                    <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" style="margin-bottom:8px">
-                    <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password">
+            <div id="step1Page">
+              <div id="step1Heading" class="sr-only">Your details</div>
+              <div id="step1ContactAccount">
+                <div id="authCardWrap">
+                  <!-- Path A: "I already have an account" shortcut (own email field). -->
+                  <div id="quickSigninCard" class="auth-card">
+                    <button type="button" id="inlineSigninToggle" class="auth-row-btn">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      <span>Already have an account? <strong>Sign in</strong></span>
+                      <svg class="auth-row-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <div id="inlineSigninForm" class="hidden auth-inline-form">
+                      <div class="form-group" style="margin-bottom:8px">
+                        <label class="sr-only" for="inlineSigninEmail">Email address</label>
+                        <input type="email" id="inlineSigninEmail" class="form-control" placeholder="Email address" autocomplete="email" style="margin-bottom:8px">
+                        <label class="sr-only" for="inlineSigninPassword">Password</label>
+                        <input type="password" id="inlineSigninPassword" class="form-control" placeholder="Your password" autocomplete="current-password">
+                      </div>
+                      <div id="inlineSigninError" class="error-message hidden"></div>
+                      <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
+                      <button type="button" id="inlineForgotPassword" class="auth-text-link" style="margin-left:10px">Forgot password?</button>
+                    </div>
                   </div>
-                  <div id="inlineSigninError" class="error-message hidden"></div>
-                  <button type="button" id="inlineSigninSubmit" class="btn" style="padding:10px 20px;font-size:14px">Sign In</button>
-                  <button type="button" id="inlineForgotPassword" class="auth-text-link" style="margin-left:10px">Forgot password?</button>
+
+                  <div id="signedInBox" class="hidden auth-card auth-signed-in">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span>Signed in as <strong id="signedInEmail"></strong></span>
+                    <button type="button" id="signOutInline" class="auth-text-link" style="margin-left:auto;color:#166534">Not you?</button>
+                  </div>
                 </div>
               </div>
 
-              <div id="signedInBox" class="hidden auth-card auth-signed-in">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#166534" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Signed in as <strong id="signedInEmail"></strong></span>
-                <button type="button" id="signOutInline" class="auth-text-link" style="margin-left:auto;color:#166534">Not you?</button>
+              <div id="contactFormFull">
+                <div class="form-group">
+                  <label class="form-label" for="customerEmail">Email <span class="opt">— for your receipt and tracking link</span></label>
+                  <input type="email" id="customerEmail" class="form-control" required autocomplete="email" inputmode="email" placeholder="thando@gmail.com">
+                  <small id="basketSaveNote" class="field-hint">We keep your basket with these details so we can help if your order doesn't go through.</small>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="firstName">First name</label>
+                    <input type="text" id="firstName" class="form-control" required autocomplete="given-name" placeholder="Thando">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="lastName">Surname</label>
+                    <input type="text" id="lastName" class="form-control" required autocomplete="family-name" placeholder="Mkhize">
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" for="phoneNumber">Phone number</label>
+                  <input type="tel" id="phoneNumber" class="form-control" required autocomplete="tel" inputmode="tel" placeholder="071 234 5678">
+                  <small class="field-hint">The rider calls it if they can't find you.</small>
+                </div>
+
+                <div id="detailsFormError" class="error-message hidden"></div>
+
+                <!-- Validates (validateDetailsForm) and folds this step to its
+                     summary line. Never signs in — that stays in
+                     handleAccountPasswordSubmit(), run when Pay is pressed. -->
+                <button type="button" id="continueToStep2Btn" class="co-continue">Continue</button>
               </div>
 
-              <!-- Path B: adaptive password field bound to the customerEmail
-                   field below, for anyone who didn't use the quick sign-in
-                   shortcut above. Flips between "create a password" (new
-                   email) and "welcome back, sign in" (email matches an
-                   existing account) via setAccountCardState(). Hidden
-                   entirely once signed in. -->
+              <!-- Path B: adaptive password card bound to the email above
+                   (create a password / welcome back — both optional). -->
               <div id="accountPasswordCard" class="hidden auth-card">
                 <div id="accountPasswordTitle" style="font-weight:600;font-size:14px;margin-bottom:2px"></div>
                 <div id="accountPasswordHint" style="font-size:13px;color:#6b7280;margin-bottom:10px"></div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                  <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" style="max-width:220px">
+                  <label class="sr-only" for="accountPasswordInput">Password</label>
+                  <input type="password" id="accountPasswordInput" class="form-control" placeholder="Password" autocomplete="current-password" style="max-width:220px">
                   <button type="button" id="accountPasswordSigninBtn" class="btn hidden" style="padding:10px 18px;font-size:14px">Sign in</button>
                   <button type="button" id="accountPasswordForgot" class="hidden auth-text-link">Forgot password?</button>
                 </div>
@@ -1297,442 +1550,379 @@
               </div>
             </div>
           </div>
+        </li>
 
-          <div id="contactFormFull">
-          <div class="field-group-label">Contact</div>
-
-          <div class="form-group">
-            <label class="form-label">Email Address <span class="required">*</span></label>
-            <input type="email" id="customerEmail" class="form-control" required autofocus>
-            <small id="basketSaveNote" style="display:block;margin-top:6px;color:#6b7280;font-size:12px">We keep your basket with these details so we can help if your order doesn't go through.</small>
+        <!-- ============ STEP 2 — Deliver to ============ -->
+        <li class="co-step" id="stepAddress" data-step="address" aria-labelledby="stepAddressTitle">
+          <div class="step-head">
+            <span class="step-num" aria-hidden="true">2</span>
+            <h2 class="step-title" id="stepAddressTitle">Deliver to</h2>
+            <span class="sr-only step-state"></span>
           </div>
+          <div class="step-body">
+            <!-- Per-service-item summary (updateServiceBanner()). -->
+            <div id="serviceDropoffBanner" style="display:none"></div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">First Name <span class="required">*</span></label>
-              <input type="text" id="firstName" class="form-control" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Last Name <span class="required">*</span></label>
-              <input type="text" id="lastName" class="form-control" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Phone Number <span class="required">*</span></label>
-            <input type="tel" id="phoneNumber" class="form-control" required placeholder="+27 12 345 6789">
-          </div>
-
-          <div id="detailsFormError" class="error-message hidden"></div>
-
-          <!-- Page 1's only exit — validates via validateDetailsForm() (the
-               same function validateShippingForm() already calls first as
-               defense-in-depth) then switches to page 2 (advanceToStep2()).
-               Does NOT sign in / create an account — that logic stays
-               exactly where it already lives, inside
-               handleAccountPasswordSubmit(), called later at actual payment
-               time by processPayment()/payWithSavedCard(). -->
-          <div class="text-center mt-4">
-            <button type="button" id="continueToStep2Btn" class="btn" style="padding: 14px 40px; font-size: 16px;">Continue to delivery details</button>
-          </div>
-          </div>
-          </div>
-
-          <!-- ============ PAGE 2 — Delivery + Payment ============
-               Hidden by default in markup. Becomes visible either
-               immediately — for a signed-in buyer whose contact is already
-               complete, see updateAuthUI() — or after page 1's Continue
-               button validates (advanceToStep2()). -->
-          <div id="step2DeliveryPayment" class="hidden">
-
-          <!-- Contact — compact summary chip for a signed-in buyer with a
-               name/phone already on file (this is effectively the top of
-               "page 2" for them); guests and signed-in-but-incomplete
-               buyers never see page 2 until Continue, and by then their
-               #contactFormFull (up in page 1) already has what's needed, so
-               this chip is what shows here from that point on too. Mirrors
-               the compact/full pattern already proven for the address
-               section below. -->
-          <div id="contactSummary" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <div style="font-size:14px;color:#1a1a2e"><svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Contact:</strong> <span id="contactSummaryText"></span></div>
-            <button type="button" id="editContactBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Edit</button>
-          </div>
-
-          <!-- Back to page 1 — shown only when the buyer actually navigated
-               here via Continue (guest, or signed-in-but-incomplete-contact,
-               which follows the same guest-like flow) — see
-               advanceToStep2(). A signed-in buyer with a complete contact
-               who skips straight to page 2 never sees this; nothing behind
-               it for them. -->
-          <div id="step2BackLink" class="hidden" style="margin-bottom:14px">
-            <button type="button" id="backToStep1Btn" class="auth-text-link">&larr; Back to your details</button>
-          </div>
-
-          <!-- .field-group-label:first-of-type strips the top divider —
-               correct when this was the first such label under the shared
-               form parent (a signed-in buyer with #step1Heading hidden but
-               still structurally present/first). Now that "Delivery" is the
-               first .field-group-label inside its own new parent
-               (#step2DeliveryPayment), that CSS rule would otherwise apply
-               here too and silently drop the divider for everyone — restore
-               it explicitly so the visual separation from #contactSummary/
-               #step2BackLink above is unchanged. -->
-          <div class="field-group-label" style="margin-top:28px;padding-top:20px;border-top:1px solid #eee">Delivery</div>
-
-          <!-- Per-service-item summary, shown when cart has one or more services.
-               Content built dynamically by updateServiceBanner() per archetype
-               (item_dropoff / in_person-scheduled / in_person-flexible / digital)
-               instead of one static drop-off-only message. Item_dropoff cards
-               are editable here (Change links) even if choices were already
-               made in the product modal at add-to-cart time. -->
-          <div id="serviceDropoffBanner" style="display:none;margin-bottom:16px"></div>
-
-          <!-- Compact "Deliver to" card — shown only when a returning buyer
-               has a complete saved address on file, so there's genuinely
-               nothing left to (re)confirm. Anything less complete just
-               falls through to the full form below. -->
-          <div id="addressCompactCard" class="hidden" style="margin-bottom:14px;padding:14px 16px;background:#f0f4ff;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
-            <div style="font-size:14px;color:#1a1a2e"><svg class="confirm-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><strong>Deliver to:</strong> <span id="compactAddressText"></span></div>
-            <button type="button" id="changeAddressBtn" class="auth-text-link" style="color:var(--accent);font-weight:600;white-space:nowrap">Change</button>
-          </div>
-
-          <!-- One-time "is this the correct address?" nudge — session-scoped
-               only (sessionStorage 'ss_addr_confirmed'), no DB write, shown
-               at most once per tab for a returning signed-in buyer with a
-               complete saved address. Small inline callout, NOT a modal —
-               see showAddressConfirmOverlay()/dismissAddressConfirmOverlay()
-               below. Sits above #addrConfirmScrim via z-index (CSS). -->
-          <div id="addrConfirmCallout" class="hidden addr-confirm-callout">
-            <span>Is this the correct address?</span>
-            <button type="button" id="addrConfirmYesBtn" class="addr-confirm-yes-btn">Yes, that's right</button>
-          </div>
-
-          <!-- Full-viewport dim scrim for the address-confirm nudge above.
-               Any click on it dismisses the nudge (identical to clicking
-               Yes) — see setupEventListeners(). Kept out of the flow
-               (position:fixed) so its DOM position doesn't matter. -->
-          <div id="addrConfirmScrim" class="hidden addr-confirm-scrim"></div>
-
-          <!-- Campus ETA strip — the one signature element of this page.
-               Replaces both the old zone-restriction banner and a buried
-               green delivery-time box with one persistent, honest line:
-               a live-styled pill that shows a generic estimate before any
-               seller-turnaround data is known, then the real seller-
-               turnaround estimate once it arrives (refreshEstimatedTime()
-               below — unchanged data, just one place to look). No delivery
-               zone is involved — deliveries aren't restricted by area. -->
-          <div id="estimatedDeliveryTime" class="eta-strip eta-strip-empty">
-            📍 Add your address to see your delivery time
-          </div>
-
-          <!-- Priority delivery (2026-10-05): shown once the address is priced. -->
-          <label class="prio-card hidden" id="priorityCard">
-            <input type="checkbox" id="priorityToggle">
-            <span class="prio-switch" aria-hidden="true"></span>
-            <span class="prio-text"><strong>⚡ Priority delivery <span id="priorityFeeLabel"></span></strong><small>Your order is delivered first.</small></span>
-            <button type="button" class="prio-help" id="priorityHelp" aria-label="What is priority delivery?">?
-              <span class="prio-tip" role="tooltip">Your order is delivered first, so it gets to you faster.</span>
-            </button>
-          </label>
-
-          <div id="addressNudgeText" class="hidden" style="font-size:13px;color:var(--accent);font-weight:600;margin-bottom:8px">One more thing — add your delivery address to finish</div>
-
-          <div id="addressFormFull">
-          <div id="shippingForm">
-            <!-- Address fields -->
-            <div id="addressSection">
-              <div class="form-group">
-                <label class="form-label">Shipping Address <span class="required">*</span></label>
-                <textarea id="shippingAddress" class="form-control" rows="3" required placeholder="Street address, apartment, suite, etc."></textarea>
+            <!-- Saved address (returning buyer with a complete address on file). -->
+            <div id="addressCompactCard" class="hidden">
+              <div class="addr-saved">
+                <span class="ring on" aria-hidden="true"></span>
+                <span class="addr-saved-text"><strong>Saved address</strong><span id="compactAddressText"></span></span>
+                <span class="addr-meta" id="compactAddressMeta"></span>
               </div>
+              <button type="button" id="changeAddressBtn" class="step-link">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Deliver somewhere else
+              </button>
+            </div>
 
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">City <span class="required">*</span></label>
-                  <input type="text" id="city" class="form-control" required>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Postal Code <span class="required">*</span></label>
-                  <input type="text" id="postalCode" class="form-control" required>
+            <!-- One-time "is this the correct address?" nudge (session only). -->
+            <div id="addrConfirmCallout" class="hidden addr-confirm-callout">
+              <span>Is this the correct address?</span>
+              <button type="button" id="addrConfirmYesBtn" class="addr-confirm-yes-btn">Yes, that's right</button>
+            </div>
+            <div id="addrConfirmScrim" class="hidden addr-confirm-scrim"></div>
+
+            <div id="addressNudgeText" class="hidden" style="font-size:13px;color:var(--accent);font-weight:600">One more thing — add your delivery address to finish</div>
+
+            <div id="addressFormFull">
+              <div id="shippingForm">
+                <div id="addressSection">
+                  <div class="form-group">
+                    <label class="form-label" for="shippingAddress">Street address</label>
+                    <input type="text" id="shippingAddress" class="form-control" required autocomplete="off" placeholder="12 Ridge Road, Glenwood">
+                    <!-- City / postal code / province come from the picked
+                         suggestion and show as one grey line; the boxes open
+                         only when they are missing (or "change" is tapped). -->
+                    <div id="addrMetaLine" class="addr-meta-line hidden"><span id="addrMetaText"></span> · <button type="button" id="addrMetaChange" class="inline-link">change</button></div>
+                  </div>
+                  <div id="addrMetaFields" class="addr-meta-fields hidden">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label class="form-label" for="city">City</label>
+                        <input type="text" id="city" class="form-control" required autocomplete="address-level2">
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="postalCode">Postal code</label>
+                        <input type="text" id="postalCode" class="form-control" required autocomplete="postal-code" inputmode="numeric">
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="provinceSelect">Province</label>
+                      <select id="provinceSelect" class="form-control" required>
+                        <!-- Umzila delivers in KwaZulu-Natal (Durban) only for now — the
+                             others stay listed so a buyer there can ask us to come. -->
+                        <option value="KwaZulu-Natal" selected>KwaZulu-Natal</option>
+                        <option value="Gauteng">Gauteng — coming soon</option>
+                        <option value="Western Cape">Western Cape — coming soon</option>
+                        <option value="Eastern Cape">Eastern Cape — coming soon</option>
+                        <option value="Free State">Free State — coming soon</option>
+                        <option value="Limpopo">Limpopo — coming soon</option>
+                        <option value="Mpumalanga">Mpumalanga — coming soon</option>
+                        <option value="North West">North West — coming soon</option>
+                        <option value="Northern Cape">Northern Cape — coming soon</option>
+                      </select>
+                      <input type="hidden" id="shippingCost" value="0">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="addressUnit">Flat, res or block <span class="opt">(optional)</span></label>
+                    <input type="text" id="addressUnit" class="form-control" autocomplete="address-line2" placeholder="Block C, room 12" maxlength="80">
+                  </div>
+                  <!-- Old second instructions box — kept (hidden) so nothing that
+                       reads it breaks; "Note for rider" below is the one box. -->
+                  <textarea id="deliveryInstructions" class="hidden" aria-hidden="true" tabindex="-1"></textarea>
                 </div>
               </div>
+              <p class="zone-line">We deliver inside our service areas — type your address to check.</p>
+              <button type="button" id="useSavedAddressBtn" class="step-link hidden">Use my saved address</button>
+              <div id="shippingFormError" class="error-message hidden"></div>
+            </div>
 
-              <div class="form-group">
-                <label class="form-label">Province <span class="required">*</span></label>
-                <select id="provinceSelect" class="form-control" required>
-                  <!-- Umzila delivers in KwaZulu-Natal (Durban) only for now — the
-                       others stay listed so a buyer there can ask us to come. -->
-                  <option value="KwaZulu-Natal" selected>KwaZulu-Natal</option>
-                  <option value="Gauteng">Gauteng — coming soon</option>
-                  <option value="Western Cape">Western Cape — coming soon</option>
-                  <option value="Eastern Cape">Eastern Cape — coming soon</option>
-                  <option value="Free State">Free State — coming soon</option>
-                  <option value="Limpopo">Limpopo — coming soon</option>
-                  <option value="Mpumalanga">Mpumalanga — coming soon</option>
-                  <option value="North West">North West — coming soon</option>
-                  <option value="Northern Cape">Northern Cape — coming soon</option>
-                </select>
-                <input type="hidden" id="shippingCost" value="0">
-              </div>
+            <!-- "Note for rider" = the order notes (notes + delivery_instructions). -->
+            <div class="form-group" id="orderNotesGroup">
+              <label class="form-label" for="orderNotes" id="orderNotesLabel">Note for rider <span class="opt">(optional)</span></label>
+              <input type="text" id="orderNotes" class="form-control" maxlength="300" placeholder="Blue gate, ring twice" autocomplete="off">
+            </div>
 
-              <div class="form-group">
-                <label class="form-label">Delivery Instructions (Optional)</label>
-                <textarea id="deliveryInstructions" class="form-control" rows="2" placeholder="Any special instructions for delivery"></textarea>
+            <!-- Delivery estimate strip (#estimatedDeliveryTime) lives here
+                 when there is no delivery-time picker; with timeslots on it
+                 is moved into step 3 (refreshSteps). -->
+            <div id="etaHostAddress">
+              <div id="estimatedDeliveryTime" class="eta-strip eta-strip-empty">
+                📍 Add your address to see your delivery time
               </div>
             </div>
-          </div>
-          <div id="shippingFormError" class="error-message hidden"></div>
-          </div>
 
-          <!-- Time-saved value anchor (founder ask 2026-09-26): sits below
-               the delivery address and above the price summary so the
-               "why this fee is worth it" message is on-screen with the
-               total the buyer is about to pay. Uses the real road route and
-               drive time from the live delivery quote — see
-               updateTimeSavedEstimate(). Hidden until a quote exists. -->
-          <div id="timeSavedBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#f6f8ff;border-radius:10px">
-            <div id="timeSavedLine" style="font-size:13px;font-weight:700;color:#1a1a2e"></div>
+            <!-- Priority delivery: shown once the address is priced. -->
+            <label class="prio-card hidden" id="priorityCard">
+              <input type="checkbox" id="priorityToggle">
+              <span class="prio-switch" aria-hidden="true"></span>
+              <span class="prio-text"><strong>⚡ Priority delivery <span id="priorityFeeLabel"></span></strong><small>Your order is delivered first.</small></span>
+              <button type="button" class="prio-help" id="priorityHelp" aria-label="What is priority delivery?">?
+                <span class="prio-tip" role="tooltip">Your order is delivered first, so it gets to you faster.</span>
+              </button>
+            </label>
+
+            <!-- Why this address can't be delivered to / isn't live-priced. -->
+            <div id="quoteNoticeBlock" class="hidden"></div>
+
+            <!-- Completeness gate for services (blocks Pay until fixed). -->
+            <div id="checkoutBlockersCard" class="hidden" style="padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:12px">
+              <div style="font-weight:700;font-size:14px;color:#78350f;margin-bottom:2px">Almost there — a couple things to finish</div>
+              <div style="font-size:13px;color:#92400e;margin-bottom:8px">Your order includes a service that still needs some info before you can pay.</div>
+              <div id="checkoutBlockersList"></div>
+            </div>
+
+            <!-- Dropped from the layout (plan §6.1) — kept so the code that
+                 writes them keeps working. -->
+            <div hidden>
+              <div id="timeSavedBlock" class="hidden"><div id="timeSavedLine"></div></div>
+            </div>
           </div>
-          <!-- Why this address isn't live-priced (outside the delivery zones,
-               over 20 km, stores too far apart…) — the standard fee applies. -->
-          <div id="quoteNoticeBlock" class="hidden" style="margin-bottom:16px;padding:10px 14px;background:#fff7ed;border-radius:10px;font-size:13px;color:#9a3412"></div>
+        </li>
 
-          <!-- Completeness gate — a service left unfinished (e.g. a required
-               file/answer never provided) blocks Pay Now until fixed. This is
-               the only checkout gate that's actually blocking; everything
-               else here is optional. -->
-          <div id="checkoutBlockersCard" class="hidden" style="margin-bottom:16px;padding:14px 16px;background:#fffbeb;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:10px">
-            <div style="font-weight:700;font-size:14px;color:#78350f;margin-bottom:2px">Almost there — a couple things to finish</div>
-            <div style="font-size:13px;color:#92400e;margin-bottom:8px">Your order includes a service that still needs some info before you can pay.</div>
-            <div id="checkoutBlockersList"></div>
+        <!-- ============ STEP 3 — Delivery time (timeslots switch on) ============ -->
+        <li class="co-step hidden" id="stepTime" data-step="time" aria-labelledby="stepTimeTitle">
+          <div class="step-head">
+            <span class="step-num" aria-hidden="true">3</span>
+            <h2 class="step-title" id="stepTimeTitle">Delivery time</h2>
+            <span class="sr-only step-state"></span>
           </div>
+          <div class="step-body" id="etaHostTime"></div>
+        </li>
 
-          <div class="field-group-label">Payment</div>
+        <!-- ============ STEP 4 — How do you want to pay? ============ -->
+        <li class="co-step" id="stepPay" data-step="pay" aria-labelledby="stepPayTitle">
+          <div class="step-head">
+            <span class="step-num" aria-hidden="true">4</span>
+            <h2 class="step-title" id="stepPayTitle">How do you want to pay?</h2>
+            <span class="sr-only step-state"></span>
+          </div>
+          <div class="step-body pay-panel" id="payPanel">
+            <!-- Payment picker (site_settings 'payments' → enabled). Rendered
+                 by renderPayOptions(); empty + hidden while the switch is off. -->
+            <div id="payOptions" class="pay-options hidden" role="radiogroup" aria-labelledby="stepPayTitle"></div>
 
-          <!-- Discount code — always visible here (founder 2026-10-07: it was
-               folded away inside the collapsed order summary). -->
-          <div class="promo-code-section promo-visible">
-            <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="true">
-              <svg class="icon-inline" viewBox="0 0 24 24"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
-              Have a code?
-            </button>
-            <div class="promo-code-input-panel open" id="promoCodePanel">
-              <div class="promo-code-input">
-                <input type="text" id="promoCodeInput" placeholder="Enter promo code">
-                <button id="applyPromoCode" class="btn">Apply</button>
-              </div>
-              <div id="promoMessage" class="promo-message"></div>
-              <!-- Once-per-person codes need an account: the buyer adds a
-                   password (or signs in) right here, using the email they
-                   already gave in step 1 — see renderPromoSignin(). -->
-              <div id="promoSignin" class="hidden" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:#f0f4ff;border:1px solid #dbe4ff">
-                <div id="promoSigninTitle" style="font-weight:700;font-size:14px;color:#0a2f66"></div>
-                <div id="promoSigninHint" style="font-size:12.5px;color:#4b5563;margin:3px 0 10px;line-height:1.45"></div>
-                <div id="promoSigninRow" style="display:flex;gap:8px;flex-wrap:wrap">
-                  <input type="password" id="promoSigninPassword" class="form-control" placeholder="Password" style="flex:1 1 150px;min-width:0">
-                  <button type="button" id="promoSigninBtn" class="btn" style="padding:10px 16px;font-size:14px;white-space:nowrap"></button>
+            <!-- Card: saved cards + "Add a new card" (renderPayChoices()) and the
+                 save switch + nickname. With the picker on this box is moved
+                 inside the Card option; with it off it shows here as today. -->
+            <div id="cardSubBox" class="card-sub">
+              <div id="payChoices" class="pay-choices hidden" role="radiogroup" aria-label="Choose a card"></div>
+              <div id="newCardBox" class="new-card-box">
+                <div class="new-card-note"><svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>You'll type your card details on PayFast's secure page next.</div>
+                <label class="save-switch" id="saveCardCheckboxGroup">
+                  <input type="checkbox" id="saveCardCheckbox" checked>
+                  <span class="save-switch-ui" aria-hidden="true"></span>
+                  <span class="save-switch-text"><strong>Save this card</strong><small id="saveCardSub">Pay in one tap next time.</small></span>
+                </label>
+                <div class="form-group card-name-group" id="cardNameGroup">
+                  <label class="form-label" for="cardNameInput">Card nickname</label>
+                  <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. FNB debit, Mom's Visa" maxlength="40" autocomplete="off" title="Change it to anything you like">
+                  <div class="card-name-hint">So you can pick it next time — you can save as many cards as you like.</div>
                 </div>
-                <button type="button" id="promoSigninForgot" class="auth-text-link hidden" style="margin-top:8px">Forgot password?</button>
-                <div id="promoSigninError" class="error-message hidden" style="margin-top:8px"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Order summary — moved here (bottom of the form, single
-               stacked column) so it reads as the last thing a buyer checks
-               before paying, rather than a persistent side rail. The item
-               list + promo panel fold shut by default on every breakpoint;
-               .summary-totals is a sibling OUTSIDE that fold, so the total
-               due is always visible regardless of expand/collapse state. -->
-          <div class="order-summary" id="orderSummaryCard">
-            <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false">
-              <span>Order Summary</span>
-              <span class="summary-header-meta" id="summaryHeaderMeta"></span>
-              <svg class="summary-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-
-            <div id="orderSummaryBody">
-              <div id="orderItems" class="order-items">
-                <!-- Order items will be populated here -->
-              </div>
-
-            </div>
-
-            <div class="summary-totals">
-              <div class="summary-row">
-                <span>Subtotal</span>
-                <span id="subtotalAmount">R0.00</span>
-              </div>
-              <div class="summary-row discount hidden" id="saleRow">
-                <span>Special price</span>
-                <span id="saleAmount">−R0.00</span>
-              </div>
-              <div class="summary-row discount hidden" id="discountRow">
-                <span>Discount</span>
-                <span id="discountAmount">-R0.00</span>
-              </div>
-              <div class="summary-row shipping">
-                <span>Delivery</span>
-                <span id="shippingAmount">—</span>
-              </div>
-              <div class="summary-row hidden" id="priorityRow">
-                <span>⚡ Priority delivery</span>
-                <span id="priorityAmount">R0.00</span>
-              </div>
-              <div id="deliveryBreakdown" style="font-size:11px;color:#6b7280;text-align:right;margin-top:-8px;margin-bottom:4px;display:none"></div>
-              <div id="noMinimumNote" style="font-size:11px;color:#6b7280;text-align:right;margin-bottom:4px">
-                No minimum order<span id="multiSellerNote" style="display:none"> &nbsp;·&nbsp; Multiple sellers may increase fee</span>
-              </div>
-              <div class="summary-row shipping hidden" id="serviceCollectionRow">
-                <span>Item collection</span>
-                <span id="serviceCollectionAmount">R0.00</span>
-              </div>
-              <div class="summary-row shipping hidden" id="serviceReturnRow">
-                <span>Return delivery</span>
-                <span id="serviceReturnAmount">R0.00</span>
-              </div>
-              <div class="summary-row tip hidden" id="tipRow">
-                <span>Tip</span>
-                <span id="tipAmount">R0.00</span>
-              </div>
-              <div class="summary-row total">
-                <span>Total</span>
-                <span><s id="totalBefore" class="was-amount" hidden></s> <span id="totalAmount" class="amount-roll">R0.00</span></span>
-              </div>
-              <!-- Value-anchor line (founder ask 2026-09-26): moved below
-                   the total itself, on purpose -- reads as a reason for the
-                   number the buyer is looking at, right where they're
-                   looking. Static; the time-saved figure lives in
-                   #timeSavedBlock above the address instead. -->
-              <div id="deliveryAnchorNote" style="font-size:11px;color:#6b7280;font-style:italic;text-align:center;margin-top:6px">Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.</div>
-            </div>
-
-            <div class="text-muted mt-4" style="font-size: 12px; text-align: center;">
-              All prices include VAT where applicable
-            </div>
-          </div>
-
-          <!-- Driver tip — optional, never pre-selected, set before the
-               buyer commits to a payment method so it's already folded into
-               whatever total gets charged either way. -->
-          <div class="tip-section" id="tipSection">
-            <div class="tip-section-label">Add a tip for your delivery rep (optional)</div>
-            <div class="tip-pills" id="tipPills">
-              <button type="button" class="tip-pill" data-tip="10">R10</button>
-              <button type="button" class="tip-pill" data-tip="20">R20</button>
-              <button type="button" class="tip-pill" data-tip="30">R30</button>
-              <input type="number" id="tipCustomInput" class="tip-pill-custom" placeholder="Custom" min="0" step="1">
-            </div>
-          </div>
-
-          <!-- PAY PANEL (redesigned 2026-10-04): one clear choice of card, the
-               save switch on by default with its nickname right under it, a
-               small "add a note" link, and ONE button whose label matches the
-               choice. Pressing it is the agreement to the Terms (the line
-               sits right above it) — no box to think about. All element ids
-               the rest of the page uses are kept. -->
-          <div class="pay-panel" id="payPanel">
-            <div class="pay-panel-h">How do you want to pay?</div>
-
-            <!-- Saved cards (signed in, 1+ cards) + "A new card" — renderPayChoices() -->
-            <div id="payChoices" class="pay-choices hidden" role="radiogroup" aria-label="Choose a card"></div>
-
-            <div id="newCardBox" class="new-card-box">
-              <div class="new-card-note"><svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>You'll type your card details on PayFast's secure page next.</div>
-              <label class="save-switch" id="saveCardCheckboxGroup">
-                <input type="checkbox" id="saveCardCheckbox" checked>
-                <span class="save-switch-ui" aria-hidden="true"></span>
-                <span class="save-switch-text"><strong>Save this card</strong><small id="saveCardSub">Pay in one tap next time.</small></span>
-              </label>
-              <div class="form-group card-name-group" id="cardNameGroup">
-                <label class="form-label" for="cardNameInput">Card nickname</label>
-                <input type="text" id="cardNameInput" class="form-control" placeholder="e.g. FNB debit, Mom's Visa" maxlength="40" autocomplete="off" title="Change it to anything you like">
-                <div class="card-name-hint">So you can pick it next time — you can save as many cards as you like.</div>
               </div>
             </div>
 
-            <details id="moreOptionsDisclosure" class="note-disclosure">
-              <summary>+ Add a note for the store or rider</summary>
-              <textarea id="orderNotes" class="form-control" rows="2" placeholder="e.g. Gate code 1234, call when outside"></textarea>
-            </details>
+            <div id="pickerError" class="field-err hidden" role="alert">Choose how you want to pay.</div>
+
+            <!-- Discount code — always visible under Payment (CLAUDE.md). -->
+            <div class="promo-code-section promo-visible">
+              <button type="button" class="promo-toggle" id="promoCodeToggle" aria-expanded="true">
+                <svg class="icon-inline" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
+                Have a code?
+              </button>
+              <div class="promo-code-input-panel open" id="promoCodePanel">
+                <div class="promo-code-input">
+                  <label class="sr-only" for="promoCodeInput">Discount code</label>
+                  <input type="text" id="promoCodeInput" placeholder="Enter code" autocomplete="off" autocapitalize="characters">
+                  <button id="applyPromoCode" class="btn" type="button">Apply</button>
+                </div>
+                <div id="promoMessage" class="promo-message" role="status"></div>
+                <!-- Once-per-person codes need an account: renderPromoSignin(). -->
+                <div id="promoSignin" class="hidden" style="margin-top:10px;padding:12px 14px;border-radius:12px;background:#f0f4ff;border:1px solid #dbe4ff">
+                  <div id="promoSigninTitle" style="font-weight:700;font-size:14px;color:#0a2f66"></div>
+                  <div id="promoSigninHint" style="font-size:12.5px;color:#4b5563;margin:3px 0 10px;line-height:1.45"></div>
+                  <div id="promoSigninRow" style="display:flex;gap:8px;flex-wrap:wrap">
+                    <label class="sr-only" for="promoSigninPassword">Password</label>
+                    <input type="password" id="promoSigninPassword" class="form-control" placeholder="Password" style="flex:1 1 150px;min-width:0">
+                    <button type="button" id="promoSigninBtn" class="btn" style="padding:10px 16px;font-size:14px;white-space:nowrap"></button>
+                  </div>
+                  <button type="button" id="promoSigninForgot" class="auth-text-link hidden" style="margin-top:8px">Forgot password?</button>
+                  <div id="promoSigninError" class="error-message hidden" style="margin-top:8px"></div>
+                </div>
+              </div>
+            </div>
 
             <label class="optin-row" id="marketingOptInGroup">
               <input type="checkbox" id="marketingOptIn" checked>
               <span>Send me deals from Umzila shops <small>(unsubscribe anytime)</small></span>
             </label>
 
-            <div id="paymentError" class="error-message hidden"></div>
-
-            <!-- Old switcher kept (hidden) — the choices above replace it. -->
+            <!-- Old pieces kept (hidden) so nothing that reads them breaks. -->
             <div class="hidden" id="cardSwitcherGroup">
               <button type="button" id="cardSwitcherToggle"><span id="cardSwitcherSelectedText"></span></button>
               <div id="cardSwitcherList"></div>
             </div>
+            <details id="moreOptionsDisclosure" class="hidden"><summary>Note</summary></details>
+          </div>
+        </li>
+      </ol>
 
-            <div class="terms-line" id="termsAgreementGroup">
-              <input type="checkbox" id="termsAgreement" class="terms-hidden-box" tabindex="-1" aria-hidden="true">
-              <span id="termsAgreementText">By paying you agree to Umzila's <a href="#" style="color: var(--accent);">Terms & Conditions</a> and <a href="#" style="color: var(--accent);">Privacy Policy</a>.</span>
-              <div id="termsAcceptedNote" class="hidden"></div>
-            </div>
-
-            <div class="form-group pay-btn-row" id="savedCardGroup" style="display:none">
-              <button type="button" id="payWithSavedCardBtn" class="btn pay-main-btn">Agree &amp; pay</button>
-            </div>
-            <div class="pay-now-inline-wrapper pay-btn-row">
-              <button id="payNowBtn" class="btn pay-main-btn">Agree &amp; pay</button>
-            </div>
-            <div class="pay-secure-line">
-              <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
+      <!-- ============ ORDER SUMMARY + PAY DOCK ============
+           Desktop: one sticky card on the right. Phone: the summary sits at
+           the top (folded), the totals under the steps and the pay dock is a
+           fixed bottom bar. -->
+      <aside class="co-aside" id="coAside" aria-label="Order summary">
+        <div class="order-summary" id="orderSummaryCard">
+          <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false" aria-controls="orderSummaryBody">
+            <span class="sum-ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+            <span class="sum-titles">
+              <span class="sum-title" id="summaryTitle">Your order</span>
+              <span class="summary-header-meta" id="summaryHeaderMeta"></span>
+            </span>
+            <span class="sum-total" id="summaryHeaderTotal"></span>
+            <svg class="summary-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="orderSummaryBody">
+            <div id="orderItems" class="order-items">
+              <!-- Order items will be populated here -->
             </div>
           </div>
-          </div>
-        </section>
+        </div>
 
-        <!-- Confirmation Section -->
-        <section id="confirmationSection" class="checkout-section hidden">
-          <div class="text-center">
-            <div style="font-size: 48px; color: var(--success); margin-bottom: 20px;">✓</div>
-            <h2 style="color: var(--success); margin-bottom: 15px;">Payment Successful!</h2>
-            <p class="mb-4">Your order has been placed successfully.</p>
-            <div class="mb-4">
-              <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                <div class="text-muted mb-2">Order ID</div>
-                <div id="orderIdDisplay" style="font-weight: 600; font-size: 18px;"></div>
-              </div>
+        <div class="co-totals" id="coTotals">
+          <h2 class="co-totals-h">Total</h2>
+          <div class="summary-totals">
+            <div class="summary-row">
+              <span>Subtotal</span>
+              <span id="subtotalAmount">R0.00</span>
             </div>
-            <p class="mb-4">A confirmation email has been sent to <span id="confirmationEmail" style="font-weight: 600;"></span></p>
-            <div class="mt-4">
-              <a href="index.html" class="btn" style="margin-right: 10px;">Continue Shopping</a>
-              <button id="viewOrderBtn" class="btn ghost">View Order Details</button>
+            <div class="summary-row discount hidden" id="saleRow">
+              <span>Special price</span>
+              <span id="saleAmount">−R0.00</span>
+            </div>
+            <div class="summary-row discount hidden" id="discountRow">
+              <span>Discount</span>
+              <span id="discountAmount">-R0.00</span>
+            </div>
+            <div class="summary-row shipping" title="Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.">
+              <span>Delivery</span>
+              <span id="shippingAmount">—</span>
+            </div>
+            <div class="summary-row hidden" id="priorityRow">
+              <span>⚡ Priority delivery</span>
+              <span id="priorityAmount">R0.00</span>
+            </div>
+            <div id="deliveryBreakdown" class="sum-note" style="display:none"></div>
+            <div id="noMinimumNote" class="sum-note">
+              No minimum order<span id="multiSellerNote" style="display:none"> &nbsp;·&nbsp; Multiple sellers may increase fee</span>
+            </div>
+            <div class="summary-row shipping hidden" id="serviceCollectionRow">
+              <span>Item collection</span>
+              <span id="serviceCollectionAmount">R0.00</span>
+            </div>
+            <div class="summary-row shipping hidden" id="serviceReturnRow">
+              <span>Return delivery</span>
+              <span id="serviceReturnAmount">R0.00</span>
+            </div>
+            <div class="summary-row tip hidden" id="tipRow">
+              <span>Tip</span>
+              <span id="tipAmount">R0.00</span>
+            </div>
+            <div class="summary-row total">
+              <span>Total</span>
+              <span><s id="totalBefore" class="was-amount" hidden></s> <span id="totalAmount" class="amount-roll">R0.00</span></span>
+            </div>
+            <div class="save-line hidden" id="saveLineTotals"></div>
+            <!-- Moved into the Delivery row's tooltip (plan §6.1); kept hidden. -->
+            <div hidden><div id="deliveryAnchorNote"></div></div>
+          </div>
+
+          <!-- Rider tip — optional, never pre-selected. -->
+          <div class="tip-section" id="tipSection">
+            <div class="tip-section-label" id="tipLabel">Add a tip for your rider <span class="opt">(optional)</span></div>
+            <div class="tip-pills" id="tipPills" role="group" aria-labelledby="tipLabel">
+              <button type="button" class="tip-pill" data-tip="10">R10</button>
+              <button type="button" class="tip-pill" data-tip="20">R20</button>
+              <button type="button" class="tip-pill" data-tip="30">R30</button>
+              <input type="number" id="tipCustomInput" class="tip-pill-custom" placeholder="Custom" min="0" step="1" aria-label="Custom tip in rand">
             </div>
           </div>
-        </section>
+          <div class="vat-note">All prices include VAT where applicable</div>
+        </div>
+
+        <!-- Pay dock: phone = fixed bottom bar, desktop = bottom of this card.
+             The desktop pair (#payNowBtn / #payWithSavedCardBtn) and the phone
+             pair (…Mobile) call the same handlers (mobilePairOf). -->
+        <div class="pay-dock" id="payDock">
+          <div class="dock-top">
+            <div class="dock-lines">
+              <span class="dock-dispatch" id="dockDispatch"></span>
+              <span class="dock-save save-line hidden" id="saveLine"></span>
+            </div>
+            <span class="mobile-pay-bar-total amount-roll" id="mobilePayBarTotal">R0.00</span>
+          </div>
+          <div class="dock-when" id="dockWhen"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span id="dockWhenText"></span></div>
+          <div id="barError" class="bar-error hidden" role="alert"></div>
+
+          <div class="form-group pay-btn-row" id="savedCardGroup" style="display:none">
+            <button type="button" id="payWithSavedCardBtn" class="btn pay-main-btn">Pay</button>
+          </div>
+          <div class="pay-now-inline-wrapper pay-btn-row">
+            <button type="button" id="payNowBtn" class="btn pay-main-btn">Pay</button>
+          </div>
+          <div class="mobile-pay-bar" id="mobilePayBar">
+            <button type="button" id="payWithSavedCardBtnMobile" class="btn pay-main-btn hidden">Pay</button>
+            <button type="button" id="payNowBtnMobile" class="btn pay-main-btn">Pay</button>
+          </div>
+
+          <div class="terms-line" id="termsAgreementGroup">
+            <input type="checkbox" id="termsAgreement" class="terms-hidden-box" tabindex="-1" aria-hidden="true">
+            <span id="termsAgreementText">By paying you agree to Umzila's <a href="#">Terms &amp; Conditions</a> and <a href="#">Privacy Policy</a>.</span>
+            <div id="termsAcceptedNote" class="hidden"></div>
+          </div>
+        </div>
+
+        <ul class="co-reassure" id="coReassure">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg><span>Payments are processed by PayFast. Umzila never sees your card or bank details.</span></li>
+          <li id="reassurePin" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>You get a 4-digit code to give the rider, so only you can receive this order.</span></li>
+          <li id="reassureCancel" class="hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg><span id="reassureCancelText"></span></li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- Confirmation Section -->
+    <section id="confirmationSection" class="checkout-section hidden">
+      <div class="text-center">
+        <div style="font-size: 48px; color: var(--success); margin-bottom: 20px;">✓</div>
+        <h2 style="color: var(--success); margin-bottom: 15px;">Payment Successful!</h2>
+        <p class="mb-4">Your order has been placed successfully.</p>
+        <div class="mb-4">
+          <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <div class="text-muted mb-2">Order ID</div>
+            <div id="orderIdDisplay" style="font-weight: 600; font-size: 18px;"></div>
+          </div>
+        </div>
+        <p class="mb-4">A confirmation email has been sent to <span id="confirmationEmail" style="font-weight: 600;"></span></p>
+        <div class="mt-4">
+          <a href="index.html" class="btn" style="margin-right: 10px;">Continue Shopping</a>
+          <button id="viewOrderBtn" class="btn ghost">View Order Details</button>
+        </div>
       </div>
+    </section>
+
+    <!-- Old page-1/page-2 controls — the steps replaced them; kept hidden so
+         the code that references them keeps working. -->
+    <div hidden>
+      <div id="step2BackLink" class="hidden"><button type="button" id="backToStep1Btn">Back</button></div>
     </div>
-  </div>
-
-
-  <!-- Sticky mobile Pay bar — replaces the deleted bottom nav's space with
-       something checkout actually benefits from. Not a duplicate payment
-       path: both buttons call the exact same handler functions as their
-       full-size counterparts above, and the total is kept in sync from
-       the same updateShippingAndTotal() write (see updateSummaryHeaderMeta).
-       The equivalent "Secured by PayFast" trust line (normally part of the
-       inline Pay Now wrapper, which is hidden on mobile) is re-shown here. -->
-  <div class="mobile-pay-trust">
-    By paying you agree to the Terms &amp; Privacy Policy · <svg class="icon-inline" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Secured by PayFast
-  </div>
-  <div class="mobile-pay-bar" id="mobilePayBar">
-    <span class="mobile-pay-bar-total amount-roll" id="mobilePayBarTotal">R0.00</span>
-    <button type="button" id="payWithSavedCardBtnMobile" class="btn hidden" style="background:var(--cta)">Agree &amp; pay</button>
-    <button type="button" id="payNowBtnMobile" class="btn" style="background:var(--cta)">Agree &amp; pay</button>
-  </div>
+  </main>
 
   <!-- PayFast Form (Hidden) -->
   <form id="payfastForm" method="post">
     <!-- Parameters will be added dynamically -->
   </form>
-
   <script>
     /********************
      * CONFIGURATION
@@ -2185,7 +2375,9 @@
       cardSwitcherSelectedText: document.getElementById('cardSwitcherSelectedText'),
       cardSwitcherList: document.getElementById('cardSwitcherList'),
       payNowBtn: document.getElementById('payNowBtn'),
-      paymentError: document.getElementById('paymentError'),
+      // The pay dock's message line (#barError, plan §6.3) — every existing
+      // showError(elements.paymentError, …) call writes there.
+      paymentError: document.getElementById('barError'),
 
       // Adaptive account/password card (Path B)
       accountPasswordCard: document.getElementById('accountPasswordCard'),
@@ -2516,6 +2708,10 @@
       refreshEstimatedTime();
 
       renderPayChoices();
+      // Payment picker: saved cards just loaded → redraw the options and
+      // preselect the account's last-used option (my_last_payment_option).
+      renderPayOptions();
+      applyRememberedPayOption();
 
       // Saved address → locate it right away so the live distance price,
       // delivery target and time saved show without retyping (it used to
@@ -2594,6 +2790,7 @@
       syncPayChoice();
     }
     function syncPayChoice() {
+      const picker = pickerOn();
       const useSaved = !state.payWithNewCard && (state.paymentMethods || []).length > 0;
       const card = useSaved ? state.paymentMethods.find(c => c.id === state.selectedPaymentMethodId) : null;
       document.getElementById('newCardBox')?.classList.toggle('hidden', useSaved);
@@ -2609,26 +2806,37 @@
       if (sub) sub.textContent = state.user
         ? 'Pay in one tap next time.'
         : 'Pay in one tap next time you sign in with this email.';
-      const tsLbl = typeof tsPayLabel === 'function' ? tsPayLabel() : null; // timeslots: Pay button names the window
-      const savedLabel = tsLbl || (card ? `Agree & pay with ${paymentMethodLabel(card)}` : 'Agree & pay');
-      const newLabel = tsLbl || 'Agree & pay';
+      // Pay button names the amount and the method (2026-11-15). The dispatch
+      // time moved out of the label into the dock line above it
+      // (tsDispatchLine). Pay is never greyed out: pressing it with something
+      // missing says exactly what (guardMissing / the server stays authoritative).
+      const amt = typeof state.lastTotal === 'number' ? ' ' + formatCurrency(state.lastTotal) : '';
+      const zero = typeof state.lastTotal === 'number' && state.lastTotal <= 0 && (state.cart || []).length > 0;
+      let savedLabel, newLabel;
+      if (zero) savedLabel = newLabel = 'Complete order';
+      else if (picker) newLabel = savedLabel = payOptionLabel(amt);
+      else {
+        savedLabel = card ? `Pay${amt} with ${paymentMethodLabel(card)}` : `Pay${amt}`;
+        newLabel = `Pay${amt}`;
+      }
+      // Picker on: one button (#payNowBtn / …Mobile) — the chosen option
+      // decides saved card vs PayFast. Picker off: today's two buttons.
+      const showSaved = !picker && useSaved;
       const savedGroup = document.getElementById('savedCardGroup');
-      if (savedGroup) savedGroup.style.display = useSaved ? '' : 'none';
-      document.querySelector('.pay-now-inline-wrapper')?.classList.toggle('hidden', useSaved);
+      if (savedGroup) savedGroup.style.display = showSaved ? '' : 'none';
+      document.querySelector('.pay-now-inline-wrapper')?.classList.toggle('hidden', showSaved);
       const busy = b => b.classList.contains('is-processing') || b.classList.contains('is-paying');
       const sBtn = document.getElementById('payWithSavedCardBtn'); if (sBtn && !busy(sBtn)) sBtn.textContent = savedLabel;
       if (elements.payNowBtn && !busy(elements.payNowBtn)) elements.payNowBtn.textContent = newLabel;
       const sM = document.getElementById('payWithSavedCardBtnMobile'), nM = document.getElementById('payNowBtnMobile');
-      if (sM) { sM.classList.toggle('hidden', !useSaved); if (!busy(sM)) sM.textContent = tsLbl || (card ? 'Pay with ' + paymentMethodLabel(card) : 'Agree & pay'); }
-      if (nM) { nM.classList.toggle('hidden', useSaved); if (!busy(nM)) nM.textContent = newLabel; }
-      // Timeslots: no open delivery time = no payment (R9). Only ever touches
-      // buttons this block itself disabled, so the off path is untouched.
-      const noRun = !!tsLbl && !TS.selRun;
+      if (sM) { sM.classList.toggle('hidden', !showSaved); if (!busy(sM)) sM.textContent = savedLabel; }
+      if (nM) { nM.classList.toggle('hidden', showSaved); if (!busy(nM)) nM.textContent = newLabel; }
+      // Buttons an older version of this page disabled for "no delivery time"
+      // are switched back on (Pay is never greyed out any more).
       [sBtn, elements.payNowBtn, sM, nM].forEach(b => {
-        if (!b || busy(b)) return;
-        if (noRun) { b.disabled = true; b.dataset.tsOff = '1'; }
-        else if (b.dataset.tsOff) { b.disabled = false; delete b.dataset.tsOff; }
+        if (b && !busy(b) && b.dataset.tsOff) { b.disabled = false; delete b.dataset.tsOff; }
       });
+      scheduleRefreshSteps();
     }
     // Pressing Pay is the agreement to the Terms (the line sits right above
     // the button) — tick the kept checkbox so validation + terms_accepted_at
@@ -2840,15 +3048,13 @@
     // (umz_guest_contact) and are all valid skips page 1 the same way a
     // signed-in buyer with a complete profile does — straight to the address
     // step, with the Back link to change details. Silent: never shows errors.
+    // One-page checkout: that now folds step 1 to its summary line ("Change"
+    // opens it again).
     function guestSkipToStep2IfComplete() {
       if (state.user || state.guestSkipDone) return;
-      const v = el => (el?.value || '').trim();
-      if (!isValidEmail(v(elements.customerEmail)) || !v(elements.firstName) || !v(elements.lastName) || !isValidPhone(v(elements.phoneNumber))) return;
-      const page1 = document.getElementById('step1Page');
-      if (page1 && page1.classList.contains('hidden')) return; // already moved on
+      if (!detailsComplete().ok) return;
       state.guestSkipDone = true;
-      elements.step2BackLink?.classList.remove('hidden');
-      showCheckoutPage(2);
+      collapseGuestDetails();
     }
 
     function hasCompleteContact() {
@@ -2864,14 +3070,33 @@
       const p = state.profile;
       const hasContact = hasCompleteContact();
       if (hasContact) {
-        elements.contactSummaryText.textContent =
-          `${p.first_name} ${p.last_name} · ${p.phone}`;
+        fillContactSummary(p.first_name, p.last_name, p.phone, state.user?.email || p.email || '');
         elements.contactSummary.classList.remove('hidden');
         elements.contactFormFull.classList.add('hidden');
       } else {
         elements.contactSummary.classList.add('hidden');
         elements.contactFormFull.classList.remove('hidden');
       }
+      scheduleRefreshSteps();
+    }
+
+    // Step 1's summary line: "Thando Mkhize" / "071 234 5678 · thando@…".
+    function fillContactSummary(first, last, phone, email) {
+      const name = [first, last].filter(Boolean).join(' ');
+      const sub = [phone, email].filter(Boolean).join(' · ');
+      elements.contactSummaryText.innerHTML = '<span class="ss-name">' + escapeHtmlLite(name) + '</span><span class="ss-sub">' + escapeHtmlLite(sub) + '</span>';
+    }
+
+    // Guest: fold step 1 to the same summary line a signed-in buyer gets.
+    // The optional password card (#accountPasswordCard) stays visible under it.
+    function collapseGuestDetails() {
+      if (state.user || !elements.contactSummary) return;
+      const v = el => (el?.value || '').trim();
+      fillContactSummary(v(elements.firstName), v(elements.lastName), v(elements.phoneNumber), v(elements.customerEmail));
+      elements.contactSummary.classList.remove('hidden');
+      elements.contactFormFull.classList.add('hidden');
+      document.getElementById('stepDetails')?.classList.add('guest-collapsed');
+      scheduleRefreshSteps();
     }
 
     // Single-page-app-style view switch between page 1 (#step1Page) and
@@ -2882,16 +3107,9 @@
     // (The address-confirm overlay race this could otherwise cause with
     // maybeShowAddressConfirmNudge()'s own scrollIntoView is handled there
     // instead, via a one-tick defer — see that function's comment.)
+    // One-page checkout (2026-11-15): there are no pages any more — steps 1–4
+    // are always on screen. Kept as a no-op so every old caller still works.
     function showCheckoutPage(pageNum) {
-      if (!elements.step1Page || !elements.step2DeliveryPayment) return;
-      if (pageNum === 2) {
-        elements.step1Page.classList.add('hidden');
-        elements.step2DeliveryPayment.classList.remove('hidden');
-      } else {
-        elements.step2DeliveryPayment.classList.add('hidden');
-        elements.step1Page.classList.remove('hidden');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
       refreshMobilePayBarVisibility();
     }
 
@@ -2903,31 +3121,42 @@
     // during page 1 too. Its "Pay Now" only makes sense once page 2 (delivery
     // + payment) is actually the visible page, so gate it on the same two
     // hidden-class checks used everywhere else in this file.
+    // One-page checkout: the pay dock (#payDock, which holds #mobilePayBar)
+    // lives inside #checkoutSection, so it hides with it (loading /
+    // confirmation) and is always shown otherwise. This only keeps the page's
+    // bottom padding in step with the dock's real height on a phone.
     function refreshMobilePayBarVisibility() {
-      const onPage2 = elements.step2DeliveryPayment && !elements.step2DeliveryPayment.classList.contains('hidden');
-      const inCheckout = elements.checkoutSection && !elements.checkoutSection.classList.contains('hidden');
-      const show = !!(onPage2 && inCheckout);
-      document.getElementById('mobilePayBar')?.classList.toggle('hidden', !show);
-      document.querySelector('.mobile-pay-trust')?.classList.toggle('hidden', !show);
+      const dock = document.getElementById('payDock');
+      if (!dock) return;
+      const h = dock.offsetHeight;
+      if (h > 0 && window.matchMedia('(max-width: 768px)').matches) document.documentElement.style.setProperty('--dock-h', h + 'px');
     }
 
     // Page 1's Continue button — validation + page-switch gate only. Never
     // signs in / creates an account (that stays inside
     // handleAccountPasswordSubmit(), called later at actual payment time).
+    // One-page checkout: Continue folds step 1 to its summary line and
+    // scrolls to the next step that still needs something.
     function advanceToStep2() {
       if (!validateDetailsForm()) return;
-      // The buyer is genuinely navigating here via Continue — this is the
-      // one and only place "Back" becomes meaningful, per the brief.
-      elements.step2BackLink?.classList.remove('hidden');
-      showCheckoutPage(2);
+      clearFieldErrors(document.getElementById('stepDetails'));
+      const v = el => (el?.value || '').trim();
+      fillContactSummary(v(elements.firstName), v(elements.lastName), v(elements.phoneNumber), v(elements.customerEmail));
+      elements.contactSummary.classList.remove('hidden');
+      elements.contactFormFull.classList.add('hidden');
+      if (!state.user) document.getElementById('stepDetails')?.classList.add('guest-collapsed');
+      refreshSteps();
+      scrollToNextIncompleteStep();
     }
 
-    // Back link at the top of page 2 (guest / incomplete-contact path only)
-    // — also reused by the existing "Edit" action on the signed-in contact
-    // chip, since #contactFormFull now lives on page 1. No data is lost
-    // either way; this only toggles CSS visibility.
+    // "Change" on step 1's summary line (#editContactBtn) — opens the
+    // details again. No data is lost; this only toggles visibility.
     function goBackToStep1() {
-      showCheckoutPage(1);
+      elements.contactSummary?.classList.add('hidden');
+      elements.contactFormFull?.classList.remove('hidden');
+      document.getElementById('stepDetails')?.classList.remove('guest-collapsed');
+      scheduleRefreshSteps();
+      document.getElementById('stepDetails')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
   function updateAuthUI(user) {
@@ -2988,6 +3217,7 @@
         setAccountCardState('hidden');
         elements.contactSummary?.classList.add('hidden');
         elements.contactFormFull?.classList.remove('hidden');
+        document.getElementById('stepDetails')?.classList.remove('guest-collapsed');
         document.getElementById('addressNudgeText')?.classList.add('hidden');
 
         // A guest sees Step 1 in full, labeled as such.
@@ -3909,6 +4139,7 @@ async function loadFromLocalStorage() {
 async function loadBuyNowItem() {
     const saved = localStorage.getItem('ss_buynow');
     localStorage.removeItem('ss_buynow');
+    state.buyNowRaw = saved; // re-stashed before a picker redirect so a PayFast cancel comes back to the same item
     if (!saved) { state.cart = []; return; }
     try {
         state.cart = await refreshCartItemsFromProducts(JSON.parse(saved));
@@ -4345,6 +4576,9 @@ async function validateCheckout() {
     
     // Show empty cart message
     function showEmptyCart() {
+      // One-page checkout: an empty cart shows only the summary card, open.
+      elements.checkoutSection?.classList.add('co-empty');
+      document.getElementById('orderSummaryCard')?.classList.add('expanded');
       elements.orderItems.innerHTML = `
         <div class="text-center text-muted" style="padding: 40px;">
           <p>Your cart is empty.</p>
@@ -4365,6 +4599,7 @@ async function validateCheckout() {
 
     function updateOrderSummary() {
       refreshBrandingAmount();
+      elements.checkoutSection?.classList.toggle('co-empty', state.cart.length === 0);
       if (state.cart.length === 0) {
         showEmptyCart();
         return;
@@ -4462,6 +4697,17 @@ async function validateCheckout() {
       }
       const mobileTotal = document.getElementById('mobilePayBarTotal');
       if (mobileTotal) setAmountText(mobileTotal, text);
+      // Summary card header (one-page checkout): store name for a one-store
+      // cart, "N items · Show items", and the total on a phone.
+      const headTotal = document.getElementById('summaryHeaderTotal');
+      if (headTotal) headTotal.textContent = count ? text : '';
+      const title = document.getElementById('summaryTitle');
+      const shop = document.getElementById('shopBrandingName')?.textContent || '';
+      if (title) title.textContent = shop && !document.getElementById('shopBrandingBanner')?.classList.contains('hidden') ? shop : 'Your order';
+      if (meta && count) {
+        const open = document.getElementById('orderSummaryCard')?.classList.contains('expanded');
+        meta.textContent += window.matchMedia('(min-width: 769px)').matches ? '' : (open ? ' · Hide items' : ' · Show items');
+      }
     }
 
     // Update delivery fee and total
@@ -4617,7 +4863,10 @@ async function validateCheckout() {
       setAmountText(elements.totalAmount, formatCurrency(total));
       updateSummaryHeaderMeta(formatCurrency(total));
       state.lastTotal = total;
-      if (tsActive()) syncPayChoice(); // Pay button label carries the amount
+      // "You save R…" = specials + an applied code (plan §6.9).
+      state.saving = Math.round((saleSave + (codeLive ? discount : 0)) * 100) / 100;
+      syncPayChoice(); // Pay button label carries the amount (and R0 → "Complete order")
+      renderPayOptions(); // R0 hides the options (P17)
     }
 
     /********************
@@ -4773,12 +5022,23 @@ async function validateCheckout() {
       if (!TS.wired) {
         TS.wired = true;
         el.addEventListener('click', e => {
+          const chip = e.target.closest('[data-tsday]');
+          if (chip && tsActive()) {
+            // A day chip shows that day's runs and selects its earliest one,
+            // so the chosen time is always the one on screen.
+            TS.viewDay = chip.dataset.tsday;
+            const first = tsOpenRuns().find(r => r.run_date === TS.viewDay);
+            if (first) { TS.sel = tsKeyOf(first); TS.notice = null; tsReselect(); }
+            refreshEstimatedTime(); syncPayChoice();
+            return;
+          }
           const b = e.target.closest('[data-ts]');
           if (!b || !tsActive()) return;
           TS.sel = b.dataset.ts; TS.notice = null;
           tsReselect();
           refreshEstimatedTime(); syncPayChoice();
         });
+        el.addEventListener('keydown', e => radioArrowKeys(e, '.ts-run', b => b.click()));
       }
       const open = tsOpenRuns();
       const now = tsNow();
@@ -4793,22 +5053,45 @@ async function validateCheckout() {
         if (!open.some(r => r.run_date === tsDate(now))) {
           h += '<div class="ts-note">Deliveries are closed for today. The next delivery time is ' + escapeHtmlLite(tsPhrase(open[0])) + '.</div>';
         }
-        let day = null;
-        open.forEach(r => {
-          if (r.run_date !== day) { day = r.run_date; h += '<div class="ts-day">' + escapeHtmlLite(tsDayWord(r)) + '</div>'; }
+        // One-page checkout (2026-11-15): day chips (Today / Tomorrow) and the
+        // chosen day's runs as a grid. Same rules: only open runs, earliest
+        // selected, "Order in the next N min" under an hour, never an end time.
+        const days = [...new Set(open.map(r => r.run_date))];
+        const selDay = TS.selRun ? TS.selRun.run_date : days[0];
+        if (!days.includes(TS.viewDay)) TS.viewDay = selDay;
+        if (days.length > 1) {
+          h += '<div class="ts-days" role="group" aria-label="Delivery day">' + days.map(d => {
+            const r0 = open.find(r => r.run_date === d);
+            return '<button type="button" class="ts-daychip" data-tsday="' + escapeHtmlLite(d) + '" aria-pressed="' + (d === TS.viewDay) + '">' +
+              '<span class="d1">' + escapeHtmlLite(tsDayWord(r0)) + '</span><span class="d2">' + escapeHtmlLite(tsFmt(r0.window_start, { weekday: 'short', day: 'numeric', month: 'short' })) + '</span></button>';
+          }).join('') + '</div>';
+        }
+        h += '<div class="ts-runs" role="radiogroup" aria-label="Delivery time">';
+        open.filter(r => r.run_date === TS.viewDay).forEach(r => {
           const ms = Date.parse(r.cutoff_at) - now, mins = Math.max(1, Math.ceil(ms / 60000));
           const by = ms <= 3600000 ? 'Order in the next ' + mins + ' min' : 'Order by ' + tsT(r.cutoff_at);
           const on = tsKeyOf(r) === TS.sel;
-          h += '<button type="button" class="ts-run' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" data-ts="' + escapeHtmlLite(tsKeyOf(r)) + '">' +
-            '<span class="ts-radio" aria-hidden="true"></span><span><span class="ts-win">Dispatched by ' + tsT(r.window_start) + '</span><span class="ts-by"> · ' + by + '</span>' +
-            (ms <= 300000 ? '<span class="ts-warn">Pay in the next ' + mins + ' min to get this time.</span>' : '') + '</span></button>';
+          h += '<button type="button" class="ts-run' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" tabindex="' + (on ? '0' : '-1') + '" data-ts="' + escapeHtmlLite(tsKeyOf(r)) + '">' +
+            '<span class="ts-k">Dispatched by</span><span class="ts-win">' + tsT(r.window_start) + '</span><span class="ts-by' + (ms <= 3600000 ? ' urgent' : '') + '">' + by + '</span>' +
+            (ms <= 300000 ? '<span class="ts-warn">Pay in the next ' + mins + ' min to get this time.</span>' : '') + '</button>';
         });
-        if (TS.selRun) h += '<div class="ts-how">Order by ' + tsT(TS.selRun.cutoff_at) + ' and it’s ' + tsDisp(TS.selRun) + '.</div>';
+        h += '</div>';
+        if (TS.selRun) h += '<div class="ts-how"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Order by ' + tsT(TS.selRun.cutoff_at) + ' and it’s ' + tsDisp(TS.selRun) + '.</span></div>';
       }
       const fresh = !el.classList.contains('ts-picker') || el._tsHtml !== h;
       el.className = 'ts-picker';
-      el.setAttribute('role', 'radiogroup');
-      if (fresh) { el.innerHTML = h; el._tsHtml = h; }
+      el.removeAttribute('role'); // the runs grid inside carries the radiogroup
+      if (fresh) {
+        const hadFocus = el.contains(document.activeElement) ? (document.activeElement.dataset.ts ? '[data-ts="' + document.activeElement.dataset.ts + '"]' : document.activeElement.dataset.tsday ? '[data-tsday="' + document.activeElement.dataset.tsday + '"]' : null) : null;
+        el.innerHTML = h; el._tsHtml = h;
+        if (hadFocus) { try { el.querySelector(hadFocus)?.focus(); } catch (_) {} }
+      }
+    }
+    // Dock line for a slot order: "Today, dispatched by 12:00" (never an end time).
+    function tsDispatchLine() {
+      if (!tsActive()) return null;
+      if (!TS.selRun) return 'No delivery time open right now';
+      return tsDayWord(TS.selRun) + ', ' + tsDisp(TS.selRun);
     }
 
     const ETA_MIN_PER_KM = 2;
@@ -4840,6 +5123,7 @@ async function validateCheckout() {
     function refreshEstimatedTime() {
       const el = document.getElementById('estimatedDeliveryTime');
       if (!el) return;
+      scheduleRefreshSteps(); // step ticks, dock dispatch line, step 3 visibility
       if (!cartHasProducts(state.cart || [])) { el.classList.add('hidden'); return; } // services only — nothing to deliver
       el.classList.remove('hidden');
 
@@ -5335,7 +5619,9 @@ async function saveShippingInfo() {
             lastName: elements.lastName.value.trim(),
             email: elements.customerEmail.value.trim().toLowerCase(),
             phone: cleanPhone(elements.phoneNumber.value),
-            address: elements.shippingAddress.value.trim(),
+            // "Flat, res or block" (optional) goes in front of the street, so
+            // the order and the saved profile address read "Block C, 12 Ridge Rd".
+            address: [document.getElementById('addressUnit')?.value.trim(), elements.shippingAddress.value.trim()].filter(Boolean).join(', '),
             city: elements.city.value.trim(),
             postalCode: elements.postalCode.value.trim(),
             province: elements.provinceSelect.value,
@@ -5463,33 +5749,13 @@ async function submitToPayFast(cartItems, orderId, total) {
     throw new Error('Configuration not loaded. Please refresh the page.');
   }
 
-  // Build the payload to send to the serverless function.
-  // IMPORTANT: do NOT include merchant_key (secret) here.
-  const payload = {
-    // public / non-secret fields only:
-    m_payment_id: String(orderId).substring(0, 100),
-    amount: parseFloat(total).toFixed(2),
-    item_name: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
-    item_description: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
-    return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${orderId}&order_id=${state.orderId || ''}`,
-    cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${orderId}`,
-    notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
-    name_first: (state.shippingInfo?.firstName || '').substring(0, 100),
-    name_last: (state.shippingInfo?.lastName || '').substring(0, 100),
-    email_address: (state.shippingInfo?.email || '').substring(0, 100),
-    cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100)
-    // add custom_strX / custom_intX here if you want the server to sign them
-  };
+  const payload = buildPayFastPayload(cartItems, orderId, total);
 
   // Tag this payment as ad-hoc/tokenized so PayFast stores a reusable token
   // (captured by payfast-itn.js into payment_methods) without creating a
-  // fixed recurring charge. Once a buyer has saved a card once, every future
-  // "different card" checkout auto-saves too — never asked again — so this
-  // is unconditional from that point on; a first-timer still opts in via
-  // the checkbox. Left unset for every ordinary checkout otherwise, matching
-  // generate-payfast-signature.js's additive fields.
-  // "Save this card" switch — on by default, the buyer can switch it off.
-  // Guests too: the signer accepts ad-hoc mode 2 for a verified guest order.
+  // fixed recurring charge. "Save this card" switch — on by default, the
+  // buyer can switch it off. Guests too: the signer accepts ad-hoc mode 2
+  // for a verified guest order.
   if (document.getElementById('saveCardCheckbox')?.checked) {
     payload.subscription_type = 2;
   }
@@ -5523,27 +5789,48 @@ async function submitToPayFast(cartItems, orderId, total) {
 
   // Server must return an object that includes:
   // { actionUrl, params }  where params is a key/value map of values to submit.
-  // If your function returns pfHost or actionUrl, use that. We'll fallback sensibly.
   const actionUrl = json.actionUrl || (json.pfHost ? `https://${json.pfHost}/eng/process` : (CONFIG.payfastSandbox ? 'https://sandbox.payfast.co.za/eng/process' : 'https://www.payfast.co.za/eng/process'));
   const params = json.params || json; // tolerate different shapes for older functions
+  postPayFastForm(actionUrl, params);
+}
 
-  // Build and submit the form in the same page
+// The fields PayFast needs for this order (factored out of submitToPayFast,
+// 2026-11-15, so the picker path sends exactly the same payload to
+// begin-payment.js). IMPORTANT: no merchant_key / passphrase here.
+function buildPayFastPayload(cartItems, orderId, total) {
+  return {
+    // public / non-secret fields only:
+    m_payment_id: String(orderId).substring(0, 100),
+    amount: parseFloat(total).toFixed(2),
+    item_name: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
+    item_description: cartItems.length === 1 ? (cartItems[0].name || '') : `${cartItems.length} items from Umzila Store`,
+    return_url: `${CONFIG.siteUrl}/checkout-success.html?m_payment_id=${orderId}&order_id=${state.orderId || ''}`,
+    cancel_url: `${CONFIG.siteUrl}/checkout-cancel.html?m_payment_id=${orderId}`,
+    notify_url: `${CONFIG.siteUrl}/.netlify/functions/payfast-itn`,
+    name_first: (state.shippingInfo?.firstName || '').substring(0, 100),
+    name_last: (state.shippingInfo?.lastName || '').substring(0, 100),
+    email_address: (state.shippingInfo?.email || '').substring(0, 100),
+    cell_number: (state.shippingInfo?.phone || '').replace(/\D/g, '').substring(0, 100)
+    // add custom_strX / custom_intX here if you want the server to sign them
+  };
+}
+
+// Build and submit the hidden PayFast form in the same page (factored out of
+// submitToPayFast; the picker path posts begin-payment's signed params here).
+function postPayFastForm(actionUrl, params) {
   const form = document.createElement('form');
   form.method = 'post';
   form.action = actionUrl;
   form.style.display = 'none';
-
   // Append parameters as hidden inputs (only keys with non-empty values)
-  Object.entries(params).forEach(([key, value]) => {
-  if (value === undefined || value === null || String(value).trim() === '') return;
-  const input = document.createElement('input');
-  input.type = 'hidden';
-  input.name = key;
-  input.value = String(value);
-  form.appendChild(input);
-});
-
-
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || String(value).trim() === '') return;
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = key;
+    input.value = String(value);
+    form.appendChild(input);
+  });
   document.body.appendChild(form);
   form.submit();
 }
@@ -5579,7 +5866,11 @@ async function submitToPayFast(cartItems, orderId, total) {
         if (TS.enabled) {
           if (tsGoodsSellerIds().join(',') !== TS.key) await tsRefresh();
           if (tsActive() && !TS.selRun) {
-            showError(elements.paymentError, 'There is no delivery time available right now. Please try again later.');
+            const nx = TS.nextOpen;
+            const msg = nx && nx.window_start && nx.run_date
+              ? 'No delivery time is open right now — the next one is ' + tsPhrase(nx) + '.'
+              : 'No delivery time is open right now. Please try again later.';
+            flagStep('time', null, msg);
             return null;
           }
         }
@@ -5588,10 +5879,10 @@ async function submitToPayFast(cartItems, orderId, total) {
         // only after agreeing to the delay (bookings already pick a time).
         if (!(await confirmClosedStores())) return null;
 
-        // Save shipping info
-        if (!state.shippingInfo) {
-            await saveShippingInfo();
-        }
+        // Save shipping info — every Pay press (one-page checkout): a buyer who
+        // fixes a field after a refused attempt must have the fixed value on
+        // the order (it used to be read only on the first press).
+        await saveShippingInfo();
 
         const mobileBtn = mobilePairOf(triggerBtn);
         triggerBtn.disabled = true;
@@ -5606,8 +5897,8 @@ async function submitToPayFast(cartItems, orderId, total) {
           await ensureFreshQuote();
           if (state.deliveryBlock) {
             renderQuoteNotice();
+            flagStep('address', null, state.deliveryBlock.kind === 'outside' ? 'We don\'t deliver to this address yet — see the note under your address.' : 'Please sort out the delivery note under your address first.');
             document.getElementById('quoteNoticeBlock')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showError(elements.paymentError, state.deliveryBlock.kind === 'outside' ? 'We don\'t deliver to this address yet — see the note under your address.' : 'Please sort out the delivery note under your address first.');
             triggerBtn.disabled = false;
             triggerBtn.classList.remove('is-processing');
             if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
@@ -5647,8 +5938,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         // checklist shown when they first reached this step.
         const blockers = renderCheckoutBlockers();
         if (blockers.length) {
+            flagStep('address', null, 'Please finish setting up your service before paying.');
             document.getElementById('checkoutBlockersCard')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            showError(elements.paymentError, 'Please finish setting up your service before paying.');
             triggerBtn.disabled = false;
             triggerBtn.classList.remove('is-processing');
             if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
@@ -5665,7 +5956,7 @@ async function submitToPayFast(cartItems, orderId, total) {
         updateEstimatedDelivery(); // display only — never hold up the Pay tap for it
 
         // Generate order ID
-        const orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        let orderId = `UMZILA-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         // Calculate totals based on validated cart. Discount comes from
         // state.serverDiscount — validateCheckout() just re-validated it
@@ -5708,7 +5999,9 @@ async function submitToPayFast(cartItems, orderId, total) {
                 // "the token only arrives later via ITN" — read back by
                 // completeOrderPayment() when it inserts the payment_methods
                 // row. Harmless when no card ends up getting tokenized.
-                pending_card_name: elements.saveCardCheckbox?.checked ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || defaultCardName()) : null,
+                // Picker on: only a NEW CARD can be saved (a token makes no
+                // sense for Capitec Pay / EFT / wallets — plan §6.7).
+                pending_card_name: (elements.saveCardCheckbox?.checked && (!pickerOn() || pickerSavesCard())) ? ((elements.cardNameInput?.value || '').trim().substring(0, 100) || defaultCardName()) : null,
                 order_status: 'pending_payment',
                 order_number: orderId,
                 m_payment_id: orderId,
@@ -5751,34 +6044,29 @@ async function submitToPayFast(cartItems, orderId, total) {
                 orderData.slot_run_date = TS.selRun.run_date;
             }
 
+            // Payment picker on (P10/P11, plan §4.3): the same order is paid
+            // again after a cancel/failed attempt as long as nothing that
+            // matters changed (fingerprint). begin-payment re-checks the
+            // delivery run for a reused order (P18). Picker off: always a new
+            // order, exactly as before.
+            const fingerprint = pendingFingerprint(validatedCart, orderData);
+            // Not when the picker fell back to the direct signer (no usable option on
+            // this device): that path never runs payment_order_recheck, so a reused
+            // order would skip the delivery-run rule (P18) — always a fresh insert then.
+            const reuse = (pickerOn() && !(currentPayOptions()[0] || {})._fallback) ? readPendingOrder() : null;
+            if (reuse && reuse.fingerprint === fingerprint && reuse.m && reuse.orderId) {
+                state.orderId = reuse.orderId;
+                orderId = reuse.m;
+            } else {
             const { error } = await supabaseClient
                 .from('orders')
                 .insert([orderData]);
 
             if (error && (error.message === 'TIMESLOT_CLOSED' || error.message === 'TIMESLOT_REQUIRED')) {
-                // The chosen run closed (or none was sent — e.g. the run list
-                // failed to load while the switch is on): say so, select the
-                // next one and STOP — the buyer must press Pay again. Never
-                // switch the run and charge in one go.
-                const refused = TS.selRun;
+                // The chosen run closed (or none was sent): say so, select the
+                // next one and STOP — the buyer must press Pay again.
                 let d = null; try { d = JSON.parse(error.details || 'null'); } catch (_) {}
-                await tsRefresh();
-                const open = tsOpenRuns();
-                const wanted = d && d.next_open ? open.find(r => r.slot_id === d.next_open.slot_id && r.run_date === d.next_open.run_date) : null;
-                const nxt = wanted || open[0] || null;
-                TS.sel = nxt ? tsKeyOf(nxt) : null; TS.selRun = nxt;
-                let msg;
-                if (error.message === 'TIMESLOT_REQUIRED' || !refused) msg = 'Please choose a delivery time.';
-                else {
-                    const closedAt = d && d.closed_at ? d.closed_at : refused.cutoff_at;
-                    const head = d && d.reason && d.reason !== 'closed'
-                        ? 'Dispatch by ' + tsT(refused.window_start) + ' is no longer available.'
-                        : 'Orders for dispatch by ' + tsT(refused.window_start) + ' closed at ' + tsT(closedAt) + '.';
-                    msg = nxt ? head + ' The next delivery time is ' + tsPhrase(nxt) + '.' : head + ' No other delivery times are open right now.';
-                }
-                TS.notice = msg;
-                refreshEstimatedTime(); syncPayChoice();
-                showError(elements.paymentError, msg);
+                await handleTimeslotRefusal(error.message, d, TS.selRun);
                 triggerBtn.disabled = false;
                 triggerBtn.classList.remove('is-processing');
                 if (mobileBtn) { mobileBtn.disabled = false; mobileBtn.classList.remove('is-processing'); }
@@ -5791,6 +6079,12 @@ async function submitToPayFast(cartItems, orderId, total) {
             }
 
             state.orderId = newOrderId;
+            if (pickerOn()) writePendingOrder({ m: orderId, orderId: newOrderId, fingerprint,
+                slot_id: orderData.slot_id || null, run_date: orderData.slot_run_date || null,
+                window_start: (orderData.slot_id && TS.selRun) ? TS.selRun.window_start : null,
+                cutoff_at: (orderData.slot_id && TS.selRun) ? TS.selRun.cutoff_at : null,
+                option_key: state.payOption || null, attempt_id: null });
+            }
 
             // Remember this address's exact location on the buyer's profile so
             // the next checkout prices it straight away (best-effort).
@@ -5912,6 +6206,10 @@ async function submitToPayFast(cartItems, orderId, total) {
             return;
         }
 
+        // One-page checkout: say exactly what is missing (red field, its step
+        // opened, the bar message) before anything else runs.
+        if (!guardMissing()) return;
+
         // Sign in / create account / continue as guest — the one branch
         // point for both auth paths, before any order is written.
         if (!(await handleAccountPasswordSubmit())) return;
@@ -5955,6 +6253,8 @@ async function submitToPayFast(cartItems, orderId, total) {
             promptForTerms();
             return;
         }
+
+        if (!guardMissing()) return;
 
         const prepared = await preparePendingOrder(btn, 'Pay with saved card');
         if (!prepared) return;
@@ -6005,6 +6305,615 @@ async function submitToPayFast(cartItems, orderId, total) {
 }
     
     /********************
+     * ONE-PAGE CHECKOUT — steps, ticks, specific errors (2026-11-15)
+     * docs/plans/payment-picker-checkout-plan.md §6.3–6.5, 6.9. Pure UI on
+     * top of the existing functions: nothing here prices, writes or pays.
+     ********************/
+    const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+    let refreshStepsTimer = null;
+    function scheduleRefreshSteps() {
+      clearTimeout(refreshStepsTimer);
+      refreshStepsTimer = setTimeout(refreshSteps, 100);
+    }
+    function serviceOnlyCart() {
+      const c = state.validatedCart || state.cart || [];
+      return cartHasServices(c) && !cartHasProducts(c);
+    }
+    const fieldVal = el => (el?.value || '').trim();
+
+    // Non-focusing twin of validateDetailsForm(): same checks, no side effects.
+    function detailsComplete() {
+      const missing = [];
+      const email = fieldVal(elements.customerEmail);
+      if (!email) missing.push({ el: elements.customerEmail, msg: 'Add your email — your receipt and tracking link go there' });
+      else if (!elements.customerEmail.readOnly && !isValidEmail(email)) missing.push({ el: elements.customerEmail, msg: 'Check your email address' });
+      if (!fieldVal(elements.firstName)) missing.push({ el: elements.firstName, msg: 'Add your first name so the rider knows who to ask for' });
+      if (!fieldVal(elements.lastName)) missing.push({ el: elements.lastName, msg: 'Add your surname' });
+      const ph = fieldVal(elements.phoneNumber);
+      if (!ph) missing.push({ el: elements.phoneNumber, msg: 'Add your phone number' });
+      else if (!isValidPhone(ph)) missing.push({ el: elements.phoneNumber, msg: 'Check your phone number (e.g. 083 123 4567)' });
+      return { ok: !missing.length, missing };
+    }
+    // Same required address fields as validateShippingForm().
+    function addressMissing() {
+      if (serviceOnlyCart()) return [];
+      const out = [];
+      if (!fieldVal(elements.shippingAddress)) out.push({ el: elements.shippingAddress, msg: 'Add the street address we should deliver to' });
+      if (!fieldVal(elements.city)) out.push({ el: elements.city, msg: 'Add your city' });
+      if (!fieldVal(elements.postalCode)) out.push({ el: elements.postalCode, msg: 'Add your postal code' });
+      return out;
+    }
+
+    // ── red fields ──
+    function markInvalid(el, msg) {
+      if (!el) return;
+      el.classList.add('is-invalid');
+      el.setAttribute('aria-invalid', 'true');
+      const grp = el.closest('.form-group') || el.parentNode;
+      grp.classList.add('is-invalid-group');
+      let e = Array.from(grp.children).find(c => c.classList && c.classList.contains('field-err'));
+      if (!e) { e = document.createElement('div'); e.className = 'field-err'; e.id = (el.id || 'field') + 'Err'; grp.appendChild(e); }
+      e.textContent = msg + '.';
+      el.setAttribute('aria-describedby', e.id);
+    }
+    function clearInvalid(el) {
+      if (!el || !el.classList.contains('is-invalid')) return;
+      el.classList.remove('is-invalid');
+      el.removeAttribute('aria-invalid');
+      const grp = el.closest('.form-group') || el.parentNode;
+      grp.classList.remove('is-invalid-group');
+      Array.from(grp.children).filter(c => c.classList && c.classList.contains('field-err')).forEach(c => c.remove());
+      el.removeAttribute('aria-describedby');
+    }
+    function clearFieldErrors(root) { (root || document).querySelectorAll('.is-invalid').forEach(clearInvalid); }
+
+    const STEP_IDS = { details: 'stepDetails', address: 'stepAddress', time: 'stepTime', pay: 'stepPay' };
+    // Open the step, mark the field red, say exactly what to add in the bar,
+    // and bring it into view. Nothing is ever greyed out.
+    function flagStep(step, el, msg) {
+      const li = document.getElementById(STEP_IDS[step]);
+      if (step === 'details') {
+        elements.contactSummary?.classList.add('hidden');
+        elements.contactFormFull?.classList.remove('hidden');
+        li?.classList.remove('guest-collapsed');
+      }
+      if (step === 'address' && el) {
+        if (!elements.addressCompactCard?.classList.contains('hidden')) {
+          elements.addressCompactCard.classList.add('hidden');
+          elements.addressFormFull?.classList.remove('hidden');
+        }
+        if (el === elements.city || el === elements.postalCode) { state.addrFieldsOpen = true; renderAddrMeta(); }
+      }
+      if (el) markInvalid(el, msg);
+      showError(elements.paymentError, msg);
+      const target = (el && el.offsetParent !== null) ? el : li;
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el && el.offsetParent !== null) el.focus({ preventScroll: true });
+      scheduleRefreshSteps();
+    }
+    function flagPay(msg) {
+      document.getElementById('payOptions')?.classList.add('is-invalid');
+      const pe = document.getElementById('pickerError');
+      if (pe) { pe.textContent = msg + '.'; pe.classList.remove('hidden'); }
+      showError(elements.paymentError, msg);
+      document.getElementById('stepPay')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    // Before any Pay path runs: the first missing thing, said exactly.
+    // Never stricter than validateShippingForm() (which still runs after).
+    function guardMissing() {
+      if (!(state.cart || []).length) return true; // the existing path says "Your cart is empty…"
+      const d = detailsComplete();
+      if (!d.ok) { flagStep('details', d.missing[0].el, d.missing[0].msg); return false; }
+      const a = addressMissing();
+      if (a.length) { flagStep('address', a[0].el, a[0].msg); return false; }
+      const zero = typeof state.lastTotal === 'number' && state.lastTotal <= 0;
+      if (pickerOn() && !zero && !selectedPayOption()) { flagPay('Choose how you want to pay'); return false; }
+      return true;
+    }
+    function scrollToNextIncompleteStep() {
+      const next = Array.from(document.querySelectorAll('.co-step')).find(li => !li.classList.contains('hidden') && !li.classList.contains('done'));
+      if (next) next.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Arrow keys / Home / End inside a radio group (pay options, saved cards,
+    // delivery times): move and select, like native radios.
+    function radioArrowKeys(e, sel, activate) {
+      if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const cur = e.target.closest(sel);
+      if (!cur) return;
+      const group = cur.closest('[role="radiogroup"]');
+      if (!group) return;
+      const items = Array.from(group.querySelectorAll(sel)).filter(b => b.offsetParent !== null && b.closest('[role="radiogroup"]') === group);
+      let i = items.indexOf(cur);
+      if (i < 0) return;
+      e.preventDefault();
+      const fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+      i = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (fwd ? (i + 1) % items.length : (i - 1 + items.length) % items.length);
+      const nxt = items[i];
+      const q = nxt.dataset.ts ? '[data-ts="' + nxt.dataset.ts + '"]' : nxt.dataset.key ? '.pay-opt[data-key="' + nxt.dataset.key + '"]' : nxt.dataset.cardId ? '.pay-choice[data-card-id="' + nxt.dataset.cardId + '"]' : null;
+      activate(nxt);
+      setTimeout(() => { let f = null; try { f = q && document.querySelector(q); } catch (_) {} (f || nxt).focus(); }, 0);
+    }
+
+    // City / postal code / province: one grey line when known, boxes when
+    // missing or the buyer taps "change".
+    function renderAddrMeta() {
+      const line = document.getElementById('addrMetaLine'), fields = document.getElementById('addrMetaFields');
+      if (!line || !fields) return;
+      const city = fieldVal(elements.city), pc = fieldVal(elements.postalCode), prov = elements.provinceSelect?.value || '';
+      const open = !!state.addrFieldsOpen || (prov && prov !== 'KwaZulu-Natal') || fields.querySelector('.is-invalid');
+      fields.classList.toggle('hidden', !open);
+      const showLine = !open && !!(city && pc);
+      line.classList.toggle('hidden', !showLine);
+      if (showLine) document.getElementById('addrMetaText').textContent = [city, pc, prov].filter(Boolean).join(', ');
+    }
+    function resetAddressState() {
+      state.destinationGeo = null;
+      state.addressValidatedAt = null;
+      state.quote = null;
+      state.deliveryQuoteId = null;
+      state.deliveryBlock = null;
+      state.quoteNotice = null;
+      renderQuoteNotice();
+      updateTimeSavedEstimate();
+      updateOrderSummary();
+    }
+
+    // Short "when" line for the dock when there is no delivery-time picker
+    // (same facts as refreshEstimatedTime's strip).
+    function etaShortLine() {
+      const cart = state.cart || [];
+      if (!cart.length || !cartHasProducts(cart)) return '';
+      const closedNow = (state.storeHours || []).filter(h => h.has_hours && !h.open_now);
+      if (closedNow.length) {
+        const first = closedNow.slice().sort((a, b) => String(b.next_open_at || '').localeCompare(String(a.next_open_at || '')))[0];
+        const nm = ((state.sellerTurnarounds || []).find(s => s.id === first.seller_id) || {}).shop_name || 'the store';
+        return 'Made when ' + nm + ' opens' + (first.next_open_at ? ' ' + sastWhen(first.next_open_at) : '');
+      }
+      const q = activeQuote();
+      if (q && q.roadKm > 0) return 'Delivery target: ' + formatEtaMinutes(q.roadKm * ETA_MIN_PER_KM + ETA_BASE_MIN);
+      return state.destinationGeo ? 'Working out your delivery time…' : 'Add your address to see your delivery time';
+    }
+
+    function refreshSteps() {
+      clearTimeout(refreshStepsTimer);
+      const ts = tsActive();
+      const hasItems = (state.cart || []).length > 0;
+      const svcOnly = serviceOnlyCart();
+
+      // Step 3 only with the delivery-time picker; the strip moves with it.
+      document.getElementById('stepTime')?.classList.toggle('hidden', !ts);
+      const eta = document.getElementById('estimatedDeliveryTime');
+      const host = document.getElementById(ts ? 'etaHostTime' : 'etaHostAddress');
+      if (eta && host && eta.parentNode !== host) host.appendChild(eta);
+
+      // Cancel return: the run chosen before PayFast has closed meanwhile.
+      if (state.cancelRun && TS.enabled && TS.runs.length) {
+        const r = state.cancelRun; state.cancelRun = null;
+        if (TS.sel !== r.slot_id + '|' + r.run_date && r.window_start && r.cutoff_at) {
+          const head = 'Orders for dispatch by ' + tsT(r.window_start) + ' closed at ' + tsT(r.cutoff_at) + '.';
+          TS.notice = TS.selRun ? head + ' The next delivery time is ' + tsPhrase(TS.selRun) + '.' : head + ' No other delivery times are open right now.';
+          refreshEstimatedTime();
+        }
+      }
+
+      const t2 = document.getElementById('stepAddressTitle');
+      if (t2) t2.textContent = svcOnly ? 'Your service' : 'Deliver to';
+      const nl = document.getElementById('orderNotesLabel');
+      if (nl && nl.firstChild) nl.firstChild.textContent = (svcOnly ? 'Note for the store ' : 'Note for rider ');
+      renderAddrMeta();
+
+      // Saved-address card: "8.4 km / R35".
+      const meta = document.getElementById('compactAddressMeta');
+      if (meta) {
+        const q = activeQuote();
+        const km = q && q.roadKm ? String(Math.round(q.roadKm * 10) / 10).replace(/\.0$/, '') + ' km' : '';
+        const fee = state.deliveryBlock ? 'Not available' : (q ? (q.fee > 0 ? formatCurrency(Math.max(0, q.fee - (q.priority ? (Number(q.priorityFee) || 0) : 0))) : 'Free') : '');
+        meta.innerHTML = [km, fee].filter(Boolean).map(escapeHtmlLite).join('<br>');
+      }
+      const useSaved = document.getElementById('useSavedAddressBtn');
+      if (useSaved) {
+        const p = state.profile;
+        const full = !!(p && p.address && p.city && p.province && p.postal_code);
+        useSaved.classList.toggle('hidden', !(full && !svcOnly && elements.addressCompactCard?.classList.contains('hidden') && fieldVal(elements.shippingAddress) !== (p?.address || '').trim()));
+      }
+      document.getElementById('orderNotesGroup')?.classList.toggle('hidden', false);
+
+      // Completion → number becomes a tick.
+      const q2 = activeQuote();
+      const done = {
+        details: detailsComplete().ok,
+        address: svcOnly ? !getCheckoutBlockers().length
+          : (!addressMissing().length && !state.deliveryBlock && !!(q2 || state.destinationGeo) && !getCheckoutBlockers().length),
+        time: !ts || !!TS.selRun,
+        pay: !pickerOn() || (typeof state.lastTotal === 'number' && state.lastTotal <= 0) || !!selectedPayOption()
+      };
+      let n = 0;
+      document.querySelectorAll('.co-step').forEach(li => {
+        if (li.classList.contains('hidden')) return;
+        n++;
+        const ok = hasItems && !!done[li.dataset.step];
+        li.classList.toggle('done', ok);
+        const num = li.querySelector('.step-num');
+        const want = ok ? 'tick' : String(n);
+        if (num && num.dataset.v !== want) { num.dataset.v = want; num.innerHTML = ok ? TICK_SVG : String(n); }
+        const st = li.querySelector('.step-state');
+        if (st) st.textContent = ok ? 'Completed' : 'Step ' + n + ', not completed yet';
+      });
+
+      // Dock: dispatch / ETA line, savings, reassurance.
+      const disp = hasItems ? (tsDispatchLine() || etaShortLine()) : '';
+      const dd = document.getElementById('dockDispatch'); if (dd) dd.textContent = disp;
+      const dw = document.getElementById('dockWhen'), dwt = document.getElementById('dockWhenText');
+      if (dwt) dwt.textContent = disp;
+      if (dw) dw.classList.toggle('hidden', !disp);
+      const save = Number(state.saving) || 0;
+      ['saveLine', 'saveLineTotals'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('hidden', !(save > 0));
+        el.textContent = save > 0 ? 'You save ' + formatCurrency(save) : '';
+      });
+      document.getElementById('reassurePin')?.classList.toggle('hidden', !cartHasProducts(state.cart || []));
+      const rc = document.getElementById('reassureCancel');
+      if (rc) {
+        const show = ts && !!TS.selRun;
+        rc.classList.toggle('hidden', !show);
+        if (show) {
+          const dw2 = tsDayWord(TS.selRun);
+          document.getElementById('reassureCancelText').textContent = 'Cancel for a full refund until ' + tsT(TS.selRun.cutoff_at) + (dw2 === 'Today' ? '' : ' ' + (dw2 === 'Tomorrow' ? 'tomorrow' : dw2)) + '.';
+        }
+      }
+      if (selectedPayOption()) {
+        document.getElementById('payOptions')?.classList.remove('is-invalid');
+        document.getElementById('pickerError')?.classList.add('hidden');
+      }
+      refreshMobilePayBarVisibility();
+    }
+
+    /********************
+     * PAYMENT PICKER (plan §6.5–6.8, contracts §9) — behind the admin master
+     * switch site_settings 'payments' → enabled (Admin → Payments). Off, or
+     * the setting unreadable → today's panel and today's PayFast path
+     * (processPayment / payWithSavedCard), untouched. On → the buyer picks an
+     * option (never a PayFast code — the server maps key → code) and Pay goes
+     * through begin-payment.js.
+     ********************/
+    const PF_CODES = ['cc', 'dc', 'cp', 'ef', 'ap', 'gp', 'sp', 'ss', 'zp', 'mp', 'mc', 'mt', 'pf', 'ab', 'nd', 'rc', 'mu', 'sc'];
+    state.payCfg = null;          // site_settings 'payments' value
+    state.payOption = null;       // chosen option key — nothing preselected for a first-timer (P2)
+    state.payOptionRemembered = null;
+    state.payOptionTouched = false;
+    function pickerOn() { return !!(state.payCfg && state.payCfg.enabled === true); }
+    async function loadPayCfg() {
+      state.payCfg = null;
+      if (!supabaseClient) return;
+      try {
+        const { data, error } = await supabaseClient.from('site_settings').select('value').eq('key', 'payments').maybeSingle();
+        if (!error && data && data.value && typeof data.value === 'object') state.payCfg = data.value;
+      } catch (e) {
+        console.warn('Payment options unavailable:', e && e.message || e);
+      }
+    }
+    // 'apple' | 'android' | 'samsung' | 'desktop' | 'other' (contract §9.8).
+    function deviceClass() {
+      const ua = navigator.userAgent || '';
+      try { if (window.ApplePaySession && ApplePaySession.canMakePayments()) return 'apple'; } catch (_) {}
+      if (/SamsungBrowser/i.test(ua)) return 'samsung';
+      if (/Android/i.test(ua)) return 'android';
+      if (/iPhone|iPad|iPod|Mobi/i.test(ua)) return 'other';
+      return 'desktop';
+    }
+    function deviceAllows(rule) {
+      if (!rule) return true;
+      const d = deviceClass();
+      if (rule === 'apple') return d === 'apple';
+      if (rule === 'android') return d === 'android' || d === 'samsung';
+      if (rule === 'samsung') return d === 'samsung';
+      return false;
+    }
+    function visiblePayOptions() {
+      const opts = (state.payCfg && Array.isArray(state.payCfg.options)) ? state.payCfg.options : [];
+      return opts.filter(o => o && o.active === true && /^[a-z_]{2,30}$/.test(o.key || '') &&
+          (o.code == null || PF_CODES.includes(o.code)) && deviceAllows(o.device || null))
+        .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+    }
+    // P15/P16: switch on but nothing usable on this device → one "Pay on
+    // PayFast" option, preselected. It pays through today's direct signer
+    // (submitToPayFast) because begin-payment only accepts active options.
+    function currentPayOptions() {
+      const v = visiblePayOptions();
+      return v.length ? v : [{ key: 'more', name: 'Pay on PayFast', description: 'Choose how to pay on PayFast’s secure page', code: null, _fallback: true }];
+    }
+    function selectedPayOption() {
+      if (!state.payOption) return null;
+      return currentPayOptions().find(o => o.key === state.payOption) || null;
+    }
+    function pickerUsesSavedCard() {
+      const o = selectedPayOption();
+      return !!(o && o.key === 'card' && !state.payWithNewCard && (state.paymentMethods || []).length);
+    }
+    function pickerSavesCard() {
+      const o = selectedPayOption();
+      return !!(o && o.key === 'card' && !pickerUsesSavedCard());
+    }
+    function payOptionLabel(amt) {
+      const o = selectedPayOption();
+      if (!o) return 'Pay' + amt;
+      if (o.code == null) return 'Pay' + amt + ' on PayFast';
+      if (o.key === 'card') {
+        const c = pickerUsesSavedCard() ? state.paymentMethods.find(x => x.id === state.selectedPaymentMethodId) : null;
+        return 'Pay' + amt + ' with ' + (c ? paymentMethodLabel(c) : 'card');
+      }
+      return 'Pay' + amt + ' with ' + (o.name || 'PayFast');
+    }
+    function payIcon(code) {
+      const p = (code === 'cc' || code === 'dc')
+        ? '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20M6 15h4"/>'
+        : (code === 'ef' || code === 'pf' || code === 'ab' || code === 'nd')
+          ? '<path d="M3 10h18L12 4z"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/>'
+          : code == null
+            ? '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'
+            : '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>';
+      return '<svg class="pay-ico" viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
+    }
+    let payOptsSig = '';
+    function renderPayOptions() {
+      const box = document.getElementById('payOptions'), sub = document.getElementById('cardSubBox');
+      const home = document.getElementById('payPanel'), anchor = document.getElementById('pickerError');
+      if (!box || !sub || !home || !anchor) return;
+      const parkSub = () => { if (sub.parentNode !== home) home.insertBefore(sub, anchor); };
+      if (!pickerOn()) {
+        // Today's panel exactly: the card choices sit straight under the heading.
+        if (payOptsSig !== 'off') { parkSub(); box.innerHTML = ''; payOptsSig = 'off'; }
+        box.classList.add('hidden');
+        sub.classList.remove('hidden');
+        return;
+      }
+      const zero = typeof state.lastTotal === 'number' && state.lastTotal <= 0 && (state.cart || []).length > 0;
+      const opts = currentPayOptions();
+      if (state.payOption && !opts.some(o => o.key === state.payOption)) state.payOption = null;
+      if (opts.length === 1 && opts[0]._fallback && !state.payOption) state.payOption = 'more';
+      if (zero) { box.classList.add('hidden'); parkSub(); sub.classList.add('hidden'); return; } // P17: R0 — nothing to pay
+      box.classList.remove('hidden');
+      const sig = JSON.stringify([state.payOption, state.payOptionRemembered, opts.map(o => [o.key, o.name, o.description, o.code])]);
+      if (sig !== payOptsSig) {
+        const focusedKey = box.contains(document.activeElement) && document.activeElement.classList.contains('pay-opt') ? document.activeElement.dataset.key : null;
+        parkSub(); // never destroy the card box with the rebuild
+        const anySel = opts.some(o => o.key === state.payOption);
+        box.innerHTML = opts.map((o, i) => {
+          const on = o.key === state.payOption;
+          return '<button type="button" class="pay-opt" role="radio" aria-checked="' + on + '" tabindex="' + ((on || (!anySel && i === 0)) ? '0' : '-1') + '" data-key="' + escapeHtmlLite(o.key) + '">' +
+            '<span class="ring" aria-hidden="true"></span>' +
+            '<span class="pay-opt-text"><strong>' + escapeHtmlLite(o.name || o.key) + '</strong>' + (o.description ? '<small>' + escapeHtmlLite(o.description) + '</small>' : '') + '</span>' +
+            (o.key === state.payOptionRemembered ? '<span class="pay-opt-tag">Last used</span>' : '') +
+            payIcon(o.code) + '</button>';
+        }).join('');
+        payOptsSig = sig;
+        if (focusedKey) box.querySelector('.pay-opt[data-key="' + focusedKey + '"]')?.focus();
+      }
+      // Card chosen → its saved cards / "Add a new card" open inside the row.
+      const cardBtn = box.querySelector('.pay-opt[data-key="card"]');
+      if (state.payOption === 'card' && cardBtn) {
+        if (cardBtn.nextElementSibling !== sub) cardBtn.after(sub);
+        sub.classList.remove('hidden');
+      } else {
+        parkSub();
+        sub.classList.add('hidden');
+      }
+    }
+    function choosePayOption(key) {
+      state.payOption = key;
+      state.payOptionTouched = true;
+      document.getElementById('payOptions')?.classList.remove('is-invalid');
+      document.getElementById('pickerError')?.classList.add('hidden');
+      renderPayOptions();
+      renderPayChoices(); // → syncPayChoice: labels + new-card box
+    }
+    // Returning customer (§6.5): signed in → my_last_payment_option(); guest
+    // → localStorage umz_pay_option. Applied only if still active and allowed
+    // on this device; a switched-off last option means nothing is selected.
+    async function applyRememberedPayOption() {
+      if (!pickerOn() || state.payOptionTouched) return;
+      let key = null;
+      if (state.user && supabaseClient) {
+        if (state.rememberedFor === state.user.id) return;
+        state.rememberedFor = state.user.id;
+        try {
+          const { data, error } = await supabaseClient.rpc('my_last_payment_option');
+          if (!error && typeof data === 'string') key = data;
+        } catch (_) {}
+      } else {
+        try {
+          const raw = localStorage.getItem('umz_pay_option');
+          if (raw) { try { const p = JSON.parse(raw); key = typeof p === 'string' ? p : (p && p.key) || null; } catch (_) { key = raw; } }
+        } catch (_) {}
+      }
+      if (!key || state.payOptionTouched || !visiblePayOptions().some(o => o.key === key)) return;
+      state.payOptionRemembered = key;
+      if (!state.payOption) state.payOption = key;
+      renderPayOptions();
+      syncPayChoice();
+    }
+
+    // ── pending order reuse (P10/P11, plan §4.3) — picker on only ──
+    function readPendingOrder() {
+      try { const p = JSON.parse(sessionStorage.getItem('umz_pending_order') || 'null'); return p && typeof p === 'object' ? p : null; } catch (_) { return null; }
+    }
+    function writePendingOrder(p) { try { sessionStorage.setItem('umz_pending_order', JSON.stringify(p)); } catch (_) {} }
+    function clearPendingOrder() { try { sessionStorage.removeItem('umz_pending_order'); } catch (_) {} }
+    // Everything that, if changed, needs a new order (a price change changes
+    // the total and so forces one).
+    function pendingFingerprint(validatedCart, od) {
+      const lines = (validatedCart || []).map(i => [String(i.id || i.product_id || ''), Number(i.quantity || i.qty || 1), String(i.size || ''), JSON.stringify(i.picks || null)])
+        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      const src = JSON.stringify([lines, Number(od.total || 0).toFixed(2), od.coupon_code || '', String(od.customer_email || '').toLowerCase(),
+        od.customer_phone || '', od.delivery_address || '', od.city || '', od.postal_code || '', od.slot_id || '', od.slot_run_date || '',
+        Number(od.tip_amount || 0), Number(od.priority_fee || 0), od.pending_card_name ? 1 : 0, od.user_id || '', od.notes || '']);
+      let h1 = 0xdeadbeef, h2 = 0x41c6ce57; // cyrb53
+      for (let i = 0; i < src.length; i++) { const ch = src.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+    }
+
+    // The chosen run closed (order insert refused, or begin-payment's
+    // TIMESLOT_CLOSED for a reused order): say so, select the next one and
+    // STOP — the buyer must press Pay again. Never switch the run and charge
+    // in one go. (Extracted from the insert handler, wording unchanged.)
+    async function handleTimeslotRefusal(code, d, refused) {
+      await tsRefresh();
+      const open = tsOpenRuns();
+      const wanted = d && d.next_open ? open.find(r => r.slot_id === d.next_open.slot_id && r.run_date === d.next_open.run_date) : null;
+      const nxt = wanted || open[0] || null;
+      TS.sel = nxt ? tsKeyOf(nxt) : null; TS.selRun = nxt;
+      if (nxt) TS.viewDay = nxt.run_date;
+      let msg;
+      if (code === 'TIMESLOT_REQUIRED' || !refused) msg = 'Please choose a delivery time.';
+      else {
+        const closedAt = d && d.closed_at ? d.closed_at : refused.cutoff_at;
+        const head = d && d.reason && d.reason !== 'closed'
+          ? 'Dispatch by ' + tsT(refused.window_start) + ' is no longer available.'
+          : 'Orders for dispatch by ' + tsT(refused.window_start) + ' closed at ' + tsT(closedAt) + '.';
+        msg = nxt ? head + ' The next delivery time is ' + tsPhrase(nxt) + '.' : head + ' No other delivery times are open right now.';
+      }
+      TS.notice = msg;
+      refreshEstimatedTime(); syncPayChoice();
+      flagStep('time', null, msg);
+      return msg;
+    }
+
+    // Pay with the picker on (plan §6.7). Same order preparation as today;
+    // then begin-payment.js decides: saved-card charge, or signed PayFast
+    // params to post (with the option's payment_method).
+    async function payWithPicker() {
+      const btn = elements.payNowBtn;
+      if (payBusy) return; // already paying — extra taps do nothing
+      payBusy = true;
+      let leaving = false;
+      setPayStage(btn, 'checking');
+      try {
+        if (!elements.termsAgreement.checked) { promptForTerms(); return; }
+        if (!guardMissing()) return;
+        if (!(await handleAccountPasswordSubmit())) return;
+
+        const prepared = await preparePendingOrder(btn, 'Pay');
+        if (!prepared) return;
+        if (prepared.total <= 0) { await completeZeroTotalOrder(prepared); leaving = true; return; } // P17
+
+        const opt = selectedPayOption();
+        if (!opt) { flagPay('Choose how you want to pay'); return; }
+        if (opt._fallback) {
+          setPayStage(btn, 'payfast');
+          await submitToPayFast(prepared.validatedCart, prepared.orderId, prepared.total);
+          leaving = true;
+          return;
+        }
+        const savedCardId = pickerUsesSavedCard() ? (state.selectedPaymentMethodId || state.paymentMethods[0].id) : null;
+        setPayStage(btn, savedCardId ? 'charging' : 'payfast');
+
+        const payload = buildPayFastPayload(prepared.validatedCart, prepared.orderId, prepared.total);
+        // Cancel comes straight back here (begin-payment appends &attempt=).
+        payload.cancel_url = `${CONFIG.siteUrl}/checkout.html?pf=cancel&m_payment_id=${encodeURIComponent(prepared.orderId)}` +
+          (state.storeScope ? '&store=' + encodeURIComponent(state.storeScope) : '') + (state.isBuyNow ? '&buynow=1' : '');
+        // A card token only for a NEW card with "Save this card" on — never
+        // for Capitec Pay / EFT / wallets.
+        if (!savedCardId && opt.key === 'card' && elements.saveCardCheckbox?.checked) payload.subscription_type = 2;
+
+        const { data: { session } } = await supabaseClient.auth.getSession().catch(() => ({ data: {} }));
+        const headers = { 'Content-Type': 'application/json' };
+        if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
+        let res = null, json = null;
+        try {
+          res = await fetch('/.netlify/functions/begin-payment', {
+            method: 'POST', headers,
+            body: JSON.stringify({ m_payment_id: prepared.orderId, option_key: opt.key, payment_method_id: savedCardId, device: deviceClass(), payload })
+          });
+          json = await res.json().catch(() => null);
+        } catch (_) { res = null; }
+
+        if (res && res.ok && json && json.kind === 'redirect' && json.actionUrl && json.params) {
+          const p = readPendingOrder();
+          if (p && p.m === prepared.orderId) writePendingOrder(Object.assign({}, p, { option_key: opt.key, attempt_id: json.attempt_id || null }));
+          if (!state.user) { try { localStorage.setItem('umz_pay_option', JSON.stringify({ key: opt.key, m: prepared.orderId })); } catch (_) {} }
+          // Buy Now: put the item back so a PayFast cancel returns to it.
+          if (state.isBuyNow && state.buyNowRaw) { try { localStorage.setItem('ss_buynow', state.buyNowRaw); } catch (_) {} }
+          leaving = true; // the browser is now loading PayFast — keep the button busy
+          postPayFastForm(json.actionUrl, json.params);
+          return;
+        }
+        if (res && res.ok && json && (json.kind === 'charged' || json.kind === 'already_paid')) {
+          if (json.kind === 'charged') {
+            const m = mobilePairOf(btn);
+            btn.classList.add('is-success'); if (m) m.classList.add('is-success');
+            setPayStage(btn, 'done');
+            await new Promise(r => setTimeout(r, 450));
+          }
+          leaving = true;
+          window.location.href = `checkout-success.html?m_payment_id=${prepared.orderId}&order_id=${state.orderId || ''}`;
+          return;
+        }
+        const code = json && json.code;
+        if (code === 'ATTEMPT_IN_FLIGHT') return; // a second tap — ignored
+        if (code === 'OPTION_UNAVAILABLE') {
+          await loadPayCfg();
+          state.payOption = null; payOptsSig = '';
+          renderPayOptions(); renderPayChoices();
+          flagPay('That way to pay is not available right now. Choose another');
+          return;
+        }
+        if (code === 'TIMESLOT_CLOSED') { await handleTimeslotRefusal('TIMESLOT_CLOSED', json.details || null, TS.selRun); return; }
+        if (code === 'ORDER_CLOSED') { clearPendingOrder(); showError(elements.paymentError, json.message || 'This order can no longer be paid. Please refresh checkout.'); return; }
+        if (code === 'PICKER_OFF') {
+          await loadPayCfg(); payOptsSig = '';
+          renderPayOptions(); renderPayChoices();
+          showError(elements.paymentError, json.message || 'Please refresh the page.');
+          return;
+        }
+        if (code === 'CHARGE_FAILED') { showError(elements.paymentError, json.message || 'PayFast declined the charge. Please pay another way.'); return; }
+        if (json && json.message && res && res.status < 500) { showError(elements.paymentError, json.message); return; }
+        showError(elements.paymentError, 'We could not reach PayFast. Check your connection and try again.');
+      } catch (error) {
+        console.error('Payment processing error:', error);
+        showError(elements.paymentError, error.message || 'Payment processing failed. Please try again.');
+      } finally {
+        payBusy = false;
+        if (!leaving) clearPayStage(btn);
+      }
+    }
+
+    // Back from PayFast's cancel (P10, plan §6.8): checkout.html?pf=cancel&
+    // m_payment_id=…&attempt=…[&store=…]. Runs before the cart/runs load so
+    // the chosen delivery time can be kept; the bar message follows once the
+    // page is up (continueInitialization).
+    function readCancelReturn() {
+      const q = new URLSearchParams(location.search);
+      if (q.get('pf') !== 'cancel') return;
+      const m = q.get('m_payment_id') || '', attempt = q.get('attempt') || '';
+      const keep = new URLSearchParams();
+      ['store', 'coupon'].forEach(k => { if (q.get(k)) keep.set(k, q.get(k)); });
+      try { history.replaceState(null, '', location.pathname + (keep.toString() ? '?' + keep.toString() : '') + location.hash); } catch (_) {}
+      state.cancelReturn = true;
+      if (supabaseClient && /^[0-9a-f-]{36}$/i.test(attempt) && /^UMZILA-\d{10,}-[a-z0-9]{6,}$/i.test(m)) {
+        supabaseClient.rpc('payment_attempt_cancelled', { p_attempt: attempt, p_m_payment_id: m }).then(() => {}, () => {});
+      }
+      const p = readPendingOrder();
+      if (p && p.m === m) {
+        if (p.option_key) { state.payOption = p.option_key; state.payOptionTouched = true; }
+        if (p.slot_id && p.run_date) { TS.sel = p.slot_id + '|' + p.run_date; state.cancelRun = p; }
+      }
+    }
+    function showCancelReturnMessage() {
+      if (!state.cancelReturn) return;
+      state.cancelReturn = false;
+      const el = elements.paymentError;
+      showError(el, 'Payment not completed. Try again or choose another way to pay.');
+      clearTimeout(el._hideTimer);
+      el._hideTimer = setTimeout(() => el.classList.add('hidden'), 20000);
+      document.getElementById('stepPay')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /********************
      * CONTINUE INITIALIZATION
      ********************/
     
@@ -6016,6 +6925,17 @@ async function submitToPayFast(cartItems, orderId, total) {
         .forEach(fn => fetch('/.netlify/functions/' + fn, { method: 'GET', cache: 'no-store' }).catch(() => {}));
       // A fresh checkout: forget an old after-hours note (set again if the buyer agrees to it).
       try { localStorage.removeItem('ss_closed_order_note'); } catch (_) {}
+      // Back from a PayFast cancel (picker): keep the option + delivery time.
+      readCancelReturn();
+      // Payment picker settings (anon-readable, one small read) — loaded
+      // alongside the cart; Pay before it lands simply takes today's path.
+      loadPayCfg().then(() => {
+        payOptsSig = '';
+        renderPayOptions(); renderPayChoices();
+        applyRememberedPayOption();
+        // Wake begin-payment too (same cold-start reason as below) — only when it will be used.
+        if (pickerOn()) fetch('/.netlify/functions/begin-payment', { method: 'GET', cache: 'no-store' }).catch(() => {});
+      });
       try {
         // Cart and sign-in load side by side (they used to run one after the
         // other — ~1s of extra waiting for a signed-in buyer). loadCart()
@@ -6031,6 +6951,8 @@ async function submitToPayFast(cartItems, orderId, total) {
         // a blank loading screen for several seconds.
         elements.loadingState.classList.add('hidden');
         goToStep('checkout');
+        refreshSteps();
+        setTimeout(showCancelReturnMessage, 300);
 
         // Saved code (ss_coupon, or a ?coupon= one already applied in
         // loadCart) is checked now that sign-in is known, so a multi-use code
@@ -6169,9 +7091,10 @@ async function submitToPayFast(cartItems, orderId, total) {
       elements.customerEmail.addEventListener('blur', () => { applyStoredFreeGiftCode(); });
 
       // Pay now button
+      // Picker on → payWithPicker (begin-payment.js); off → today's processPayment.
       elements.payNowBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        agreeAndRun(processPayment);
+        agreeAndRun(pickerOn() ? payWithPicker : processPayment);
       });
       document.getElementById('payChoices')?.addEventListener('click', (e) => {
         const b = e.target.closest('.pay-choice');
@@ -6223,9 +7146,23 @@ async function submitToPayFast(cartItems, orderId, total) {
       // (see .order-summary:not(.expanded) #orderSummaryBody in the CSS).
       document.getElementById('summaryToggle')?.addEventListener('click', () => {
         const card = document.getElementById('orderSummaryCard');
+        if (window.matchMedia('(min-width: 769px)').matches) return; // always open on desktop
         const expanded = card.classList.toggle('expanded');
         document.getElementById('summaryToggle').setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        updateSummaryHeaderMeta();
       });
+      // Desktop: the summary column is always open (and says so).
+      const deskMq = window.matchMedia('(min-width: 769px)');
+      const syncSummaryOpen = () => {
+        const t = document.getElementById('summaryToggle');
+        if (!t) return;
+        if (deskMq.matches) { t.setAttribute('aria-expanded', 'true'); t.setAttribute('tabindex', '-1'); }
+        else { t.removeAttribute('tabindex'); t.setAttribute('aria-expanded', document.getElementById('orderSummaryCard')?.classList.contains('expanded') ? 'true' : 'false'); }
+        updateSummaryHeaderMeta();
+        refreshMobilePayBarVisibility();
+      };
+      deskMq.addEventListener ? deskMq.addEventListener('change', syncSummaryOpen) : deskMq.addListener(syncSummaryOpen);
+      syncSummaryOpen();
 
       document.getElementById('termsAgreement')?.addEventListener('change', (e) => {
 
@@ -6243,7 +7180,7 @@ async function submitToPayFast(cartItems, orderId, total) {
       // Sticky mobile Pay bar — same handlers as the full-size buttons above.
       document.getElementById('payNowBtnMobile')?.addEventListener('click', (e) => {
         e.preventDefault();
-        agreeAndRun(processPayment);
+        agreeAndRun(pickerOn() ? payWithPicker : processPayment);
       });
       document.getElementById('payWithSavedCardBtnMobile')?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -6457,6 +7394,71 @@ async function submitToPayFast(cartItems, orderId, total) {
           applyPromoCode();
         }
       });
+
+      // ── One-page checkout (2026-11-15) ──
+      // Payment options: tap / Space / Enter, arrow keys move like radios.
+      const payOpts = document.getElementById('payOptions');
+      payOpts?.addEventListener('click', e => {
+        const b = e.target.closest('.pay-opt');
+        if (b) choosePayOption(b.dataset.key);
+      });
+      payOpts?.addEventListener('keydown', e => radioArrowKeys(e, '.pay-opt', b => choosePayOption(b.dataset.key)));
+      document.getElementById('payChoices')?.addEventListener('keydown', e => radioArrowKeys(e, '.pay-choice', b => b.click()));
+
+      // Any typing / change: clear that field's red state and re-tick the steps.
+      const coSec = elements.checkoutSection;
+      ['input', 'change'].forEach(t => coSec?.addEventListener(t, e => {
+        if (e.target && e.target.classList && e.target.classList.contains('is-invalid')) clearInvalid(e.target);
+        scheduleRefreshSteps();
+      }));
+
+      // City / postal code boxes open when a street was typed without
+      // picking a suggestion (the suggestion fills them otherwise).
+      elements.shippingAddress?.addEventListener('blur', () => {
+        setTimeout(() => {
+          if (fieldVal(elements.shippingAddress) && !(fieldVal(elements.city) && fieldVal(elements.postalCode))) {
+            state.addrFieldsOpen = true; renderAddrMeta();
+          }
+        }, 400);
+      });
+      document.getElementById('addrMetaChange')?.addEventListener('click', () => {
+        state.addrFieldsOpen = true; renderAddrMeta(); elements.city?.focus();
+      });
+      // "Deliver somewhere else": an empty address form for the new place.
+      elements.changeAddressBtn?.addEventListener('click', () => {
+        ['shippingAddress', 'city', 'postalCode'].forEach(k => { if (elements[k]) elements[k].value = ''; });
+        const unit = document.getElementById('addressUnit'); if (unit) unit.value = '';
+        state.addrFieldsOpen = false;
+        resetAddressState();
+        elements.shippingAddress?.focus();
+        scheduleRefreshSteps();
+      });
+      // "Use my saved address": back to the profile's address (+ its saved pin).
+      document.getElementById('useSavedAddressBtn')?.addEventListener('click', () => {
+        const p = state.profile;
+        if (!p) return;
+        elements.shippingAddress.value = p.address || '';
+        elements.city.value = p.city || '';
+        elements.postalCode.value = p.postal_code || '';
+        const unit = document.getElementById('addressUnit'); if (unit) unit.value = '';
+        state.addrFieldsOpen = false;
+        resetAddressState();
+        renderAddressCard();
+        useSavedAddressLocation();
+        scheduleRefreshSteps();
+      });
+
+      // Header back link: back to where the buyer came from on Umzila.
+      try {
+        const ref = document.referrer ? new URL(document.referrer) : null;
+        if (ref && ref.origin === location.origin && !/checkout/i.test(ref.pathname)) document.getElementById('coBackLink').href = ref.pathname + ref.search;
+        else if (state.storeScope) document.getElementById('coBackLink').href = 'index.html';
+      } catch (_) {}
+
+      // Keep the phone's bottom padding equal to the pay dock's height.
+      const dock = document.getElementById('payDock');
+      if (dock && window.ResizeObserver) new ResizeObserver(() => refreshMobilePayBarVisibility()).observe(dock);
+      window.addEventListener('resize', refreshMobilePayBarVisibility);
     }
     
     /********************

@@ -32,17 +32,67 @@ function esc(str) {
 // throughout; every field on it is a fallback for data that primarily comes
 // from the order row itself, so a caller supplying a sparse/different-shaped
 // object here is safe by design, not just by luck.
-async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfResponse, siteUrl }) {
+// ── Payment picker helpers (additive, docs/plans/payment-picker-checkout-plan.md §4.4) ──
+const PP_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ppNum = (v) => { if (v === undefined || v === null || String(v).trim() === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
+const ppFee = (v) => { const n = ppNum(v); return n === null ? null : Math.abs(n); }; // PayFast sends "-5.70"
+async function ppPickerOn(supabase, known) {
+    if (typeof known === 'boolean') return known;
+    try {
+        const { data } = await supabase.from('site_settings').select('value').eq('key', 'payments').maybeSingle();
+        return !!(data && data.value && data.value.enabled === true);
+    } catch (_) { return false; }
+}
+
+async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfResponse, siteUrl, pickerOn: pickerOnKnown }) {
     const pfData = pfResponse || {};
+    const attemptRef = PP_UUID_RE.test(String(pfData.custom_str3 || '')) ? String(pfData.custom_str3) : null;
 
     // Fetch order before update — needed for idempotency check, coupon/cart data, confirmation + seller emails
     const { data: existingOrder } = await supabase
         .from('orders')
-        .select('id, payment_status, user_id, customer_email, customer_name, coupon_code, items, total, discount, shipping_cost, order_number, label, delivery_address, city, province, postal_code, notes, pending_card_name')
+        .select('id, payment_status, user_id, customer_email, customer_name, coupon_code, items, total, discount, shipping_cost, order_number, label, delivery_address, city, province, postal_code, notes, pending_card_name, pf_payment_id')
         .eq('m_payment_id', mPaymentId)
         .maybeSingle();
 
     const alreadyPaid = existingOrder?.payment_status === 'paid';
+
+    // ── Payment picker: "paid twice" (P13) — picker on only ──────────
+    // Already paid with a DIFFERENT PayFast payment → keep the first payment's
+    // data on the order, store the extra one on a paid_twice attempt, flag the
+    // order for an admin refund, and stop. A repeat of the SAME ITN (same
+    // pf_payment_id) falls through to today's idempotent path below.
+    if (alreadyPaid && pfPaymentId && existingOrder.pf_payment_id
+        && String(pfPaymentId) !== String(existingOrder.pf_payment_id)
+        && await ppPickerOn(supabase, pickerOnKnown)) {
+        try {
+            const extra = {
+                status: 'paid_twice', ended_at: new Date().toISOString(), pf_payment_id: String(pfPaymentId),
+                amount_gross: ppNum(pfData.amount_gross), amount_fee: ppFee(pfData.amount_fee), amount_net: ppNum(pfData.amount_net),
+                pf_response: pfData
+            };
+            let extraId = null;
+            if (attemptRef) {
+                const { data: upd } = await supabase.from('payment_attempts').update(extra)
+                    .eq('id', attemptRef).eq('order_id', existingOrder.id).neq('status', 'paid').select('id');
+                extraId = (upd && upd[0] && upd[0].id) || null;
+            }
+            if (!extraId) {
+                const { data: ins, error: insErr } = await supabase.from('payment_attempts').insert({
+                    order_id: existingOrder.id, m_payment_id: mPaymentId, user_id: existingOrder.user_id || null,
+                    option_key: 'legacy', payment_method_code: null, kind: 'redirect',
+                    amount: ppNum(pfData.amount_gross) || 0, started_at: new Date().toISOString(), ...extra
+                }).select('id');
+                if (insErr) console.error('completeOrderPayment: paid-twice attempt insert error:', insErr.message);
+                extraId = (ins && ins[0] && ins[0].id) || null;
+            }
+            // "Paid twice" outranks an earlier "amount differs"; a second paid-twice keeps the first link.
+            await supabase.from('orders').update({ payment_flag: 'paid_twice', payment_flag_attempt_id: extraId, payment_flag_resolved_at: null })
+                .eq('id', existingOrder.id).or('payment_flag.is.null,payment_flag.eq.amount_mismatch');
+            console.warn('completeOrderPayment: PAID TWICE — order', mPaymentId, 'extra pf_payment_id', pfPaymentId);
+        } catch (e) { console.error('completeOrderPayment: paid-twice handling error:', e.message); }
+        return;
+    }
 
     // Mark order paid
     const { error: orderErr } = await supabase
@@ -61,6 +111,48 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         return;
     }
     console.log('completeOrderPayment: order marked as paid:', mPaymentId);
+
+    // ── Payment picker: confirm the attempt (P9/P14) ─────────────────
+    // custom_str3 = payment_attempts.id (begin-payment.js). Any earlier status
+    // (no_answer, cancelled, failed) is overridden: a late success still counts.
+    let ppAttempt = null;
+    if (attemptRef && existingOrder) {
+        try {
+            const { data: upd } = await supabase.from('payment_attempts').update({
+                status: 'paid', ended_at: new Date().toISOString(), pf_payment_id: pfPaymentId || null,
+                amount_gross: ppNum(pfData.amount_gross), amount_fee: ppFee(pfData.amount_fee), amount_net: ppNum(pfData.amount_net)
+            }).eq('id', attemptRef).eq('m_payment_id', mPaymentId).neq('status', 'paid').select('id, option_key, payment_method_code');
+            ppAttempt = (upd && upd[0]) || null;
+            if (!ppAttempt) {
+                const { data: same } = await supabase.from('payment_attempts').select('id, option_key, payment_method_code')
+                    .eq('id', attemptRef).eq('m_payment_id', mPaymentId).maybeSingle();
+                ppAttempt = same || null;
+            }
+            if (ppAttempt) {
+                await supabase.from('orders').update({ payment_option_key: ppAttempt.option_key, payment_method_code: ppAttempt.payment_method_code })
+                    .eq('id', existingOrder.id);
+            }
+        } catch (e) { console.warn('completeOrderPayment: attempt confirm error:', e.message); }
+    }
+
+    // ── Payment picker: amount check + R0 marker — picker on only ─────
+    // Never refuses: the money was taken. A mismatch is flagged for an admin.
+    if (existingOrder && !alreadyPaid) {
+        const gross = ppNum(pfData.amount_gross);
+        const mismatch = gross !== null && Math.abs(gross - Number(existingOrder.total || 0)) > 0.01;
+        if ((mismatch || pfData.zero_total) && await ppPickerOn(supabase, pickerOnKnown)) {
+            try {
+                if (mismatch) { // .is('payment_flag', null): never overwrite an earlier flag
+                    await supabase.from('orders').update({ payment_flag: 'amount_mismatch', payment_flag_attempt_id: ppAttempt ? ppAttempt.id : null })
+                        .eq('id', existingOrder.id).is('payment_flag', null);
+                    console.warn('completeOrderPayment: amount differs — order', mPaymentId, 'total', existingOrder.total, 'paid', gross);
+                }
+                if (pfData.zero_total) {
+                    await supabase.from('orders').update({ payment_method_code: 'zero' }).eq('id', existingOrder.id);
+                }
+            } catch (e) { console.warn('completeOrderPayment: amount check error:', e.message); }
+        }
+    }
 
     // Run post-payment tasks only once (guard against ITN retries / a stray
     // ITN arriving after the saved-card path already completed this order)

@@ -144,13 +144,21 @@ if (event.httpMethod !== 'POST') {
       custom_int5: payload.custom_int5 || payload.customInt5 || '',
       custom_str1: payload.custom_str1 || payload.customStr1 || '',
       custom_str2: payload.custom_str2 || payload.customStr2 || '',
-      custom_str3: payload.custom_str3 || payload.customStr3 || '',
+      // Payment picker (begin-payment.js): the attempt id travels as custom_str3
+      // and PayFast echoes it in the ITN. Only a server caller can set it.
+      custom_str3: event.trustedAttemptId || payload.custom_str3 || payload.customStr3 || '',
       custom_str4: payload.custom_str4 || payload.customStr4 || '',
       custom_str5: payload.custom_str5 || payload.customStr5 || '',
 
       // Transaction options
       email_confirmation: (payload.email_confirmation === undefined ? (payload.emailConfirmation || '1') : payload.email_confirmation),
       confirmation_address: payload.confirmation_address || payload.confirmationAddress || '',
+
+      // Set payment method (payment picker). Only ever the code begin-payment.js
+      // looked up in site_settings 'payments' — the browser's payload.payment_method
+      // is ignored on purpose. Empty for every direct caller → omitted from the
+      // string and the form, so their signatures are byte-identical to before.
+      payment_method: event.trustedPaymentMethod || '',
 
       // Recurring/tokenization (optional) — only present when the buyer opts
       // in to "save my card". subscription_type=2 is PayFast's ad-hoc/token
@@ -175,6 +183,9 @@ if (event.httpMethod !== 'POST') {
       'custom_int1','custom_int2','custom_int3','custom_int4','custom_int5',
       'custom_str1','custom_str2','custom_str3','custom_str4','custom_str5',
       'email_confirmation','confirmation_address',
+      // PayFast's documented section order: Transaction options → Set payment
+      // method → Recurring billing. Omitted when empty (picker off / "More ways to pay").
+      'payment_method',
       // Recurring/tokenization fields — appended at the end, empty/omitted
       // for every non-tokenized call (see comment above), verify this
       // position against PAYFAST_SANDBOX before relying on it for real cards.
@@ -221,6 +232,8 @@ if (event.httpMethod !== 'POST') {
 
     // Prepare a copy to return to clients. merchant_key is required by PayFast forms.
 const paramsToReturn = { ...params };
+// Picker off: leave the new key out of the response entirely (same body as before).
+if (!paramsToReturn.payment_method) delete paramsToReturn.payment_method;
 // IMPORTANT: do NOT include the passphrase anywhere in the response.
 // We keep merchant_key because PayFast expects it in the form submission.
 

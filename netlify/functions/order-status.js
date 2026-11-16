@@ -78,5 +78,28 @@ exports.handler = async function (event) {
       moved_from: movedFrom
     };
   }
-  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services, trackPath, run }) };
+  // Payment picker: how a paid order was paid ("Paid R210 with Capitec Pay"). null for
+  // orders paid with the picker off, R0 orders, or when nothing is known.
+  // Separate, guarded read so this endpoint never breaks on the payment columns.
+  let paidWith = null;
+  if (order.payment_status === 'paid') {
+    try {
+      const { data: pw } = await supabase.from('orders')
+        .select('total, payment_option_key, payment_method_code, pf_response').eq('id', order.id).maybeSingle();
+      if (pw && (pw.payment_option_key || pw.payment_method_code === 'token') && pw.payment_method_code !== 'zero') {
+        let name = null;
+        if (pw.payment_method_code === 'token') name = 'Saved card';
+        else {
+          const { data: ps } = await supabase.from('site_settings').select('value').eq('key', 'payments').maybeSingle();
+          const opt = ((ps && ps.value && ps.value.options) || []).find(o => o && o.key === pw.payment_option_key);
+          name = opt && opt.name ? String(opt.name) : null;
+        }
+        const g = pw.pf_response && pw.pf_response.amount_gross;
+        const gross = g !== undefined && g !== null && String(g).trim() !== '' && Number.isFinite(Number(g)) ? Number(g)
+          : (pw.payment_method_code === 'token' ? Number(pw.total) : null);
+        paidWith = { option_key: pw.payment_option_key || null, name, amount_gross: gross };
+      }
+    } catch (_) { paidWith = null; }
+  }
+  return { statusCode: 200, headers, body: JSON.stringify({ paymentStatus: order.payment_status || 'pending', hasPhysical, services, trackPath, run, paidWith }) };
 };

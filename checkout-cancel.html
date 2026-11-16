@@ -4,8 +4,37 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
-  <title>Payment Cancelled - Umzila</title>
+  <title>Payment not completed - Umzila</title>
+  <!--
+    Payment picker (docs/systems/payment-picker.md): with the picker on,
+    PayFast's cancel_url points at checkout.html?pf=cancel&… directly, so
+    buyers come back to checkout with their cart, delivery time and details.
+    This page is kept for (1) checkout payments started before that deploy
+    (cancel_url = checkout-cancel.html?m_payment_id=UMZILA-…) — they are sent
+    on to the same checkout return — and (2) seller enrolment payments
+    (initiate-seller-enrollment.js, no m_payment_id), which still see the
+    message below.
+  -->
+  <script>
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search);
+      var m = q.get('m_payment_id') || '';
+      if (!/^UMZILA-\d{10,}-[a-z0-9]{6,}$/i.test(m)) return; // seller enrolment / unknown: show the message
+      var to = new URLSearchParams();
+      to.set('pf', 'cancel');
+      to.set('m_payment_id', m);
+      var attempt = q.get('attempt') || '';
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(attempt)) to.set('attempt', attempt);
+      var store = q.get('store') || '';
+      if (/^[0-9a-f-]{36}$/i.test(store)) to.set('store', store);
+      document.documentElement.className += ' redirecting';
+      location.replace('/checkout.html?' + to.toString());
+    } catch (e) { /* the message below stays */ }
+  })();
+  </script>
   <style>
+    html.redirecting .cancel-card { visibility: hidden; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: #f7f7f9;
@@ -15,30 +44,33 @@
       min-height: 100vh;
       margin: 0;
       padding: 20px;
+      box-sizing: border-box;
     }
     .cancel-card {
       background: white;
       border-radius: 12px;
-      padding: 40px;
+      padding: 40px 24px;
       max-width: 500px;
       width: 100%;
       text-align: center;
       box-shadow: 0 6px 18px rgba(11,13,20,0.08);
+      box-sizing: border-box;
     }
     .cancel-icon {
-      font-size: 64px;
-      margin-bottom: 20px;
-      color: #dc3545;
+      font-size: 56px;
+      margin-bottom: 16px;
     }
     h1 {
       color: #0a2f66;
       margin-bottom: 10px;
+      font-size: 24px;
     }
     p {
       color: #6b6b74;
       line-height: 1.6;
       margin-bottom: 20px;
     }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
     .btn {
       display: inline-block;
       background: #0a2f66;
@@ -47,25 +79,21 @@
       border-radius: 999px;
       text-decoration: none;
       font-weight: 600;
-      margin-top: 10px;
     }
-    .btn:hover {
-      background: #08315f;
-    }
+    .btn:hover { background: #08315f; }
+    .btn.secondary { background: #6c757d; }
   </style>
 </head>
 <body>
   <div class="cancel-card">
-    <div class="cancel-icon">❌</div>
-    <h1>Payment Cancelled</h1>
-    <p>Your payment was cancelled. No charges have been made to your account.</p>
-    <p>Your cart has been saved so you can complete your purchase when you're ready.</p>
-    
-    <a href="index.html" class="btn">Continue Shopping</a>
-    <a href="index.html" onclick="window.history.back(); return false;" 
-       class="btn" style="background: #6c757d; margin-left: 10px;">
-       Try Again
-    </a>
+    <div class="cancel-icon" aria-hidden="true">↩️</div>
+    <h1>Payment not completed</h1>
+    <p>No money was taken. Try again or choose another way to pay.</p>
+    <p>Your cart has been saved so you can finish when you're ready.</p>
+    <div class="actions">
+      <a href="/checkout.html" class="btn" onclick="if (history.length > 1) { history.back(); return false; }">Try again</a>
+      <a href="/index.html" class="btn secondary">Continue shopping</a>
+    </div>
   </div>
 </body>
 </html>
