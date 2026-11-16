@@ -6,6 +6,8 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ## 2026-11-15: Payment method picker + one-page checkout (picker built behind the "Payment picker on" switch — OFF)
 
+**Follow-up (2026-11-16, founder):** the "Cancel for a full refund until <cut-off>" reassurance line under the Pay button was removed (checkout.html). Guest email stays required. A customer whose order is moved to a later run is still offered a refund in the run-changed email / success page.
+
 **Why:** the founder's payment method picker brief (2026-11-14, rules P1–P18) and the checkout redesign mockups. Buyers used to press Pay, land on PayFast and hunt for their method; the checkout itself was two "pages" plus a separate pay panel with vague errors. Plan: `docs/plans/payment-picker-checkout-plan.md` (§0 FOUNDER DECISIONS override the brief and the mockups). Full prose: **`docs/systems/payment-picker.md`**. Built by four workstreams (A database + server, B checkout.html, C admin, D success/cancel pages + docs + QA), reviewed and fixed the same day.
 
 **State today:** the one-page checkout is the **new default** (no switch of its own — rollback = redeploy the previous commit). The picker is **inert**: `site_settings` key `payments` → `enabled: false`. With it off, checkout renders today's payment panel and calls `generate-payfast-signature` directly (its response body was snapshot-tested byte for byte), `begin-payment` refuses with `PICKER_OFF`, the ITN skips the server confirmation and the flags, and no `payment_attempts` rows are written.
