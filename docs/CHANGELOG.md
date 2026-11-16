@@ -4,6 +4,12 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-16: Fix — guest orders failed with "Failed to create order"
+
+**Reported:** the founder turned the payment picker on and every Pay press said "Failed to create order". **Root cause:** the review fix `orders_payment_columns_guard` (BEFORE INSERT on orders, migration pp_payment_picker_review_fixes) ran as the caller and called `timeslot_is_staff()`, which `anon` is not allowed to execute — so every GUEST order insert was refused (PostgREST 401 / 42501), picker on or off. Signed-in buyers were not affected. Live for ~12 h; only the founder's two test presses hit it (no customer orders in that window). **Fix:** the guard is now SECURITY DEFINER (migration `fix_orders_payment_columns_guard_definer`, copy docs/plans/sql/9_…). Tested as anon in a rolled-back block: insert succeeds, a client-sent payment_flag is still nulled. **Gotcha for next time:** a SECURITY INVOKER trigger function runs with the inserting role's rights — any helper it calls must be executable by anon/authenticated, or make the trigger SECURITY DEFINER.
+
+---
+
 ## 2026-11-15: Payment method picker + one-page checkout (picker built behind the "Payment picker on" switch — OFF)
 
 **Follow-up (2026-11-16, founder):** the "Cancel for a full refund until <cut-off>" reassurance line under the Pay button was removed (checkout.html). Guest email stays required. A customer whose order is moved to a later run is still offered a refund in the run-changed email / success page.
