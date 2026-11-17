@@ -285,7 +285,11 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
     // Only for product orders, not seller enrollment
     if (pfData.custom_str1 !== 'seller_enrollment' && existingOrder.label !== 'seller_enrollment' && existingOrder.customer_email) {
         const RESEND_KEY = process.env.RESEND_API_KEY || '';
-        if (RESEND_KEY) {
+        // Manual orders (manual-order.js, logistics "New Order"): pfData.manual,
+        // pfData.delivered = already paid & delivered (receipt wording, no store /
+        // admin alerts), pfData.notify === false = staff chose not to email.
+        const manualDelivered = pfData.manual === true && pfData.delivered === true;
+        if (RESEND_KEY && !(pfData.manual === true && pfData.notify === false)) {
             // Private tracking link (the delivery row is created by a trigger
             // when the order turns paid) — guests have no account to track from.
             let trackToken = null;
@@ -329,7 +333,8 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
                     body: JSON.stringify({
                         ...mailFrom('Umzila', 'orders'),
                         to:      [existingOrder.customer_email],
-                        subject: (slotRun && !slotRun.needs_attention && slotRun.window_start)
+                        subject: manualDelivered ? `Your Umzila receipt — ${existingOrder.order_number || mPaymentId}`
+                            : (slotRun && !slotRun.needs_attention && slotRun.window_start)
                             ? `Order confirmed — ${slotDispatchLabel(slotRun)} — ${existingOrder.order_number || mPaymentId}`
                             : `Order confirmed — ${existingOrder.order_number || mPaymentId}`,
                         html:    buildOrderConfirmationEmail(existingOrder, pfData, mPaymentId, siteUrl, trackToken, closedStores, slotRun)
@@ -367,12 +372,12 @@ async function completeOrderPayment(supabase, { mPaymentId, pfPaymentId, pfRespo
         } catch (_) { /* timeslots lib not deployed yet — nothing to do */ }
 
         // ── Send per-seller new order notification emails ──
-        await sendSellerOrderNotifications(supabase, existingOrder, mPaymentId, siteUrl).catch(
+        if (!manualDelivered) await sendSellerOrderNotifications(supabase, existingOrder, mPaymentId, siteUrl).catch(
             e => console.error('completeOrderPayment: seller notifications error', e)
         );
 
         // ── Send admin CHA-CHING! notification ──
-        await sendAdminOrderNotification(supabase, existingOrder, mPaymentId, siteUrl).catch(
+        if (!manualDelivered) await sendAdminOrderNotification(supabase, existingOrder, mPaymentId, siteUrl).catch(
             e => console.error('completeOrderPayment: admin notification error', e)
         );
     }
@@ -984,7 +989,10 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
             ? 'Order confirmed. Your payment reached us after your delivery time had closed, so Umzila will contact you shortly to arrange a new delivery time.'
             : 'Order confirmed. Dispatched ' + slotDayWord(slotRun.window_start) + ' by ' + slotHhmm(slotRun.window_start) + '. Your payment is received and each store prepares its items for your run; our logistics team delivers them to you.')
         : '';
-    const introText = hasPhysical
+    const manualDelivered = !!pfData && pfData.manual === true && pfData.delivered === true;
+    const introText = manualDelivered
+        ? 'Thanks for your order — it has been delivered. Here\'s your receipt.'
+        : hasPhysical
         ? 'We\'ve received your payment and your order is being prepared. Your items may come from one or more local stores — each seller prepares their items and our logistics team delivers them to you.'
         : onlyVouchers
             ? 'Payment received — your gift voucher code is on its way in a separate email.'
@@ -1039,12 +1047,12 @@ function buildOrderConfirmationEmail(order, pfData, mPaymentId, siteUrl, trackTo
 <div class="wrap">
   <div class="hdr">
     <h1>Umzila</h1>
-    <p>Your order has been confirmed</p>
-    <span class="badge">✓ PAYMENT CONFIRMED</span>
+    <p>${manualDelivered ? 'Your order was delivered' : 'Your order has been confirmed'}</p>
+    <span class="badge">${manualDelivered ? '✓ PAID &amp; DELIVERED' : '✓ PAYMENT CONFIRMED'}</span>
   </div>
   <div class="bd">
     <h2>Thanks, ${esc(firstName)}! 🎉</h2>
-    <p>${slotIntro || introText}</p>
+    <p>${(!manualDelivered && slotIntro) || introText}</p>
     ${(closedStores || []).length ? `<div style="background:#fff7e6;border:1px solid #f5d38a;border-radius:10px;padding:12px 14px;margin:0 0 16px;color:#6b4a0e;font-size:14px;line-height:1.5">🕘 ${closedStores.map(c => `<strong>${esc(c.name)}</strong> is closed right now${c.opensAt ? ' and opens ' + esc(sastWhen(c.opensAt)) : ''}`).join('; ')}. Your order is made when the store opens, and then delivered — we'll email you when it's on the way.</div>` : ''}
 
     <div class="ref-box">Order reference: <strong>${esc(orderRef)}</strong></div>

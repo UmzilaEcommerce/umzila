@@ -1299,6 +1299,10 @@
     /* Summary card */
     #orderSummaryCard { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 0; margin: 0; box-shadow: none; overflow: hidden; }
     #orderSummaryCard .summary-header { min-height: 56px; padding: 10px 16px; margin: 0; border: 0; font-size: 15px; color: var(--ink); gap: 10px; font-weight: 600; }
+    .sum-head-row { display: flex; align-items: center; }
+    .sum-head-row .summary-header { flex: 1; min-width: 0; }
+    .sum-edit { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px 0 4px; color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+    .sum-edit.hidden { display: none !important; }
     .sum-ico { width: 36px; height: 36px; border-radius: 10px; background: var(--tint); color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
     .sum-titles { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .sum-title { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1733,6 +1737,13 @@
                 Have a code?
               </button>
               <div class="promo-code-input-panel open" id="promoCodePanel">
+                <!-- Mystery gift waiting (index.html pop-up → localStorage umz_mystery_pending): says
+                     where the code is; the code itself only travels by email. renderMysteryNote(). -->
+                <div id="mysteryNote" class="hidden" style="background:#fff1f3;border:1px solid #fbd5dd;border-radius:12px;padding:12px 14px;margin:0 0 10px;font-size:13px;line-height:1.5;color:#4b1d2a">
+                  <div style="font-weight:700;font-size:14px;color:#9f1239;margin-bottom:4px">🎁 Your mystery gift code is in your email</div>
+                  Open <b id="mysteryNoteEmail"></b> and find the email from <b>Umzila</b> called <b id="mysteryNoteSubject"></b>. Can't see it? Look in Promotions or Spam. Paste the code below and press <b>Apply</b> to see your gift.
+                  <a id="mysteryNoteGmail" class="hidden" href="https://mail.google.com/mail/u/0/#search/from%3Aumzila" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;min-height:40px;margin-top:8px;padding:0 14px;border-radius:10px;background:#fff;border:1px solid #fbd5dd;color:#9f1239;font-weight:700;text-decoration:none">Open Gmail</a>
+                </div>
                 <div class="promo-code-input">
                   <label class="sr-only" for="promoCodeInput">Discount code</label>
                   <input type="text" id="promoCodeInput" placeholder="Enter code" autocomplete="off" autocapitalize="characters">
@@ -1775,6 +1786,7 @@
            fixed bottom bar. -->
       <aside class="co-aside" id="coAside" aria-label="Order summary">
         <div class="order-summary" id="orderSummaryCard">
+          <div class="sum-head-row">
           <button type="button" class="summary-header" id="summaryToggle" aria-expanded="false" aria-controls="orderSummaryBody">
             <span class="sum-ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
             <span class="sum-titles">
@@ -1784,6 +1796,9 @@
             <span class="sum-total" id="summaryHeaderTotal"></span>
             <svg class="summary-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
+          <!-- Edit the cart: cart.html for a full checkout, the store's own cart for ?store= (set in setupEventListeners) -->
+          <a href="cart.html" id="editCartLink" class="sum-edit">Edit cart</a>
+          </div>
           <div id="orderSummaryBody">
             <div id="orderItems" class="order-items">
               <!-- Order items will be populated here -->
@@ -3575,7 +3590,7 @@ async function saveCartToServer() {
                   const props = { housenumber: details.housenumber, street: details.street, city: details.city, postcode: details.postcode, state: details.state, countrycode: details.countrycode };
                   // Street-level match (HERE doesn't know that exact number):
                   // keep the house number the buyer typed.
-                  if (!props.housenumber) { const typedNo = query.match(/^s*(d+[A-Za-z]?)/); if (typedNo) props.housenumber = typedNo[1]; }
+                  if (!props.housenumber) { const typedNo = query.match(/^\s*(\d+[A-Za-z]?)\b/); if (typedNo) props.housenumber = typedNo[1]; }
                   const geometry = Number.isFinite(details.lat) && Number.isFinite(details.lon)
                     ? { type: 'Point', coordinates: [details.lon, details.lat] }
                     : null;
@@ -4201,6 +4216,25 @@ async function loadBuyNowItem() {
     // against). Only clears the stored code once it actually applies, so the
     // second call can still retry after the first one's guest-email attempt
     // legitimately fails for lack of an email yet.
+    // Mystery gift reminder above the code box, while a code is waiting in the buyer's inbox
+    // and nothing is applied yet. Never shows (or fills in) the code itself.
+    function renderMysteryNote() {
+      const note = document.getElementById('mysteryNote');
+      if (!note) return;
+      let p = null;
+      try {
+        p = JSON.parse(localStorage.getItem('umz_mystery_pending') || 'null');
+        if (p && p.until && new Date(p.until) < new Date()) { localStorage.removeItem('umz_mystery_pending'); p = null; }
+      } catch (_) { p = null; }
+      const show = !!(p && p.email) && !!(state.cart && state.cart.length) && !state.couponCode && !state.isBuyNow;
+      note.classList.toggle('hidden', !show);
+      if (!show) return;
+      document.getElementById('mysteryNoteEmail').textContent = p.email;
+      document.getElementById('mysteryNoteSubject').textContent = '“' + (p.subject || 'Your mystery gift is waiting 🎁') + '”';
+      const g = document.getElementById('mysteryNoteGmail');
+      if (g) g.classList.toggle('hidden', !/@(gmail|googlemail)\.com$/i.test(p.email));
+    }
+
     async function applyStoredFreeGiftCode() {
       try {
         const code = localStorage.getItem('um_free_gift_code');
@@ -4252,6 +4286,9 @@ async function loadBuyNowItem() {
         state.appliedPromoCode = discount;
 
         localStorage.setItem('ss_coupon', JSON.stringify({ code: discount.code }));
+        // The mystery gift code has been found and applied: stop pointing at the inbox.
+        if (/^MYSTERY/i.test(discount.code)) { try { localStorage.removeItem('umz_mystery_pending'); } catch (_) {} }
+        renderMysteryNote();
 
         // A returning visitor with an already-applied code (or one just
         // restored from cart.html) should see the panel open, not have to
@@ -6970,6 +7007,7 @@ function postPayFastForm(actionUrl, params) {
           const code = state.couponCode || state.storedCouponCode;
           if (code) await applyCoupon(code);
           await applyStoredFreeGiftCode();
+          renderMysteryNote();
         })();
 
         // Now that the cart is loaded, set the delivery block's initial
@@ -7455,12 +7493,39 @@ function postPayFastForm(actionUrl, params) {
         scheduleRefreshSteps();
       });
 
-      // Header back link: back to where the buyer came from on Umzila.
+      // Header "Back to shopping" = the last page the buyer shopped on (home or a store),
+      // never cart.html — cart's back used to return here, a loop. The cart is reached
+      // with "Edit cart" on the order summary instead. Same rule as cart.html umzShopReturn.
       try {
+        let ret = null;
         const ref = document.referrer ? new URL(document.referrer) : null;
-        if (ref && ref.origin === location.origin && !/checkout/i.test(ref.pathname)) document.getElementById('coBackLink').href = ref.pathname + ref.search;
-        else if (state.storeScope) document.getElementById('coBackLink').href = 'index.html';
+        if (ref && ref.origin === location.origin && !/^\/(cart|checkout[\w-]*)(\.html)?$/i.test(ref.pathname)) {
+          ret = ref.pathname + ref.search;
+          try { sessionStorage.setItem('umz_shop_return', ret); } catch (_) {}
+        }
+        if (!ret) { try { ret = sessionStorage.getItem('umz_shop_return'); } catch (_) {} }
+        document.getElementById('coBackLink').href = ret || '/';
       } catch (_) {}
+      // "Edit cart": the full cart page, or — for a one-store checkout — that store's
+      // own cart (shop.html opens it for #cart). Buy-now has no cart to edit.
+      (() => {
+        const edit = document.getElementById('editCartLink');
+        if (!edit) return;
+        if (state.isBuyNow) { edit.classList.add('hidden'); return; }
+        if (!state.storeScope) { edit.href = 'cart.html'; return; }
+        // The store's slug is looked up on tap (the client isn't ready yet at this point).
+        edit.addEventListener('click', async (ev) => {
+          ev.preventDefault();
+          let slug = null;
+          try {
+            if (supabaseClient) {
+              const { data } = await supabaseClient.from('sellers').select('slug').eq('id', state.storeScope).maybeSingle();
+              slug = data && data.slug;
+            }
+          } catch (_) {}
+          window.location.href = slug ? '/' + slug + '#cart' : 'cart.html';
+        });
+      })();
 
       // Keep the phone's bottom padding equal to the pay dock's height.
       const dock = document.getElementById('payDock');

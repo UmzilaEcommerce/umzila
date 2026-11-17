@@ -204,6 +204,29 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 .badge.house{background:#e0f2fe;color:#075985}
 .badge.disabled{background:#f3f4f6;color:#4b5563}
 /* Order detail: record a cash/card-machine/EFT payment on a manual order */
+/* New Order (manual-order.js) */
+.mo-modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mo-mode{display:flex;gap:10px;align-items:flex-start;padding:12px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;background:var(--surface)}
+.mo-mode:has(input:checked){border-color:var(--accent);background:var(--accent-light)}
+.mo-mode input{margin-top:3px;accent-color:var(--accent)}
+.mo-mode strong{display:block;font-size:13px}
+.mo-mode small{display:block;font-size:12px;color:var(--muted);line-height:1.4;margin-top:2px}
+.mo-row{display:grid;grid-template-columns:1fr 130px 64px 90px 34px;gap:8px;align-items:center;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-top:8px;border:1px solid var(--border)}
+.mo-row input,.mo-row select{background:var(--surface)}
+.mo-store{font-size:11px;color:var(--muted)}
+.mo-hint{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+.mo-sum{display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-size:13px;max-width:320px;margin-left:auto;margin-top:12px}
+.mo-sum .tot{font-weight:800;font-size:15px;border-top:1px solid var(--border);padding-top:6px}
+.mo-next{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--accent-light);color:var(--text2);font-size:12px;line-height:1.5}
+.mo-addr-sugg{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:9px;box-shadow:var(--shadow-md);z-index:210;max-height:220px;overflow:auto}
+.mo-addr-sugg div{padding:9px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)}
+.mo-addr-sugg div:hover{background:var(--surface2)}
+@media(max-width:768px){
+  .mo-modes{grid-template-columns:1fr}
+  .mo-row{grid-template-columns:1fr 60px 80px 34px}
+  .mo-row .mo-search-wrap{grid-column:1 / -1}
+  .mo-head{display:none!important}
+}
 .pay-record{margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:10px;background:var(--surface2)}
 .pay-record-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 
@@ -866,7 +889,7 @@ document.addEventListener('sb-ready', function(e){
       (data?.value?.options||[]).forEach(o=>{ if(o.key) PAY_NAMES.byKey[o.key]=o.name||o.key; if(o.code) PAY_NAMES.byCode[o.code]=o.name||o.code; });
     }catch(e){ console.warn('payment names', e); _payNamesLoaded = false; }
   }
-  function isManualOrder(o){ return /^ORD-/i.test(String(o.id||'')) && !o.m_payment_id && !o.isFee; }
+  function isManualOrder(o){ return /^ORD-/i.test(String(o.id||'')) && (!o.m_payment_id || o.m_payment_id===o.id) && !o.isFee; } // manual-order.js sets m_payment_id = the order number
   function paidWithLabel(o){
     if(o.payment_method_code && MANUAL_PAY[o.payment_method_code]) return MANUAL_PAY[o.payment_method_code];
     if(o.payment_option_key) return PAY_NAMES.byKey[o.payment_option_key] || o.payment_option_key;
@@ -958,6 +981,7 @@ document.addEventListener('sb-ready', function(e){
       payment_option_key: r.payment_option_key||null,
       payment_method_code: r.payment_method_code||null,
       pf_gross: r.pf_gross ?? null,
+      manual_mode: r.manual_mode || null, // 'deliver' | 'done' on orders made by manual-order.js
       shipping_cost: Number(r.shipping_cost||0),
       delivery_class: r.delivery_class||'',
       delivery_zone: r.delivery_zone||'',
@@ -977,7 +1001,7 @@ document.addEventListener('sb-ready', function(e){
   async function fetchOrders(){
     try{
       const {data,error} = await sb.from('orders')
-        .select('id,order_number,customer_name,customer_email,customer_phone,delivery_address,pickup_address,city,province,postal_code,label,order_status,payment_status,shipping_cost,delivery_class,delivery_zone,coupon_code,items,total,discount,package_type,notes,profile_id,user_id,created_at,delivery_instructions,delivery_quote_id,m_payment_id,paid_at,payment_option_key,payment_method_code,pf_gross:pf_response->>amount_gross')
+        .select('id,order_number,customer_name,customer_email,customer_phone,delivery_address,pickup_address,city,province,postal_code,label,order_status,payment_status,shipping_cost,delivery_class,delivery_zone,coupon_code,items,total,discount,package_type,notes,profile_id,user_id,created_at,delivery_instructions,delivery_quote_id,m_payment_id,paid_at,payment_option_key,payment_method_code,pf_gross:pf_response->>amount_gross,manual_mode:pf_response->>mode')
         .neq('order_status','pending_payment')
         .order('created_at',{ascending:false}).limit(1000);
       if(error){console.warn('fetchOrders error',error);return[];}
@@ -1065,16 +1089,9 @@ document.addEventListener('sb-ready', function(e){
       if(!order.statusChanged) delete upd.order_status;
       result = await sb.from('orders').update(upd).eq('order_number',order.id).select('*');
     } else {
-      // New manual order: "Paid by" decides the payment columns once, at
-      // creation (staff are exempt from orders_payment_columns_guard). Later
-      // payments go through logistics_record_manual_payment, never saveOrder.
-      payload.payment_status = 'pending';
-      if(order.paid_by && MANUAL_PAY[order.paid_by]){
-        payload.payment_status = 'paid';
-        payload.payment_method_code = order.paid_by;
-        payload.paid_at = new Date().toISOString();
-      }
-      result = await sb.from('orders').insert([payload]).select('*');
+      // New orders are created only by manual-order.js (openCreateModal) — never inserted here.
+      toast('This order no longer exists — refresh the page','error');
+      return null;
     }
 
     if(result.error){
@@ -1515,7 +1532,9 @@ document.addEventListener('sb-ready', function(e){
       ${o.pf_gross!=null && Math.abs(chargedOf(o)-o.total)>=0.01 ? `<div style="text-align:right;font-size:11px;color:var(--muted)">PayFast received ${fmt(chargedOf(o))}; the order says ${fmt(o.total)}.</div>` : ''}
       ${isManualOrder(o) && o.payment_status!=='paid' ? `<div class="pay-record">
         <div style="font-weight:700;font-size:13px">Payment not recorded yet</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px">When the customer has paid, record how. This marks the order paid (it doesn't change its delivery status).</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${o.manual_mode==='deliver' && o.rawStatus==='Pending'
+          ? 'When the customer has paid, record how. Like an online payment: the store is told, a rider is sent and the customer is emailed the tracking link.'
+          : 'When the customer has paid, record how. This marks the order paid (it doesn\'t change its delivery status).'}</div>
         <div class="pay-record-btns">
           ${Object.entries(MANUAL_PAY).map(([k,l])=>`<button class="btn btn-primary btn-sm" data-record-pay="${k}">Paid: ${esc(l)}</button>`).join('')}
         </div>
@@ -1568,24 +1587,25 @@ document.addEventListener('sb-ready', function(e){
     });
 
     // Record a cash / card-machine / EFT payment on a manual ORD- order.
-    // Server-side only (logistics_record_manual_payment refuses PayFast and
-    // already-paid orders); saveOrder() never writes payment_status.
+    // Server-side only (manual-order.js 'pay' refuses PayFast and already-paid
+    // orders; a 'deliver' order then sends the rider + tracking email);
+    // saveOrder() never writes payment_status.
     modalBody.querySelectorAll('[data-record-pay]').forEach(btn=>{
       btn.addEventListener('click',()=>{
         const method=btn.dataset.recordPay;
         showInlineConfirm(`Record ${o.id} as paid (${MANUAL_PAY[method]})?`, async()=>{
           modalBody.querySelectorAll('[data-record-pay]').forEach(b=>b.disabled=true);
           try{
-            const { error } = await sb.rpc('logistics_record_manual_payment', { p_order_id: o.dbId, p_method: method });
-            if(error){
-              if(rpcMissing(error)) toast('Recording payments isn\'t switched on yet — try again later','warn');
-              else toast('Could not record payment: '+(error.message||'error'),'error');
+            let res;
+            try{ res = await manualOrderApi({ action:'pay', order_id:o.dbId, method }); }
+            catch(err){
+              toast('Could not record payment: '+(err.message||'error'),'error');
               modalBody.querySelectorAll('[data-record-pay]').forEach(b=>b.disabled=false);
               return;
             }
             ORDERS = await fetchOrders();
             PAID_TODAY = null; _paidTodayAt = 0;
-            toast(`${o.id} recorded as paid (${MANUAL_PAY[method]})`,'success');
+            toast(`${o.id} recorded as paid (${MANUAL_PAY[method]})${res && res.tracking_url ? ' — rider requested, tracking emailed' : ''}`,'success');
             renderOverview();
             if(activePanel==='orders') renderOrders();
             if(activePanel==='past') renderPast();
@@ -1910,242 +1930,284 @@ document.addEventListener('sb-ready', function(e){
   /* ═══════════════════════════════════════════
      CREATE ORDER MODAL
   ═══════════════════════════════════════════ */
+  // Manual orders are created and paid ONLY through netlify/functions/manual-order.js
+  // (staff-checked, server-priced, then the same post-payment path as a PayFast
+  // order) — this page never inserts an order itself.
+  async function manualOrderApi(body){
+    const { data:{ session } } = await sb.auth.getSession();
+    const res = await fetch('/.netlify/functions/manual-order',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(session?.access_token||'')},
+      body:JSON.stringify(body)
+    });
+    const j = await res.json().catch(()=>({}));
+    if(!res.ok || j.error) throw new Error(j.error || ('Request failed ('+res.status+')'));
+    return j;
+  }
+
+  let ORDER_PRODUCTS = null;
+  async function fetchOrderProducts(){
+    if(ORDER_PRODUCTS) return ORDER_PRODUCTS;
+    const { data:prods, error } = await sb.from('products')
+      .select('id,name,price,sale,sale_price,stock,listing_type,metadata,sellers(shop_name,is_house)')
+      .eq('visible',true).order('name').limit(2000);
+    if(error || !prods){ console.warn('fetchOrderProducts',error); return []; }
+    const goods = prods.filter(p=>(p.listing_type||'product')!=='service');
+    let vars = [];
+    for(let i=0;i<goods.length;i+=120){ // chunks keep the request URL short
+      const { data } = await sb.from('product_variants').select('id,product_id,size,stock,price_override').in('product_id',goods.slice(i,i+120).map(p=>p.id));
+      vars = vars.concat(data||[]);
+    }
+    // Same price rule as validate-cart.js (manual-order.js re-checks it).
+    ORDER_PRODUCTS = goods.map(p=>{
+      const sale = p.sale && p.sale_price ? Number(p.sale_price) : null;
+      return {
+        id:p.id, name:p.name||'Item', store:(p.sellers&&p.sellers.shop_name)||'',
+        price: sale ?? Number(p.price||0), stock:Number(p.stock||0),
+        mustChoose: !!(p.metadata&&p.metadata.option_required), optionLabel:(p.metadata&&p.metadata.option_label)||'Choose',
+        variants: vars.filter(v=>v.product_id===p.id).map(v=>({ id:v.id, size:v.size||'Option', stock:Number(v.stock??p.stock??0), price: sale ?? Number(v.price_override||p.price||0) }))
+      };
+    });
+    return ORDER_PRODUCTS;
+  }
+
+  // HERE address suggestions (address-search.js, same as checkout) → lat/lon for the rider.
+  function wireAddressSearch(input, onPick){
+    const wrap=input.parentNode; wrap.style.position='relative';
+    const box=document.createElement('div'); box.className='mo-addr-sugg'; box.style.display='none'; wrap.appendChild(box);
+    let t=null, ctl=null;
+    input.addEventListener('input',()=>{
+      onPick(null); // typed again → the pinned location no longer matches
+      clearTimeout(t);
+      const q=input.value.trim();
+      if(q.length<3){box.style.display='none';return;}
+      t=setTimeout(async()=>{
+        ctl?.abort(); ctl=new AbortController();
+        try{
+          const r=await fetch('/.netlify/functions/address-search?action=autocomplete&input='+encodeURIComponent(q),{signal:ctl.signal});
+          const j=await r.json();
+          const list=(j.suggestions||[]).slice(0,8);
+          if(!list.length){box.style.display='none';return;}
+          box.innerHTML=list.map((s,i)=>`<div data-i="${i}">${esc(s.mainText?[s.mainText,s.secondaryText].filter(Boolean).join(', '):(s.text||''))}</div>`).join('');
+          box.style.display='block';
+          box.querySelectorAll('[data-i]').forEach(el=>el.onclick=async()=>{
+            const s=list[Number(el.dataset.i)]; box.style.display='none';
+            if(!s||!s.placeId) return;
+            try{
+              const d=await (await fetch('/.netlify/functions/address-search?action=details&placeId='+encodeURIComponent(s.placeId))).json();
+              if(!Number.isFinite(d.lat)||!Number.isFinite(d.lon)) return;
+              let hn=d.housenumber; if(!hn){ const m=q.match(/^\s*(\d+[A-Za-z]?)/); if(m) hn=m[1]; }
+              input.value=[[hn,d.street].filter(Boolean).join(' '), d.suburb].filter(Boolean).join(', ')||d.label||input.value;
+              onPick({lat:d.lat,lon:d.lon,city:d.city||'',province:d.state||'',postal_code:d.postcode||''});
+            }catch(e){ console.warn('address details failed',e); }
+          });
+        }catch(e){ if(e.name!=='AbortError') box.style.display='none'; }
+      },350);
+    });
+    document.addEventListener('click',e=>{ if(!wrap.contains(e.target)) box.style.display='none'; });
+  }
+
   function openCreateModal(){
-    const cats=['Accessories','Bundles','Caps','T-Shirts','Bottoms','Hoodies','Tops','Mystery Boxes','All'];
+    const payOpts=Object.entries(MANUAL_PAY).map(([k,l])=>`<option value="${k}">Paid — ${esc(l)}</option>`).join('');
     openModal('New Order',`
+      <div class="form-section">
+        <div class="form-section-title">How is this order handled?</div>
+        <div class="mo-modes">
+          <label class="mo-mode"><input type="radio" name="co-mode" value="deliver" checked><span><strong>🛵 Deliver it — with tracking</strong><small>Like an online order: the store is told, a rider is sent and the customer gets the confirmation email with a live tracking link.</small></span></label>
+          <label class="mo-mode"><input type="radio" name="co-mode" value="done"><span><strong>✅ Already paid &amp; delivered</strong><small>Just record it — no rider, no store alert. Saved as Delivered; the customer can be emailed a receipt.</small></span></label>
+        </div>
+      </div>
       <div class="form-section">
         <div class="form-section-title">Customer</div>
         <div class="form-grid">
-          <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="co-name" placeholder="John Doe"/></div>
-          <div class="form-group"><label class="form-label">Email *</label><input class="form-input" id="co-email" data-guard="email" placeholder="john@example.com"/></div>
-          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="co-phone" data-guard="phone" placeholder="+27 …"/></div>
+          <div class="form-group"><label class="form-label">Full name *</label><input class="form-input" id="co-name" autocomplete="off"/></div>
+          <div class="form-group"><label class="form-label">Email * <span style="font-weight:400;color:var(--muted)">— tracking &amp; receipts go here</span></label><input class="form-input" id="co-email" type="email" data-guard="email" placeholder="name@gmail.com"/></div>
+          <div class="form-group"><label class="form-label">Phone <span style="font-weight:400;color:var(--muted)">— for the rider</span></label><input class="form-input" id="co-phone" type="tel" data-guard="phone" placeholder="083 123 4567"/></div>
         </div>
       </div>
       <div class="form-section">
-        <div class="form-section-title">Delivery Address</div>
+        <div class="form-section-title">Delivery address</div>
         <div class="form-grid">
-          <div class="form-group full"><label class="form-label">Street *</label><input class="form-input" id="co-address" placeholder="123 Main St"/></div>
-          <div class="form-group"><label class="form-label">City</label><input class="form-input" id="co-city" placeholder="Cape Town"/></div>
-          <div class="form-group"><label class="form-label">Province</label><input class="form-input" id="co-province" placeholder="Western Cape"/></div>
-          <div class="form-group"><label class="form-label">Postal Code</label><input class="form-input" id="co-postal" placeholder="8001"/></div>
-          <div class="form-group"><label class="form-label">Label</label>
-            <select class="form-input" id="co-label"><option value="">—</option><option>Home</option><option>Work</option><option>Other</option></select>
-          </div>
-          <div class="form-group full"><label class="form-label">Delivery Details</label><input class="form-input" id="co-details" placeholder="Gate code, floor, etc."/></div>
-        </div>
-      </div>
-      <div class="form-section">
-        <div class="form-section-title">Order</div>
-        <div class="form-grid">
-          <div class="form-group"><label class="form-label">Category *</label>
-            <select class="form-input" id="co-category"><option value="">Select…</option>${cats.map(c=>`<option>${c}</option>`).join('')}</select>
-          </div>
-          <div class="form-group"><label class="form-label">Order Status</label>
-            <select class="form-input" id="co-status"><option>Pending</option><option>Packaging</option><option>Fulfilled</option><option>Delivered</option><option>Returned</option></select>
-          </div>
-          <div class="form-group"><label class="form-label">Paid by</label>
-            <select class="form-input" id="co-paid-by"><option value="">Not paid yet</option>${Object.entries(MANUAL_PAY).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('')}</select>
-          </div>
-          <div class="form-group"><label class="form-label">Shipping Cost (R)</label><input class="form-input" id="co-shipping" type="number" step="0.01" min="0" value="0" placeholder="0.00"/></div>
-          <div class="form-group"><label class="form-label">Delivery Class</label>
-            <select class="form-input" id="co-delivery-class"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
-          </div>
-          <div class="form-group"><label class="form-label">Delivery Zone</label><input class="form-input" id="co-delivery-zone" placeholder="e.g. Cape Town Metro"/></div>
-          <div class="form-group"><label class="form-label">Pickup Address</label><input class="form-input" id="co-pickup" placeholder="Where seller hands over"/></div>
-          <div class="form-group"><label class="form-label">Coupon Code</label><input class="form-input" id="co-coupon" placeholder="e.g. COMEBACK10"/></div>
-          <div class="form-group"><label class="form-label">Order ID (optional)</label><input class="form-input" id="co-id" placeholder="Auto-generated"/></div>
-          <div class="form-group full"><label class="form-label">Notes</label><textarea class="form-input" id="co-notes" rows="2" placeholder="Any internal notes…"></textarea></div>
+          <div class="form-group full"><label class="form-label" id="co-address-lbl"></label><div><input class="form-input" id="co-address" autocomplete="off" placeholder="Start typing, e.g. 400 Umgeni Road"/></div><div class="mo-hint" id="co-geo-state"></div></div>
+          <div class="form-group full"><label class="form-label">Directions for the rider</label><input class="form-input" id="co-details" placeholder="Res, block, room, gate code…"/></div>
         </div>
       </div>
       <div class="form-section">
         <div class="form-section-title">Items</div>
-        <div style="font-size:11px;font-weight:600;color:var(--muted);display:grid;grid-template-columns:1fr 68px 88px 96px 36px;gap:8px;padding:0 10px;margin-bottom:4px">
-          <span>Product</span><span style="text-align:center">Qty</span><span>Size</span><span>Price</span><span></span>
+        <div class="mo-head" style="font-size:11px;font-weight:600;color:var(--muted);display:grid;grid-template-columns:1fr 130px 64px 90px 34px;gap:8px;padding:0 10px">
+          <span>Product</span><span>Option</span><span style="text-align:center">Qty</span><span>Price (R)</span><span></span>
         </div>
         <div id="co-items"></div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" id="co-add">+ Add Item</button>
-          <span style="font-size:13px;color:var(--muted)">Discount: <input class="form-input" id="co-discount" type="number" step="0.01" value="0" min="0" style="width:90px;padding:5px 8px;text-align:right;display:inline-block"/></span>
-          <span style="font-size:13px;font-weight:700;margin-left:auto">Total: <span id="co-total">R0.00</span></span>
+        <button class="btn btn-ghost btn-sm" id="co-add" type="button" style="margin-top:10px">+ Add item</button>
+        <div class="mo-hint">Prices fill in from the store; change one only if a different price was agreed.</div>
+      </div>
+      <div class="form-section">
+        <div class="form-section-title">Payment &amp; totals</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Payment *</label><select class="form-input" id="co-paid-by"></select></div>
+          <div class="form-group"><label class="form-label">Delivery fee (R)</label><input class="form-input" id="co-fee" type="number" step="0.01" min="0"/><div class="mo-hint" id="co-fee-hint"></div></div>
+          <div class="form-group"><label class="form-label">Discount (R)</label><input class="form-input" id="co-discount" type="number" step="0.01" min="0" value="0"/></div>
+          <div class="form-group"><label class="form-label">Code used (optional)</label><input class="form-input" id="co-coupon" placeholder="e.g. SPIN1234"/></div>
+          <div class="form-group"><label class="form-label">Order number (optional)</label><input class="form-input" id="co-id" placeholder="Made for you, e.g. ORD-123456"/></div>
+          <div class="form-group full"><label class="form-label">Internal notes</label><textarea class="form-input" id="co-notes" rows="2" placeholder="Only staff see this"></textarea></div>
+          <div class="form-group full" id="co-email-wrap" style="display:none"><label style="display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer"><input type="checkbox" id="co-email-customer" checked/> Email the customer a receipt</label></div>
         </div>
-        <div id="co-error" style="color:#dc2626;font-size:12px;margin-top:8px;display:none"></div>
+        <div class="mo-sum">
+          <span>Items</span><span id="co-sub" style="text-align:right">R0.00</span>
+          <span>Discount</span><span id="co-dis" style="text-align:right">−R0.00</span>
+          <span>Delivery</span><span id="co-del" style="text-align:right">R0.00</span>
+          <span class="tot">Total</span><span class="tot" id="co-total" style="text-align:right">R0.00</span>
+        </div>
+        <div class="mo-next" id="co-next"></div>
+        <div id="co-error" style="color:#dc2626;font-size:13px;margin-top:8px;display:none"></div>
       </div>
     `,
     `<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-     <button class="btn btn-primary" id="co-submit">Create Order →</button>`);
+     <button class="btn btn-primary" id="co-submit">Create order →</button>`);
 
-    function computeCoTotal(){
-      let sub=0;
-      modalBody.querySelectorAll('.co-row').forEach(row=>{
-        const p=Number(row.querySelector('.co-price')?.value||0);
-        const q=Number(row.querySelector('.co-qty')?.value||0);
-        sub+=p*q;
-      });
-      const dis=parseFloat(modalBody.querySelector('#co-discount')?.value||0)||0;
-      const tot=document.getElementById('co-total');
-      if(tot) tot.textContent=fmt(Math.max(0,sub-dis));
+    const $=s=>modalBody.querySelector(s);
+    let geo=null, feeTouched=false, quoteSeq=0;
+    const modeOf=()=>modalBody.querySelector('input[name="co-mode"]:checked')?.value||'deliver';
+
+    function renderPayOptions(){
+      const sel=$('#co-paid-by'), cur=sel.value;
+      sel.innerHTML=(modeOf()==='deliver'?'<option value="">Not paid yet — rider waits until you record it</option>':'<option value="">Choose how it was paid…</option>')+payOpts;
+      if([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+    }
+    function lines(){
+      return Array.from(modalBody.querySelectorAll('.mo-row')).map(row=>({
+        product_id:row.dataset.pid||'', variant_id:row.querySelector('.mo-opt').value||'',
+        quantity:Number(row.querySelector('.mo-qty').value||0), price:row.querySelector('.mo-price').value
+      }));
+    }
+    function refresh(){
+      const m=modeOf(), ls=lines();
+      const sub=ls.reduce((s,l)=>s+(Number(l.price)||0)*(l.quantity||0),0);
+      const dis=Math.max(0,Number($('#co-discount').value)||0);
+      const fee=Math.max(0,Number($('#co-fee').value)||0);
+      $('#co-sub').textContent=fmt(sub); $('#co-dis').textContent='−'+fmt(dis); $('#co-del').textContent=fmt(fee);
+      $('#co-total').textContent=fmt(Math.max(0,sub-dis)+fee);
+      $('#co-email-wrap').style.display=m==='done'?'':'none';
+      $('#co-address-lbl').innerHTML=m==='deliver'
+        ? 'Street address * <span style="font-weight:400;color:var(--muted)">— pick it from the suggestions</span>'
+        : 'Address <span style="font-weight:400;color:var(--muted)">(optional)</span>';
+      $('#co-geo-state').textContent=m==='deliver' ? (geo?'📍 Location found — the rider is sent here.':'Pick the address from the list so the rider can find it.') : '';
+      $('#co-fee').placeholder=m==='deliver'?'Worked out from the address':'0.00';
+      const paid=$('#co-paid-by').value;
+      $('#co-next').innerHTML=m==='deliver'
+        ? (paid
+            ? `<strong>What happens:</strong> the order is marked paid (${esc(MANUAL_PAY[paid])}), the store gets its new-order email, a rider is offered the trip and the customer is emailed the confirmation with a live tracking link. After that it's like any online order — on-the-way, delivered and rating emails included.`
+            : `<strong>What happens:</strong> the order is saved as <strong>not paid</strong> and nothing is sent yet. Open it and press <em>Paid: …</em> when the money comes in — that sends the rider and the tracking email.`)
+        : `<strong>What happens:</strong> the order is saved as paid${paid?' ('+esc(MANUAL_PAY[paid])+')':''} and <strong>Delivered</strong>. No rider, no store alert. ${$('#co-email-customer').checked?'The customer is emailed a receipt.':'No email is sent.'}`;
+    }
+    async function requote(){
+      const hint=$('#co-fee-hint');
+      if(modeOf()!=='deliver'||!geo){ hint.textContent=''; return; }
+      const items=lines().filter(l=>l.product_id).map(l=>({product_id:l.product_id}));
+      if(!items.length){ hint.textContent='Add an item to work out the fee.'; return; }
+      const seq=++quoteSeq; hint.textContent='Working out the delivery fee…';
+      try{
+        const q=await manualOrderApi({action:'quote',lat:geo.lat,lon:geo.lon,items});
+        if(seq!==quoteSeq) return;
+        if(!q.in_zone){ hint.innerHTML='<span style="color:#dc2626">Outside every Service Area — Umzila can’t deliver here.</span>'; return; }
+        if(!feeTouched) $('#co-fee').value=Number(q.fee).toFixed(2);
+        hint.textContent=q.free?'Free delivery on these items.':`Checkout would charge ${fmt(q.fee)}${q.km!=null?' ('+q.km+' km by road)':''}.`;
+        refresh();
+      }catch(e){ if(seq===quoteSeq) hint.textContent='Could not work out the fee ('+e.message+') — type it in.'; }
     }
 
-    function addCoRow(){
-      const row=document.createElement('div');
-      row.className='item-row co-row';
-      row.innerHTML=`
-        <div class="product-search-wrap" style="grid-column:1">
-          <input class="form-input co-search" placeholder="Search product…"/>
-          <div class="product-sugg"></div>
-        </div>
-        <input class="form-input co-qty" type="number" value="1" min="1" style="text-align:center"/>
-        <input class="form-input co-size" readonly style="background:#f8fafc"/>
-        <input class="form-input co-price" type="number" step="0.01" value="0"/>
-        <button class="btn btn-ghost btn-sm co-remove" style="padding:5px 8px">✕</button>
-        <input type="hidden" class="co-pid"/>
-        <input type="hidden" class="co-vid"/>
-      `;
-      document.getElementById('co-items').appendChild(row);
-
-      const search=row.querySelector('.co-search');
-      const sugg=row.querySelector('.product-sugg');
-      const qtyI=row.querySelector('.co-qty');
-      const sizeI=row.querySelector('.co-size');
-      const priceI=row.querySelector('.co-price');
-      const pidI=row.querySelector('.co-pid');
-      const vidI=row.querySelector('.co-vid');
-
+    async function addRow(){
+      const products=await fetchOrderProducts();
+      const row=document.createElement('div'); row.className='mo-row';
+      row.innerHTML=`<div class="product-search-wrap mo-search-wrap"><input class="form-input mo-search" placeholder="Search product or store…" autocomplete="off"/><div class="product-sugg"></div></div>
+        <select class="form-input mo-opt" disabled><option value="">—</option></select>
+        <input class="form-input mo-qty" type="number" min="1" max="99" value="1" style="text-align:center"/>
+        <input class="form-input mo-price" type="number" step="0.01" min="0" placeholder="0.00"/>
+        <button class="btn btn-ghost btn-sm mo-remove" type="button" style="padding:5px 8px" title="Remove">✕</button>`;
+      $('#co-items').appendChild(row);
+      const search=row.querySelector('.mo-search'), sugg=row.querySelector('.product-sugg'), opt=row.querySelector('.mo-opt'), price=row.querySelector('.mo-price'), qty=row.querySelector('.mo-qty');
+      function pick(p){
+        row.dataset.pid=p.id; search.value=p.name+(p.store?' — '+p.store:''); sugg.style.display='none';
+        if(p.variants.length){
+          opt.disabled=false;
+          opt.innerHTML=(p.mustChoose?`<option value="">${esc(p.optionLabel)}…</option>`:'')+p.variants.map(v=>`<option value="${v.id}" data-price="${v.price}">${esc(v.size)}${v.stock<=0?' (sold out)':''}</option>`).join('');
+        }else{ opt.disabled=true; opt.innerHTML='<option value="">—</option>'; }
+        const v=p.variants.find(x=>x.id===opt.value);
+        price.value=(v?v.price:p.price).toFixed(2);
+        refresh(); requote();
+      }
       search.addEventListener('input',()=>{
-        const q=(search.value||'').toLowerCase().trim();
-        sugg.innerHTML='';
-        if(!q){sugg.style.display='none';return;}
-        const matches=PRODUCTS_CACHE.filter(p=>p.stock>0&&(
-          p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||(p.variant_sku&&p.variant_sku.toLowerCase().includes(q))
-        )).slice(0,12);
-        if(!matches.length){sugg.style.display='none';return;}
-        matches.forEach(m=>{
-          const d=document.createElement('div');
-          d.className='product-sugg-item';
-          d.innerHTML=`<span><strong>${esc(m.name)}</strong> ${m.size?`<span style="color:var(--muted)">· ${esc(m.size)}</span>`:''} <span style="color:var(--muted);font-size:11px">(${m.stock} in stock)</span></span><span style="font-weight:700">${fmt(m.price)}</span>`;
-          d.onclick=()=>{
-            pidI.value=m.product_id;vidI.value=m.variant_id||'';
-            search.value=`${m.name}${m.size?' · '+m.size:''}`;
-            sizeI.value=m.size||'';priceI.value=m.price||0;
-            qtyI.max=m.stock;qtyI.value=Math.min(1,m.stock);
-            sugg.style.display='none';computeCoTotal();
-          };
-          sugg.appendChild(d);
+        delete row.dataset.pid; opt.disabled=true; opt.innerHTML='<option value="">—</option>';
+        const q=search.value.toLowerCase().trim(); sugg.innerHTML='';
+        refresh();
+        if(!q){ sugg.style.display='none'; return; }
+        if(!products.length){ sugg.innerHTML='<div class="product-sugg-item" style="cursor:default;color:#dc2626">Could not load products — reopen New Order</div>'; sugg.style.display='block'; return; }
+        const hits=products.filter(p=>(p.name+' '+p.store).toLowerCase().includes(q)).slice(0,15);
+        if(!hits.length){ sugg.innerHTML='<div class="product-sugg-item" style="cursor:default;color:var(--muted)">No matching product</div>'; sugg.style.display='block'; return; }
+        hits.forEach(p=>{
+          const stock=p.variants.length?p.variants.reduce((s,v)=>s+Math.max(0,v.stock),0):p.stock;
+          const d=document.createElement('div'); d.className='product-sugg-item';
+          d.innerHTML=`<span><strong>${esc(p.name)}</strong> <span class="mo-store">· ${esc(p.store||'—')}${stock<=0?' · sold out':''}</span></span><span style="font-weight:700">${fmt(p.price)}</span>`;
+          d.onclick=()=>pick(p); sugg.appendChild(d);
         });
         sugg.style.display='block';
       });
-
-      document.addEventListener('click',ev=>{if(!row.contains(ev.target))sugg.style.display='none';},{once:false});
-      row.querySelector('.co-remove').onclick=()=>{row.remove();computeCoTotal();};
-      qtyI.addEventListener('input',computeCoTotal);
-      priceI.addEventListener('input',computeCoTotal);
+      opt.addEventListener('change',()=>{ const o=opt.selectedOptions[0]; if(o&&o.dataset.price) price.value=Number(o.dataset.price).toFixed(2); refresh(); });
+      qty.addEventListener('input',refresh); price.addEventListener('input',refresh);
+      row.querySelector('.mo-remove').onclick=()=>{ row.remove(); refresh(); requote(); };
+      document.addEventListener('click',ev=>{ if(!row.contains(ev.target)) sugg.style.display='none'; });
     }
 
-    document.getElementById('co-add')?.addEventListener('click',()=>addCoRow());
-    modalBody.querySelector('#co-discount')?.addEventListener('input',computeCoTotal);
+    modalBody.querySelectorAll('input[name="co-mode"]').forEach(r=>r.addEventListener('change',()=>{
+      renderPayOptions();
+      if(modeOf()==='done'){ if(!feeTouched) $('#co-fee').value=''; $('#co-fee-hint').textContent=''; }
+      refresh(); requote();
+    }));
+    wireAddressSearch($('#co-address'),g=>{ geo=g; refresh(); if(g) requote(); });
+    $('#co-fee').addEventListener('input',()=>{ feeTouched=$('#co-fee').value!==''; refresh(); });
+    ['#co-discount','#co-paid-by','#co-email-customer'].forEach(s=>{ $(s).addEventListener('input',refresh); $(s).addEventListener('change',refresh); });
+    $('#co-add').addEventListener('click',()=>addRow());
+    renderPayOptions(); refresh(); addRow();
 
-    // Initial row
-    fetchProducts().then(()=>addCoRow());
-
-    document.getElementById('co-submit')?.addEventListener('click',async()=>{
-      const errEl=document.getElementById('co-error');
-      errEl.style.display='none';
-
-      const name=modalBody.querySelector('#co-name')?.value.trim();
-      const email=guardVal(modalBody.querySelector('#co-email'));
-      const phone=guardVal(modalBody.querySelector('#co-phone'));
+    $('#co-submit').addEventListener('click',async()=>{
+      const errEl=$('#co-error'); errEl.style.display='none';
+      const showErr=m=>{ errEl.textContent=m; errEl.style.display='block'; };
+      const m=modeOf();
+      const name=$('#co-name').value.trim();
+      const email=guardVal($('#co-email'),true), phone=guardVal($('#co-phone'));
       if(email==null||phone==null) return; // input-guard.js shows the problem under the box
-      const address=modalBody.querySelector('#co-address')?.value.trim();
-      const city=modalBody.querySelector('#co-city')?.value.trim()||'';
-      const province=modalBody.querySelector('#co-province')?.value.trim()||'';
-      const postal_code=modalBody.querySelector('#co-postal')?.value.trim()||'';
-      const label=modalBody.querySelector('#co-label')?.value||'';
-      const details=modalBody.querySelector('#co-details')?.value.trim()||'';
-      const category=modalBody.querySelector('#co-category')?.value||'';
-      const status=modalBody.querySelector('#co-status')?.value||'Pending';
-      const paid_by=modalBody.querySelector('#co-paid-by')?.value||'';
-      const shipping_cost=parseFloat(modalBody.querySelector('#co-shipping')?.value||0)||0;
-      const delivery_class=modalBody.querySelector('#co-delivery-class')?.value||'';
-      const delivery_zone=modalBody.querySelector('#co-delivery-zone')?.value.trim()||'';
-      const pickup_address=modalBody.querySelector('#co-pickup')?.value.trim()||'';
-      const coupon_code=modalBody.querySelector('#co-coupon')?.value.trim()||'';
-      const notes=modalBody.querySelector('#co-notes')?.value.trim()||'';
-      const discount=parseFloat(modalBody.querySelector('#co-discount')?.value||0)||0;
-      const customId=modalBody.querySelector('#co-id')?.value.trim()||'';
-
-      function showErr(m){errEl.textContent=m;errEl.style.display='block';}
-      if(!name){showErr('Customer name is required');return;}
-      if(!email){showErr('Customer email is required');return;}
-      if(!address){showErr('Delivery address is required');return;}
-      if(!category){showErr('Please select a category');return;}
-
-      const rows=Array.from(modalBody.querySelectorAll('.co-row'));
-      if(!rows.length){showErr('Add at least one item');return;}
-
-      const items=[];
-      for(const row of rows){
-        const n=row.querySelector('.co-search')?.value.trim();
-        if(!n){showErr('All items need a product selected');return;}
-        const qty=Number(row.querySelector('.co-qty')?.value||1);
-        const price=Number(row.querySelector('.co-price')?.value||0);
-        if(qty<1){showErr('Quantity must be ≥ 1');return;}
-        const it={item:n,quantity:qty,size:row.querySelector('.co-size')?.value||'',price};
-        const pid=row.querySelector('.co-pid')?.value;
-        const vid=row.querySelector('.co-vid')?.value;
-        if(pid) it.product_id=pid;
-        if(vid) it.variant_id=vid;
-        items.push(it);
-      }
-
-      const submitBtn=document.getElementById('co-submit');
-      submitBtn.disabled=true;
-      submitBtn.textContent='Creating…';
-
+      if(!name) return showErr('Customer name is required.');
+      if(!email) return showErr('Customer email is required — tracking and receipts are sent there.');
+      const ls=lines();
+      if(!ls.length) return showErr('Add at least one item.');
+      if(ls.some(l=>!l.product_id)) return showErr('Pick every item from the product list (or remove the empty row).');
+      if(ls.some(l=>!(l.quantity>=1))) return showErr('Every quantity must be at least 1.');
+      if(ls.some(l=>{ const p=(ORDER_PRODUCTS||[]).find(x=>x.id===l.product_id); return p&&p.mustChoose&&!l.variant_id; })) return showErr('Choose the option for every item.');
+      const address=$('#co-address').value.trim();
+      if(m==='deliver'&&(!address||!geo)) return showErr('Pick the delivery address from the suggestions so the rider can find it.');
+      const paid=$('#co-paid-by').value;
+      if(m==='done'&&!paid) return showErr('Choose how it was paid.');
+      const btn=$('#co-submit'); btn.disabled=true; btn.textContent='Creating…';
       try{
-        const subtotal=items.reduce((s,it)=>s+(it.price*it.quantity),0);
-        const total=Math.max(0,subtotal-discount);
-        const id=customId||('ORD-'+Math.floor(100000+Math.random()*900000));
-        const created_at=new Date().toISOString();
-
-        const prof=await ensureProfile({email,phone,full_name:name,address,city,province,postal_code,label,details});
-
-        const order={
-          id, customer:prof.customer||name, email, phone,
-          address, city, province, postal_code, label, details,
-          pickup_address, delivery_zone, delivery_class, coupon_code,
-          status, paid_by, shipping_cost,
-          items, subtotal, discount, total, category, notes,
-          created_at, date:fmtDate(created_at),
-          profile_id:prof.profile_id,
-          user_id:CURRENT_USER_ID
-        };
-
-        const saved=await saveOrder(order);
-        if(!saved){
-          showErr('Failed to save order — check console for details');
-          submitBtn.disabled=false;submitBtn.textContent='Create Order →';
-          return;
-        }
-
-        // Decrement stock + populate order_items for this logistics-created order
-        if(saved.id && items.length){
-          sb.rpc('handle_logistics_order',{
-            p_order_id: saved.id,
-            p_items: items
-          }).then(({error:rpcErr})=>{
-            if(rpcErr) console.warn('handle_logistics_order RPC error',rpcErr);
-          });
-        }
-
-        toast(`Order ${id} created`,'success');
-        closeModal();
-        showPanel('orders');
-        renderOrders();
-        renderOverview();
-      }catch(err){
-        console.error('Create order error',err);
-        showErr('Error: '+(err.message||String(err)));
-        submitBtn.disabled=false;submitBtn.textContent='Create Order →';
+        const r=await manualOrderApi({
+          action:'create', mode:m,
+          customer:{ name, email, phone },
+          address:Object.assign({ street:address, details:$('#co-details').value.trim() }, geo?{ lat:geo.lat, lon:geo.lon, city:geo.city, province:geo.province, postal_code:geo.postal_code }:{}),
+          items:ls.map(l=>({ product_id:l.product_id, variant_id:l.variant_id||null, quantity:l.quantity, price:l.price })),
+          delivery_fee:$('#co-fee').value, discount:$('#co-discount').value, coupon_code:$('#co-coupon').value.trim(),
+          notes:$('#co-notes').value.trim(), paid_by:paid, email_customer:$('#co-email-customer').checked,
+          order_number:$('#co-id').value.trim()
+        });
+        ORDER_PRODUCTS=null; // stock has moved
+        ORDERS=await fetchOrders(); PAID_TODAY=null; _paidTodayAt=0;
+        if(r.pay_error) toast(`${r.order_number} saved, but: ${r.pay_error}`,'warn');
+        else toast(m==='deliver'
+          ? (r.paid?`${r.order_number} created — rider requested, tracking emailed to ${email}`:`${r.order_number} saved as not paid — record the payment to send the rider`)
+          : `${r.order_number} recorded as paid & delivered`,'success');
+        closeModal(); showPanel('orders'); renderOrders(); renderOverview();
+      }catch(e){
+        showErr(e.message||'Could not create the order.');
+        btn.disabled=false; btn.textContent='Create order →';
       }
     });
   }

@@ -32,8 +32,6 @@ exports.handler = async function (event) {
   const SERVICE_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
   const RESEND_KEY    = process.env.RESEND_API_KEY || '';
   const SITE_BASE_URL = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
-  const FREE_GIFT_PRODUCT_ID = process.env.FREE_GIFT_PRODUCT_ID || DEFAULT_FREE_GIFT_PRODUCT_ID;
-
   if (!SUPABASE_URL || !SERVICE_KEY)
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error' }) };
 
@@ -51,6 +49,25 @@ exports.handler = async function (event) {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 
+  // The free-item consolation gift (admin.html → Marketing → Mystery gift pop-up): on/off and
+  // which product, from public.site_settings key 'mystery_gift'. Missing row = on, ice cream.
+  async function freeGiftSettings() {
+    let v = {};
+    try {
+      const { data } = await admin.from('site_settings').select('value').eq('key', 'mystery_gift').maybeSingle();
+      v = (data && data.value) || {};
+    } catch (_) { /* fall back to the defaults */ }
+    return {
+      enabled: v.free_gift_enabled !== false,
+      productId: v.free_gift_product_id || process.env.FREE_GIFT_PRODUCT_ID || DEFAULT_FREE_GIFT_PRODUCT_ID
+    };
+  }
+  async function consolation(reason) {
+    const cfg = await freeGiftSettings();
+    if (!cfg.enabled) return { state: 'gift_off', reason };
+    return issueFreeGift(admin, rawEmail, cfg.productId);
+  }
+
   try {
     if (action === 'check') {
       const hasProfile = await hasProfileForEmail(admin, rawEmail);
@@ -62,20 +79,22 @@ exports.handler = async function (event) {
       const funFact = !!body.fun_fact;
       const { state, row } = await classifyCode(admin, rawEmail);
 
+      // expires_at (never the code) lets the browser remind the buyer at their cart that the
+      // code is waiting in THIS inbox. The code itself only travels by email: handing it to
+      // the browser would let anyone mint codes by typing made-up emails.
       if (state === 'none') {
         const created = await issueMysteryCode(admin, rawEmail, funFact, SITE_BASE_URL, RESEND_KEY);
         if (!created) return serverError();
-        return ok({ state: 'claimed' });
+        return ok({ state: 'claimed', expires_at: created.expires_at });
       }
       if (state === 'active') {
-        return ok({ state: 'active' });
+        return ok({ state: 'active', expires_at: row.expires_at });
       }
       // state is 'used' or 'expired' — the email-only claim flow cannot verify account
       // ownership to reinstate the original code (that requires post_login), so both
       // "already used" and "expired unused" are treated as spent and routed to the
-      // small free-item consolation gift instead.
-      const gift = await issueFreeGift(admin, rawEmail, FREE_GIFT_PRODUCT_ID);
-      return ok(gift);
+      // small free-item consolation gift instead (or a plain message when it is switched off).
+      return ok(await consolation(state));
     }
 
     if (action === 'post_login') {
@@ -97,19 +116,18 @@ exports.handler = async function (event) {
       if (state === 'none') {
         const created = await issueMysteryCode(admin, rawEmail, funFact, SITE_BASE_URL, RESEND_KEY);
         if (!created) return serverError();
-        return ok({ state: 'claimed' });
+        return ok({ state: 'claimed', expires_at: created.expires_at });
       }
       if (state === 'active') {
-        return ok({ state: 'active' });
+        return ok({ state: 'active', expires_at: row.expires_at });
       }
       if (state === 'expired') {
         const reinstated = await reinstateCode(admin, row, SITE_BASE_URL, RESEND_KEY);
         if (!reinstated) return serverError();
-        return ok({ state: 'reinstated' });
+        return ok({ state: 'reinstated', expires_at: reinstated.expires_at });
       }
       // state === 'used'
-      const gift = await issueFreeGift(admin, rawEmail, FREE_GIFT_PRODUCT_ID);
-      return ok(gift);
+      return ok(await consolation('used'));
     }
 
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Unknown action' }) };
@@ -195,8 +213,8 @@ async function issueMysteryCode(admin, email, funFact, SITE_BASE_URL, RESEND_KEY
         ? buildMysteryFunFactEmail(newCode.code, expiryLabel, SITE_BASE_URL)
         : buildMysteryEmail(newCode.code, expiryLabel, SITE_BASE_URL);
       const subject = funFact
-        ? 'Your mystery gift — with a little something extra 🎁'
-        : 'Your mystery gift is waiting... 🎁';
+        ? MYSTERY_SUBJECT_BONUS
+        : MYSTERY_SUBJECT;
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
@@ -245,8 +263,8 @@ async function reinstateCode(admin, row, SITE_BASE_URL, RESEND_KEY) {
         body: JSON.stringify({
           ...mailFrom('Umzila', 'noreply'),
           to: [updated.email],
-          subject: 'Your mystery code is back from the dead 🧟🎁',
-          html: buildReinstateEmail(updated.code, updated.amount, expiryLabel, SITE_BASE_URL)
+          subject: 'Your mystery gift code is back 🎁',
+          html: buildReinstateEmail(updated.code, expiryLabel, SITE_BASE_URL)
         })
       });
       if (!res.ok) console.error('claim-mystery-gift: Resend error', res.status, await res.text());
@@ -326,154 +344,65 @@ function esc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+
+// Subjects are quoted word for word in the pop-up (index.html "Find the email called …"),
+// so people who read English as a second language know exactly what to look for. Change both together.
+const MYSTERY_SUBJECT = 'Your mystery gift is waiting 🎁';
+const MYSTERY_SUBJECT_BONUS = 'Your mystery gift, plus a little extra 🎁';
+
+// One email for the new code (with or without the fun-fact bonus) and the revived code.
+// Rules: never name the amount (it is revealed at checkout), plain short sentences, no dashes,
+// and push "fill your cart first" so people arrive at checkout with things they want.
+function giftEmail({ code, expiryLabel, siteUrl, kicker, title, intro, bonus }) {
+  const shop = esc(siteUrl) + '/?src=mystery-email';
+  const step = (n, html) => `<tr><td style="vertical-align:top;padding:0 12px 14px 0"><div style="width:28px;height:28px;border-radius:9px;background:#0a2f66;color:#fff;font-weight:800;font-size:14px;line-height:28px;text-align:center">${n}</div></td><td style="padding:2px 0 14px;font-size:15px;line-height:1.55;color:#374151">${html}</td></tr>`;
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title></head>
+<body style="margin:0;padding:0;background:#f6f4f0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif">
+<div style="display:none;max-height:0;overflow:hidden">Your code is inside. Fill your cart, then use it at checkout to see what you got.</div>
+<div style="max-width:560px;margin:28px auto;background:#fff;border-radius:18px;overflow:hidden;border:1px solid #e9e6df">
+  <div style="background:#0a2f66;padding:28px 32px;text-align:center">
+    <div style="font-family:Georgia,serif;font-size:24px;font-weight:700;color:#fff">Umzila</div>
+    <div style="color:#c9d6ee;font-size:14px;margin-top:4px">${esc(kicker)}</div>
+  </div>
+  <div style="padding:30px 32px 8px">
+    <h1 style="margin:0 0 10px;font-family:Georgia,serif;font-size:24px;line-height:1.25;color:#0a2f66">${esc(title)}</h1>
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#374151">${intro}</p>
+    <div style="border:2px dashed #e0284f;border-radius:14px;padding:20px;text-align:center;margin:0 0 8px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:6px">Your code</div>
+      <div style="font-family:'Courier New',monospace;font-size:28px;font-weight:800;letter-spacing:3px;color:#e0284f">${esc(code)}</div>
+      <div style="font-size:13px;color:#6b7280;margin-top:8px">Use it before ${esc(expiryLabel)}</div>
+    </div>
+    ${bonus ? `<p style="margin:12px 0 0;font-size:14px;line-height:1.55;color:#0a2f66;background:#eef2f8;border-radius:12px;padding:12px 14px">Because you read about Umzila, there is a bonus inside this code too.</p>` : ''}
+    <h2 style="margin:24px 0 12px;font-size:17px;color:#16181d">How to use your gift</h2>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">
+      ${step(1, '<b>Add the things you like to your cart.</b> Food, treats, gifts, anything from the stores on Umzila.')}
+      ${step(2, '<b>Go to checkout.</b> Type your code in the box that says <b>“Have a code?”</b> and press <b>Apply</b>.')}
+      ${step(3, '<b>See your gift.</b> It shows on your order straight away.')}
+    </table>
+    <div style="text-align:center;margin:10px 0 22px">
+      <a href="${shop}" style="display:inline-block;background:#e0284f;color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:15px 34px;border-radius:14px">Start filling my cart</a>
+    </div>
+    <p style="margin:0 0 24px;font-size:13px;line-height:1.55;color:#6b7280;text-align:center">Tip: pick what you really want first. Your gift is revealed when you apply the code at checkout.</p>
+  </div>
+  <div style="background:#f6f4f0;padding:16px 32px;text-align:center;font-size:12px;color:#6b7280">
+    <a href="${esc(siteUrl)}" style="color:#0a2f66;font-weight:700;text-decoration:none">Umzila</a> · Durban's best local businesses, delivered<br>
+    Questions? Reply to this email or write to <a href="mailto:support@umzila.store" style="color:#0a2f66">support@umzila.store</a>
+  </div>
+</div></body></html>`;
+}
+
 function buildMysteryEmail(code, expiryLabel, siteUrl) {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
-  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.09)}
-  .hdr{background:#0a2f66;padding:30px 40px;text-align:center}
-  .hdr h1{color:#fff;margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-0.5px}
-  .hdr p{color:rgba(255,255,255,0.7);margin:0;font-size:13px}
-  .bd{padding:34px 40px}
-  .bd h2{color:#0a2f66;margin:0 0 12px;font-size:20px;font-weight:700}
-  .bd p{color:#555;line-height:1.7;margin:0 0 14px;font-size:15px}
-  .gift-wrap{background:linear-gradient(135deg,#f0f4ff,#fdf0f3);border-radius:14px;padding:28px;text-align:center;margin:20px 0}
-  .gift-icon{font-size:52px;margin-bottom:10px}
-  .gift-teaser{font-size:16px;color:#0a2f66;font-weight:700;margin:0}
-  .gift-sub{font-size:13px;color:#888;margin-top:6px}
-  .code-box{background:#fff;border:2px dashed #e0284f;border-radius:10px;padding:22px;text-align:center;margin:22px 0;box-shadow:0 2px 8px rgba(224,40,79,0.08)}
-  .code-box .code{font-size:28px;font-weight:800;color:#e0284f;letter-spacing:4px;font-family:monospace}
-  .code-box .note{font-size:12px;color:#999;margin-top:8px}
-  .cta{text-align:center;margin:22px 0 14px}
-  .btn{display:inline-block;background:#e0284f;color:#fff !important;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
-  .hint{font-size:13px;color:#aaa;text-align:center;font-style:italic;margin-top:4px}
-  .ft{background:#f4f6fb;padding:18px 40px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
-  .ft a{color:#0a2f66;text-decoration:none}
-</style></head>
-<body><div class="wrap">
-  <div class="hdr">
-    <h1>Umzila</h1>
-    <p>Your mystery gift has arrived</p>
-  </div>
-  <div class="bd">
-    <h2>Something special, just for you.</h2>
-    <div class="gift-wrap">
-      <div class="gift-icon">🎁</div>
-      <p class="gift-teaser">Your mystery gift is inside.</p>
-      <p class="gift-sub">We'd tell you what it is, but that would ruin the fun...</p>
-    </div>
-    <p>We don't want to spoil the surprise — just enter the code below when you checkout and watch what happens. Trust us, you'll like it.</p>
-    <div class="code-box">
-      <div class="code">${esc(code)}</div>
-      <div class="note">Enter at checkout &bull; Valid until ${esc(expiryLabel)}</div>
-    </div>
-    <div class="cta"><a href="${esc(siteUrl)}/shop.html" class="btn">Claim Your Gift &rarr;</a></div>
-    <p class="hint">The mystery reveals itself at checkout. 🤫</p>
-  </div>
-  <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
-    Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
-  </div>
-</div></body></html>`;
-//foto
+  return giftEmail({ code, expiryLabel, siteUrl, kicker: 'Your mystery gift is here', title: 'Here is your mystery gift code',
+    intro: 'Thanks for visiting Umzila. We hid a gift inside the code below. We won’t tell you what it is yet. You find out at checkout.' });
 }
 
-// Sent when the user read the fun facts on-site — their code carries the extra 2%
-// (12% vs 10%). The copy confirms a bonus exists without naming either amount — the gift
-// is meant to stay a mystery until checkout, so never put the percentage in user-facing copy.
 function buildMysteryFunFactEmail(code, expiryLabel, siteUrl) {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
-  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.09)}
-  .hdr{background:#0a2f66;padding:30px 40px;text-align:center}
-  .hdr h1{color:#fff;margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-0.5px}
-  .hdr p{color:rgba(255,255,255,0.7);margin:0;font-size:13px}
-  .bd{padding:34px 40px}
-  .bd h2{color:#0a2f66;margin:0 0 12px;font-size:20px;font-weight:700}
-  .bd p{color:#555;line-height:1.7;margin:0 0 14px;font-size:15px}
-  .fact-wrap{background:linear-gradient(135deg,#eef2f8,#f0f4ff);border-left:4px solid #0a2f66;border-radius:8px;padding:18px 22px;margin:18px 0}
-  .fact-wrap p{margin:0;color:#0a2f66;font-size:14px;line-height:1.6;font-style:italic}
-  .gift-wrap{background:linear-gradient(135deg,#f0f4ff,#fdf0f3);border-radius:14px;padding:28px;text-align:center;margin:20px 0}
-  .gift-icon{font-size:52px;margin-bottom:10px}
-  .gift-teaser{font-size:16px;color:#0a2f66;font-weight:700;margin:0}
-  .gift-sub{font-size:13px;color:#888;margin-top:6px}
-  .code-box{background:#fff;border:2px dashed #e0284f;border-radius:10px;padding:22px;text-align:center;margin:22px 0;box-shadow:0 2px 8px rgba(224,40,79,0.08)}
-  .code-box .code{font-size:28px;font-weight:800;color:#e0284f;letter-spacing:4px;font-family:monospace}
-  .code-box .note{font-size:12px;color:#999;margin-top:8px}
-  .cta{text-align:center;margin:22px 0 14px}
-  .btn{display:inline-block;background:#e0284f;color:#fff !important;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
-  .hint{font-size:13px;color:#aaa;text-align:center;font-style:italic;margin-top:4px}
-  .ft{background:#f4f6fb;padding:18px 40px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
-  .ft a{color:#0a2f66;text-decoration:none}
-</style></head>
-<body><div class="wrap">
-  <div class="hdr">
-    <h1>Umzila</h1>
-    <p>Your mystery gift has arrived — plus a little extra</p>
-  </div>
-  <div class="bd">
-    <h2>Thanks for getting to know us.</h2>
-    <div class="fact-wrap"><p>Because you read up on Umzila, we've slipped a bonus in on top of your mystery gift. Both reveal themselves at checkout.</p></div>
-    <div class="gift-wrap">
-      <div class="gift-icon">🎁</div>
-      <p class="gift-teaser">Your mystery gift is inside.</p>
-      <p class="gift-sub">Your bonus is already built into the code below.</p>
-    </div>
-    <p>We don't want to spoil the surprise — just enter the code below when you checkout and watch what happens. Trust us, you'll like it.</p>
-    <div class="code-box">
-      <div class="code">${esc(code)}</div>
-      <div class="note">Enter at checkout &bull; Valid until ${esc(expiryLabel)}</div>
-    </div>
-    <div class="cta"><a href="${esc(siteUrl)}/shop.html" class="btn">Claim Your Gift &rarr;</a></div>
-    <p class="hint">The mystery reveals itself at checkout. 🤫</p>
-  </div>
-  <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
-    Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
-  </div>
-</div></body></html>`;
+  return giftEmail({ code, expiryLabel, siteUrl, kicker: 'Your mystery gift is here, with a little extra', title: 'Here is your mystery gift code',
+    intro: 'Thanks for getting to know Umzila. We hid a gift inside the code below. We won’t tell you what it is yet. You find out at checkout.', bonus: true });
 }
 
-function buildReinstateEmail(code, amount, expiryLabel, siteUrl) {
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body{margin:0;padding:0;background:#f4f6fb;font-family:system-ui,-apple-system,sans-serif}
-  .wrap{max-width:580px;margin:40px auto;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.09)}
-  .hdr{background:#0a2f66;padding:30px 40px;text-align:center}
-  .hdr h1{color:#fff;margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-0.5px}
-  .hdr p{color:rgba(255,255,255,0.7);margin:0;font-size:13px}
-  .bd{padding:34px 40px}
-  .bd h2{color:#0a2f66;margin:0 0 12px;font-size:20px;font-weight:700}
-  .bd p{color:#555;line-height:1.7;margin:0 0 14px;font-size:15px}
-  .code-box{background:#fff;border:2px dashed #0a2f66;border-radius:10px;padding:22px;text-align:center;margin:22px 0;box-shadow:0 2px 8px rgba(10,47,102,0.08)}
-  .code-box .code{font-size:28px;font-weight:800;color:#0a2f66;letter-spacing:4px;font-family:monospace}
-  .code-box .note{font-size:12px;color:#999;margin-top:8px}
-  .cta{text-align:center;margin:22px 0 14px}
-  .btn{display:inline-block;background:#0a2f66;color:#fff !important;padding:14px 36px;border-radius:999px;text-decoration:none;font-weight:700;font-size:15px}
-  .ft{background:#f4f6fb;padding:18px 40px;text-align:center;font-size:12px;color:#aaa;border-top:1px solid #eaecf0}
-  .ft a{color:#0a2f66;text-decoration:none}
-</style></head>
-<body><div class="wrap">
-  <div class="hdr">
-    <h1>Umzila</h1>
-    <p>Your mystery code lives again</p>
-  </div>
-  <div class="bd">
-    <h2>It expired unused — so we brought it back.</h2>
-    <p>Your mystery discount quietly expired without ever being used. Since that's a shame, we've revived it — same code, same ${esc(String(amount || 10))}% off, fresh expiry date below.</p>
-    <div class="code-box">
-      <div class="code">${esc(code)}</div>
-      <div class="note">Enter at checkout &bull; Valid until ${esc(expiryLabel)}</div>
-    </div>
-    <div class="cta"><a href="${esc(siteUrl)}/shop.html" class="btn">Use It Now &rarr;</a></div>
-  </div>
-  <div class="ft">
-    <strong><a href="${esc(siteUrl)}">Umzila</a></strong> &mdash; Durban&rsquo;s best local businesses<br>
-    Questions? <a href="mailto:support@umzila.store">support@umzila.store</a>
-  </div>
-</div></body></html>`;
+function buildReinstateEmail(code, expiryLabel, siteUrl) {
+  return giftEmail({ code, expiryLabel, siteUrl, kicker: 'Your mystery gift code is back', title: 'We brought your gift back',
+    intro: 'Your mystery gift code ran out before you used it, so we gave it more time. It is the same code, with a new date below.' });
 }

@@ -4,6 +4,170 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-17: Mystery gift: free item switch in admin, clearer "find your code" wording, cart/checkout reminder
+
+**Asked:**
+- The free ice cream should be switchable in the admin portal.
+- "Check your inbox" is too vague for people who read English as a second language.
+- Codes should be remembered by the browser while keeping Gmail opens high.
+- The gift must stay a surprise: never auto-filled, revealed only when the buyer applies the code at checkout after choosing what they want.
+
+**Found on the way:**
+- 37 mystery codes issued, 0 used, 32 expired. No paid order has ever used a MYSTERY or GIFT code.
+- The emails linked to `/shop.html` (the store template with no store) instead of the home page.
+- The "code is back" email named the percentage, breaking the mystery rule.
+
+**What changed:**
+- **Free item switch:**
+  - New `site_settings` key `mystery_gift` `{free_gift_enabled, free_gift_product_id}`, seeded on with the Milky pie ice cream.
+  - Edited in **admin.html → Marketing → 🎁 Mystery gift pop-up**: an on/off checkbox and a product picker, written through the existing admin-only RLS.
+  - `claim-mystery-gift.js` reads it, with the env/default product as the fallback.
+  - When it's off, people whose code was used or expired get `state:'gift_off'` (with `reason`) and a polite pane (`#myP6off`: "You already used your mystery gift" / "…has expired"), instead of a free item or the "getting a refresh" error.
+  - Free-item codes already issued keep working until they expire.
+- **The code never goes to the browser.** `claim`, `active` and `reinstated` now also return `expires_at`. The pop-up stores `localStorage umz_mystery_pending {email, until, subject}`, which records *where* the code is, not the code. Returning the code itself would let anyone mint codes by typing made-up emails and checking out as a guest with them.
+- **Pop-up wording:** "Your gift code is in your email", then 3 numbered steps:
+  1. find the email from Umzila, quoting its exact subject, with "look in Promotions or Spam";
+  2. add the things you like to your cart;
+  3. type the code at checkout and press Apply, which is when you see the gift.
+
+  The email address is echoed back, Gmail users get an "Open Gmail" button (a search for the sender), and the final explainer is now "How Umzila works" (cart → checkout with address + code → track + 4 digit code).
+- **Reminders:**
+  - **Home bar:** "Your mystery gift is waiting. Add the things you like to your cart, then use the code from your email at checkout." It shows while a gift is pending; closing it hides it for the session.
+  - **cart.html and checkout.html:** a pink note by the code box once the cart has items and no code is applied. It names the inbox and email subject, offers "Open Gmail", and says to paste the code and press Apply.
+  - Nothing is ever pre-filled. Applying a `MYSTERY…` code clears `umz_mystery_pending`, and an expired one is dropped.
+- **Emails rewritten** (one shared `giftEmail()` builder):
+  - plain short sentences with no dashes, the code in a dashed box, "Use it before …";
+  - "How to use your gift" in 3 steps, with the CTA "Start filling my cart" → `/?src=mystery-email`;
+  - a preheader line, and the amount never named.
+  - Subjects are `Your mystery gift is waiting 🎁`, `Your mystery gift, plus a little extra 🎁` and `Your mystery gift code is back 🎁`. They are quoted word for word in the pop-up and notes, so change them together.
+
+**Files:** netlify/functions/claim-mystery-gift.js, index.html, cart.html, checkout.html, admin.html, migration `site_settings_mystery_gift`, CLAUDE.md.
+
+---
+
+## 2026-11-17: Mystery gift pop-up redesigned
+
+**Reported:** the home page's mystery gift pop-up looked plain, so people dismissed it instead of trying it.
+
+**What changed (index.html only; flow, element ids, `claim-mystery-gift.js` calls and the 20 s / not-signed-in gate unchanged):**
+- **First screen:** a navy hero with an animated SVG gift box. The box wiggles and sparkles, its lid lifts on hover, and tapping it opens the gift like the button does. It has the headline "There's a gift with your name on it", three chips (Real discount · 10 seconds · No spam), a pulsing "Open my gift" button and a soft "No thanks, maybe next time" (it used to say "No thanks, I don't like saving money").
+- **A close × button and Esc to close,** both meaning "no thanks", the same as before.
+- **Steps:** an "Unwrapping your gift" progress bar (email → account → bonus, driven by `data-step` set in `showPane`), 52 px inputs, big buttons and Enter-to-continue. The fun facts got numbered cards.
+- **Success screens** (claimed / reinstated / free gift) play a short confetti burst. Everything respects reduced motion.
+- **Copy:** the amount is still never named (mystery rule). The last button now says "Start shopping".
+
+**Files:** index.html.
+
+---
+
+## 2026-11-17: Main cart redesigned like checkout; cart ⇄ checkout loop fixed
+
+**Reported:**
+- The main cart (`cart.html`) looked outdated next to the new one-page checkout.
+- From checkout you couldn't get back to the cart. "Back to shopping" went to the cart when you came from the home page, and the cart's Back then took you straight back to checkout.
+
+**Root causes:**
+- Checkout's back link was simply `document.referrer`, which is `cart.html` for anyone coming from the home page.
+- The cart's Back was `history.back()`, which returned to checkout. That made a loop with no way to keep shopping and no explicit way to edit the cart.
+- `cart.html` also preferred the saved `carts` row over this browser's `ss_cart`, against the store-pages rule (the row can be stale).
+
+**What changed:**
+- **cart.html rebuilt** in checkout's design:
+  - the same tokens, header, white cards and Playfair title;
+  - lines grouped by store, with an "Add more" link to the store, and Umzila's own drinks last;
+  - 40 px quantity buttons and "R… each";
+  - a summary card (items, code, delivery "worked out at checkout", total so far) that is sticky on desktop and a fixed pay bar on phones, plus the reassurance lines;
+  - one delegated listener for the line controls;
+  - it reloads the cart when you come back to the page, or when another tab changes it.
+
+  Cart logic is unchanged: shape conversion, picks, the code check via validate-cart (now `persistCart:false`, since the page saves the row itself) and the flush-before-checkout. `ss_cart` now wins, and the `carts` row is read only when this browser's cart is empty.
+- **"Back to shopping"** on both cart and checkout goes to the last page the buyer shopped on. That is the referrer when it isn't cart or checkout, kept in `sessionStorage umz_shop_return`, else `/`. It never goes to cart or checkout.
+- **checkout.html:** a new **"Edit cart"** link on the order summary.
+  - A full checkout goes to `cart.html`.
+  - A one-store checkout (`?store=`) goes to `/<slug>#cart`, the slug looked up on tap. **shop.html** opens its cart for `#cart` and skips the promo pop-up.
+  - Buy-now hides the link.
+
+**Files:** cart.html, checkout.html, shop.html, CLAUDE.md.
+
+---
+
+## 2026-11-17: Intelligence rebuilt around what grows the business
+
+**Reported:** Admin → Intelligence gave favourites the most weight and showed things that don't help improve the business.
+
+**Root cause:** the page and `admin-analytics.js` ranked products, categories and sellers by `favourite_count` (1 favourite in the last 30 days). They also showed raw event counts. Nothing showed sales per product, drop-off, repeat customers or unmet demand. The dashboard's "Total Favourites" card and its two charts were only filled after Intelligence had been opened.
+
+**What changed:**
+- **New `public.fin_intelligence(p_from, p_to)`** (admin-only, `docs/plans/sql/14_fin_intelligence.sql`, applied as a migration). It is the one source for the page. Money comes from `fin__order_lines`; behaviour from `user_events` with staff left out. It returns:
+  - headline figures against the previous period;
+  - the funnel;
+  - per-product and per-store conversion;
+  - customers (new / returning / repeat rate / lapsed / top);
+  - unpaid checkouts;
+  - order timing;
+  - search gaps;
+  - out-of-area requests;
+  - ratings.
+- **admin.html → Intelligence:** a period picker and five tabs.
+  - **What to do:** a ranked action list plus a drop-off funnel.
+  - **Products:** best sellers, looked-not-bought, carted-not-bought, low stock.
+  - **Stores:** a conversion table.
+  - **Customers:** win-back list and top customers.
+  - **Demand & timing:** when orders come, failed searches, out-of-area requests, ratings.
+- **Dashboard:** "Total Favourites" was replaced by "Paying Customers (30d)" and "Unpaid Checkouts (30d)". The favourites and event charts were replaced by "Best sellers — last 30 days". "Active Sellers" now fills on load.
+- **Removed:** `netlify/functions/admin-analytics.js` (no other caller).
+
+**Files:** admin.html, netlify/functions/admin-analytics.js (deleted), docs/plans/sql/14_fin_intelligence.sql, docs/systems/intelligence.md (new), docs/systems/finances.md, docs/systems/site-speed.md, CLAUDE.md.
+
+---
+
+## 2026-11-17: Isiqalo professional photos + product pop-up side thumbnails
+
+**Asked:** put Isiqalo's professional shoot on their products, each with a relevant cover and the related photos as small boxes beside the main image.
+
+**What changed:**
+- **Data only (live at once, no deploy needed):** 10 square crops of the shoot uploaded to `shop-assets/sellers/<isiqalo>/products/isiqalo-shoot-*.w1280/.w480.webp` (same naming/cache as image-upload.js). Each Isiqalo product (except Beef curry, which had no matching shot) got new `product_images` rows: a cover that matches the dish at `image_order 0`, then sides/related shots. The old photo was kept as the last image (`image_order 10`). `products.image` follows via the existing `trigger_sync_product_image`. Sellers can still reorder or remove them in the seller dashboard.
+- **product-sheet.js:** the gallery thumbnails moved from a row along the bottom of the photo to a column of small boxes down the right side (68 px, 52 px on phones), and they now load the `.w480` thumbnail with a fall-back to the full image.
+
+**Files:** product-sheet.js, docs/CHANGELOG.md.
+
+---
+
+## 2026-11-17: Manual orders rebuilt: "Deliver with tracking" or "Already paid & delivered"
+
+**Reported:** adding an order by hand in logistics was broken. The founder wants to choose whether the order needs a rider and tracking. If it does, it should work exactly like a PayFast order, with tracking emailed to the customer. If not, it should be recorded as paid and delivered, with the end-of-cycle email.
+
+**Root causes (old New Order form):**
+- **The page inserted the order itself**, with the logistics rep's own id as `orders.user_id`. Every manual order became the rep's order, and the customer's account never saw it.
+- **Items had no `id`/`seller_id`.** `orders_seller_read` matches `items->>'id'`, so stores never saw manual orders.
+- **The form never saved a location,** so no delivery or tracking could ever be made.
+- **No emails were sent.**
+- **`handle_logistics_order` wrote `order_items` from the browser,** a second writer next to the paid trigger.
+- **The rest was a leftover clothing-store form:** a required clothing "Category", and a product search that hid anything with 0 product-level stock.
+
+**What changed:**
+- **New staff-only `netlify/functions/manual-order.js`** (`quote` / `create` / `pay`):
+  - it re-prices and stock-checks the items on the server;
+  - it checks the Service Area and suggests the delivery fee using the checkout rule;
+  - it inserts the order (`m_payment_id` = order number, `source 'manual'`, `pf_response.manual`);
+  - on payment it runs the existing `completeOrderPayment()`. The delivery, tracking link, emails and rider dispatch all come from the existing triggers and that one path.
+  - "Already paid & delivered" records the sale as paid + Delivered, with no rider and no store alert, and sends an optional receipt email.
+- **`lib/complete-order-payment.js`: additive only, active only when `pfData.manual`.** It adds the receipt wording for `delivered`, skips store/admin mails for delivered orders, and skips the buyer email when `notify === false`. PayFast behaviour is unchanged.
+- **`logistics.html`:**
+  - the New Order form is rebuilt: a mode choice, HERE address picker, product search with store names and options, an auto delivery fee, a totals box, and a "what happens" line;
+  - "Paid: …" now calls `manual-order.js`, so for a "deliver" order it sends the rider and the tracking email;
+  - `saveOrder()` no longer inserts;
+  - `isManualOrder()` accepts `m_payment_id` = order number.
+- **Older ORD- orders** only get their payment columns set when paid (no emails, no rider, no double stock).
+- **Also fixed:** the "keep the typed house number" regex in checkout.html, profile.html and seller-dashboard.html had lost its backslashes. It was `/^s*(d+…)<backspace>/`, which never matched.
+- **To run after deploy:** `docs/plans/sql/13_drop_old_manual_order_rpcs.sql` drops `handle_logistics_order` and `logistics_record_manual_payment`.
+
+**Files:** netlify/functions/manual-order.js (new), netlify/functions/lib/complete-order-payment.js, logistics.html, checkout.html, profile.html, seller-dashboard.html, docs/systems/manual-orders.md (new), docs/systems/ops-panels.md, docs/systems/finances.md, docs/plans/sql/13_drop_old_manual_order_rpcs.sql, CLAUDE.md.
+
+**Where in the portal:** Logistics → New Order. Logistics → open an unpaid ORD- order → Paid: Cash / Card machine / EFT. See [docs/systems/manual-orders.md](systems/manual-orders.md).
+
+---
+
 ## 2026-11-17: Finances page + admin/logistics money audit (built 2026-11-16, reviewed 2026-11-17)
 
 **Reported:** the founder said admin and logistics had "inconsistencies, redundant and inaccurate stuff". She also asked for a Finances page that:

@@ -727,137 +727,307 @@
   </div>
   </div>
 
-  <!-- Mystery Gift Popup -->
-  <style>.mystery-pane{display:none}.mystery-pane.active{display:block}</style>
-<div id="mysteryModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true">
-  <div class="modal-card" style="max-width:440px">
-    <div class="modal-body" style="padding-top:24px">
+  <!-- Mystery Gift Popup (redesigned 2026-11-17: hero with a tappable animated gift box, progress
+       through the steps, confetti on success. Flow, ids and server calls unchanged — see the
+       "Mystery Gift Popup" script below and claim-mystery-gift.js. Never name the discount amount.) -->
+  <style>
+    .mystery-pane{display:none}.mystery-pane.active{display:block}
+    #mysteryModal .modal-card{max-width:440px;padding:0;overflow-x:hidden}
+    #mysteryModal .modal-card::before{position:absolute;left:50%;top:0;transform:translateX(-50%);background:rgba(255,255,255,.55);z-index:3}
+    #mysteryModal .modal-body{padding:0}
+    .mg-close{position:absolute;top:10px;right:10px;z-index:4;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.16);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
+    .mg-close:hover{background:rgba(255,255,255,.28)}
+    #mysteryModal:not([data-pane="myP1"]) .mg-close{background:#f3f1ec;color:#5b5f6a}
+    #mysteryModal:not([data-pane="myP1"]) .mg-close:hover{background:#e9e6df}
+    .mg-close svg{width:18px;height:18px}
+
+    /* Hero (first screen) */
+    .mg-hero{position:relative;background:radial-gradient(120% 90% at 50% 0%,#174a8f 0%,#0a2f66 55%,#071f45 100%);color:#fff;text-align:center;padding:34px 22px 26px;overflow:hidden}
+    .mg-dots i{position:absolute;width:8px;height:8px;border-radius:2px;opacity:.9;animation:mgFloat 6s ease-in-out infinite}
+    .mg-box{position:relative;z-index:1;display:block;margin:0 auto 10px;width:150px;height:140px;border:0;background:none;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent}
+    .mg-box svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 14px 18px rgba(0,0,0,.35))}
+    .mg-box .mg-gift{transform-origin:75px 120px;animation:mgWiggle 3.2s ease-in-out infinite}
+    .mg-box .mg-lid{transform-origin:75px 60px;transition:transform .25s ease}
+    .mg-box:hover .mg-lid,.mg-box:focus-visible .mg-lid{transform:translateY(-8px) rotate(-6deg)}
+    .mg-box .mg-spark{animation:mgTwinkle 1.8s ease-in-out infinite}
+    .mg-box .mg-spark:nth-of-type(2){animation-delay:.6s}.mg-box .mg-spark:nth-of-type(3){animation-delay:1.2s}
+    .mg-tap{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#ffc21a;margin-bottom:6px}
+    .mg-hero h2{font-family:var(--font-display,'Playfair Display',Georgia,serif);font-size:27px;line-height:1.15;margin:0 0 8px;color:#fff;font-weight:800}
+    .mg-hero p{font-size:15px;line-height:1.55;color:#d7e1f2;margin:0 auto;max-width:330px}
+    .mg-chips{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:14px}
+    .mg-chips span{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:5px 10px}
+    .mg-chips svg{width:13px;height:13px}
+    .mg-actions{padding:18px 20px 22px;display:flex;flex-direction:column;gap:6px;background:#fff}
+
+    /* Step panes */
+    .mg-body{padding:30px 22px 22px;text-align:center}
+    .mg-progress{display:none;padding:22px 64px 0 22px}
+    #mysteryModal[data-step] .mg-progress{display:block}
+    .mg-progress small{display:block;font-size:12px;font-weight:700;color:#e0284f;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px}
+    .mg-bar{height:6px;border-radius:999px;background:#f0eee9;overflow:hidden}
+    .mg-bar i{display:block;height:100%;width:33%;border-radius:999px;background:linear-gradient(90deg,#e0284f,#ff6b2c);transition:width .4s ease}
+    #mysteryModal[data-step="2"] .mg-bar i{width:66%}#mysteryModal[data-step="3"] .mg-bar i{width:92%}
+    #mysteryModal[data-step] .mg-body{padding-top:16px}
+    .mg-ico{width:60px;height:60px;border-radius:18px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:30px;background:#fff1f3}
+    .mg-ico.blue{background:#eef2f8}.mg-ico.green{background:#ecfdf3}.mg-ico.yellow{background:#fff8e1}
+    .mg-h{font-family:var(--font-display,'Playfair Display',Georgia,serif);color:var(--color-accent,#0a2f66);font-size:23px;line-height:1.2;margin:0 0 8px;font-weight:800}
+    .mg-p{color:#5b5f6a;font-size:14.5px;line-height:1.6;margin:0 0 16px}
+    .mg-input{display:block;width:100%;height:52px;padding:0 16px;border:1.5px solid #d8d5cd;border-radius:14px;font-size:16px;margin:0 0 8px;box-sizing:border-box;background:#fff;color:#16181d;transition:border-color .15s,box-shadow .15s}
+    .mg-input:focus{outline:none;border-color:#0a2f66;box-shadow:0 0 0 4px rgba(10,47,102,.1)}
+    .mg-err{color:#e0284f;font-size:13px;margin:0 0 8px;text-align:left}
+    .mg-hint{color:#6b6b74;font-size:12px;margin:0 0 10px;text-align:left}
+    .mg-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;padding:12px 18px;border:0;border-radius:14px;background:#e0284f;color:#fff;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 8px 18px -8px rgba(224,40,79,.65);transition:transform .12s,filter .15s}
+    .mg-btn:hover{filter:brightness(1.05)}.mg-btn:active{transform:scale(.98)}
+    .mg-btn:disabled{opacity:.6;cursor:wait}
+    .mg-btn svg{width:18px;height:18px}
+    .mg-btn.pulse{animation:mgPulse 2.4s ease-in-out infinite}
+    .mg-btn-ghost{width:100%;min-height:48px;border:1.5px solid #e6e3dc;border-radius:14px;background:#fff;color:#0a2f66;font-weight:700;font-size:14px;cursor:pointer}
+    .mg-btn-ghost:hover{background:#f6f4f0}
+    .mg-link{display:block;width:100%;min-height:44px;background:none;border:0;color:#6b6b74;font-size:13px;font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+    .mg-link:hover{color:#0a2f66}
+    .mg-row{display:flex;gap:10px}.mg-row > *{flex:1}
+    .mg-facts{background:#f6f4f0;border-radius:16px;padding:16px 18px 6px;margin:0 0 16px;text-align:left}
+    .mg-facts p{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b6b74;margin:0 0 10px;text-align:center}
+    .mg-facts ol{list-style:none;margin:0;padding:0;counter-reset:f}
+    .mg-facts li{counter-increment:f;position:relative;padding:0 0 12px 34px;font-size:14px;line-height:1.55;color:#16181d}
+    .mg-facts li::before{content:counter(f);position:absolute;left:0;top:0;width:24px;height:24px;border-radius:8px;background:#0a2f66;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+    .mg-how{list-style:none;margin:0 0 18px;padding:0;text-align:left;display:flex;flex-direction:column;gap:10px}
+    .mg-how li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.5;color:#5b5f6a}
+    .mg-how b{flex:none;width:24px;height:24px;border-radius:8px;background:#eef2f8;color:#0a2f66;font-size:12px;display:flex;align-items:center;justify-content:center}
+    .mg-how strong{color:#0a2f66}
+
+    /* Confetti on the "you got it" screens */
+    .mg-confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+    .mg-confetti i{position:absolute;top:-12px;width:8px;height:12px;border-radius:2px;opacity:0}
+    #mysteryModal.celebrate .mg-confetti i{animation:mgFall 1.6s cubic-bezier(.2,.7,.4,1) forwards}
+
+    @keyframes mgWiggle{0%,62%,100%{transform:rotate(0)}66%{transform:rotate(-7deg)}70%{transform:rotate(6deg)}74%{transform:rotate(-4deg)}78%{transform:rotate(2deg)}}
+    @keyframes mgTwinkle{0%,100%{opacity:.2;transform:scale(.6)}50%{opacity:1;transform:scale(1)}}
+    @keyframes mgFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-8px) rotate(25deg)}}
+    @keyframes mgPulse{0%,100%{box-shadow:0 8px 18px -8px rgba(224,40,79,.65),0 0 0 0 rgba(224,40,79,.35)}50%{box-shadow:0 8px 18px -8px rgba(224,40,79,.65),0 0 0 10px rgba(224,40,79,0)}}
+    @keyframes mgFall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(420px) rotate(540deg)}}
+    @keyframes mgPaneIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    #mysteryModal .mystery-pane.active{animation:mgPaneIn .28s ease-out}
+    @media (min-width:769px){ #mysteryModal .modal-card{border-radius:24px} }
+    @media (prefers-reduced-motion:reduce){
+      .mg-box .mg-gift,.mg-box .mg-spark,.mg-dots i,.mg-btn.pulse,#mysteryModal .mystery-pane.active{animation:none}
+      #mysteryModal.celebrate .mg-confetti i{animation:none}
+    }
+  </style>
+<div id="mysteryModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="myTitle" data-pane="myP1">
+  <div class="modal-card">
+    <button type="button" class="mg-close" id="myBtnClose" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <div class="mg-confetti" aria-hidden="true">
+      <i style="left:6%;background:#ffc21a;animation-delay:.00s"></i><i style="left:14%;background:#e0284f;animation-delay:.12s"></i><i style="left:22%;background:#0a2f66;animation-delay:.05s"></i>
+      <i style="left:30%;background:#00a0ff;animation-delay:.2s"></i><i style="left:38%;background:#ffc21a;animation-delay:.08s"></i><i style="left:46%;background:#e0284f;animation-delay:.16s"></i>
+      <i style="left:54%;background:#15803d;animation-delay:.02s"></i><i style="left:62%;background:#ffc21a;animation-delay:.22s"></i><i style="left:70%;background:#0a2f66;animation-delay:.1s"></i>
+      <i style="left:78%;background:#e0284f;animation-delay:.04s"></i><i style="left:86%;background:#00a0ff;animation-delay:.18s"></i><i style="left:93%;background:#ffc21a;animation-delay:.07s"></i>
+    </div>
+    <div class="mg-progress" aria-hidden="true"><small>Unwrapping your gift</small><div class="mg-bar"><i></i></div></div>
+    <div class="modal-body">
 
       <!-- S1: intro -->
-      <div class="mystery-pane active" id="myP1" style="text-align:center">
-        <div style="font-size:40px;margin-bottom:10px">🎁</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:22px">Mystery Gift Inside</h2>
-        <p style="color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:18px">
-          First-time visitor? We've hidden something for you — a genuine discount, unlocked in about 10 seconds. Ready?
-        </p>
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <button class="btn" id="myBtnClaim" style="width:100%;padding:14px">Yes, show me</button>
-          <button class="btn ghost" id="myBtnDecline" style="width:100%;padding:12px;font-size:13px">No thanks, I don't like saving money</button>
+      <div class="mystery-pane active" id="myP1">
+        <div class="mg-hero">
+          <div class="mg-dots" aria-hidden="true">
+            <i style="left:9%;top:22%;background:#ffc21a"></i><i style="left:84%;top:16%;background:#e0284f;animation-delay:1s"></i>
+            <i style="left:16%;top:62%;background:#00a0ff;animation-delay:2s"></i><i style="left:90%;top:58%;background:#ffc21a;animation-delay:.5s"></i>
+            <i style="left:74%;top:34%;background:#fff;animation-delay:1.5s;width:6px;height:6px"></i><i style="left:26%;top:12%;background:#fff;animation-delay:2.5s;width:5px;height:5px"></i>
+          </div>
+          <button type="button" class="mg-box" id="myGiftBox" aria-label="Open your mystery gift">
+            <svg viewBox="0 0 150 140" aria-hidden="true">
+              <g class="mg-gift">
+                <rect x="22" y="62" width="106" height="68" rx="8" fill="#e0284f"/>
+                <rect x="22" y="62" width="106" height="14" fill="#b81b3c" opacity=".55"/>
+                <rect x="66" y="62" width="18" height="68" fill="#ffc21a"/>
+                <g class="mg-lid">
+                  <rect x="14" y="44" width="122" height="24" rx="7" fill="#ff3d63"/>
+                  <rect x="66" y="44" width="18" height="24" fill="#ffd34d"/>
+                  <path d="M75 44c-8-16-30-22-32-10-2 10 18 12 32 10z" fill="#ffc21a" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>
+                  <path d="M75 44c8-16 30-22 32-10 2 10-18 12-32 10z" fill="#ffc21a" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>
+                  <circle cx="75" cy="44" r="6" fill="#ffd34d" stroke="#e0a800" stroke-width="2"/>
+                </g>
+                <text x="75" y="108" text-anchor="middle" font-family="Georgia,serif" font-size="30" font-weight="700" fill="#fff" opacity=".9">?</text>
+              </g>
+              <path class="mg-spark" d="M18 20l2.5 6 6 2.5-6 2.5-2.5 6-2.5-6-6-2.5 6-2.5z" fill="#ffc21a"/>
+              <path class="mg-spark" d="M132 12l2 4.5 4.5 2-4.5 2-2 4.5-2-4.5-4.5-2 4.5-2z" fill="#fff"/>
+              <path class="mg-spark" d="M140 78l1.8 4 4 1.8-4 1.8-1.8 4-1.8-4-4-1.8 4-1.8z" fill="#ffc21a"/>
+            </svg>
+          </button>
+          <span class="mg-tap">Tap the box</span>
+          <h2 id="myTitle">There's a gift with your name on it</h2>
+          <p>First time on Umzila? We've hidden a real discount for your first order. Unwrapping it takes about 10 seconds.</p>
+          <div class="mg-chips">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Real discount</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>10 seconds</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>No spam</span>
+          </div>
+        </div>
+        <div class="mg-actions">
+          <button type="button" class="mg-btn pulse" id="myBtnClaim">Open my gift <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button type="button" class="mg-link" id="myBtnDecline">No thanks, maybe next time</button>
         </div>
       </div>
 
       <!-- S2: email -->
-      <div class="mystery-pane" id="myP2" style="text-align:center">
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Where should we send it?</h2>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Pop in your email — we'll check if you're new around here and take it from there.</p>
-        <input type="email" id="myEmailInput" placeholder="your@email.com"
-          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:8px;box-sizing:border-box">
-        <div id="myEmailErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn" id="myBtnEmailContinue" style="width:100%;padding:14px">Continue</button>
-        <p style="color:var(--muted);font-size:12px;margin-top:10px">We'll use this for your gift and to keep your basket handy if you shop. No spam, promise.</p>
+      <div class="mystery-pane" id="myP2">
+        <div class="mg-body">
+          <div class="mg-ico blue" aria-hidden="true">✉️</div>
+          <h2 class="mg-h">Where should we send it?</h2>
+          <p class="mg-p">Pop in your email and we'll check if you're new around here.</p>
+          <label for="myEmailInput" class="sr-only" style="position:absolute;left:-9999px">Email</label>
+          <input type="email" id="myEmailInput" class="mg-input" placeholder="your@email.com" autocomplete="email" inputmode="email">
+          <div id="myEmailErr" class="mg-err" style="display:none"></div>
+          <button type="button" class="mg-btn" id="myBtnEmailContinue">Continue</button>
+          <p class="mg-hint" style="text-align:center;margin:10px 0 0">We use it for your gift and to keep your basket handy. No spam, promise.</p>
+        </div>
       </div>
 
       <!-- S3a: no profile — create password (or skip) -->
-      <div class="mystery-pane" id="myP3a" style="text-align:center">
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Lock in your gift</h2>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:12px" id="myP3aDesc"></p>
-        <input type="password" id="myPwInput" placeholder="Create a password"
-          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:6px;box-sizing:border-box">
-        <p style="color:var(--muted);font-size:12px;margin:0 0 8px">At least 8 characters, with a number and a symbol.</p>
-        <div id="myPwErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn" id="myBtnCreateAcct" style="width:100%;padding:14px">Create my account &amp; continue</button>
-        <button class="btn-link" id="myBtnSkipPw" style="width:100%;background:none;border:none;color:var(--accent-2);font-size:13px;margin-top:12px;cursor:pointer;text-decoration:underline">Just email me the gift instead</button>
+      <div class="mystery-pane" id="myP3a">
+        <div class="mg-body">
+          <div class="mg-ico yellow" aria-hidden="true">🔐</div>
+          <h2 class="mg-h">Lock in your gift</h2>
+          <p class="mg-p" id="myP3aDesc"></p>
+          <label for="myPwInput" style="position:absolute;left:-9999px">Create a password</label>
+          <input type="password" id="myPwInput" class="mg-input" placeholder="Create a password" autocomplete="new-password">
+          <p class="mg-hint">At least 8 characters, with a number and a symbol.</p>
+          <div id="myPwErr" class="mg-err" style="display:none"></div>
+          <button type="button" class="mg-btn" id="myBtnCreateAcct">Create my account &amp; continue</button>
+          <button type="button" class="mg-link" id="myBtnSkipPw" style="margin-top:6px">Just email me the gift instead</button>
+        </div>
       </div>
 
       <!-- S3b: profile exists — inline sign-in -->
-      <div class="mystery-pane" id="myP3b" style="text-align:center">
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:20px">Welcome back!</h2>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:12px">Looks like <strong id="myP3bEmail"></strong> already has an Umzila account. Sign in to grab your gift.</p>
-        <input type="password" id="mySigninPwInput" placeholder="Your password"
-          style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:var(--radius-md);font-size:15px;margin-bottom:8px;box-sizing:border-box">
-        <div class="forgot-password" style="text-align:right;margin-bottom:8px">
-          <a href="#" id="myForgotLink" style="font-size:13px">Forgot password?</a>
+      <div class="mystery-pane" id="myP3b">
+        <div class="mg-body">
+          <div class="mg-ico blue" aria-hidden="true">👋</div>
+          <h2 class="mg-h">Welcome back!</h2>
+          <p class="mg-p"><strong id="myP3bEmail"></strong> already has an Umzila account. Sign in to grab your gift.</p>
+          <label for="mySigninPwInput" style="position:absolute;left:-9999px">Your password</label>
+          <input type="password" id="mySigninPwInput" class="mg-input" placeholder="Your password" autocomplete="current-password">
+          <div class="forgot-password" style="text-align:right;margin:0 0 8px">
+            <a href="#" id="myForgotLink" style="font-size:13px;color:#0a2f66;font-weight:600">Forgot password?</a>
+          </div>
+          <div id="mySigninErr" class="mg-err" style="display:none"></div>
+          <button type="button" class="mg-btn" id="myBtnSignin">Sign in &amp; continue</button>
+          <button type="button" class="mg-link" id="myWrongEmailLink" style="margin-top:6px">Not you? Use a different email</button>
         </div>
-        <div id="mySigninErr" style="color:#e0284f;font-size:13px;margin-bottom:8px;display:none"></div>
-        <button class="btn" id="myBtnSignin" style="width:100%;padding:14px">Sign in &amp; continue</button>
-        <button class="btn-link" id="myWrongEmailLink" style="width:100%;background:none;border:none;color:var(--accent-2);font-size:13px;margin-top:12px;cursor:pointer;text-decoration:underline">Not you? Use a different email</button>
       </div>
 
       <!-- S4: fun fact prompt -->
-      <div class="mystery-pane" id="myP4" style="text-align:center">
-        <div style="font-size:32px;margin-bottom:8px">🤔</div>
-        <h2 style="color:var(--color-accent);margin:0 0 8px;font-size:19px">Want a bonus added to your mystery gift?</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 16px">Read 4 quick facts about Umzila and we'll slip a little something extra in on top. What it is stays a mystery until checkout.</p>
-        <div style="display:flex;gap:10px">
-          <button class="btn ghost" id="myBtnFunNo" style="flex:1;padding:12px">No, just the gift</button>
-          <button class="btn" id="myBtnFunYes" style="flex:1;padding:12px">Yes, add the bonus</button>
+      <div class="mystery-pane" id="myP4">
+        <div class="mg-body">
+          <div class="mg-ico yellow" aria-hidden="true">✨</div>
+          <h2 class="mg-h">Want a bonus on top?</h2>
+          <p class="mg-p">Read 4 quick facts about Umzila and we'll slip a little something extra into your gift. What it is stays a mystery until checkout.</p>
+          <div class="mg-row">
+            <button type="button" class="mg-btn-ghost" id="myBtnFunNo">Just the gift</button>
+            <button type="button" class="mg-btn" id="myBtnFunYes" style="min-height:48px">Yes, add a bonus</button>
+          </div>
         </div>
       </div>
 
       <!-- S4 reveal: all fun facts, user continues when done reading -->
-      <div class="mystery-pane" id="myP4r" style="text-align:center">
-        <div style="font-size:32px;margin-bottom:8px">✨</div>
-        <div style="background:var(--color-accent-tint);border-radius:var(--radius-lg);padding:18px 20px;margin-bottom:16px;text-align:left">
-          <p style="color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px;font-weight:700;text-align:center">4 things to know about Umzila</p>
-          <ol id="myFunFactList" style="color:var(--color-accent);font-size:14px;line-height:1.6;margin:0;padding-left:20px;font-weight:600"></ol>
+      <div class="mystery-pane" id="myP4r">
+        <div class="mg-body">
+          <div class="mg-facts">
+            <p>4 things to know about Umzila</p>
+            <ol id="myFunFactList"></ol>
+          </div>
+          <button type="button" class="mg-btn" id="myBtnFunDone">Claim my gift + bonus</button>
         </div>
-        <button class="btn" id="myBtnFunDone" style="width:100%;padding:14px">Claim my gift + bonus</button>
       </div>
 
       <!-- S6: plain claim success -->
-      <div class="mystery-pane" id="myP6claimed" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">📬</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Check your inbox!</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">We've sent your mystery gift. The reveal happens at checkout — enter the code and see what you got.</p>
-        <button class="btn" id="myBtnClaimedContinue" style="width:100%;padding:14px">Continue</button>
+      <div class="mystery-pane" id="myP6claimed">
+        <div class="mg-body">
+          <div class="mg-ico green" aria-hidden="true">📬</div>
+          <h2 class="mg-h">Your gift code is in your email</h2>
+          <p class="mg-p" style="margin-bottom:12px">We just sent it to <strong class="myEmailEcho"></strong></p>
+          <ol class="mg-how">
+            <li><b>1</b><span>Open your email and find the email from <strong>Umzila</strong> called <strong class="mySubjectEcho">“Your mystery gift is waiting 🎁”</strong>. Can't see it? Look in <strong>Promotions</strong> or <strong>Spam</strong>.</span></li>
+            <li><b>2</b><span><strong>Add the things you like</strong> to your Umzila cart.</span></li>
+            <li><b>3</b><span>At checkout, <strong>type the code</strong> from the email and press <strong>Apply</strong>. That is when you see your gift.</span></li>
+          </ol>
+          <a class="mg-btn-ghost myOpenGmail" href="https://mail.google.com/mail/u/0/#search/from%3Aumzila" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;text-decoration:none;margin-bottom:8px">Open Gmail</a>
+          <button type="button" class="mg-btn" id="myBtnClaimedContinue">Got it, let me shop</button>
+        </div>
       </div>
 
       <!-- S6-active -->
-      <div class="mystery-pane" id="myP6active" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">🎁</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">You've already got one!</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">You already have a mystery discount waiting in your inbox. No need for a new one — just grab that code at checkout.</p>
-        <button class="btn" id="myBtnActiveContinue" style="width:100%;padding:14px">Got it, continue</button>
+      <div class="mystery-pane" id="myP6active">
+        <div class="mg-body">
+          <div class="mg-ico" aria-hidden="true">🎁</div>
+          <h2 class="mg-h">You already have a gift code</h2>
+          <p class="mg-p" style="margin-bottom:12px">We sent it to <strong class="myEmailEcho"></strong> before.</p>
+          <ol class="mg-how">
+            <li><b>1</b><span>Find the email from <strong>Umzila</strong> called <strong>“Your mystery gift…”</strong>. Can't see it? Look in <strong>Promotions</strong> or <strong>Spam</strong>.</span></li>
+            <li><b>2</b><span><strong>Add the things you like</strong> to your cart, then type the code at checkout to see your gift.</span></li>
+          </ol>
+          <a class="mg-btn-ghost myOpenGmail" href="https://mail.google.com/mail/u/0/#search/from%3Aumzila" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;text-decoration:none;margin-bottom:8px">Open Gmail</a>
+          <button type="button" class="mg-btn" id="myBtnActiveContinue">Got it, let me shop</button>
+        </div>
       </div>
 
       <!-- S6-back (reinstated) -->
-      <div class="mystery-pane" id="myP6back" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">🧟</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Good news — it's back.</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">Your mystery code had expired, unused and lonely, so we brought it back to life. Check your inbox — same code, two more weeks to use it.</p>
-        <button class="btn" id="myBtnBackContinue" style="width:100%;padding:14px">Nice, continue</button>
+      <div class="mystery-pane" id="myP6back">
+        <div class="mg-body">
+          <div class="mg-ico green" aria-hidden="true">🧟</div>
+          <h2 class="mg-h">Good news: it's back.</h2>
+          <p class="mg-p">Your code ran out before you used it, so we gave it two more weeks. Find the email from <strong>Umzila</strong> called <strong>“Your mystery gift code is back 🎁”</strong> in <strong class="myEmailEcho"></strong>. Add the things you like to your cart, then type the code at checkout.</p>
+          <a class="mg-btn-ghost myOpenGmail" href="https://mail.google.com/mail/u/0/#search/from%3Aumzila" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;text-decoration:none;margin-bottom:8px">Open Gmail</a>
+          <button type="button" class="mg-btn" id="myBtnBackContinue">Nice, continue</button>
+        </div>
       </div>
 
       <!-- S6-gift (free item) -->
-      <div class="mystery-pane" id="myP6gift" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">🍦</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">You've used your gift — so here's ice cream.</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px" id="myGiftDesc">Looks like your mystery gift is already spent — smart move. So here's something sweeter: a free Milky Pie Ice Cream, R0 at checkout, already added to your cart. No code needed.</p>
-        <button class="btn" id="myBtnGiftContinue" style="width:100%;padding:14px">Sweet — take me to my cart</button>
+      <div class="mystery-pane" id="myP6gift">
+        <div class="mg-body">
+          <div class="mg-ico" aria-hidden="true">🍦</div>
+          <h2 class="mg-h">You've used your gift, so here's ice cream.</h2>
+          <p class="mg-p" id="myGiftDesc">Looks like you already used your mystery gift. Smart move. So here's something sweeter: a free Milky Pie Ice Cream, R0 at checkout and already in your cart. No code needed.</p>
+          <button type="button" class="mg-btn" id="myBtnGiftContinue">Sweet, take me to my cart</button>
+        </div>
       </div>
 
       <!-- S6 fallback: gift unavailable -->
-      <div class="mystery-pane" id="myP6nogift" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">🙈</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Your gift's getting a refresh</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">Our mystery gift item is temporarily unavailable — our team's on it. Check back soon, or reach out at <a href="mailto:support@umzila.store">support@umzila.store</a>.</p>
-        <button class="btn" id="myBtnNoGiftContinue" style="width:100%;padding:14px">Okay</button>
+      <div class="mystery-pane" id="myP6nogift">
+        <div class="mg-body">
+          <div class="mg-ico blue" aria-hidden="true">🙈</div>
+          <h2 class="mg-h">Your gift's getting a refresh</h2>
+          <p class="mg-p">Our mystery gift item is temporarily unavailable and our team's on it. Check back soon, or reach out at <a href="mailto:support@umzila.store">support@umzila.store</a>.</p>
+          <button type="button" class="mg-btn" id="myBtnNoGiftContinue">Okay</button>
+        </div>
+      </div>
+
+      <!-- S6-off: free item switched off in admin (Marketing → Mystery gift pop-up) -->
+      <div class="mystery-pane" id="myP6off">
+        <div class="mg-body">
+          <div class="mg-ico blue" aria-hidden="true">💙</div>
+          <h2 class="mg-h" id="myOffTitle">You already used your mystery gift</h2>
+          <p class="mg-p" id="myOffText">Mystery gifts are one per person, and yours has been used. Thank you for shopping with Umzila!</p>
+          <button type="button" class="mg-btn" id="myBtnOffContinue">Continue</button>
+        </div>
       </div>
 
       <!-- fallback: something went wrong -->
-      <div class="mystery-pane" id="myP6error" style="text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">😅</div>
-        <h2 style="color:var(--color-accent);margin:0 0 10px;font-size:19px">Something hiccuped</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:16px">We couldn't finish that on our end. Drop us a line at <a href="mailto:support@umzila.store">support@umzila.store</a> and we'll sort your gift out personally.</p>
-        <button class="btn" id="myBtnErrorContinue" style="width:100%;padding:14px">Continue</button>
+      <div class="mystery-pane" id="myP6error">
+        <div class="mg-body">
+          <div class="mg-ico blue" aria-hidden="true">😅</div>
+          <h2 class="mg-h">Something hiccuped</h2>
+          <p class="mg-p">We couldn't finish that on our end. Drop us a line at <a href="mailto:support@umzila.store">support@umzila.store</a> and we'll sort your gift out personally.</p>
+          <button type="button" class="mg-btn" id="myBtnErrorContinue">Continue</button>
+        </div>
       </div>
 
       <!-- S7: delivery explainer — shown after every successful/terminal branch -->
       <div class="mystery-pane" id="myP7">
-        <h2 style="color:var(--color-accent);margin:0 0 14px;font-size:19px;text-align:center">How delivery works</h2>
+        <div class="mg-body">
+        <h2 class="mg-h" style="margin-bottom:14px">How Umzila works</h2>
         <div style="display:flex;gap:10px;margin-bottom:16px">
           <!-- Live tracking: order travels from the store to your pin -->
-          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Tracking your order live on the map">
+          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:12px" role="img" aria-label="Tracking your order live on the map">
             <rect width="160" height="100" rx="10" fill="#f0f4ff"/>
             <path d="M0 28h160M0 64h160M56 0v100M104 0v100" stroke="#dfe7f8" stroke-width="7"/>
             <path d="M40 76C62 76 60 52 86 52S118 40 132 34" fill="none" stroke="#0a2f66" stroke-width="2.5" stroke-dasharray="5 5" stroke-linecap="round"/>
@@ -874,7 +1044,7 @@
             <text x="27" y="21.5" font-size="9" font-weight="800" fill="#0a2f66" font-family="system-ui,sans-serif">LIVE</text>
           </svg>
           <!-- Handover: show your 4-digit code, get your order -->
-          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:var(--radius-md)" role="img" aria-label="Showing your 4-digit code to receive your delivery">
+          <svg viewBox="0 0 160 100" style="width:50%;height:auto;border-radius:12px" role="img" aria-label="Showing your 4-digit code to receive your delivery">
             <rect width="160" height="100" rx="10" fill="#f0f4ff"/>
             <rect x="14" y="10" width="62" height="80" rx="9" fill="#fff" stroke="#0a2f66" stroke-width="2.5"/>
             <path d="M39 16h12" stroke="#0a2f66" stroke-width="2" stroke-linecap="round"/>
@@ -894,13 +1064,14 @@
             <path d="M146 34l1.5 3.5L151 39l-3.5 1.5L146 44l-1.5-3.5L141 39l3.5-1.5z" fill="#f5b301"/>
           </svg>
         </div>
-        <ol style="color:var(--muted);font-size:14px;line-height:1.7;margin:0 0 18px;padding-left:20px">
-          <li><strong style="color:var(--color-accent)">Enter your delivery address at checkout</strong>.</li>
-          <li><strong style="color:var(--color-accent)">Track your order</strong> live as it comes to you.</li>
-          <li>Show your <strong style="color:var(--color-accent)">4-digit code</strong> and grab your delivery.</li>
+        <ol class="mg-how">
+          <li><b>1</b><span><strong>Add the things you like</strong> to your cart, from any store.</span></li>
+          <li><b>2</b><span>At checkout, <strong>enter your address</strong> and your <strong>gift code</strong>.</span></li>
+          <li><b>3</b><span><strong>Track your rider</strong> live and give them your <strong>4 digit code</strong> at the door.</span></li>
         </ol>
-        <a href="cart.html" id="myCartLink" style="display:none;text-align:center;font-size:13px;color:var(--accent-2);margin-bottom:10px">View my cart &rarr;</a>
-        <button class="btn" id="myBtnGotIt" style="width:100%;padding:14px">Got it</button>
+        <a href="cart.html" id="myCartLink" style="display:none;text-align:center;font-size:14px;font-weight:600;color:#0a2f66;margin-bottom:10px">View my cart &rarr;</a>
+        <button type="button" class="mg-btn" id="myBtnGotIt">Start shopping</button>
+        </div>
       </div>
 
     </div>
@@ -1647,7 +1818,7 @@
 
     // ---- element refs ----
     var panes = {};
-    ['myP1','myP2','myP3a','myP3b','myP4','myP4r','myP6claimed','myP6active','myP6back','myP6gift','myP6nogift','myP6error','myP7']
+    ['myP1','myP2','myP3a','myP3b','myP4','myP4r','myP6claimed','myP6active','myP6back','myP6gift','myP6nogift','myP6off','myP6error','myP7']
       .forEach(function(id){ panes[id] = document.getElementById(id); });
 
     var myBtnClaim        = document.getElementById('myBtnClaim');
@@ -1696,17 +1867,27 @@
     var authToken         = '';
     var arrivedViaGift    = false;
 
+    // Written to answer what a first-time buyer worries about (are the stores any good, how do I
+    // shop, is my money safe, will my order arrive). Keep them true to how the site works.
     var FUN_FACTS = [
-      "Umzila is isiZulu for “trail” or “path” — fitting, since every order here is a short path from one of Durban's best local businesses to your door.",
-      "Not every store gets onto Umzila. Businesses are vetted first, so only the best get in.",
-      "Every order on Umzila goes straight to a local Durban business, not a faceless warehouse.",
-      "Umzila started small: a handful of student sellers trading snacks and prints, before it grew into a home for Durban's best local businesses."
+      "Every store on Umzila is a Durban business we have checked out ourselves before letting it in. If you find it here, it is worth your money.",
+      "Your cart works across every store. Add a plate from one place and a drink from another, then pay once at checkout. You don't need an account to order.",
+      "You pay through PayFast with your card, Instant EFT and more. Your card details go straight to PayFast, so neither Umzila nor the store ever sees them.",
+      "You get a tracking link with your order, so you can follow your rider on the map as they head to you. At the door you give them a 4 digit code, so your order only goes to you."
     ];
 
+    // Which step of "Unwrapping your gift" each pane is (progress bar), and which panes celebrate.
+    var STEP_OF = { myP2: 1, myP3a: 2, myP3b: 2, myP4: 3, myP4r: 3 };
+    var CELEBRATE = { myP6claimed: 1, myP6back: 1, myP6gift: 1 };
     function showPane(id) {
       Object.keys(panes).forEach(function(k){ if (panes[k]) panes[k].classList.remove('active'); });
       if (panes[id]) panes[id].classList.add('active');
       currentPane = id;
+      modal.setAttribute('data-pane', id);
+      if (STEP_OF[id]) modal.setAttribute('data-step', String(STEP_OF[id])); else modal.removeAttribute('data-step');
+      modal.classList.remove('celebrate');
+      if (CELEBRATE[id]) { void modal.offsetWidth; modal.classList.add('celebrate'); }
+      var card = modal.querySelector('.modal-card'); if (card) card.scrollTop = 0;
     }
 
     function openMystery()  { modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
@@ -1727,6 +1908,16 @@
     setTimeout(maybeOpenMystery, 20000);
 
     myBtnDecline.addEventListener('click', closeMystery);
+    document.getElementById('myBtnClose').addEventListener('click', closeMystery);
+    // Tapping the gift box itself opens it, same as "Open my gift".
+    document.getElementById('myGiftBox').addEventListener('click', function(){ myBtnClaim.click(); });
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && modal.classList.contains('open')) closeMystery();
+    });
+    // Enter moves on from each text box.
+    [[myEmailInput, myBtnEmailContinue], [myPwInput, myBtnCreateAcct], [mySigninPwInput, myBtnSignin]].forEach(function(pair){
+      pair[0].addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); if (!pair[1].disabled) pair[1].click(); } });
+    });
     modal.addEventListener('click', function(e){
       if (e.target !== modal) return;
       if (currentPane === 'myP4') { advanceAfterFunFact(false); return; } // backdrop-click on fun-fact pane == "No"
@@ -1768,8 +1959,8 @@
           showPane('myP3b');
         } else {
           myP3aDesc.textContent = (currentCodeState === 'none')
-            ? "One more thing — set a password and we'll save this account so your gift (and your next order) is ready to go. Or skip it and we'll just email you the gift."
-            : "Looks like you've been here before. Set a password to officially own your free gift — or skip and we'll sort it by email.";
+            ? "One more thing. Set a password and we'll save your account, so your gift and your next order are ready to go. Or skip it and we'll just email you the gift."
+            : "Looks like you've been here before. Set a password to make the gift officially yours, or skip and we'll sort it out by email.";
           myPwInput.value = '';
           myPwErr.style.display = 'none';
           showPane('myP3a');
@@ -1840,7 +2031,7 @@
           var resendMg = function () { return client.auth.resend({ type: 'signup', email: currentEmail, options: { emailRedirectTo: window.location.origin + '/' } }); };
           if (!window.UmzilaAuthMail || UmzilaAuthMail.shouldResend(currentEmail)) { var rr = await resendMg(); if (!(rr && rr.error) && window.UmzilaAuthMail) UmzilaAuthMail.markSent(currentEmail); }
           if (window.UmzilaAuthMail) UmzilaAuthMail.show(mySigninErr, currentEmail, { client: client, resend: resendMg, context: 'and claim your gift' });
-          else { mySigninErr.textContent = 'Please confirm your email first — we’ve sent a link to ' + currentEmail + '. Open it, then come back to claim your gift.'; mySigninErr.style.display = 'block'; }
+          else { mySigninErr.textContent = 'Please confirm your email first. We’ve sent a link to ' + currentEmail + '. Open it, then come back to claim your gift.'; mySigninErr.style.display = 'block'; }
           return;
         }
         if (res.error) {
@@ -1894,7 +2085,9 @@
       advanceAfterFunFact(true);
     });
 
+    var lastFunFact = false;
     function advanceAfterFunFact(funFact) {
+      lastFunFact = !!funFact;
       if (viaProfileSignin) { doPostLogin(funFact); }
       else { doClaim(funFact); }
     }
@@ -1925,17 +2118,47 @@
       handleOutcome(data);
     }
 
+    // A code is waiting in this inbox: remember WHERE (not the code — that only travels by
+    // email), so cart.html / checkout.html / the home bar can point people back to it once they
+    // have picked what they want. Cleared when a MYSTERY code is applied (cart/checkout).
+    function rememberPendingGift(data) {
+      try {
+        localStorage.setItem('umz_mystery_pending', JSON.stringify({
+          email: currentEmail, until: data.expires_at || null,
+          subject: data.state === 'reinstated' ? 'Your mystery gift code is back 🎁'
+            : (lastFunFact && data.state === 'claimed' ? 'Your mystery gift, plus a little extra 🎁' : 'Your mystery gift is waiting 🎁')
+        }));
+        window.dispatchEvent(new Event('umz-mystery-pending'));
+      } catch (e) {}
+    }
+    function fillEmailEcho(subject) {
+      modal.querySelectorAll('.myEmailEcho').forEach(function(el){ el.textContent = currentEmail; });
+      modal.querySelectorAll('.mySubjectEcho').forEach(function(el){ el.textContent = '“' + subject + '”'; });
+      var gmail = /@(gmail|googlemail)\.com$/i.test(currentEmail);
+      modal.querySelectorAll('.myOpenGmail').forEach(function(el){ el.style.display = gmail ? 'flex' : 'none'; });
+    }
     function handleOutcome(data) {
       if (!data || data.error) { showPane('myP6error'); return; }
+      if (data.state === 'claimed' || data.state === 'active' || data.state === 'reinstated') {
+        rememberPendingGift(data);
+        fillEmailEcho(lastFunFact && data.state === 'claimed' ? 'Your mystery gift, plus a little extra 🎁' : 'Your mystery gift is waiting 🎁');
+      }
       switch (data.state) {
         case 'claimed':    showPane('myP6claimed'); break;
         case 'active':      showPane('myP6active'); break;
         case 'reinstated':  showPane('myP6back'); break;
+        case 'gift_off':
+          if (data.reason === 'expired') {
+            document.getElementById('myOffTitle').textContent = 'Your mystery gift code has expired';
+            document.getElementById('myOffText').textContent = 'Your code ran out before it was used, and mystery gifts are one per person. Keep an eye on your email for our next offer.';
+          }
+          showPane('myP6off');
+          break;
         case 'free_gift':
           arrivedViaGift = true;
           addGiftToCart(data.gift, data.code);
           if (data.gift && data.gift.name) {
-            myGiftDesc.textContent = "Looks like your mystery gift is already spent — smart move. So here's something sweeter: a free " + data.gift.name + ", R0 at checkout, already added to your cart. No code needed.";
+            myGiftDesc.textContent = "Looks like you already used your mystery gift. Smart move. So here's something sweeter: a free " + data.gift.name + ", R0 at checkout and already in your cart. No code needed.";
           }
           showPane('myP6gift');
           break;
@@ -1973,6 +2196,7 @@
     myBtnActiveContinue.addEventListener('click', function() { showPane('myP7'); });
     myBtnBackContinue.addEventListener('click', function() { showPane('myP7'); });
     myBtnNoGiftContinue.addEventListener('click', function() { showPane('myP7'); });
+    document.getElementById('myBtnOffContinue').addEventListener('click', function() { showPane('myP7'); });
     myBtnErrorContinue.addEventListener('click', function() { showPane('myP7'); });
     myBtnGiftContinue.addEventListener('click', function() {
       if (myCartLink) myCartLink.style.display = 'block';
@@ -2000,6 +2224,45 @@
         if (!el.innerHTML.trim()) el.innerHTML = row;
       });
     })();
+  </script>
+
+  <!-- Mystery gift reminder: shown while a gift code is waiting in this visitor's inbox
+       (localStorage umz_mystery_pending, set by the pop-up). Points them at filling the cart first;
+       the code itself is never on the page. Closing it hides it for this visit. -->
+  <style>
+    .mg-bar-home{position:fixed;left:12px;right:84px;bottom:22px;z-index:1100;max-width:560px;display:flex;align-items:center;gap:10px;background:#0a2f66;color:#fff;border-radius:16px;padding:10px 8px 10px 14px;box-shadow:0 12px 28px -10px rgba(10,47,102,.55);font-size:13.5px;line-height:1.4;animation:mgBarIn .35s ease-out}
+    .mg-bar-home b{color:#ffc21a}
+    .mg-bar-home .mgb-ico{font-size:22px;flex:none}
+    .mg-bar-home .mgb-txt{flex:1;min-width:0}
+    .mg-bar-home button{flex:none;width:36px;height:36px;border:0;border-radius:10px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-size:18px;line-height:1}
+    @media (max-width:768px){ .mg-bar-home{bottom:calc(72px + env(safe-area-inset-bottom))} }
+    @keyframes mgBarIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    @media (prefers-reduced-motion:reduce){ .mg-bar-home{animation:none} }
+  </style>
+  <script>
+  (function () {
+    function show() {
+      var p = null;
+      try { p = JSON.parse(localStorage.getItem('umz_mystery_pending') || 'null'); } catch (e) {}
+      try { if (sessionStorage.getItem('umz_mystery_bar_closed')) return; } catch (e) {}
+      if (!p || !p.email || (p.until && new Date(p.until) < new Date())) return;
+      if (document.getElementById('mgBarHome')) return;
+      var bar = document.createElement('div');
+      bar.id = 'mgBarHome'; bar.className = 'mg-bar-home'; bar.setAttribute('role', 'status');
+      bar.innerHTML = '<span class="mgb-ico" aria-hidden="true">🎁</span><span class="mgb-txt"><b>Your mystery gift is waiting.</b> Add the things you like to your cart, then use the code from your email at checkout.</span><button type="button" aria-label="Hide">×</button>';
+      bar.querySelector('button').addEventListener('click', function () {
+        try { sessionStorage.setItem('umz_mystery_bar_closed', '1'); } catch (e) {}
+        bar.remove();
+      });
+      document.body.appendChild(bar);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show); else show();
+    // The pop-up just sent a code: show the bar once the pop-up closes.
+    window.addEventListener('umz-mystery-pending', function () {
+      var m = document.getElementById('mysteryModal');
+      var wait = setInterval(function () { if (!m || !m.classList.contains('open')) { clearInterval(wait); show(); } }, 800);
+    });
+  })();
   </script>
 
   <!-- Floating WhatsApp button -->

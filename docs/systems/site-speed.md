@@ -120,7 +120,7 @@ Store pages don't load `script.js`, so until 2026-10-05 they recorded nothing: n
 **Counter events (click, view, add-to-cart) go only through `track-engagement.js`.** It logs the `user_events` row and bumps the product counters. `script.js` used to *also* insert them itself, so every home click and add was stored twice. That's fixed, and the historical pairs were deleted (migration `user_events_dedupe_double_logged_clicks`).
 
 Where people see it:
-- **Admin** → Intelligence → Sellers has a "Store visits (30d)" column with distinct people.
+- **Admin** → Intelligence → Stores has a "Visitors" column (distinct people from `store_view`, via `fin_intelligence`).
 - **Admin** → Live now names the store (`get_live_visitors` joins the slug to `shop_name`).
 - **Sellers** → Analytics has "Store visitors": on your store now, visitors over 7 and 30 days, and visits over 30 days. This uses `get_my_store_traffic(seller_id)`, which only works for a store you own.
 

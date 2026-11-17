@@ -1166,7 +1166,11 @@ async function boot(){
   $('#stLoading').hidden = true;
   $('#storeView').hidden = false;
   renderHero(); renderCats(); renderCatalog(); renderAbout(); syncCart(false); syncSaved();
-  loadStorePromo(seller, cachedStore).then(() => setTimeout(() => showStorePromo(seller), 1800));
+  // checkout.html's "Edit cart" for a one-store checkout lands on /<slug>#cart: open the cart
+  // straight away (and skip the promo pop-up, which would cover it).
+  const openCartNow = location.hash === '#cart';
+  if (openCartNow) { history.replaceState(null, '', location.pathname + location.search); openCart(); }
+  loadStorePromo(seller, cachedStore).then(() => { if (!openCartNow) setTimeout(() => showStorePromo(seller), 1800); });
   loadHouseAddons(seller).then(() => syncCart(false));
   if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
 

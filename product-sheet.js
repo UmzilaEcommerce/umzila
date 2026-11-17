@@ -66,8 +66,8 @@
 .uq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .uq-media{position:relative;min-height:420px;background:color-mix(in srgb,var(--uq-accent) 9%,#fff)}
 .uq-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.uq-thumbs{position:absolute;left:12px;bottom:12px;z-index:2;display:flex;gap:6px;max-width:calc(100% - 24px);overflow-x:auto;scrollbar-width:none}
-.uq-thumbs button{flex:0 0 auto;width:48px;height:48px;padding:0;border-radius:10px;overflow:hidden;border:2px solid #fff;background:#fff;cursor:pointer;opacity:.75}
+.uq-thumbs{position:absolute;right:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;max-height:calc(100% - 24px);overflow-y:auto;scrollbar-width:none}
+.uq-thumbs button{flex:0 0 auto;width:68px;height:68px;padding:0;border-radius:12px;overflow:hidden;border:2px solid #fff;background:#fff;cursor:pointer;opacity:.8;box-shadow:0 6px 16px -6px rgb(0 0 0/.45)}
 .uq-thumbs button[aria-pressed="true"]{opacity:1;box-shadow:0 0 0 2px var(--uq-ink)}
 .uq-thumbs img{width:100%;height:100%;object-fit:cover}
 .uq-ph{position:absolute;inset:0;display:grid;align-content:end;padding:20px;font:800 clamp(1.4rem,3vw,2.2rem)/1.05 "Archivo","Arial Black",sans-serif}
@@ -129,6 +129,8 @@
   .uq[open]{animation:uqUp .35s cubic-bezier(.2,.9,.3,1)}
   .uq-grid{grid-template-columns:1fr}
   .uq-media{min-height:0;aspect-ratio:4/3}
+  .uq-thumbs{right:10px;top:10px;gap:6px;max-height:calc(100% - 20px)}
+  .uq-thumbs button{width:52px;height:52px;border-radius:10px}
   .uq-body{padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px))}
 }
 @media (prefers-reduced-motion:reduce){.uq[open]{animation:none}}`;
@@ -190,7 +192,7 @@
     if (opt && !opt.required) picked = opt.values[0];
 
     const media = !quick ? (p.images && p.images.length
-      ? `<img id="uqMain" src="${esc(p.images[0])}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="uq-thumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(u)}" alt=""></button>`).join('')}</div>` : '')
+      ? `<img id="uqMain" src="${esc(p.images[0])}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="uq-thumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(String(u).replace(/\.w1280\.webp$/, '.w480.webp'))}" data-full="${esc(u)}" onerror="if(this.src!==this.dataset.full)this.src=this.dataset.full" alt=""></button>`).join('')}</div>` : '')
       : `<div class="uq-ph">${esc(p.title)}</div>`) : '';
     const assure = [
       p.closedNote ? `${ICONS.clock}<span>${esc(p.closedNote)}</span>` : '',
