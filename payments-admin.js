@@ -212,7 +212,7 @@
     var mount = $('paymentsMount'); if (!mount) return;
     var unresolved = (S.flagged || []).filter(function (f) { return !f.resolved_at; }).length;
     var h = '<div class="pp-tabs" role="tablist">' +
-      tabBtn('options', 'Payment options') + tabBtn('flagged', 'Flagged orders' + (unresolved ? ' <span class="pp-count">' + unresolved + '</span>' : '')) + tabBtn('report', 'Report') + '</div>';
+      tabBtn('options', 'Payment options') + tabBtn('flagged', 'Flagged orders' + (unresolved ? ' <span class="pp-count">' + unresolved + '</span>' : '')) + tabBtn('report', 'Attempts report') + '</div>';
     if (S.tab === 'options') h += optionsHtml();
     else if (S.tab === 'flagged') h += flaggedHtml();
     else h += reportHtml();
@@ -314,12 +314,12 @@
 
   function reportHtml() {
     var rg = S.range || (S.range = defaultRange());
-    var h = '<div class="pp-card"><div class="pp-h"><h3>Report</h3></div>' +
+    var h = '<div class="pp-card"><div class="pp-h"><h3>Payment attempts since the picker was switched on</h3></div>' +
       '<div class="pp-form"><div class="pp-field"><label for="ppFrom">From</label><input type="date" id="ppFrom" value="' + esc(rg.from) + '" max="' + sastDate() + '"></div>' +
       '<div class="pp-field"><label for="ppTo">To</label><input type="date" id="ppTo" value="' + esc(rg.to) + '" max="' + sastDate() + '"></div>' +
       '<button type="button" class="pp-btn primary" data-act="range">Show</button></div>' +
       '<div class="pp-actions"><button type="button" class="pp-btn" data-act="quick" data-days="7">Last 7 days</button><button type="button" class="pp-btn" data-act="quick" data-days="30">Last 30 days</button><button type="button" class="pp-btn" data-act="quick" data-days="month">This month</button></div>' + msg('range') +
-      '<p class="pp-help">Dates are South African time. “Started” counts each press of Pay; “Paid” are the ones PayFast confirmed. Amounts and fees come from PayFast’s notifications.</p></div>';
+      '<p class="pp-help">Dates are South African time. “Started” counts each press of Pay; “Paid” are the ones PayFast confirmed. Amounts and fees come from PayFast’s notifications. It only sees payments started while the payment picker is switched on — for every order, fees per payment method and profit, see <strong>Finances</strong>.</p></div>';
 
     h += '<div class="pp-card"><div class="pp-h"><h3>Per payment option</h3>' + (S.report && S.report.rows.length ? '<button type="button" class="pp-btn" data-act="csv-report">⬇ CSV</button>' : '') + '</div>';
     if (S.reportErr) h += '<div class="pp-warn">' + esc(S.reportErr) + '</div>';

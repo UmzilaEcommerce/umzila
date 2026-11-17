@@ -194,7 +194,18 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 
 /* === ANALYTICS === */
 .analytics-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.analytics-metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.analytics-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.ana-note{font-size:12px;color:var(--muted);margin:-6px 0 14px}
+.ana-msg{color:var(--muted);font-size:13px;padding:10px 0}
+/* Stores tab (2026-11-16): header tools + sales column */
+.store-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.store-tools .form-input{padding:6px 10px}
+#storeSearch{width:200px}
+.badge.house{background:#e0f2fe;color:#075985}
+.badge.disabled{background:#f3f4f6;color:#4b5563}
+/* Order detail: record a cash/card-machine/EFT payment on a manual order */
+.pay-record{margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:10px;background:var(--surface2)}
+.pay-record-btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 
 /* === SCROLLBAR === */
 ::-webkit-scrollbar{width:5px;height:5px}
@@ -247,6 +258,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
 
   .form-grid,.form-grid.cols3{grid-template-columns:1fr}
   .analytics-metrics{grid-template-columns:1fr}
+  .store-tools{width:100%}
+  #storeSearch{flex:1;width:auto;min-width:0}
 }
 
 /* === TODAY / OPS BOARD (2026-10-04) === */
@@ -715,8 +728,17 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
   <section id="panel-stores" class="panel">
     <div class="panel-title">
       Stores
-      <input id="storeSearch" class="form-input" placeholder="Search stores…" style="width:200px;padding:6px 10px"/>
+      <div class="store-tools">
+        <input id="storeSearch" class="form-input" placeholder="Search stores…"/>
+        <select id="storeRange" class="form-input" aria-label="Sales period">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last 12 months</option>
+        </select>
+      </div>
     </div>
+    <div class="ana-note">Sales = paid orders only (South African days, test orders left out), worked out on the server.</div>
     <div id="stores-list"><div class="orders-empty">Loading…</div></div>
   </section>
 
@@ -731,26 +753,27 @@ body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line
         <input type="date" id="ana-end" class="form-input" style="margin-left:6px"/>
       </label>
       <select id="ana-gran" class="form-input" style="width:120px">
-        <option value="day">Daily</option>
+        <option value="day" selected>Daily</option>
         <option value="week">Weekly</option>
-        <option value="month" selected>Monthly</option>
-        <option value="year">Yearly</option>
+        <option value="month">Monthly</option>
       </select>
       <button class="btn btn-primary btn-sm" id="ana-refresh">Run</button>
     </div>
+    <div class="ana-note">Paid orders only, by the South African day they were paid. Test orders are left out. Costs and profit are in the admin portal → Finances.</div>
     <div class="analytics-metrics">
-      <div class="stat-card revenue"><div class="stat-lbl">Revenue</div><div class="stat-val" id="ana-revenue">—</div></div>
-      <div class="stat-card delivered"><div class="stat-lbl">Orders</div><div class="stat-val" id="ana-orders">—</div></div>
+      <div class="stat-card delivered"><div class="stat-lbl">Paid orders</div><div class="stat-val" id="ana-orders">—</div></div>
+      <div class="stat-card revenue"><div class="stat-lbl">Paid by customers</div><div class="stat-val" id="ana-revenue">—</div></div>
+      <div class="stat-card packaging"><div class="stat-lbl">Goods sold</div><div class="stat-val" id="ana-goods">—</div></div>
     </div>
     <div class="card" style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Revenue Over Time</div>
-      <div id="ana-timeseries"></div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Sales over time</div>
+      <div id="ana-timeseries" style="overflow:auto"></div>
     </div>
     <div class="card">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Top 10 Products</div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Top 10 products</div>
       <div style="overflow:auto">
         <table id="ana-table" class="detail-items-table">
-          <thead><tr><th>#</th><th>Product</th><th>Orders</th><th>Qty</th><th>Revenue</th></tr></thead>
+          <thead><tr><th>#</th><th>Product</th><th>Store</th><th>Orders</th><th>Qty</th><th>Goods</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -803,6 +826,57 @@ document.addEventListener('sb-ready', function(e){
   let deliveryOnline = false;
   let deliveryHeartbeatTimer = null;
   let deliveryOffersTimer = null;
+  let MY_ROLES = [];
+
+  /* ═══════════════════════════════════════════
+     SERVER-SIDE SALES (2026-11-16)
+     Money figures on this page come only from the staff sales RPCs
+     (fin_sales_by_period / fin_store_breakdown / fin_top_products — paid
+     orders only, SAST days, test orders excluded). Never sum orders in
+     the browser again. If an RPC isn't deployed yet the screen says so.
+  ═══════════════════════════════════════════ */
+  const SAST_TZ = 'Africa/Johannesburg';
+  function sastDay(d){ return new Intl.DateTimeFormat('en-CA',{ timeZone: SAST_TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(d||new Date()); }
+  function sastDaysAgo(n){ return sastDay(new Date(Date.now() - n*86400000)); }
+  function rpcMissing(err){
+    if(!err) return false;
+    return err.code==='PGRST202' || err.code==='42883' || /could not find the function|does not exist/i.test(String(err.message||''));
+  }
+  // The fin_* RPCs return jsonb: accept a bare array or an object holding one.
+  function rpcRows(data, key){
+    if(Array.isArray(data)) return data;
+    if(data && typeof data==='object'){
+      if(key && Array.isArray(data[key])) return data[key];
+      const arr = Object.values(data).find(Array.isArray);
+      if(arr) return arr;
+    }
+    return [];
+  }
+  function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
+
+  // How an order was paid. Manual codes are logistics' own; PayFast option
+  // names come from site_settings 'payments' (public, admin-edited).
+  const MANUAL_PAY = { cash:'Cash', pos:'Card machine', eft_manual:'EFT (manual)' };
+  let PAY_NAMES = { byKey:{}, byCode:{} }, _payNamesLoaded = false;
+  async function loadPayNames(){
+    if(_payNamesLoaded) return; _payNamesLoaded = true;
+    try{
+      const { data, error } = await sb.from('site_settings').select('value').eq('key','payments').maybeSingle();
+      if(error) throw error;
+      (data?.value?.options||[]).forEach(o=>{ if(o.key) PAY_NAMES.byKey[o.key]=o.name||o.key; if(o.code) PAY_NAMES.byCode[o.code]=o.name||o.code; });
+    }catch(e){ console.warn('payment names', e); _payNamesLoaded = false; }
+  }
+  function isManualOrder(o){ return /^ORD-/i.test(String(o.id||'')) && !o.m_payment_id && !o.isFee; }
+  function paidWithLabel(o){
+    if(o.payment_method_code && MANUAL_PAY[o.payment_method_code]) return MANUAL_PAY[o.payment_method_code];
+    if(o.payment_option_key) return PAY_NAMES.byKey[o.payment_option_key] || o.payment_option_key;
+    if(o.payment_method_code) return PAY_NAMES.byCode[o.payment_method_code] || o.payment_method_code;
+    if(o.m_payment_id || o.pf_gross!=null) return 'PayFast';
+    if(o.payment_status==='paid' && isManualOrder(o)) return 'Cash (not recorded)';
+    return '';
+  }
+  // What the customer was actually charged: PayFast's gross when present.
+  function chargedOf(o){ return o.pf_gross!=null && o.pf_gross!=='' && Number.isFinite(Number(o.pf_gross)) ? Number(o.pf_gross) : o.total; }
 
   /* ═══════════════════════════════════════════
      AUTH
@@ -823,7 +897,7 @@ document.addEventListener('sb-ready', function(e){
     if(error||!roles?.length) return null;
     const names = roles.map(r=>r.role.toLowerCase());
     if(!names.includes('logistics')&&!names.includes('admin')) return null;
-    return {user, role: names.includes('admin')?'admin':'logistics'};
+    return {user, role: names.includes('admin')?'admin':'logistics', roles: [...new Set(names)]};
   }
 
   /* ═══════════════════════════════════════════
@@ -879,6 +953,11 @@ document.addEventListener('sb-ready', function(e){
       label: r.label||'', details: r.details||'',
       status,
       payment_status: r.payment_status||'pending',
+      m_payment_id: r.m_payment_id||null,
+      paid_at: r.paid_at||null,
+      payment_option_key: r.payment_option_key||null,
+      payment_method_code: r.payment_method_code||null,
+      pf_gross: r.pf_gross ?? null,
       shipping_cost: Number(r.shipping_cost||0),
       delivery_class: r.delivery_class||'',
       delivery_zone: r.delivery_zone||'',
@@ -898,7 +977,7 @@ document.addEventListener('sb-ready', function(e){
   async function fetchOrders(){
     try{
       const {data,error} = await sb.from('orders')
-        .select('id,order_number,customer_name,customer_email,customer_phone,delivery_address,pickup_address,city,province,postal_code,label,order_status,payment_status,shipping_cost,delivery_class,delivery_zone,coupon_code,items,total,discount,package_type,notes,profile_id,user_id,created_at,delivery_instructions,delivery_quote_id')
+        .select('id,order_number,customer_name,customer_email,customer_phone,delivery_address,pickup_address,city,province,postal_code,label,order_status,payment_status,shipping_cost,delivery_class,delivery_zone,coupon_code,items,total,discount,package_type,notes,profile_id,user_id,created_at,delivery_instructions,delivery_quote_id,m_payment_id,paid_at,payment_option_key,payment_method_code,pf_gross:pf_response->>amount_gross')
         .neq('order_status','pending_payment')
         .order('created_at',{ascending:false}).limit(1000);
       if(error){console.warn('fetchOrders error',error);return[];}
@@ -957,7 +1036,6 @@ document.addEventListener('sb-ready', function(e){
       postal_code: order.postal_code||null,
       label: order.label||null,
       order_status: order.status||'Pending',
-      payment_status: order.payment_status||'pending',
       shipping_cost: order.shipping_cost||null,
       delivery_class: order.delivery_class||null,
       delivery_zone: order.delivery_zone||null,
@@ -983,10 +1061,19 @@ document.addEventListener('sb-ready', function(e){
       // it — mapOrder() shows 'paid' as 'Pending', which used to be written
       // back and wipe out 'paid'.
       const upd = Object.assign({}, payload);
-      delete upd.user_id; delete upd.created_at; delete upd.payment_status;
+      delete upd.user_id; delete upd.created_at; delete upd.payment_status; // (payment_status is no longer in payload at all — kept as a belt-and-braces guard)
       if(!order.statusChanged) delete upd.order_status;
       result = await sb.from('orders').update(upd).eq('order_number',order.id).select('*');
     } else {
+      // New manual order: "Paid by" decides the payment columns once, at
+      // creation (staff are exempt from orders_payment_columns_guard). Later
+      // payments go through logistics_record_manual_payment, never saveOrder.
+      payload.payment_status = 'pending';
+      if(order.paid_by && MANUAL_PAY[order.paid_by]){
+        payload.payment_status = 'paid';
+        payload.payment_method_code = order.paid_by;
+        payload.paid_at = new Date().toISOString();
+      }
       result = await sb.from('orders').insert([payload]).select('*');
     }
 
@@ -1182,26 +1269,52 @@ document.addEventListener('sb-ready', function(e){
     </button>`;
   }
 
+  // "Paid orders today" / "Sales today": get_ops_board().paid_today when the
+  // board carries it, else fin_sales_by_period(today, today, 'day'); refetched
+  // at most once a minute. null = not available (shown as —).
+  let PAID_TODAY = null, _paidTodayAt = 0, _paidTodayDay = '', _paidTodayBusy = false;
+  function paidTodayFigures(){
+    if(OPS && OPS.paid_today && typeof OPS.paid_today === 'object'){
+      return { orders: num(OPS.paid_today.orders), total: num(OPS.paid_today.total ?? OPS.paid_today.gross) };
+    }
+    const day = sastDay();
+    if(!_paidTodayBusy && (Date.now() - _paidTodayAt > 60000 || _paidTodayDay !== day)){
+      _paidTodayBusy = true;
+      sb.rpc('fin_sales_by_period', { p_from: day, p_to: day, p_gran: 'day' }).then(({ data, error })=>{
+        if(error){ if(!rpcMissing(error)) console.warn('fin_sales_by_period (today)', error); PAID_TODAY = null; }
+        else {
+          const rows = rpcRows(data, 'rows');
+          PAID_TODAY = { orders: rows.reduce((s,r)=>s+num(r.orders),0), total: rows.reduce((s,r)=>s+num(r.gross),0) };
+        }
+      }).catch(e=>{ console.warn('fin_sales_by_period (today)', e); }).finally(()=>{
+        _paidTodayAt = Date.now(); _paidTodayDay = day; _paidTodayBusy = false;
+        if(activePanel==='overview') renderToday();
+      });
+    }
+    return _paidTodayDay === day ? PAID_TODAY : null;
+  }
+
   function renderToday(){
     const root = document.getElementById('today-root');
     if(!root) return;
     if(!OPS){ root.innerHTML = `<div class="ops-empty">Loading live operations…</div>`; return; }
     const ds = OPS.deliveries || [];
     const open = ds.filter(d=>!['DELIVERED','CANCELLED','FAILED','RETURNED'].includes(d.status));
-    const today0 = new Date(); today0.setHours(0,0,0,0);
-    const deliveredToday = ds.filter(d=>d.status==='DELIVERED' && d.delivered_at && new Date(d.delivered_at) >= today0);
-    const attention = ds.filter(d=>attentionReason(d) && !(d.status==='FAILED' && new Date(d.since) < today0));
+    const todaySast = sastDay(); // SAST day, not the device clock
+    const deliveredToday = ds.filter(d=>d.status==='DELIVERED' && d.delivered_at && sastDay(new Date(d.delivered_at)) === todaySast);
+    const attention = ds.filter(d=>attentionReason(d) && !(d.status==='FAILED' && (!d.since || sastDay(new Date(d.since)) < todaySast)));
     const riders = OPS.riders || [];
     const online = riders.filter(r=>r.online);
     const lane = k => open.filter(d=>(DSTATE[d.status]||{}).lane===k);
-    const paidToday = ORDERS.filter(o=>o.payment_status==='paid' && o.created_at && new Date(o.created_at) >= today0 && !o.isFee);
+    // Paid today: server-side, SAST day, by paid time, tests excluded.
+    const pt = paidTodayFigures();
     const kpis = [
       ['Open deliveries', open.length, ''],
       ['Need attention', attention.length, attention.length ? 'bad' : ''],
       ['Delivered today', deliveredToday.length, 'good'],
       ['Riders online', online.length, online.length ? 'good' : 'bad'],
-      ['Paid orders today', paidToday.length, ''],
-      ['Sales today', fmt(paidToday.reduce((s,o)=>s+o.total,0)), '']
+      ['Paid orders today', pt ? pt.orders : '—', ''],
+      ['Sales today', pt ? fmt(pt.total) : '—', '']
     ];
     const laneCol = (title, list, emptyTxt) => `<div class="ops-lane">
       <div class="ops-lane-h">${esc(title)}<span>${list.length}</span></div>
@@ -1298,7 +1411,7 @@ document.addEventListener('sb-ready', function(e){
         <div class="or-ref"><div class="order-id">${esc(shortRef(o.id))}</div><div class="order-date">${esc(o.date)}</div></div>
         <div class="or-cust"><div class="order-name">${esc(o.customer||'—')}</div><div class="order-addr">${esc([o.address,o.city].filter(Boolean).join(', ')||'—')}</div></div>
         <div class="order-items-count">${n} item${n===1?'':'s'}</div>
-        <div class="order-total">${fmt(o.total)}</div>
+        <div class="order-total">${fmt(chargedOf(o))}</div>
         <div class="or-st"><span class="ops-pill ${st.cls}">${esc(st.label)}</span></div>
         <div class="order-actions"><span class="or-chev">›</span></div>
       </div>`;
@@ -1382,6 +1495,7 @@ document.addEventListener('sb-ready', function(e){
         </div>
         <div style="text-align:right">
           ${badge(o.payment_status||'pending')}
+          ${paidWithLabel(o)?`<div style="font-size:12px;color:var(--muted);margin-top:6px">Paid with ${esc(paidWithLabel(o))}</div>`:''}
           ${o.category?`<div style="font-size:12px;color:var(--muted);margin-top:6px">${esc(o.category)}</div>`:''}
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(o.date)}</div>
         </div>
@@ -1397,7 +1511,15 @@ document.addEventListener('sb-ready', function(e){
 
       <div class="form-section-title" style="margin-bottom:10px">Items</div>
       ${itemsHtml}
-      <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:6px;font-size:13px">${o.shipping_cost?`<span style="color:var(--muted)">Delivery: ${fmt(o.shipping_cost)}</span>`:''}<span style="font-weight:800">Charged: ${fmt(o.total)}</span></div>
+      <div style="display:flex;justify-content:flex-end;gap:24px;margin-top:6px;font-size:13px">${o.shipping_cost?`<span style="color:var(--muted)">Delivery: ${fmt(o.shipping_cost)}</span>`:''}<span style="font-weight:800">Charged: ${fmt(chargedOf(o))}</span></div>
+      ${o.pf_gross!=null && Math.abs(chargedOf(o)-o.total)>=0.01 ? `<div style="text-align:right;font-size:11px;color:var(--muted)">PayFast received ${fmt(chargedOf(o))}; the order says ${fmt(o.total)}.</div>` : ''}
+      ${isManualOrder(o) && o.payment_status!=='paid' ? `<div class="pay-record">
+        <div style="font-weight:700;font-size:13px">Payment not recorded yet</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">When the customer has paid, record how. This marks the order paid (it doesn't change its delivery status).</div>
+        <div class="pay-record-btns">
+          ${Object.entries(MANUAL_PAY).map(([k,l])=>`<button class="btn btn-primary btn-sm" data-record-pay="${k}">Paid: ${esc(l)}</button>`).join('')}
+        </div>
+      </div>` : ''}
       ${o.delivery_instructions?`<div class="ops-why" style="margin-top:10px">📝 ${esc(o.delivery_instructions)}</div>`:''}
 
       ${o.notes?`<div style="margin-top:14px"><div class="form-section-title" style="margin-bottom:6px">Notes</div><div style="font-size:13px;color:var(--text2);padding:8px;background:var(--surface2);border-radius:8px">${esc(o.notes)}</div></div>`:''}
@@ -1440,6 +1562,37 @@ document.addEventListener('sb-ready', function(e){
             if(activePanel==='orders') renderOrders();
             if(activePanel==='past') renderPast();
             openDetailsModal(o.id);
+          }
+        });
+      });
+    });
+
+    // Record a cash / card-machine / EFT payment on a manual ORD- order.
+    // Server-side only (logistics_record_manual_payment refuses PayFast and
+    // already-paid orders); saveOrder() never writes payment_status.
+    modalBody.querySelectorAll('[data-record-pay]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const method=btn.dataset.recordPay;
+        showInlineConfirm(`Record ${o.id} as paid (${MANUAL_PAY[method]})?`, async()=>{
+          modalBody.querySelectorAll('[data-record-pay]').forEach(b=>b.disabled=true);
+          try{
+            const { error } = await sb.rpc('logistics_record_manual_payment', { p_order_id: o.dbId, p_method: method });
+            if(error){
+              if(rpcMissing(error)) toast('Recording payments isn\'t switched on yet — try again later','warn');
+              else toast('Could not record payment: '+(error.message||'error'),'error');
+              modalBody.querySelectorAll('[data-record-pay]').forEach(b=>b.disabled=false);
+              return;
+            }
+            ORDERS = await fetchOrders();
+            PAID_TODAY = null; _paidTodayAt = 0;
+            toast(`${o.id} recorded as paid (${MANUAL_PAY[method]})`,'success');
+            renderOverview();
+            if(activePanel==='orders') renderOrders();
+            if(activePanel==='past') renderPast();
+            openDetailsModal(o.id);
+          }catch(e){
+            toast('Could not record payment — check your connection','error');
+            modalBody.querySelectorAll('[data-record-pay]').forEach(b=>b.disabled=false);
           }
         });
       });
@@ -1516,6 +1669,7 @@ document.addEventListener('sb-ready', function(e){
         <button class="btn btn-primary btn-sm js-ok">Confirm</button>
       </div>`;
     modalBody.appendChild(box);
+    try{ box.scrollIntoView({block:'nearest',behavior:'smooth'}); }catch(_){}
     box.querySelector('.js-ok').onclick=()=>{box.remove();onConfirm();};
     box.querySelector('.js-cancel').onclick=()=>box.remove();
   }
@@ -1621,11 +1775,12 @@ document.addEventListener('sb-ready', function(e){
         <div class="form-section-title">Order</div>
         <div class="form-grid">
           <div class="form-group"><label class="form-label">Category</label><select class="form-input" id="ei-category"><option value="">—</option>${catOpts}</select></div>
-          <div class="form-group"><label class="form-label">Order Status</label><select class="form-input" id="ei-status">${statusOpts}</select></div>
-          <div class="form-group"><label class="form-label">Payment Status</label>
-            <select class="form-input" id="ei-payment-status">
-              ${['pending','paid','failed','refunded'].map(s=>`<option value="${s}"${s===o.payment_status?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
-            </select>
+          <div class="form-group"><label class="form-label">Order Status</label>${orderState(o).delivery
+            ? `<div style="font-size:13px;padding:6px 0">${esc(orderState(o).label)}</div><div style="font-size:11px;color:var(--muted)">Moved by the delivery network.</div>`
+            : `<select class="form-input" id="ei-status">${statusOpts}</select>`}</div>
+          <div class="form-group"><label class="form-label">Payment</label>
+            <div style="font-size:13px;padding:6px 0">${badge(o.payment_status||'pending')}${paidWithLabel(o)?` <span style="color:var(--muted)">· ${esc(paidWithLabel(o))}</span>`:''}</div>
+            <div style="font-size:11px;color:var(--muted)">${o.m_payment_id?'Set by PayFast — can\'t be changed here.':(isManualOrder(o)&&o.payment_status!=='paid'?'Use “Payment not recorded yet” on the order to record a cash, card-machine or EFT payment.':'Can\'t be changed here.')}</div>
           </div>
           <div class="form-group"><label class="form-label">Shipping Cost (R)</label><input class="form-input" id="ei-shipping" type="number" step="0.01" min="0" value="${o.shipping_cost||0}"/></div>
           <div class="form-group"><label class="form-label">Delivery Class</label>
@@ -1702,8 +1857,10 @@ document.addEventListener('sb-ready', function(e){
       const label=modalBody.querySelector('#ei-label')?.value.trim()||'';
       const details=modalBody.querySelector('#ei-details')?.value.trim()||'';
       const category=modalBody.querySelector('#ei-category')?.value||'';
-      const status=modalBody.querySelector('#ei-status')?.value||'Pending';
-      const payment_status=modalBody.querySelector('#ei-payment-status')?.value||'pending';
+      // Network orders have no status select (the state machine owns them).
+      const statusSel=modalBody.querySelector('#ei-status');
+      const status=statusSel ? (statusSel.value||o.status) : o.status;
+      const statusChanged=!!statusSel && status!==o.status;
       const shipping_cost=parseFloat(modalBody.querySelector('#ei-shipping')?.value||0)||0;
       const delivery_class=modalBody.querySelector('#ei-delivery-class')?.value||'';
       const delivery_zone=modalBody.querySelector('#ei-delivery-zone')?.value.trim()||'';
@@ -1735,7 +1892,7 @@ document.addEventListener('sb-ready', function(e){
         const prof=await ensureProfile({email,phone,full_name:customer,address,city,province,postal_code,label,details});
         const updated={...o,customer,email,phone,address,city,province,postal_code,label,details,
           pickup_address,delivery_zone,delivery_class,coupon_code,
-          payment_status,shipping_cost,
+          shipping_cost,statusChanged,
           category,status,notes,items,discount,total,profile_id:prof.profile_id||o.profile_id,user_id:CURRENT_USER_ID};
         const idx=ORDERS.findIndex(x=>x.id===o.id);
         if(idx!==-1) ORDERS[idx]=updated;
@@ -1786,8 +1943,8 @@ document.addEventListener('sb-ready', function(e){
           <div class="form-group"><label class="form-label">Order Status</label>
             <select class="form-input" id="co-status"><option>Pending</option><option>Packaging</option><option>Fulfilled</option><option>Delivered</option><option>Returned</option></select>
           </div>
-          <div class="form-group"><label class="form-label">Payment Status</label>
-            <select class="form-input" id="co-payment-status"><option value="pending">Pending</option><option value="paid">Paid</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select>
+          <div class="form-group"><label class="form-label">Paid by</label>
+            <select class="form-input" id="co-paid-by"><option value="">Not paid yet</option>${Object.entries(MANUAL_PAY).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('')}</select>
           </div>
           <div class="form-group"><label class="form-label">Shipping Cost (R)</label><input class="form-input" id="co-shipping" type="number" step="0.01" min="0" value="0" placeholder="0.00"/></div>
           <div class="form-group"><label class="form-label">Delivery Class</label>
@@ -1906,7 +2063,7 @@ document.addEventListener('sb-ready', function(e){
       const details=modalBody.querySelector('#co-details')?.value.trim()||'';
       const category=modalBody.querySelector('#co-category')?.value||'';
       const status=modalBody.querySelector('#co-status')?.value||'Pending';
-      const payment_status=modalBody.querySelector('#co-payment-status')?.value||'pending';
+      const paid_by=modalBody.querySelector('#co-paid-by')?.value||'';
       const shipping_cost=parseFloat(modalBody.querySelector('#co-shipping')?.value||0)||0;
       const delivery_class=modalBody.querySelector('#co-delivery-class')?.value||'';
       const delivery_zone=modalBody.querySelector('#co-delivery-zone')?.value.trim()||'';
@@ -1956,7 +2113,7 @@ document.addEventListener('sb-ready', function(e){
           id, customer:prof.customer||name, email, phone,
           address, city, province, postal_code, label, details,
           pickup_address, delivery_zone, delivery_class, coupon_code,
-          status, payment_status, shipping_cost,
+          status, paid_by, shipping_cost,
           items, subtotal, discount, total, category, notes,
           created_at, date:fmtDate(created_at),
           profile_id:prof.profile_id,
@@ -2120,9 +2277,17 @@ document.addEventListener('sb-ready', function(e){
           items,Number(o.total)||0,items.reduce((s,i)=>s+qtyOf(i),0),nudge(o.customer_email,o.user_id,items));
       }).join('');
 
+      // One person, one card: a basket whose owner already shows under
+      // "Unfinished payments", or who paid after the basket last changed,
+      // isn't listed again (the carts row lingers after Pay is pressed).
+      const unpaidEmails=new Set(unpaid.map(o=>(o.customer_email||'').toLowerCase()).filter(Boolean));
+      const unpaidUids=new Set(unpaid.map(o=>o.user_id).filter(Boolean));
       const known=[],anon=[];
       carts.forEach(c=>{
         const p=profMap[c.user_id]||{};
+        const em=String((c.user_id?p.email:c.guest_email)||'').toLowerCase();
+        if((c.user_id&&unpaidUids.has(c.user_id))||(em&&unpaidEmails.has(em))) return;
+        if(em&&paidAfter[em]&&paidAfter[em]>(c.updated_at||'')) return;
         const items=c.items;
         const total=items.reduce((s,i)=>s+(parseFloat(i.price||0)*qtyOf(i)),0);
         const count=items.reduce((s,i)=>s+qtyOf(i),0);
@@ -2142,7 +2307,7 @@ document.addEventListener('sb-ready', function(e){
       _basketsLoaded=true;
       el.innerHTML=
         section('💳 Unfinished payments ('+unpaid.length+')','Pressed Pay in the last 14 days but never paid (hidden once they pay).',unpaidHtml||'<div class="orders-empty">None 🎉</div>')+
-        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout — changed in the last 30 days.',known.join('')||'<div class="orders-empty">None right now</div>')+
+        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout — changed in the last 30 days. People already under Unfinished payments, or who have since paid, aren\'t repeated.',known.join('')||'<div class="orders-empty">None right now</div>')+
         section('👀 Anonymous baskets ('+anon.length+')','Guests who added items but haven\'t given details yet — what people are picking (last 30 days).',anon.join('')||'<div class="orders-empty">None right now</div>');
 
       el.querySelectorAll('button[data-email]').forEach(btn=>{
@@ -3040,36 +3205,59 @@ document.addEventListener('sb-ready', function(e){
   /* ═══════════════════════════════════════════
      STORES
   ═══════════════════════════════════════════ */
-  async function loadStores(){
-    if(_storesLoaded&&_allStores.length){renderStores(_allStores);return;}
+  // Stores (2026-11-16): status from sellers.status (active / pending /
+  // disabled), a House badge for Umzila's own seller, and sales from
+  // fin_store_breakdown (paid only; store = order_items.seller_id, else the
+  // product's seller) + top item from fin_top_products — never from the
+  // orders loaded in the browser.
+  let _storeSalesNote = '';
+  async function loadStores(force=false){
+    if(!force&&_storesLoaded&&_allStores.length){renderStores(_allStores);return;}
     const el=document.getElementById('stores-list');
     el.innerHTML='<div class="orders-empty">Loading stores…</div>';
+    const days=Number(document.getElementById('storeRange')?.value||30);
+    const p_from=sastDaysAgo(days-1), p_to=sastDay();
     try{
-      const [{data:sellers},{data:products}] = await Promise.all([
-        sb.from('sellers').select('id,shop_name,status,email,location,delivery_method,created_at').order('shop_name'),
-        sb.from('products').select('id,seller_id,name')
+      const [sellersRes,salesRes,topRes] = await Promise.all([
+        sb.from('sellers').select('id,shop_name,status,is_house,email,location,delivery_method,created_at').order('shop_name'),
+        sb.rpc('fin_store_breakdown',{ p_from, p_to }),
+        sb.rpc('fin_top_products',{ p_from, p_to, p_limit: 200 })
       ]);
-      const prodMap={};(products||[]).forEach(p=>{prodMap[p.id]={seller_id:p.seller_id,name:p.name};});
-      const storeMap={};(sellers||[]).forEach(s=>{storeMap[s.id]={...s,revenue:0,orderCount:0,itemMap:{}};});
-      ORDERS.filter(o=>o.status!=='Returned').forEach(o=>{
-        const seen=new Set();
-        (o.items||[]).forEach(it=>{
-          const ps=prodMap[it.product_id||it.id];
-          if(!ps||!storeMap[ps.seller_id]) return;
-          const sid=ps.seller_id;
-          storeMap[sid].revenue+=(it.price||0)*(it.quantity||1);
-          if(!seen.has(sid)){storeMap[sid].orderCount++;seen.add(sid);}
-          const n=it.item||it.name||ps.name||'Item';
-          if(!storeMap[sid].itemMap[n]) storeMap[sid].itemMap[n]=0;
-          storeMap[sid].itemMap[n]+=(it.quantity||1);
+      if(sellersRes.error) throw sellersRes.error;
+      const sales={}, top={};
+      _storeSalesNote='';
+      if(salesRes.error){
+        _storeSalesNote = rpcMissing(salesRes.error) ? 'Store sales aren\'t available yet.' : 'Couldn\'t load store sales.';
+        if(!rpcMissing(salesRes.error)) console.warn('fin_store_breakdown', salesRes.error);
+      } else {
+        rpcRows(salesRes.data,'rows').forEach(r=>{ if(r.seller_id) sales[r.seller_id]={ orders:num(r.orders), goods:num(r.goods ?? r.goods_sold) }; });
+      }
+      if(topRes.error){ if(!rpcMissing(topRes.error)) console.warn('fin_top_products', topRes.error); }
+      else {
+        // rows are ranked; the first row seen per store is its top item
+        rpcRows(topRes.data,'rows').forEach(r=>{
+          const k=r.seller_id||('name:'+(r.shop_name||''));
+          if(!top[k]) top[k]={ name:r.name||'Item', qty:num(r.qty) };
         });
+      }
+      _allStores=(sellersRes.data||[]).map(s=>{
+        const sl=sales[s.id];
+        return {...s, salesKnown: !salesRes.error, revenue: sl?sl.goods:0, orderCount: sl?sl.orders:0,
+                top: top[s.id]||top['name:'+(s.shop_name||'')]||null};
       });
-      _allStores=Object.values(storeMap);
       _storesLoaded=true;
       renderStores(_allStores);
     }catch(err){
-      el.innerHTML=`<div class="orders-empty">Error: ${esc(err.message)}</div>`;
+      el.innerHTML=`<div class="orders-empty">Error: ${esc(err.message||String(err))}</div>`;
     }
+  }
+
+  function storeStatusBadge(s){
+    const st=String(s.status||'pending').toLowerCase();
+    const b = st==='active' ? '<span class="badge Delivered" style="margin-left:6px">Active</span>'
+      : st==='disabled' ? '<span class="badge disabled" style="margin-left:6px">Disabled</span>'
+      : `<span class="badge Pending" style="margin-left:6px">${st==='pending'?'Pending approval':esc(st)}</span>`;
+    return b + (s.is_house ? '<span class="badge house" style="margin-left:6px">House — Umzila\'s own</span>' : '');
   }
 
   function renderStores(stores){
@@ -3077,24 +3265,23 @@ document.addEventListener('sb-ready', function(e){
     if(!el) return;
     const q=(document.getElementById('storeSearch')?.value||'').toLowerCase();
     let list=q?stores.filter(s=>(s.shop_name||'').toLowerCase().includes(q)):stores;
-    list=[...list].sort((a,b)=>b.revenue-a.revenue);
-    if(!list.length){el.innerHTML='<div class="orders-empty">No stores found</div>';return;}
-    el.innerHTML=list.map(s=>{
-      const topItem=Object.entries(s.itemMap||{}).sort((a,b)=>b[1]-a[1])[0];
-      const statusHtml=s.status==='approved'
-        ?'<span class="badge Delivered" style="margin-left:6px">Active</span>'
-        :`<span class="badge Pending" style="margin-left:6px">${esc(s.status||'Pending')}</span>`;
+    const rank=s=>s.status==='active'?0:s.status==='pending'?1:2;
+    list=[...list].sort((a,b)=>rank(a)-rank(b)||(!!a.is_house-!!b.is_house)||b.revenue-a.revenue||String(a.shop_name||'').localeCompare(String(b.shop_name||'')));
+    const note=_storeSalesNote?`<div class="ana-msg">${esc(_storeSalesNote)}</div>`:'';
+    if(!list.length){el.innerHTML=note+'<div class="orders-empty">No stores found</div>';return;}
+    const rangeLbl=document.getElementById('storeRange')?.selectedOptions?.[0]?.textContent||'';
+    el.innerHTML=note+list.map(s=>{
       return `<div class="item-card">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-          <div>
-            <div style="font-weight:700;font-size:15px">${esc(s.shop_name||'(unnamed)')}${statusHtml}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px">${esc(s.email||'')} ${s.location?'· 📍 '+esc(s.location):''}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:700;font-size:15px">${esc(s.shop_name||'(unnamed)')}${storeStatusBadge(s)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;word-break:break-word">${esc(s.email||'')} ${s.location?'· 📍 '+esc(s.location):''}</div>
             <div style="font-size:12px;color:var(--muted)">Delivery: ${esc(s.delivery_method||'—')} · Since ${s.created_at?new Date(s.created_at).toLocaleDateString('en-GB',{month:'short',year:'numeric'}):'—'}</div>
           </div>
           <div style="text-align:right">
-            <div style="font-weight:800;font-size:16px">${fmt(s.revenue)}</div>
-            <div style="font-size:12px;color:var(--muted)">${s.orderCount} order${s.orderCount!==1?'s':''}</div>
-            ${topItem?`<div style="font-size:11px;color:var(--muted);margin-top:4px">Top: ${esc(topItem[0])} (${topItem[1]})</div>`:''}
+            ${s.salesKnown?`<div style="font-weight:800;font-size:16px">${fmt(s.revenue)}</div>
+            <div style="font-size:12px;color:var(--muted)">${s.orderCount} paid order${s.orderCount!==1?'s':''} · ${esc(rangeLbl.toLowerCase())}</div>`:'<div style="font-size:12px;color:var(--muted)">Sales —</div>'}
+            ${s.top?`<div style="font-size:11px;color:var(--muted);margin-top:4px">Top: ${esc(s.top.name)} (${s.top.qty})</div>`:''}
           </div>
         </div>
       </div>`;
@@ -3102,6 +3289,7 @@ document.addEventListener('sb-ready', function(e){
   }
 
   document.getElementById('storeSearch')?.addEventListener('input',()=>renderStores(_allStores));
+  document.getElementById('storeRange')?.addEventListener('change',()=>loadStores(true));
 
   /* ═══════════════════════════════════════════
      SETTINGS
@@ -3111,7 +3299,8 @@ document.addEventListener('sb-ready', function(e){
     let info={};try{info=JSON.parse(raw||'{}');}catch{}
     document.getElementById('settings-info').innerHTML=`
       <div style="margin-bottom:8px"><strong>Email:</strong> ${esc(info.email||'—')}</div>
-      <div style="margin-bottom:16px"><strong>Role:</strong> ${esc(info.role||'—')}</div>
+      <div style="margin-bottom:16px"><strong>Roles:</strong> ${esc((MY_ROLES.length?MY_ROLES:(info.roles||[info.role].filter(Boolean))).map(r=>r.charAt(0).toUpperCase()+r.slice(1)).join(', ')||'—')}
+        <div style="font-size:11px;margin-top:2px">From your active staff roles. Admins change roles in the admin portal.</div></div>
       <button class="btn btn-ghost btn-sm" id="settings-logout">Sign out</button>`;
     document.getElementById('settings-logout')?.addEventListener('click',performLogout);
   }
@@ -3148,7 +3337,9 @@ document.addEventListener('sb-ready', function(e){
 
     // Store session info
     CURRENT_USER_ID = auth.user.id;
-    localStorage.setItem('scp_current_user',JSON.stringify({email:auth.user.email,role:auth.role,user_id:auth.user.id}));
+    MY_ROLES = auth.roles||[auth.role];
+    localStorage.setItem('scp_current_user',JSON.stringify({email:auth.user.email,role:auth.role,roles:MY_ROLES,user_id:auth.user.id}));
+    loadPayNames(); // "Paid with …" names for the order screens
     const name=auth.user.email.split('@')[0];
     document.getElementById('profileChip').textContent=name;
 
@@ -3172,74 +3363,83 @@ document.addEventListener('sb-ready', function(e){
 });
 </script>
 
-<!-- Analytics Script -->
+<!-- Analytics Script (2026-11-16): paid sales from the server only.
+     fin_sales_by_period + fin_top_products (staff-gated, paid orders only,
+     SAST days by paid time, test orders excluded). The browser only formats. -->
 <script>
 document.addEventListener('sb-ready',function(e){
   const sb=e.detail;
+  const TZ='Africa/Johannesburg';
   function fmtA(v){return new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(Number(v||0));}
   function escA(s){return(s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-
-  function toKey(d,gran){
-    const dt=new Date(d);if(isNaN(dt))return null;
-    if(gran==='week'){const oj=new Date(dt.getFullYear(),0,1);const w=Math.ceil((((dt-oj)/86400000)+oj.getDay()+1)/7);return`${dt.getFullYear()}-W${String(w).padStart(2,'0')}`;}
-    if(gran==='month')return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
-    if(gran==='year')return`${dt.getFullYear()}`;
-    return dt.toISOString().slice(0,10);
+  function numA(v){const n=Number(v);return Number.isFinite(n)?n:0;}
+  function sastDayA(d){return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(d||new Date());}
+  function missing(err){return !!err&&(err.code==='PGRST202'||err.code==='42883'||/could not find the function|does not exist/i.test(String(err.message||'')));}
+  function rows(data,key){
+    if(Array.isArray(data))return data;
+    if(data&&typeof data==='object'){if(key&&Array.isArray(data[key]))return data[key];const a=Object.values(data).find(Array.isArray);if(a)return a;}
+    return [];
+  }
+  // Period keys come from the server (a SAST date / week start / month start).
+  function periodLabel(p,gran){
+    const s=String(p||'');const m=/^(\d{4})-(\d{2})(?:-(\d{2}))?/.exec(s);
+    if(!m)return s;
+    const d=new Date(Date.UTC(+m[1],+m[2]-1,+(m[3]||1),12));
+    const f=o=>new Intl.DateTimeFormat('en-ZA',Object.assign({timeZone:'UTC'},o)).format(d);
+    if(gran==='month')return f({month:'long',year:'numeric'});
+    if(gran==='week')return 'Week of '+f({day:'numeric',month:'short',year:'numeric'});
+    return f({weekday:'short',day:'numeric',month:'short',year:'numeric'});
   }
 
-  async function fetchRange(s,e){
-    let q=sb.from('orders').select('id,order_number,items,total,created_at,order_status').order('created_at',{ascending:false}).limit(5000);
-    if(s)q=q.gte('created_at',s);if(e)q=q.lte('created_at',e);
-    const{data,error}=await q;
-    if(error){console.warn('analytics fetch error',error);return[];}
-    return data||[];
-  }
-
+  let runSeq=0;
   async function runAnalytics(){
-    const s=document.getElementById('ana-start')?.value;
-    const e=document.getElementById('ana-end')?.value;
-    const gran=document.getElementById('ana-gran')?.value||'month';
-    const sISO=s?(new Date(s+'T00:00:00Z')).toISOString():null;
-    const eISO=e?(new Date(e+'T23:59:59Z')).toISOString():null;
-
-    const orders=await fetchRange(sISO,eISO);
-    const active=orders.filter(o=>(o.order_status||'')==='Returned'?false:true);
-    let totRev=0,totOrd=0;const series={};
-    active.forEach(o=>{
-      const k=toKey(o.created_at,gran);if(!k)return;
-      if(!series[k])series[k]={label:k,orders:0,revenue:0};
-      series[k].orders++;series[k].revenue+=Number(o.total||0);
-      totOrd++;totRev+=Number(o.total||0);
-    });
-    document.getElementById('ana-revenue').textContent=fmtA(totRev);
-    document.getElementById('ana-orders').textContent=totOrd;
-
-    const arr=Object.values(series).sort((a,b)=>a.label<b.label?-1:1);
+    const seq=++runSeq;
+    let s=document.getElementById('ana-start')?.value;
+    let en=document.getElementById('ana-end')?.value;
+    const gran=document.getElementById('ana-gran')?.value||'day';
     const tsEl=document.getElementById('ana-timeseries');
-    if(tsEl) tsEl.innerHTML=arr.length
-      ?`<table class="detail-items-table"><thead><tr><th>Period</th><th>Orders</th><th>Revenue</th></tr></thead><tbody>${arr.map(s=>`<tr><td>${escA(s.label)}</td><td>${s.orders}</td><td>${fmtA(s.revenue)}</td></tr>`).join('')}</tbody></table>`
-      :'<div style="color:var(--muted);font-size:13px;padding:10px 0">No data for this period</div>';
-
-    // Top products
-    const prodMap=new Map();
-    orders.forEach(o=>{
-      if((o.order_status||'')==='Returned')return;
-      const oid=o.id||o.order_number;
-      (Array.isArray(o.items)?o.items:[]).forEach(it=>{
-        const pid=it.product_id||null;
-        const n=it.item||it.name||'Unknown';
-        const k=pid?`pid:${pid}`:`name:${n}`;
-        if(!prodMap.has(k))prodMap.set(k,{title:n,orders_set:new Set(),qty:0,rev:0});
-        const rec=prodMap.get(k);
-        rec.qty+=Number(it.quantity||1);rec.rev+=Number(it.quantity||1)*Number(it.price||0);
-        if(oid)rec.orders_set.add(oid);
-      });
-    });
-    const top=Array.from(prodMap.values()).map(r=>({...r,oc:r.orders_set.size})).sort((a,b)=>b.oc-a.oc||b.qty-a.qty).slice(0,10);
     const tbody=document.querySelector('#ana-table tbody');
-    if(tbody) tbody.innerHTML=top.length
-      ?top.map((p,i)=>`<tr><td>${i+1}</td><td>${escA(p.title)}</td><td>${p.oc}</td><td>${p.qty}</td><td>${fmtA(p.rev)}</td></tr>`).join('')
-      :`<tr><td colspan="5" style="color:var(--muted)">No data</td></tr>`;
+    const setKpis=(o,g,gd)=>{
+      document.getElementById('ana-orders').textContent=o;
+      document.getElementById('ana-revenue').textContent=g;
+      document.getElementById('ana-goods').textContent=gd;
+    };
+    if(!s||!en){if(tsEl)tsEl.innerHTML='<div class="ana-msg">Pick a From and To date.</div>';return;}
+    if(s>en){const t=s;s=en;en=t;}
+    setKpis('…','…','…');
+    if(tsEl)tsEl.innerHTML='<div class="ana-msg">Loading…</div>';
+    if(tbody)tbody.innerHTML='<tr><td colspan="6" style="color:var(--muted)">Loading…</td></tr>';
+
+    const [salesRes,topRes]=await Promise.all([
+      sb.rpc('fin_sales_by_period',{p_from:s,p_to:en,p_gran:gran}).then(r=>r,err=>({error:err})),
+      sb.rpc('fin_top_products',{p_from:s,p_to:en,p_limit:10}).then(r=>r,err=>({error:err}))
+    ]);
+    if(seq!==runSeq)return; // a newer run started
+
+    if(salesRes.error){
+      if(!missing(salesRes.error))console.warn('fin_sales_by_period',salesRes.error);
+      setKpis('—','—','—');
+      if(tsEl)tsEl.innerHTML=`<div class="ana-msg">${missing(salesRes.error)?'Sales figures aren\'t available yet — they\'re being moved to the server.':'Couldn\'t load sales: '+escA(salesRes.error.message||'error')}</div>`;
+    } else {
+      const arr=rows(salesRes.data,'rows').slice().sort((a,b)=>String(a.period)<String(b.period)?-1:1);
+      const tot=arr.reduce((t,r)=>({o:t.o+numA(r.orders),g:t.g+numA(r.gross),gd:t.gd+numA(r.goods)}),{o:0,g:0,gd:0});
+      setKpis(String(tot.o),fmtA(tot.g),fmtA(tot.gd));
+      if(tsEl)tsEl.innerHTML=arr.length
+        ?`<table class="detail-items-table"><thead><tr><th>Period</th><th>Paid orders</th><th>Paid by customers</th><th>Goods</th></tr></thead><tbody>${arr.map(r=>`<tr><td>${escA(periodLabel(r.period,gran))}</td><td>${numA(r.orders)}</td><td>${fmtA(r.gross)}</td><td>${fmtA(r.goods)}</td></tr>`).join('')}</tbody></table>`
+        :'<div class="ana-msg">No paid orders in this period</div>';
+    }
+
+    if(tbody){
+      if(topRes.error){
+        if(!missing(topRes.error))console.warn('fin_top_products',topRes.error);
+        tbody.innerHTML=`<tr><td colspan="6" style="color:var(--muted)">${missing(topRes.error)?'Top products aren\'t available yet.':'Couldn\'t load top products.'}</td></tr>`;
+      } else {
+        const top=rows(topRes.data,'rows').slice(0,10);
+        tbody.innerHTML=top.length
+          ?top.map((p,i)=>`<tr><td>${i+1}</td><td>${escA(p.name||'Item')}</td><td>${escA(p.shop_name||'—')}</td><td>${numA(p.orders)}</td><td>${numA(p.qty)}</td><td>${fmtA(p.goods)}</td></tr>`).join('')
+          :'<tr><td colspan="6" style="color:var(--muted)">No data</td></tr>';
+      }
+    }
   }
 
   window._runAnalytics=runAnalytics;
@@ -3249,11 +3449,10 @@ document.addEventListener('sb-ready',function(e){
   document.getElementById('ana-end')?.addEventListener('change',runAnalytics);
   document.getElementById('ana-gran')?.addEventListener('change',runAnalytics);
 
-  // Set default date range
-  const now=new Date();const past=new Date();past.setMonth(now.getMonth()-1);
+  // Default range: the last 30 SAST days, today included.
   const si=document.getElementById('ana-start');const ei=document.getElementById('ana-end');
-  if(si)si.value=past.toISOString().slice(0,10);
-  if(ei)ei.value=now.toISOString().slice(0,10);
+  if(si)si.value=sastDayA(new Date(Date.now()-29*86400000));
+  if(ei)ei.value=sastDayA();
 });
 </script>
 </body>

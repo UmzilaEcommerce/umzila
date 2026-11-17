@@ -119,11 +119,27 @@ While `site_settings` `timeslots.enabled` is true, a delivery whose order has a 
 
 **No Mark Ready (2026-11-15).** Stores no longer tap anything. `create_delivery_on_payment` still creates the delivery `PENDING`; `lib/batch-dispatch.js releaseOrderDelivery()` (called by the after-paid hook in `complete-order-payment.js` via `timeslotAfterPaid`, release only — no route planning on the payment path) and `releasePendingDeliveries()` (start of every `sweepWaitingDeliveries`: rider heartbeat every 30 s, offer answers, and the once-a-minute `timeslot-tick`, which now sweeps whether timeslots are on or off) move it to `READY_FOR_DISPATCH` (event `ORDER_READY`, metadata `auto: true`). Exception: while `order_closed_store(order_id)` names a closed goods store the delivery stays `PENDING` until it opens. Staff screens: `PENDING` reads "Preparing"; "Not sent to riders" is flagged after 5 min; run deliveries waiting for their release are not flagged as "No rider". `advance-delivery-on-fulfillment.js` is kept for the old per-item dropdown but nothing on the dashboard calls it any more. Riders could always collect without the store's tap (`complete_pickup` never checked it). Timeslots off, or an order without a run, takes none of these branches.
 
+## Money on the logistics screens (2026-11-16)
+
+Logistics never adds up money in the browser any more. Every sales figure comes from staff-gated RPCs (`timeslot_is_staff()`), from the Finances engine (see `docs/systems/finances.md`; shapes in `docs/plans/finances-contract-changes.md`): paid orders only (`payment_status='paid'`, no seller enrolment fee), SAST days by paid time, orders marked as tests in Finances left out.
+
+| Screen | Source |
+|---|---|
+| Today → "Paid orders today", "Sales today" | `fin_sales_by_period(today, today, 'day')` (the code also accepts a `get_ops_board().paid_today` field, which the board does not return today) (refetched at most once a minute). "Delivered today" uses the SAST day too. |
+| Analytics | `fin_sales_by_period(from, to, day/week/month)` + `fin_top_products(from, to, 10)`. Shows paid orders, "paid by customers" (gross, incl. delivery) and goods. Costs/profit are admin-only (admin → Finances). |
+| Stores | `sellers` (status `active` / `pending` / `disabled`, `is_house` → "House — Umzila's own" badge) + `fin_store_breakdown(from, to)` for sales and paid orders (7/30/90/365-day picker) + `fin_top_products` for each store's top item. |
+
+If an RPC isn't deployed (PostgREST `PGRST202`) the screen shows "not available yet" / "—" rather than falling back to a browser sum.
+
+**Recording a manual payment.** The Edit order form has no payment-status control (it was dead: `saveOrder()` strips it). A manual order (`ORD-…`, no `m_payment_id`) that isn't paid shows "Payment not recorded yet" with Paid: Cash / Card machine / EFT (manual), which calls `logistics_record_manual_payment(order_id, method)` — it sets `payment_status='paid'`, `paid_at`, `payment_method_code` (`cash|pos|eft_manual`), refuses PayFast and already-paid orders, and never touches `order_status`. Setting paid fires the paid-order triggers; manual orders carry no `destination_geo`/quote, so `create_delivery_on_payment` creates no delivery — if logistics ever saves a geocoded address on manual orders, recording a payment would dispatch a rider. `fin_top_products` caps `p_limit` at 100 (Stores asks for 200). The New Order form's "Paid by" (Not paid yet / Cash / Card machine / EFT) sets those three columns on the insert itself (staff are exempt from `orders_payment_columns_guard`). The Edit form's Order Status select is hidden for orders with a network delivery and now actually saves for the others (it was silently dropped before because `statusChanged` was never set).
+
+**Baskets.** A carts row lingers after the buyer presses Pay, so a person used to show twice (Unfinished payments + Baskets with contact details). A contact basket is now skipped when the same email/account is under Unfinished payments or paid after the basket last changed.
+
 ## Gotchas
 
-- **`saveOrder()` in logistics** must never write `user_id`, `created_at` or `payment_status` on an existing order. It writes `order_status` only when `statusChanged` is set by the status buttons. It used to hand the customer's order to the rep and overwrite `paid`.
+- **`saveOrder()` in logistics** must never write `user_id`, `created_at` or `payment_status` on an existing order (the payload no longer carries `payment_status` at all; only the insert branch sets payment columns, from "Paid by"). It writes `order_status` only when `statusChanged` is set (status buttons, or the Edit form's status select when it changed). It used to hand the customer's order to the rep and overwrite `paid`.
 - Manual status buttons are hidden for orders that have a network delivery; the state machine owns those. Delete is hidden for paid orders.
-- Order detail shows the stored `orders.total` as "Charged". Never total it up in the browser; item shapes differ by order type:
+- Order detail shows "Charged" = PayFast's `pf_response.amount_gross` when there is one, else the stored `orders.total` (`chargedOf()`), plus "Paid with …" (`paidWithLabel()`: manual codes cash/pos/eft_manual, else the option name from `site_settings` `payments`, else "PayFast"). Never total it up in the browser; item shapes differ by order type:
   - checkout: `name/price/quantity/subtotal`;
   - legacy: `item/price/quantity`;
   - fees: `item_name/unit_price/total`.

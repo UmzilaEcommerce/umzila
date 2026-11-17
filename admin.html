@@ -495,6 +495,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="delivery-times"><span class="menu-icon">🕒</span><span class="menu-label">Delivery Times</span></li>
           <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
           <li data-section="payments"><span class="menu-icon">💳</span><span class="menu-label">Payments</span></li>
+          <li data-section="finances"><span class="menu-icon">💰</span><span class="menu-label">Finances</span></li>
           <li data-section="delivery-analytics"><span class="menu-icon">📈</span><span class="menu-label">Delivery Analytics</span></li>
           <li class="menu-group" role="presentation">Sellers</li>
           <li data-section="seller-applications"><span class="menu-icon">🏪</span><span class="menu-label">Seller Applications</span></li>
@@ -534,36 +535,31 @@ const supabaseClient = supabase.createClient(
           </div>
           <div id="trafficBody" class="muted" style="font-size:13px">Loading…</div>
         </div>
-        <!-- KPI Row 1 -->
-        <div class="grid">
-          <div class="card" style="border-top:3px solid #2563eb"><h3>Total Products</h3><p id="statTotal">0</p></div>
-          <div class="card" style="border-top:3px solid #f97316"><h3>Active Sale Items</h3><p id="statSale">0</p></div>
-          <div class="card" style="border-top:3px solid #ef4444"><h3>Low Stock (&lt;5)</h3><p id="statLow">0</p></div>
+        <!-- KPI Row 1 — stock + open deliveries (+ Out of Stock appended by addOutOfStockCard) -->
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="card" style="border-top:3px solid #2563eb" title="Listed (visible) goods of the stores — services, hidden items and Umzila's own drinks are not counted"><h3>Listed Products</h3><p id="statTotal">0</p></div>
+          <div class="card" style="border-top:3px solid #f97316" title="Listed goods marked on sale"><h3>On Sale</h3><p id="statSale">0</p></div>
+          <div class="card" style="border-top:3px solid #ef4444" title="Listed goods with 1–4 left"><h3>Low Stock (1–4)</h3><p id="statLow">0</p></div>
+          <div class="card" style="border-top:3px solid #0a2f66" title="Umzila's own drinks (house seller) — our own stock"><h3>Umzila Drinks Stock</h3><p id="statHouseStock">—</p><div id="statHouseStockSub" class="muted" style="font-size:12px"></div></div>
           <div class="card" style="border-top:3px solid #8b5cf6"><h3>Open Deliveries</h3><p id="statOpenDeliveries">—</p></div>
         </div>
         <!-- KPI Row 2 -->
-        <div class="grid" style="grid-template-columns:repeat(5,1fr)">
-          <div class="card" style="border-top:3px solid #10b981"><h3>Total Revenue</h3><p id="kpiRevenue" style="font-size:20px">—</p></div>
-          <div class="card" style="border-top:3px solid #0ea5e9"><h3>Total Orders</h3><p id="kpiOrders">—</p></div>
+        <div class="grid" style="grid-template-columns:repeat(2,1fr)">
           <div class="card" style="border-top:3px solid #f59e0b"><h3>Active Sellers</h3><p id="kpiSellers">—</p></div>
-          <div class="card" style="border-top:3px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>
-          <div class="card" style="border-top:3px solid #6366f1"><h3>Carts w/ Items</h3><p id="kpiCarts">—</p></div>
-        </div>
-        <!-- KPI Row 3 — Revenue breakdown -->
-        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
-          <div class="card" style="border-top:3px solid #059669;background:#f0fdf4"><h3 style="color:#059669">Product Sales</h3><p id="kpiProductRevenue" style="font-size:20px;color:#059669">—</p></div>
-          <div class="card" style="border-top:3px solid #7c3aed;background:#f5f3ff"><h3 style="color:#7c3aed">Enrollment Fees</h3><p id="kpiEnrollRevenue" style="font-size:20px;color:#7c3aed">—</p></div>
-          <div class="card" style="border-top:3px solid #ea580c;background:#fff7ed"><h3 style="color:#ea580c">Ad Revenue</h3><p id="kpiAdRevenue" style="font-size:20px;color:#ea580c">—</p></div>
-        </div>
+          <div class="card" style="border-top:3px solid #ec4899"><h3>Total Favourites</h3><p id="kpiFavourites">—</p></div>        </div>
+        <!-- Money this month — fin_summary() via /finances-admin.js (replaces the old "Total Revenue",
+             "Total Orders", Product Sales / Enrollment / Ad Revenue cards: those summed cash through
+             the till incl. what stores are owed and test orders). Tapping a card opens Finances. -->
+        <div id="finDashMount"><div class="muted" style="font-size:13px">💰 Money — loading…</div></div>
 
-        <!-- Charts -->
+        <!-- Charts (both drawn by /finances-admin.js from fin_summary(last 30 days).by_day, SAST, paid orders) -->
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-top:14px">
           <div class="card">
-            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Revenue — last 30 days</h3>
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Order value &amp; Umzila gross profit — last 30 days</h3>
             <canvas id="chartRevenue" height="100"></canvas>
           </div>
           <div class="card">
-            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Orders — last 30 days</h3>
+            <h3 style="margin:0 0 14px;font-size:13px;font-weight:700;color:var(--text)">Paid orders — last 30 days</h3>
             <canvas id="chartOrders" height="100"></canvas>
           </div>
         </div>
@@ -762,10 +758,11 @@ const supabaseClient = supabase.createClient(
             <h4 style="margin:0 0 10px">Seller Rankings</h4>
             <div style="overflow-x:auto">
               <table>
-                <thead><tr><th>Shop</th><th title="Store page visits in the last 30 days (distinct visitors)">Store visits (30d)</th><th>Products</th><th>Total Favourites</th><th>Total Clicks</th><th>Est. Revenue</th></tr></thead>
+                <thead><tr><th>Shop</th><th title="Store page visits in the last 30 days (distinct visitors)">Store visits (30d)</th><th>Products</th><th>Total Favourites</th><th>Clicks (30d)</th><th title="Value of this store's goods on paid orders in the last 30 days">Goods sold (30d)</th><th title="What Umzila owes the store for those goods (Finances)">Owed to store (30d)</th></tr></thead>
                 <tbody id="intelSellersTable"></tbody>
               </table>
             </div>
+            <div id="intelSellersNote" class="muted" style="font-size:12px;margin-top:8px"></div>
           </div>
         </div>
 
@@ -844,6 +841,7 @@ const supabaseClient = supabase.createClient(
         </div>
         <div class="sub-tab-bar">
           <button class="sub-tab active" data-shtab="active">Active</button>
+          <button class="sub-tab" data-shtab="pending">Pending</button>
           <button class="sub-tab" data-shtab="disabled">Disabled</button>
           <button class="sub-tab" data-shtab="all">All</button>
         </div>
@@ -1143,11 +1141,10 @@ const supabaseClient = supabase.createClient(
         <div id="deliveryPricingMount"></div>
       </section>
 
-      <!-- Delivery Analytics (Stage 17, plan §99/100). Explicitly lowest
-           priority per the plan itself -- "needs real operational data to
-           be meaningful... post-pilot-validation, not part of the launch
-           checklist." Built structurally correct now; will show near-empty
-           numbers until real delivery volume exists, which is expected. -->
+      <!-- Delivery Analytics — rebuilt 2026-11-16 (audit A8/A9): period picker,
+           deliveries/timing from deliveries rows, money per order from the
+           Finances engine fin_delivery_breakdown() (falls back to the old
+           per-route RPC until it exists). Logic: window.loadDeliveryAnalytics. -->
       <section id="section-delivery-analytics" style="display:none">
         <div class="section-top">
           <h2>📈 Delivery Analytics</h2>
@@ -1164,6 +1161,16 @@ const supabaseClient = supabase.createClient(
            alert emails. All logic in /timeslots-admin.js (docs/plans/delivery-timeslots-plan.md). -->
       <!-- Payments (payment method picker): options + master switch, flagged "paid twice" orders,
            report per option. All logic in /payments-admin.js (docs/plans/payment-picker-checkout-plan.md §7). -->
+      <!-- Finances (profit & loss, fees per method, owed to stores, expenses/income, per-order corrections,
+           store prices, assumptions). All logic in /finances-admin.js (docs/systems/finances.md); every figure
+           comes from the fin_* RPCs. -->
+      <section id="section-finances" style="display:none">
+        <div class="section-top">
+          <h2>💰 Finances</h2>
+        </div>
+        <div id="financesMount"><p style="color:#6b7280">Loading…</p></div>
+      </section>
+
       <section id="section-payments" style="display:none">
         <div class="section-top">
           <h2>💳 Payments</h2>
@@ -1252,16 +1259,8 @@ const supabaseClient = supabase.createClient(
             <input type="password" id="newPass" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;margin-bottom:10px;font-family:inherit;outline:none" />
             <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Confirm New</label>
             <input type="password" id="confirmPass" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;margin-bottom:14px;font-family:inherit;outline:none" />
-            <button class="small-btn" onclick="alert('Dummy only — no-op')">Change Password</button>
-          </div>
-
-          <div class="card" style="min-width:240px;max-width:320px">
-            <h3 style="font-size:14px;font-weight:700;color:var(--text);text-transform:none;margin-bottom:16px">Inventory</h3>
-            <button id="exportInv" class="btn" style="width:100%;justify-content:center;margin-bottom:10px">📥 Export Inventory (JSON)</button>
-            <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-              <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Users</div>
-              <button id="addDummyUser" class="btn" style="width:100%;justify-content:center">Add Dummy User</button>
-            </div>
+            <div id="changePassMsg" role="status" style="font-size:13px;margin-bottom:10px;display:none"></div>
+            <button class="small-btn" id="changePassBtn" type="button">Change Password</button>
           </div>
         </div>
       </section>
@@ -1399,7 +1398,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
   // Helpers
   const fmt = v => new Intl.NumberFormat('en-ZA',{style:'currency',currency:'ZAR'}).format(v);
-  const ORDERS_KEY = 'scp_orders_v1';
   const app = document.getElementById('app');
   const toasts = document.getElementById('toasts');
   function showToast(msg){
@@ -1568,42 +1566,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
   }
 
-  // Update pending orders count from supabase (Pending or Packaging)
-  async function updatePendingCount(){
-    const el = document.getElementById('statPending');
-    if(!el) return; // card replaced by live "Open Deliveries" (get_ops_board) — it counted delivered orders + seller fees
-    if(!supabaseClient){ 
-      // fallback to localStorage as before
-      const pendingOrders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').filter(o => o.status === 'Pending').length;
-      if(el) el.textContent = pendingOrders;
-      return;
-    }
-    try {
-      // use .select with count
-      const { count, error } = await supabaseClient
-        .from('orders')
-        .select('id', { count: 'exact', head: false })
-        .in('order_status', ['paid', 'Packaging']);
-      // Some Supabase versions return count as `count` or in the meta; this handles common behavior
-      if(error){ console.warn('updatePendingCount select error', error); }
-      // If count is available as number use it; else attempt a cheap fetch to count length
-      if(typeof count === 'number'){
-        if(el) el.textContent = count;
-      } else {
-        // fallback: fetch rows and measure
-        const { data, error: dErr } = await supabaseClient.from('orders').select('id').in('order_status', ['paid', 'Packaging']).limit(1000);
-        if(!dErr && data) { if(el) el.textContent = data.length; return; }
-        // final fallback
-        if(el) el.textContent = '0';
-      }
-    } catch(e){
-      console.warn('updatePendingCount failed', e);
-      // fallback to localStorage
-      const pendingOrders = JSON.parse(localStorage.getItem(ORDERS_KEY) || '[]').filter(o => o.status === 'Pending').length;
-      if(el) el.textContent = pendingOrders;
-    }
-  }
-
   // fetch products from supabase (single source of truth)
     // fetch products from supabase (single source of truth)
   async function fetchProducts(){
@@ -1634,7 +1596,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           popularity,
           product_images!fk_product_images_product(url),
           product_variants!product_variants_product_id_fkey(id, sku, size, stock),
-          sellers(id, shop_name)
+          listing_type,
+          sellers(id, shop_name, is_house)
         `)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -1671,6 +1634,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           category: categoryName || r.category || '',
           seller_id: r.seller_id || null,
           seller_name: (r.sellers && r.sellers.shop_name) || '',
+          is_house: !!(r.sellers && r.sellers.is_house),
+          listing_type: r.listing_type || 'product',
           delivery_class: r.delivery_class || 'medium',
           free_delivery: !!(r.free_delivery),
           units_per_trip: r.units_per_trip || null,
@@ -1693,26 +1658,41 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       
       console.log('Processed products cache:', productsCache); // Debug
       
-      // Update pending orders stat (async)
-      await updatePendingCount();
       loadProducts(); // render UI from cache
     } catch(e){
       console.warn('fetchProducts failed', e);
       productsCache = [];
-      await updatePendingCount();
       loadProducts();
     }
   }
 
 
+  // Listed goods of real stores: visible, listing_type 'product' (services
+  // have no stock), not the house seller (Umzila's drinks get their own card).
+  function dashboardGoods(){
+    return productsCache.filter(p => p.visible && p.listing_type === 'product' && !p.is_house);
+  }
+
   // render products table from productsCache
   function loadProducts(){
     const tbody = document.querySelector('#productsTable tbody');
     tbody.innerHTML = '';
-    document.getElementById('statTotal').textContent = productsCache.length;
-    document.getElementById('statSale').textContent = productsCache.filter(p=>p.sale).length;
-    document.getElementById('statLow').textContent = productsCache.filter(p=>p.quantity < 5).length;
-    // statPending updated in fetchProducts via updatePendingCount()
+    // Dashboard stock cards count listed goods of real stores only: hidden
+    // products, services (no stock) and the house seller's drinks (Umzila's
+    // own stock — its own card) are left out. See dashboardGoods().
+    const goods = dashboardGoods();
+    document.getElementById('statTotal').textContent = goods.length;
+    document.getElementById('statSale').textContent = goods.filter(p=>p.sale).length;
+    document.getElementById('statLow').textContent = goods.filter(p=>p.quantity > 0 && p.quantity < 5).length;
+    const houseEl = document.getElementById('statHouseStock');
+    if (houseEl) {
+      const house = productsCache.filter(p => p.is_house && p.visible);
+      const units = house.reduce((s, p) => s + Math.max(0, Number(p.quantity || 0)), 0);
+      const low = house.filter(p => Number(p.quantity || 0) < 5).length;
+      houseEl.textContent = units + ' units';
+      const sub = document.getElementById('statHouseStockSub');
+      if (sub) sub.textContent = house.length + ' drinks listed' + (low ? ' · ' + low + ' low / out' : '');
+    }
     productsCache.forEach(p => {
       const tr = document.createElement('tr');
       const imgCell = document.createElement('td');
@@ -2360,6 +2340,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'delivery-analytics': document.getElementById('section-delivery-analytics'),
     'delivery-times': document.getElementById('section-delivery-times'),
     'payments': document.getElementById('section-payments'),
+    'finances': document.getElementById('section-finances'),
     'spin': document.getElementById('section-spin'),
     'home': document.getElementById('section-home')
   };
@@ -2499,7 +2480,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       </div>
       <div class="tr-box" style="margin-top:14px">
         <h4>Where orders come from (links with ?src=)</h4>
-        ${(t.sources || []).length ? t.sources.map(x => `<div class="tr-row"><span>${e(x.src)}</span><span><b>${x.orders}</b> <small>paid order${x.orders === 1 ? '' : 's'} · ${fmtR(x.sales)} · ${x.visitors} arrived</small></span></div>`).join('')
+        <div class="tr-note" style="margin:0 0 6px">Order value = what customers paid, delivery included; orders marked as tests in Finances are left out.</div>
+        ${(t.sources || []).length ? t.sources.map(x => `<div class="tr-row"><span>${e(x.src)}</span><span><b>${x.orders}</b> <small>paid order${x.orders === 1 ? '' : 's'} · ${fmtR(x.sales)} order value · ${x.visitors} arrived</small></span></div>`).join('')
           : '<div class="tr-row"><span>No tagged links yet — share e.g. <b>…/velaphishisanyama?src=thandi</b> or <b>?src=tiktok</b> and orders from them show up here.</span></div>'}
       </div>
       <div class="tr-note">One visitor = one phone/browser (people on two phones count twice). Your staff browsers are left out. Counting started ${t.since ? fmtDay(t.since) : 'today'}.</div>`;
@@ -3062,6 +3044,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="delivery-times"]')?.addEventListener('click', () => window.loadTimeslotsAdmin?.());
   document.querySelector('[data-section="payments"]')?.addEventListener('click', () => window.loadPaymentsAdmin?.());
   document.querySelector('[data-section="dashboard"]')?.addEventListener('click', () => window.loadPaymentsBadge?.());
+  document.querySelector('[data-section="finances"]')?.addEventListener('click', () => window.loadFinancesAdmin?.());
+  document.querySelector('[data-section="dashboard"]')?.addEventListener('click', () => window.loadFinanceDashboard?.());
   document.querySelector('[data-section="spin"]')?.addEventListener('click', () => window.loadSpinAdmin?.());
   document.querySelector('[data-section="home"]')?.addEventListener('click', () => window.loadHomeAdmin?.());
   document.querySelector('[data-section="delivery-analytics"]')?.addEventListener('click', () => window.loadDeliveryAnalytics?.());
@@ -3100,16 +3084,36 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     });
   });
 
-  // Export inventory (uses current productsCache)
-  document.getElementById('exportInv').addEventListener('click', ()=>{
-    const data = JSON.stringify(productsCache, null, 2);
-    const blob = new Blob([data], {type:'application/json'}); const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'inventory.json'; a.click(); URL.revokeObjectURL(url);
-    showToast('Inventory exported');
+  // Settings → Change Password: re-check the current password with
+  // signInWithPassword (same account), then auth.updateUser. Nothing is
+  // stored in the browser; Supabase Auth enforces its own password rules.
+  document.getElementById('changePassBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('changePassBtn');
+    const msg = document.getElementById('changePassMsg');
+    const cur = document.getElementById('curPass'), nw = document.getElementById('newPass'), cf = document.getElementById('confirmPass');
+    const say = (t, ok) => { msg.style.display = ''; msg.style.color = ok ? '#15803d' : '#b91c1c'; msg.textContent = t; };
+    if (!supabaseClient) { say('Not connected — reload the page.'); return; }
+    if (!cur.value) { say('Enter your current password.'); cur.focus(); return; }
+    if (nw.value.length < 8) { say('The new password needs at least 8 characters.'); nw.focus(); return; }
+    if (nw.value !== cf.value) { say('The two new passwords do not match.'); cf.focus(); return; }
+    if (nw.value === cur.value) { say('The new password is the same as the current one.'); nw.focus(); return; }
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Saving…';
+    try {
+      const user = await getSupabaseUser();
+      if (!user || !user.email) { say('Your session has ended — sign in again.'); return; }
+      const { error: reErr } = await supabaseClient.auth.signInWithPassword({ email: user.email, password: cur.value });
+      if (reErr) { say('Current password is not right.'); cur.focus(); return; }
+      const { error } = await supabaseClient.auth.updateUser({ password: nw.value });
+      if (error) { say('Could not change the password: ' + error.message); return; }
+      cur.value = nw.value = cf.value = '';
+      say('Password changed.', true);
+      showToast('Password changed');
+    } catch (e) {
+      say('Could not change the password — check your connection and try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = label;
+    }
   });
-
-  // Dummy user button (unchanged)
-  document.getElementById('addDummyUser').addEventListener('click', ()=> showToast('Dummy user added (no-op)'));
 
   // small helper functions
   function escapeHtml(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -3183,7 +3187,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   async function loadDashboardOverview() {
     if (intelLoaded.overview) return;
     intelLoaded.overview = true;
-    ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites','kpiCarts'].forEach(id => {
+    ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '…';
     });
     try {
@@ -3197,28 +3201,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if (el('kpiOrders'))         el('kpiOrders').textContent         = overview.totalOrders  || 0;
       if (el('kpiSellers'))        el('kpiSellers').textContent        = overview.activeSellers || 0;
       if (el('kpiFavourites'))     el('kpiFavourites').textContent     = (overview.totalFavourites || 0).toLocaleString();
-      if (el('kpiCarts'))          el('kpiCarts').textContent          = (overview.cartsWithItems || 0).toLocaleString();
       if (el('kpiProductRevenue')) el('kpiProductRevenue').textContent = fmt(overview.productRevenue || 0);
       if (el('kpiEnrollRevenue'))  el('kpiEnrollRevenue').textContent  = fmt(overview.enrollmentRevenue || 0);
       if (el('kpiAdRevenue'))      el('kpiAdRevenue').textContent      = fmt(overview.adRevenue || 0);
 
-      // Revenue line chart
-      const revDays = Object.keys(trends.dailyRevenue || {}).sort();
-      if (revDays.length) {
-        mkChart('chartRevenue', { type: 'line', data: {
-          labels: revDays.map(d => d.slice(5)),
-          datasets: [{ label: 'Revenue (R)', data: revDays.map(d => Math.round(trends.dailyRevenue[d] || 0)), borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', fill: true, tension: 0.4, pointRadius: 2 }]
-        }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
-      }
-
-      // Orders bar chart
-      const ordDays = Object.keys(trends.dailyOrders || {}).sort();
-      if (ordDays.length) {
-        mkChart('chartOrders', { type: 'bar', data: {
-          labels: ordDays.map(d => d.slice(5)),
-          datasets: [{ label: 'Orders', data: ordDays.map(d => trends.dailyOrders[d] || 0), backgroundColor: '#0ea5e9' }]
-        }, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
-      }
+      // chartRevenue + chartOrders are drawn by /finances-admin.js (fin_summary by_day, SAST, paid only).
 
       // Top categories by favourites (horizontal bar)
       const topCats = (cats.categories || []).slice(0, 8);
@@ -3241,7 +3228,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       }
     } catch (e) {
       console.warn('loadDashboardOverview error', e);
-      ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites','kpiCarts'].forEach(id => {
+      ['kpiRevenue','kpiOrders','kpiSellers','kpiFavourites'].forEach(id => {
         const el = document.getElementById(id); if (el) el.textContent = '—';
       });
     }
@@ -3336,20 +3323,56 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   }
 
   // ── Sellers tab ────────────────────────────────────────────────
+  // SAST calendar date (YYYY-MM-DD) `daysAgo` days before today — the Finances RPCs take SAST dates.
+  function sastDateISO(daysAgo) {
+    const d = new Date(Date.now() + 2 * 3600 * 1000 - (daysAgo || 0) * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  // Per-store sales from the Finances engine (fin_store_breakdown: paid only,
+  // test orders excluded, store = order_items.seller_id else products.seller_id).
+  // Returns null when the RPC is not there / fails, so callers fall back.
+  async function finStoreBreakdown(fromISO, toISO) {
+    if (!supabaseClient) return null;
+    try {
+      const { data, error } = await supabaseClient.rpc('fin_store_breakdown', { p_from: fromISO, p_to: toISO });
+      if (error || data == null) return null;
+      const rows = Array.isArray(data) ? data : (data.rows || data.by_store || null);
+      return Array.isArray(rows) ? rows : null;
+    } catch (_) { return null; }
+  }
+
   async function renderIntelSellers() {
-    const data = await callAnalytics('sellers');
+    const [data, fin] = await Promise.all([
+      callAnalytics('sellers'),
+      finStoreBreakdown(sastDateISO(29), sastDateISO(0))
+    ]);
+    const finBy = {};
+    (fin || []).forEach(r => { if (r && r.seller_id) finBy[r.seller_id] = r; });
     const sellers = (data.sellers || []).slice(0, 20);
+    const num = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+
+    const noteEl = document.getElementById('intelSellersNote');
+    if (noteEl) noteEl.textContent = fin
+      ? 'Goods sold and owed to store: paid orders in the last 30 days (SAST), test orders excluded — same figures as Finances.'
+      : 'Goods sold: paid orders in the last 30 days at list price (before discounts). Finances figures could not be loaded, so "Owed to store" is not shown and test orders are included.';
 
     const tableEl = document.getElementById('intelSellersTable');
-    if (tableEl) tableEl.innerHTML = sellers.map(s =>
-      `<tr style="border-bottom:1px solid #f3f4f6">
-        <td style="padding:8px 12px;font-weight:600">${escapeHtml(s.shop_name||'')}</td>
+    if (tableEl) tableEl.innerHTML = sellers.map(s => {
+      const f = finBy[s.id];
+      const goods = f ? num(f.goods ?? f.goods_after_discount ?? f.goods_list) : num(s.goods30d);
+      const orders = f ? num(f.orders) : num(s.orders30d);
+      const owed = f ? num(f.payout ?? f.owed ?? f.store_owed) : null;
+      const house = s.is_house || (f && f.is_house);
+      return `<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:8px 12px;font-weight:600">${escapeHtml(s.shop_name||'')}${house ? ' <span style="background:#0a2f66;color:#fff;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;white-space:nowrap">Umzila\'s own</span>' : ''}</td>
         <td style="padding:8px 12px">🚶 ${s.storeVisits||0} <span style="color:#6b7280;font-size:12px">(${s.storeVisitors||0} people)</span></td>
         <td style="padding:8px 12px">${s.productCount}</td>
         <td style="padding:8px 12px">❤️ ${s.totalFavourites}</td>
         <td style="padding:8px 12px">👁 ${s.totalClicks}</td>
-        <td style="padding:8px 12px;font-weight:700;color:#059669">${fmt(s.revenue||0)}</td>
-      </tr>`).join('');
+        <td style="padding:8px 12px;font-weight:700;color:#059669">${goods == null ? '—' : fmt(goods)}${orders ? `<div style="color:#6b7280;font-size:11px;font-weight:500">${orders} order${orders === 1 ? '' : 's'}</div>` : ''}</td>
+        <td style="padding:8px 12px">${house ? '<span style="color:#6b7280;font-size:12px">ours</span>' : (owed == null ? '—' : fmt(owed))}</td>
+      </tr>`;
+    }).join('');
 
     const top10 = sellers.slice(0, 10);
     if (top10.length) {
@@ -3426,18 +3449,46 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (!wrap) return;
     wrap.innerHTML = '<div class="muted" style="padding:12px">Generating insights…</div>';
     try {
-      const [overview, cats, sellers] = await Promise.all([
-        callAnalytics('overview'), callAnalytics('categories'), callAnalytics('sellers')
+      // Sales snapshot = the Finances engine (fin_summary, last 30 days SAST,
+      // test orders excluded). If it is not available yet, only order counts
+      // from paid orders are shown — never a lifetime "revenue" figure.
+      const finSummary = (async () => {
+        if (!supabaseClient) return null;
+        try {
+          const { data, error } = await supabaseClient.rpc('fin_summary', { p_from: sastDateISO(29), p_to: sastDateISO(0) });
+          return (error || !data || typeof data !== 'object') ? null : data;
+        } catch (_) { return null; }
+      })();
+      const [overview, cats, sellers, fs] = await Promise.all([
+        callAnalytics('overview'), callAnalytics('categories'), callAnalytics('sellers'), finSummary
       ]);
       const cards = [];
 
-      cards.push(`<div class="card" style="padding:18px;border-left:4px solid #10b981">
-        <h4 style="margin:0 0 8px">💰 Revenue Snapshot</h4>
-        <p style="margin:0;font-size:14px;line-height:1.7">
-          <strong>${fmt(overview.totalRevenue||0)}</strong> total revenue across <strong>${overview.totalOrders||0}</strong> paid orders.
-          Average order value: <strong>${fmt(overview.avgOrderValue||0)}</strong>.
-          ${overview.totalOrders > 0 ? `That's one order every ~${Math.round(30/(overview.totalOrders||1))} days on average.` : ''}
-        </p></div>`);
+      const goSales = `<a href="#" data-go-section="finances" style="font-size:12px;font-weight:700;color:var(--primary)">Open Finances →</a>`;
+      if (fs && fs.totals) {
+        const t = fs.totals, n = Number(fs.orders || 0), gross = Number(t.gross || 0);
+        const gp = Number(t.umzila_gross_profit || 0);
+        const best = (fs.by_store || []).filter(s => !s.is_house).sort((a, b) => Number(b.goods || 0) - Number(a.goods || 0))[0];
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #10b981">
+          <h4 style="margin:0 0 8px">💰 Sales — last 30 days</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            <strong>${n}</strong> paid orders (~<strong>${(n / 30 * 7).toFixed(1)}</strong> a week) worth <strong>${fmt(gross)}</strong> incl. delivery.
+            ${n ? `Average order: <strong>${fmt(gross / n)}</strong>.` : ''}
+            ${gross > 0 ? `Umzila gross profit: <strong>${fmt(gp)}</strong> (${(gp / gross * 100).toFixed(1)}% of order value).` : ''}
+            ${best ? `Best store: <strong>${escapeHtml(best.shop_name || '')}</strong> (${fmt(Number(best.goods || 0))} goods).` : ''}
+            ${Number(fs.excluded_orders || 0) ? `<span class="muted">${fs.excluded_orders} test order(s) left out.</span>` : ''}
+          </p><div style="margin-top:6px">${goSales}</div></div>`);
+      } else {
+        const list = (sellers.sellers || []).filter(s => !s.is_house);
+        const best = list.slice().sort((a, b) => (b.goods30d || 0) - (a.goods30d || 0))[0];
+        cards.push(`<div class="card" style="padding:18px;border-left:4px solid #10b981">
+          <h4 style="margin:0 0 8px">💰 Sales</h4>
+          <p style="margin:0;font-size:14px;line-height:1.7">
+            <strong>${overview.totalOrders||0}</strong> paid orders so far (all time, test orders included).
+            ${best && best.goods30d > 0 ? `Best store in the last 30 days: <strong>${escapeHtml(best.shop_name||'')}</strong> (${fmt(best.goods30d)} goods at list price).` : ''}
+            Profit, fees and what stores are owed are on the Finances page.
+          </p><div style="margin-top:6px">${goSales}</div></div>`);
+      }
 
       const topCat = (cats.categories || [])[0];
       if (topCat) {
@@ -3451,13 +3502,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
           </p></div>`);
       }
 
-      const topSeller = (sellers.sellers || [])[0];
+      const topSeller = (sellers.sellers || []).filter(x => !x.is_house)[0];
       if (topSeller) {
         cards.push(`<div class="card" style="padding:18px;border-left:4px solid #8b5cf6">
           <h4 style="margin:0 0 8px">🏪 Top Seller: ${escapeHtml(topSeller.shop_name||'')}</h4>
           <p style="margin:0;font-size:14px;line-height:1.7">
             <strong>${escapeHtml(topSeller.shop_name||'')}</strong> leads engagement with <strong>${topSeller.totalFavourites}</strong> favourites across <strong>${topSeller.productCount}</strong> products.
-            ${topSeller.revenue > 0 ? `Revenue: <strong>${fmt(topSeller.revenue)}</strong>.` : 'No revenue recorded yet.'}
+            ${topSeller.goods30d > 0 ? `Goods sold in the last 30 days: <strong>${fmt(topSeller.goods30d)}</strong>.` : 'No sales in the last 30 days.'}
           </p></div>`);
       }
 
@@ -3482,6 +3533,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       }
 
       wrap.innerHTML = cards.join('') || '<div class="muted">Not enough data for insights yet.</div>';
+      wrap.querySelectorAll('[data-go-section]').forEach(a => {
+        const li = document.querySelector('.menu li[data-section="' + a.dataset.goSection + '"]');
+        if (!li) { a.remove(); return; }
+        a.addEventListener('click', ev => { ev.preventDefault(); li.click(); });
+      });
     } catch (e) {
       wrap.innerHTML = `<div class="card" style="padding:18px;color:#b91c1c">Failed to load insights: ${escapeHtml(e.message)}</div>`;
     }
@@ -3496,9 +3552,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const card = document.createElement('div');
       card.className = 'card';
       card.style.cursor = 'pointer';
+      card.title = 'Listed goods with none left (tap for the list)';
       card.innerHTML = `<h3>Out of Stock</h3><p id="outOfStockCount">0</p>`;
       card.addEventListener('click', ()=> {
-        const out = productsCache.filter(p => Number(p.quantity || 0) === 0);
+        const out = dashboardGoods().filter(p => Number(p.quantity || 0) <= 0);
         const html = out.map(o => `<div style="padding:8px;border-bottom:1px solid #f3f4f6"><strong>${escapeHtml(o.name)}</strong><div class="muted">${escapeHtml(o.category || '')} • SKU: ${escapeHtml(o.sku || '')}</div></div>`).join('') || '<div class="muted">No out-of-stock products</div>';
         modalContent.innerHTML = `<h3>Out of Stock</h3><div style="max-height:400px;overflow:auto">${html}</div><div style="margin-top:12px"><button id="closeOOS" class="small-btn">Close</button></div>`;
         modalWrap.style.display = 'flex';
@@ -3514,7 +3571,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     origLoadProducts();
     try {
       const el = document.getElementById('outOfStockCount');
-      if(el) el.textContent = productsCache.filter(p => Number(p.quantity || 0) === 0).length;
+      if(el) el.textContent = dashboardGoods().filter(p => Number(p.quantity || 0) <= 0).length;
     } catch(e){}
   };
 
@@ -3721,7 +3778,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('sellers')
-        .select('id, shop_name, slug, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo, free_delivery')
+        .select('id, shop_name, slug, email, status, created_at, user_id, self_arranged_radius_km, pickup_geo, free_delivery, is_house')
         .order('created_at', { ascending: false });
       if (error) { wrap.innerHTML = `<div style="color:#b91c1c;padding:20px">Error: ${escapeHtml(error.message)}</div>`; return; }
       shopsCache = data || [];
@@ -3738,6 +3795,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (!wrap) return;
     let shops = shopsCache;
     if (tab === 'active')   shops = shopsCache.filter(s => s.status === 'active');
+    if (tab === 'pending')  shops = shopsCache.filter(s => s.status === 'pending');
     if (tab === 'disabled') shops = shopsCache.filter(s => s.status === 'disabled');
 
     if (!shops.length) {
@@ -3775,7 +3833,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       return `
       <div style="background:#fff;border-radius:12px;padding:16px 20px;margin-bottom:10px;box-shadow:0 2px 8px rgba(2,6,23,0.06);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
-          <div style="font-weight:700;font-size:15px">${escapeHtml(s.shop_name || '—')}</div>
+          <div style="font-weight:700;font-size:15px">${escapeHtml(s.shop_name || '—')}${s.is_house ? ' <span title="Umzila&#39;s own drinks seller — its sales are Umzila revenue, not a store&#39;s" style="background:#0a2f66;color:#fff;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;vertical-align:middle;white-space:nowrap">House — Umzila&#39;s own</span>' : ''}</div>
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${escapeHtml(s.email || '—')}</div>
           <div style="font-size:12px;color:var(--muted)">${s.created_at ? new Date(s.created_at).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
           ${slugRow}
@@ -3792,10 +3850,10 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
           <span style="background:${statusColor};color:#fff;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600">${escapeHtml(s.status || 'unknown')}</span>
-          <button onclick="toggleShopStatus('${escapeHtml(s.id)}','${isActive ? 'disabled' : 'active'}')"
+          ${s.is_house ? '' : `<button onclick="toggleShopStatus('${escapeHtml(s.id)}','${isActive ? 'disabled' : 'active'}')"
             style="padding:6px 14px;border-radius:8px;border:none;background:${btnColor};color:#fff;font-size:13px;font-weight:600;cursor:pointer">
             ${btnLabel}
-          </button>
+          </button>`}
         </div>
       </div>`;
     }).join('');
@@ -4786,8 +4844,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         <h3>🧑‍✈️ Riders</h3>
         <div style="overflow:auto;margin-top:8px">
           <table id="deliveryOpsRidersTable" aria-live="polite">
-            <thead><tr><th>Vehicle</th><th>Status</th><th>Eligibility</th><th>Last Seen</th><th>Capabilities</th><th>Actions</th></tr></thead>
-            <tbody><tr><td colspan="6" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+            <thead><tr><th>Vehicle</th><th>Status</th><th>Eligibility</th><th>Last Seen</th><th>Actions</th></tr></thead>
+            <tbody><tr><td colspan="5" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
           </table>
         </div>
       `;
@@ -4796,14 +4854,14 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     try {
       const { data, error } = await supabaseClient
         .from('drivers')
-        .select('id, user_id, is_online, last_seen_at, vehicle_description, eligibility_status, can_do_live_delivery, can_do_scheduled_collections')
+        .select('id, user_id, is_online, last_seen_at, vehicle_description, eligibility_status')
         .order('is_online', { ascending: false });
-      if(error){ console.warn('loadDeliveryOpsRiders error', error); if(tbody) tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>'; return; }
+      if(error){ console.warn('loadDeliveryOpsRiders error', error); if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>'; return; }
       deliveryOpsRidersCache = data || [];
       renderDeliveryOpsRidersTable();
     } catch(e){
       console.warn('loadDeliveryOpsRiders failed', e);
-      if(tbody) tbody.innerHTML = '<tr><td colspan="6" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>';
+      if(tbody) tbody.innerHTML = '<tr><td colspan="5" style="color:#dc2626;padding:20px">Failed to load riders</td></tr>';
     }
   }
 
@@ -4812,7 +4870,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if(!tbody) return;
     tbody.innerHTML = '';
     if(!deliveryOpsRidersCache.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);padding:20px">No riders registered yet.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">No riders registered yet.</td></tr>';
       return;
     }
     const eligColors = { eligible: '#16a34a', suspended: '#dc2626', pending: '#d97706' };
@@ -4824,13 +4882,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       const elig = (d.eligibility_status || 'pending').toLowerCase();
       const eligColor = eligColors[elig] || '#6b7280';
       const eligBadge = `<span style="background:${eligColor}1a;color:${eligColor};padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;text-transform:capitalize">${escapeHtml(elig)}</span>`;
-      const caps = [d.can_do_live_delivery ? 'Live' : null, d.can_do_scheduled_collections ? 'Scheduled' : null].filter(Boolean).join(', ') || '—';
       tr.innerHTML = `
         <td>${escapeHtml(d.vehicle_description || '—')}</td>
         <td>${onlineBadge}</td>
         <td>${eligBadge}</td>
         <td style="font-size:12px;color:#6b7280">${escapeHtml(deliveryOpsRelativeTime(d.last_seen_at))}</td>
-        <td style="font-size:12px;color:#6b7280">${escapeHtml(caps)}</td>
         <td class="actions"></td>
       `;
       const actionsTd = tr.querySelector('.actions');
@@ -4953,14 +5009,16 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const mount = document.getElementById('deliveriesExceptionsMount');
     if(!mount) return;
     try {
-      const nowIso = new Date().toISOString();
+      // Offers nobody accepted in time today (SAST). The dispatcher marks
+      // them 'expired' itself, so 'pending' + past expiry never exists.
+      const sastMidnightIso = new Date(new Date(Date.now() + 2 * 3600 * 1000).toISOString().slice(0, 10) + 'T00:00:00+02:00').toISOString();
       const [lockedRes, staleOffersRes, failedRes] = await Promise.all([
         supabaseClient.from('deliveries').select('id, order_id, pin_locked_at, pin_attempt_count, orders(order_number)').not('pin_locked_at', 'is', null).order('pin_locked_at', { ascending: false }),
-        supabaseClient.from('driver_offers').select('id, delivery_id, driver_id, expires_at').eq('status', 'pending').lt('expires_at', nowIso).order('expires_at', { ascending: false }),
+        supabaseClient.from('driver_offers').select('id, delivery_id, driver_id, expires_at, deliveries(orders(order_number))').eq('status', 'expired').gte('expires_at', sastMidnightIso).order('expires_at', { ascending: false }).limit(50),
         supabaseClient.from('deliveries').select('id, order_id, created_at, failure_reason, orders(order_number)').eq('status', 'FAILED').order('created_at', { ascending: false }).limit(50)
       ]);
       if(lockedRes.error) console.warn('deliveries pin_locked query error', lockedRes.error);
-      if(staleOffersRes.error) console.warn('driver_offers stale query error', staleOffersRes.error);
+      if(staleOffersRes.error) console.warn('driver_offers expired-today query error', staleOffersRes.error);
       if(failedRes.error) console.warn('deliveries FAILED query error', failedRes.error);
 
       const locked = lockedRes.data || [];
@@ -4992,10 +5050,11 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 
       if(staleOffers.length){
         html += `<div style="background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-          <h3 style="font-size:14px;font-weight:800;color:#92400e;margin-bottom:10px">⏰ Stale unaccepted offers (${staleOffers.length})</h3>
+          <h3 style="font-size:14px;font-weight:800;color:#92400e;margin-bottom:4px">⏰ Offers no rider took in time — today (${staleOffers.length})</h3>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:10px">The dispatcher moves on to the next rider by itself; many on one order means riders are offline or far away.</div>
           <div style="display:flex;flex-direction:column;gap:6px">
             ${staleOffers.map(o => `<div style="font-size:12px;color:#6b7280;background:#fffbeb;border-radius:8px;padding:8px 12px">
-              delivery ${escapeHtml(String(o.delivery_id).slice(0,8))} &middot; offer ${escapeHtml(String(o.id).slice(0,8))} &middot; expired ${escapeHtml(new Date(o.expires_at).toLocaleString('en-ZA'))}
+              Order ${escapeHtml(String((o.deliveries && o.deliveries.orders && o.deliveries.orders.order_number) || String(o.delivery_id).slice(0,8)))} &middot; offer expired ${escapeHtml(new Date(o.expires_at).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }))}
             </div>`).join('')}
           </div>
         </div>`;
@@ -5935,84 +5994,216 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   /* ============================================================ end Delivery Pricing */
 
   /* ============================================================ Delivery Analytics
-     Stage 17 (plan §99/100). Two admin-gated RPCs (SECURITY DEFINER, checks
-     admins internally -- these are cross-seller/cross-customer aggregates
-     with no natural per-row RLS scoping) back a summary KPI row and a
-     per-route profitability table. Explicitly lowest priority per the plan
-     itself; will show mostly zeros until real delivery volume exists --
-     that's expected, not a bug, and this admin view exists precisely so the
-     founder can watch it fill in once the pilot goes live. */
+     Rebuilt 2026-11-16 (audit A8/A9, docs/plans/admin-logistics-audit-and-finances-plan.md).
+     Date range (SAST) on top. Money per ORDER (what the customer sees), from
+     the Finances engine fin_delivery_breakdown(p_from, p_to): delivery fee
+     charged (ex priority), priority, rider pay (actual from driver_payouts, ≈
+     while a route is still open), margin, free-delivery flag. Ops figures
+     (delivered share, time to deliver = dispatched_at → delivered_at, so
+     closed-store waits and delivery-run holds are NOT counted) come from the
+     deliveries rows in the range. If fin_delivery_breakdown is not there yet
+     the money part says so and falls back to the old per-route RPC with
+     honest labels (all time). */
+
+  let daRangeKey = 'last30';
+  function daRange(key){
+    const today = sastDateISO(0);
+    const [y, m] = today.split('-').map(Number);
+    const pad = n => String(n).padStart(2, '0');
+    if (key === 'last7')  return { from: sastDateISO(6),  to: today, label: 'last 7 days' };
+    if (key === 'month')  return { from: `${y}-${pad(m)}-01`, to: today, label: 'this month' };
+    if (key === 'lastmonth') {
+      const ly = m === 1 ? y - 1 : y, lm = m === 1 ? 12 : m - 1;
+      const last = new Date(Date.UTC(ly, lm, 0)).getUTCDate();
+      return { from: `${ly}-${pad(lm)}-01`, to: `${ly}-${pad(lm)}-${pad(last)}`, label: 'last month' };
+    }
+    if (key === 'all')    return { from: '2024-01-01', to: today, label: 'all time' };
+    return { from: sastDateISO(29), to: today, label: 'last 30 days' };
+  }
+  // SAST day bounds → UTC ISO instants for timestamptz filters
+  const sastStartIso = d => new Date(d + 'T00:00:00+02:00').toISOString();
+  const sastEndIso   = d => new Date(new Date(d + 'T00:00:00+02:00').getTime() + 86400000).toISOString();
 
   window.loadDeliveryAnalytics = async function(){
     const summaryMount = document.getElementById('deliveryAnalyticsSummaryMount');
     const routesMount = document.getElementById('deliveryAnalyticsRoutesMount');
     if(!summaryMount || !routesMount) return;
     if(!supabaseClient){ summaryMount.innerHTML = ''; routesMount.innerHTML = '<p style="color:var(--muted)">Supabase not available</p>'; return; }
-    summaryMount.innerHTML = '<p style="color:var(--muted)">Loading summary…</p>';
-    routesMount.innerHTML = '<p style="color:var(--muted)">Loading routes…</p>';
-    await Promise.all([ loadDeliveryAnalyticsSummary(), loadRouteProfitability() ]);
+    const r = daRange(daRangeKey);
+    summaryMount.innerHTML = `
+      <style>
+        .da-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+        .da-bar select{padding:8px 10px;border:1.5px solid var(--border);border-radius:9px;font:inherit;background:var(--card);color:var(--text)}
+        .da-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+        .da-card{background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+        .da-card .k{font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+        .da-card .v{font-size:18px;font-weight:800;color:var(--text)}
+        .da-card .s{font-size:11px;color:#6b7280;margin-top:2px}
+        .da-note{font-size:12px;color:#6b7280;margin-top:10px;line-height:1.5}
+        .da-flag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:700;margin:1px 2px 1px 0;white-space:nowrap}
+        @media (max-width:600px){
+          .da-table thead{display:none}
+          .da-table, .da-table tbody, .da-table tr, .da-table td{display:block;width:100%}
+          .da-table tr{background:var(--card);border-radius:10px;margin-bottom:8px;padding:8px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+          .da-table td{border:none;padding:3px 0;display:flex;justify-content:space-between;gap:10px;font-size:13px}
+          .da-table td::before{content:attr(data-l);color:#6b7280;font-size:12px}
+        }
+      </style>
+      <div class="da-bar">
+        <label for="daRange" style="font-size:13px;font-weight:700">Period</label>
+        <select id="daRange" aria-label="Period">
+          <option value="last7">Last 7 days</option><option value="last30">Last 30 days</option>
+          <option value="month">This month</option><option value="lastmonth">Last month</option><option value="all">All time</option>
+        </select>
+        <span class="muted" style="font-size:12px">${escapeHtml(r.from)} → ${escapeHtml(r.to)} (SAST)</span>
+      </div>
+      <div id="daOps"><p style="color:var(--muted)">Loading…</p></div>`;
+    const sel = document.getElementById('daRange');
+    sel.value = daRangeKey;
+    sel.addEventListener('change', () => { daRangeKey = sel.value; window.loadDeliveryAnalytics(); });
+    routesMount.innerHTML = '<p style="color:var(--muted)">Loading delivery money…</p>';
+    await Promise.all([ loadDeliveryAnalyticsOps(r), loadDeliveryAnalyticsMoney(r) ]);
   };
 
   function fmtRands(v){ return 'R' + Number(v || 0).toFixed(2); }
   function fmtNum(v, decimals){ return v === null || v === undefined ? '—' : Number(v).toFixed(decimals === undefined ? 0 : decimals); }
-  function fmtPct(v){ return v === null || v === undefined ? '—' : (Number(v) * 100).toFixed(1) + '%'; }
+  function daCard(label, val, sub){
+    return `<div class="da-card"><div class="k">${escapeHtml(label)}</div><div class="v">${escapeHtml(String(val))}</div>${sub ? `<div class="s">${escapeHtml(sub)}</div>` : ''}</div>`;
+  }
 
-  async function loadDeliveryAnalyticsSummary(){
-    const mount = document.getElementById('deliveryAnalyticsSummaryMount');
+  // Ops: deliveries created in the range + feedback in the range.
+  async function loadDeliveryAnalyticsOps(r){
+    const mount = document.getElementById('daOps');
     if(!mount) return;
     try {
-      const { data, error } = await supabaseClient.rpc('get_delivery_analytics_summary');
-      if(error){ console.warn('loadDeliveryAnalyticsSummary error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load analytics summary</p>'; return; }
-      const s = Array.isArray(data) ? data[0] : data;
-      if(!s){ mount.innerHTML = '<p style="color:var(--muted)">No data yet.</p>'; return; }
-      const cards = [
-        ['Total deliveries', fmtNum(s.total_deliveries)],
-        ['Delivered', fmtNum(s.delivered_count)],
-        ['Failed', fmtNum(s.failed_count)],
-        ['Cancelled', fmtNum(s.cancelled_count)],
-        ['Avg delivery time', s.avg_delivery_minutes === null ? '—' : fmtNum(s.avg_delivery_minutes, 1) + ' min'],
-        ['PIN completion rate', fmtPct(s.pin_completion_rate)],
-        ['Compliments', fmtNum(s.compliments_count)],
-        ['Complaints', fmtNum(s.complaints_count)],
-        ['Total rider payout', fmtRands(s.total_rider_payout)],
-        ['Total delivery revenue', fmtRands(s.total_delivery_revenue)]
-      ];
-      mount.innerHTML = '<h3 style="margin-bottom:10px">Summary</h3><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">' +
-        cards.map(([label, val]) => `<div style="background:var(--card);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
-          <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${escapeHtml(label)}</div>
-          <div style="font-size:18px;font-weight:800;color:var(--text)">${escapeHtml(String(val))}</div>
-        </div>`).join('') + '</div>' +
-        '<p style="font-size:11px;color:#9ca3af;margin-top:10px">Average pickup time, rider acceptance time, and customer ETA accuracy are not yet computable from the current schema (they need per-event timestamp diffing) — deferred, not silently dropped; tracked in docs/systems/delivery-network-spec.md §T.</p>';
+      const [dRes, fRes] = await Promise.all([
+        supabaseClient.from('deliveries').select('id, status, created_at, dispatched_at, delivered_at')
+          .gte('created_at', sastStartIso(r.from)).lt('created_at', sastEndIso(r.to)).limit(5000),
+        supabaseClient.from('delivery_feedback').select('feedback_type, rating')
+          .gte('created_at', sastStartIso(r.from)).lt('created_at', sastEndIso(r.to)).limit(5000)
+      ]);
+      if(dRes.error){ console.warn('delivery analytics deliveries error', dRes.error); mount.innerHTML = '<p style="color:#dc2626">Failed to load deliveries</p>'; return; }
+      const rows = dRes.data || [];
+      const by = st => rows.filter(d => d.status === st).length;
+      const delivered = by('DELIVERED'), failed = by('FAILED'), cancelled = by('CANCELLED');
+      const open = rows.length - delivered - failed - cancelled;
+      const mins = rows.filter(d => d.status === 'DELIVERED' && d.dispatched_at && d.delivered_at)
+        .map(d => (new Date(d.delivered_at) - new Date(d.dispatched_at)) / 60000)
+        .filter(m => Number.isFinite(m) && m >= 0).sort((a, b) => a - b);
+      const median = mins.length ? (mins.length % 2 ? mins[(mins.length - 1) / 2] : (mins[mins.length / 2 - 1] + mins[mins.length / 2]) / 2) : null;
+      const finished = delivered + failed;
+      const fb = fRes.error ? null : (fRes.data || []);
+      const compliments = fb ? fb.filter(f => f.feedback_type === 'compliment').length : null;
+      const complaints  = fb ? fb.filter(f => f.feedback_type === 'complaint').length : null;
+      const rated = fb ? fb.filter(f => Number(f.rating) > 0) : [];
+      const avgRating = rated.length ? rated.reduce((s, f) => s + Number(f.rating), 0) / rated.length : null;
+      mount.innerHTML = '<h3 style="margin-bottom:10px">Deliveries</h3><div class="da-cards">' +
+        daCard('Deliveries', rows.length, open > 0 ? open + ' still open' : '') +
+        daCard('Delivered', delivered) +
+        daCard('Delivered share', finished ? (delivered / finished * 100).toFixed(1) + '%' : '—', finished ? `of ${finished} finished (failed: ${failed})` : 'none finished yet') +
+        daCard('Cancelled', cancelled) +
+        daCard('Time to deliver', median == null ? '—' : fmtNum(median, 0) + ' min', mins.length ? `median, rider set off → delivered (${mins.length})` : '') +
+        daCard('Compliments', compliments == null ? '—' : compliments) +
+        daCard('Complaints', complaints == null ? '—' : complaints) +
+        daCard('Avg rating', avgRating == null ? '—' : avgRating.toFixed(1) + ' ★', rated.length ? rated.length + ' ratings' : '') +
+        '</div><p class="da-note">Time to deliver starts when the rider sets off (dispatched), so waiting for a store to open or for a delivery run is not counted. Delivered share = delivered ÷ (delivered + failed).</p>';
     } catch(e){
-      console.warn('loadDeliveryAnalyticsSummary failed', e);
-      mount.innerHTML = '<p style="color:#dc2626">Failed to load analytics summary</p>';
+      console.warn('loadDeliveryAnalyticsOps failed', e);
+      mount.innerHTML = '<p style="color:#dc2626">Failed to load deliveries</p>';
     }
   }
 
-  async function loadRouteProfitability(){
+  // Money per order — fin_delivery_breakdown (Finances engine). Fallback: old per-route RPC.
+  async function loadDeliveryAnalyticsMoney(r){
     const mount = document.getElementById('deliveryAnalyticsRoutesMount');
     if(!mount) return;
+    let fin = null;
+    try {
+      const { data, error } = await supabaseClient.rpc('fin_delivery_breakdown', { p_from: r.from, p_to: r.to });
+      if(!error && data) fin = data;
+      else if(error) console.info('fin_delivery_breakdown not available yet — falling back', error.message);
+    } catch(_) {}
+    if(fin){ renderDeliveryMoney(mount, fin, r); return; }
+    await loadRouteProfitabilityFallback(mount);
+  }
+
+  function renderDeliveryMoney(mount, fin, r){
+    const orders = Array.isArray(fin) ? fin : (fin.orders || fin.rows || []);
+    const n = v => Number(v || 0);
+    const pick = (o, ...keys) => { for (const k of keys) if (o && o[k] != null) return o[k]; return null; };
+    const t = (!Array.isArray(fin) && fin.totals) || {};
+    const sum = k => orders.reduce((s, o) => s + n(o[k]), 0);
+    const fee = t.fee_customer != null ? n(t.fee_customer) : sum('fee_customer');
+    const pri = t.priority != null ? n(t.priority) : sum('priority');
+    const pay = t.rider_pay != null ? n(t.rider_pay) : sum('rider_pay');
+    const margin = t.margin != null ? n(t.margin) : (fee + pri - pay);
+    const est = orders.filter(o => o.rider_pay_est).length;
+    const free = orders.filter(o => o.free_delivery);
+    const freeCost = t.rider_pay_on_free != null ? n(t.rider_pay_on_free) : free.reduce((s, o) => s + n(o.rider_pay), 0);
+    const ridersAsCost = Array.isArray(fin) ? null : (fin.rider_pay_counted != null ? fin.rider_pay_counted : pick(t, 'rider_pay_counted'));
+    let html = '<h3 style="margin:18px 0 10px">Delivery money — ' + escapeHtml(r.label) + '</h3><div class="da-cards">' +
+      daCard('Orders with delivery', orders.length) +
+      daCard('Delivery fees charged', fmtRands(fee), 'excl. priority') +
+      daCard('Priority fees', fmtRands(pri)) +
+      daCard('Rider pay' + (est ? ' ≈' : ''), fmtRands(pay), est ? `${est} estimated (route still open)` : 'from completed routes') +
+      daCard('Delivery margin', fmtRands(margin), 'fees + priority − rider pay') +
+      daCard('Free-delivery orders', free.length, free.length ? fmtRands(freeCost) + ' rider pay paid by Umzila' : '') +
+      '</div>';
+    if (ridersAsCost === false) html += '<p class="da-note">Riders are paid as staff right now, so Finances does not count rider pay as a per-order cost; it is shown here to compare with the fees.</p>';
+    if (!orders.length) { mount.innerHTML = html + '<p style="color:var(--muted);margin-top:10px">No delivered orders in this period.</p>'; return; }
+    html += '<div style="overflow:auto;margin-top:12px"><table class="da-table"><thead><tr><th>When</th><th>Order</th><th>Status</th><th>Fee</th><th>Priority</th><th>Rider pay</th><th>Margin</th><th></th></tr></thead><tbody>' +
+      orders.map(o => {
+        const when = pick(o, 'when', 'day', 'delivered_at', 'created_at');
+        const whenTxt = when ? new Date(String(when).length === 10 ? when + 'T12:00:00+02:00' : when).toLocaleString('en-ZA', { day: 'numeric', month: 'short', hour: String(when).length === 10 ? undefined : '2-digit', minute: String(when).length === 10 ? undefined : '2-digit', timeZone: 'Africa/Johannesburg' }) : '—';
+        const m = o.margin != null ? n(o.margin) : n(o.fee_customer) + n(o.priority) - n(o.rider_pay);
+        const mins = pick(o, 'minutes_to_deliver', 'deliver_minutes', 'minutes');
+        const flags = [
+          o.free_delivery ? '<span class="da-flag" style="background:#fef3c7;color:#92400e">free delivery — rider paid by Umzila</span>' : '',
+          o.rider_pay_est ? '<span class="da-flag" style="background:#e0f2fe;color:#0369a1">rider pay ≈</span>' : '',
+          o.rider_pay_override ? '<span class="da-flag" style="background:#ede9fe;color:#5b21b6">rider pay overridden</span>' : '',
+          mins != null ? `<span class="da-flag" style="background:#f3f4f6;color:#374151">${fmtNum(mins, 0)} min</span>` : ''
+        ].join('');
+        return `<tr>
+          <td data-l="When" style="font-size:12px">${escapeHtml(whenTxt)}</td>
+          <td data-l="Order" style="font-weight:600">${escapeHtml(String(pick(o, 'order_number') || String(o.order_id || '').slice(0, 8)))}</td>
+          <td data-l="Status">${escapeHtml(String(pick(o, 'status', 'delivery_status') || ''))}</td>
+          <td data-l="Fee">${fmtRands(o.fee_customer)}</td>
+          <td data-l="Priority">${fmtRands(o.priority)}</td>
+          <td data-l="Rider pay">${fmtRands(o.rider_pay)}${o.rider_pay_est ? ' ≈' : ''}</td>
+          <td data-l="Margin" style="font-weight:700;color:${m < 0 ? '#b91c1c' : '#15803d'}">${fmtRands(m)}</td>
+          <td data-l="">${flags}</td>
+        </tr>`;
+      }).join('') + '</tbody></table></div>';
+    mount.innerHTML = html;
+  }
+
+  async function loadRouteProfitabilityFallback(mount){
+    const head = '<h3 style="margin:18px 0 6px">Delivery money</h3><p class="da-note" style="margin-top:0">Per-order delivery money could not be loaded from Finances (fin_delivery_breakdown), so this is the old view: per route, <strong>all time</strong>, test orders included.</p>';
     try {
       const { data, error } = await supabaseClient.rpc('get_route_profitability', { p_limit: 50 });
-      if(error){ console.warn('loadRouteProfitability error', error); mount.innerHTML = '<p style="color:#dc2626">Failed to load route profitability</p>'; return; }
+      if(error){ console.warn('loadRouteProfitability error', error); mount.innerHTML = head + '<p style="color:#dc2626">Failed to load route figures</p>'; return; }
       const rows = data || [];
-      if(!rows.length){ mount.innerHTML = '<h3 style="margin-bottom:8px">Route Profitability</h3><p style="color:var(--muted)">No routes yet.</p>'; return; }
-      mount.innerHTML = '<h3 style="margin-bottom:8px">Route Profitability</h3><div style="overflow:auto"><table>' +
-        '<thead><tr><th>Route</th><th>Status</th><th>Deliveries</th><th>Distance</th><th>Duration</th><th>Revenue</th><th>Priority</th><th>Payout</th><th>Remaining</th></tr></thead><tbody>' +
-        rows.map(r => `<tr>
-          <td style="font-size:12px">${escapeHtml(String(r.route_id).slice(0,8))}</td>
-          <td>${escapeHtml(r.status || '')}</td>
-          <td>${fmtNum(r.delivery_count)}</td>
-          <td>${r.total_distance_km === null ? '—' : fmtNum(r.total_distance_km, 1) + 'km'}</td>
-          <td>${r.total_duration_min === null ? '—' : fmtNum(r.total_duration_min, 0) + 'min'}</td>
-          <td>${fmtRands(r.customer_delivery_revenue)}</td>
-          <td>${fmtRands(r.priority_revenue)}</td>
-          <td>${fmtRands(r.driver_payout)}</td>
-          <td>${fmtRands(r.gross_logistics_revenue_remaining)}</td>
-        </tr>`).join('') + '</tbody></table></div>';
+      if(!rows.length){ mount.innerHTML = head + '<p style="color:var(--muted)">No routes yet.</p>'; return; }
+      mount.innerHTML = head + '<div style="overflow:auto"><table class="da-table">' +
+        '<thead><tr><th>When</th><th>Status</th><th>Drops</th><th>Distance</th><th>Fees charged</th><th>of which priority</th><th>Rider pay</th><th>Fees − rider pay</th><th></th></tr></thead><tbody>' +
+        rows.map(r => {
+          const left = Number(r.gross_logistics_revenue_remaining || 0);
+          const freeFlag = Number(r.customer_delivery_revenue || 0) === 0 && Number(r.driver_payout || 0) > 0
+            ? '<span class="da-flag" style="background:#fef3c7;color:#92400e">free delivery — rider paid by Umzila</span>' : '';
+          return `<tr>
+          <td data-l="When" style="font-size:12px">${(r.completed_at || r.created_at) ? escapeHtml(new Date(r.completed_at || r.created_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', timeZone: 'Africa/Johannesburg' })) : '—'}</td>
+          <td data-l="Status">${escapeHtml(r.status || '')}</td>
+          <td data-l="Drops">${fmtNum(r.delivery_count)}</td>
+          <td data-l="Distance">${r.total_distance_km === null ? '—' : fmtNum(r.total_distance_km, 1) + ' km'}</td>
+          <td data-l="Fees charged">${fmtRands(r.customer_delivery_revenue)}</td>
+          <td data-l="of which priority">${fmtRands(r.priority_revenue)}</td>
+          <td data-l="Rider pay">${fmtRands(r.driver_payout)}</td>
+          <td data-l="Fees − rider pay" style="font-weight:700;color:${left < 0 ? '#b91c1c' : '#15803d'}">${fmtRands(left)}</td>
+          <td data-l="">${freeFlag}</td>
+        </tr>`; }).join('') + '</tbody></table></div>';
     } catch(e){
       console.warn('loadRouteProfitability failed', e);
-      mount.innerHTML = '<p style="color:#dc2626">Failed to load route profitability</p>';
+      mount.innerHTML = head + '<p style="color:#dc2626">Failed to load route figures</p>';
     }
   }
   /* ============================================================ end Delivery Analytics */
@@ -6027,5 +6218,6 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 </script>
 <script src="/timeslots-admin.js"></script>
 <script src="/payments-admin.js"></script>
+<script src="/finances-admin.js"></script>
 </body>
 </html>

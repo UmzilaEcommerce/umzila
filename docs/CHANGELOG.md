@@ -4,6 +4,132 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-17: Finances page + admin/logistics money audit (built 2026-11-16, reviewed 2026-11-17)
+
+**Reported:** the founder said admin and logistics had "inconsistencies, redundant and inaccurate stuff". She also asked for a Finances page that:
+- takes each payment method and its fees into account,
+- deducts them automatically,
+- is editable (expenses, income, corrections),
+- shows whether Umzila makes a profit.
+
+Plan: `docs/plans/admin-logistics-audit-and-finances-plan.md` (the FOUNDER ANSWERS block at its top overrides the rest). The real contract is in `docs/plans/finances-contract-changes.md`. **Full prose: `docs/systems/finances.md`.**
+
+**Root causes of the wrong figures:**
+- **No money model.** Every screen summed `orders.total` or `orders.items` its own way:
+  - admin dashboard "Total Revenue",
+  - `admin-analytics.js` "Est. Revenue",
+  - logistics Analytics, Stores and Today.
+- **Those sums included things that are not Umzila's revenue or not sales at all:**
+  - the share owed to stores,
+  - delivery money,
+  - the founder's test orders (a third of "revenue"),
+  - unpaid `pending_payment` baskets (logistics Analytics filtered on `order_status`),
+  - the enrolment fee.
+- **Days were wrong:** they were UTC or device-clock days, not SAST.
+- **Fees were ignored:** PayFast fees were never used, although every PayFast order carries them in `orders.pf_response`. Payments → Report only saw `payment_attempts`, which have existed only since the picker went on.
+- **Manual sales had no store:** hand-entered `ORD-` lines have no `seller_id`, so about R5.8k of sales belonged to no store.
+- **Wrong store badges:** logistics Stores checked `sellers.status === 'approved'`, a value that never exists, so every store showed "Pending".
+- **Dead controls:**
+  - logistics Edit order "Payment status" (`saveOrder` strips it) and "Order status" (`statusChanged` was never set),
+  - admin "Change Password" (an alert), "Add Dummy User" and the JSON export,
+  - "Stale unaccepted offers", which can never fill because the dispatcher expires offers itself.
+- **Wrong counts:**
+  - the house seller was counted as a store in "Active Sellers" and named in `get_ops_board` store lists,
+  - the stock cards counted hidden products, services and house drinks,
+  - "Carts w/ Items" was a lifetime count of stale guest rows.
+- **Misleading delivery analytics:** "Avg delivery time" included closed-store and delivery-run waits, and "PIN completion rate" was really delivered ÷ (delivered + failed).
+
+**Founder decisions built in:**
+- Commission is a **mark-up**: per-product store price, else 9 %. It is not the 15 % in the seller-terms pitch.
+- A store's own promo codes come out of the store's share; Umzila's codes are Umzila's cost.
+- Manual orders are cash with no fee.
+- No bulk test exclusion. Only the R5 Apple Pay test is excluded, with its R39.25 rider pay overridden to 0.
+- Tips, delivery and priority are all Umzila revenue. Rider pay is not a cost while riders are staff ("Count rider pay as a cost" toggle, off).
+- House drinks cost: small R15, 1.5 L R18, Appletiser R22, Liqui-Fruit R18.
+- PayFast rates are editable (card, Apple Pay, Google Pay, Samsung Pay 3.2 % + R2; Capitec Pay and Instant EFT 2 %, min R2; all + VAT). The actual ITN fee always wins.
+- No payout ledger. Payout fees are recorded as an expense category.
+
+**Where it lives in the admin portal:**
+- **Admin → Finances (💰, after Payments):**
+  - period bar and "Include test orders" switch,
+  - profit & loss waterfall,
+  - insights,
+  - breakdowns by payment method, by store, over time and for delivery,
+  - Orders drill-down: per-order Test switch, refund, overrides, notes, remove correction,
+  - Expenses & other income (one-off or monthly, optional store link). The Enspire R30 000 is added here by the founder.
+  - Store prices, with the "missing" list and drinks costs,
+  - Assumptions (mark-up, rider-pay toggle, who funds discounts, tips, fee-rate table with reset, categories),
+  - CSV export.
+- **Admin Dashboard:** "Money — this month" (order value, Umzila gross profit, net after costs, paid orders) and the two 30-day charts, all from `fin_summary`.
+- **Admin → Intelligence → Sellers / Insights:** read `fin_store_breakdown` / `fin_summary`.
+- **Admin → Delivery Analytics:** period picker; money per order from `fin_delivery_breakdown`; time to deliver = dispatched → delivered.
+- **Other admin tabs:**
+  - Deliveries: "Offers no rider took in time — today",
+  - Manage Shops: Pending tab and house badge,
+  - Payments → "Attempts report" (relabelled; it points to Finances),
+  - Settings → a real Change Password.
+- **Logistics:**
+  - Analytics, Stores and Today KPIs read the staff RPCs,
+  - Orders → a manual order → "Payment not recorded yet → Paid: Cash / Card machine / EFT",
+  - New Order → "Paid by",
+  - Settings shows the active `user_roles`.
+
+**Database (live):**
+- Migrations: `fin_schema`, `fin_rpcs_engine`, `fin_rpcs_engine_fix_discount_alias`, `fin_rpcs_engine_fix_manual_source`, `fin_rpcs_admin`, `fin_rpcs_staff`, `fin_audit_fixes_and_seeds`, `fin_rpcs_est_amount_after_discount`.
+- Copies are in `docs/plans/sql/10_fin_schema.sql`, `11_fin_rpcs.sql` and `12_fin_audit_fixes_and_seeds.sql`; checks are in `fin_checks.sql`.
+- **New table `finance_entries`:** expenses, income and per-order adjustments. Rows are voided, never deleted. Admin read through RLS; writes only through RPCs.
+- **New `site_settings` key `finance`:**
+  - admin-only: the public select policy is now `key <> 'finance'`,
+  - validated by the `site_settings_finance_validate` trigger,
+  - holds the assumptions plus the `store_prices` map (`<product_id>` or `<product_id>:<variant_id>`), which is written only by `fin_store_price_set`.
+- **RPCs** (all SECURITY DEFINER, EXECUTE revoked from PUBLIC/anon, role check first):
+  - one engine, `fin__order_lines`,
+  - admin: `fin_order_lines`, `fin_summary`, `fin_entries_list`, `fin_entry_save`, `fin_entry_void`, `fin_set_excluded`, `fin_settings_get`, `fin_settings_save`, `fin_store_prices_list`, `fin_store_price_set`, `fin_delivery_breakdown`,
+  - staff (admins + active logistics/admin `user_roles`): `fin_sales_by_period`, `fin_top_products`, `fin_store_breakdown`, `logistics_record_manual_payment`.
+- **Changed functions:**
+  - `get_ops_board`: store names leave out the house seller; manual lines are resolved through `products.seller_id`,
+  - `get_site_traffic`: sources leave out orders excluded as tests.
+- **Dropped (grepped first):**
+  - the `"Logistics"` and `user_roles_backup` tables,
+  - `delivery_analytics_summary_v` and `get_delivery_analytics_summary()`.
+  - `discount_redemptions` is kept (it is still used). `route_profitability_v` / `get_route_profitability` are kept as the Delivery Analytics fallback.
+- **Data:**
+  - the R5 test is excluded, with rider pay 0,
+  - four hand-entered delivered orders (ORD-790502, ORD-496470, ORD-631232, ORD-270760, R460) are recorded as paid in cash.
+
+**Final review fixes (2026-11-17), where callers were written to the plan before the functions existed:**
+- `admin.html` `finStoreBreakdown()` read `data.by_store`/`data.stores`, but the function returns `{rows}`. Intelligence → Sellers therefore always fell back to the browser figure. It now reads `data.rows`.
+- `admin.html` `renderDeliveryMoney()`:
+  - It read `totals.rider_pay_counted`, but the field is top-level. The "riders are staff" note never showed; it now does.
+  - It read `totals.free_delivery_rider_pay`, but the real field is `rider_pay_on_free`.
+- Fallback labels that said "once the Finances engine is live" now say the figures could not be loaded. The Visitors note no longer claims that test orders are counted (`get_site_traffic` now leaves them out).
+- `logistics.html` Stores reads `fin_store_breakdown` by its real key, `rows`.
+- `finances-admin.js`: a header comment named a function that doesn't exist.
+
+**Files:** `finances-admin.js` (new), `admin.html`, `logistics.html`, `netlify/functions/admin-analytics.js`, `payments-admin.js`, `docs/systems/finances.md` (new), `docs/systems/ops-panels.md`, `CLAUDE.md`, plus the plan, contract, SQL copies and fixtures under `docs/plans/`. No PayFast function, checkout or ITN code was touched.
+
+**Tested:**
+- Every `fin_*` / `logistics_record_manual_payment` call in the five callers was checked against the live function signatures and live responses.
+- The functions were run as an admin identity in read-only and rolled-back blocks. The all-time figures:
+  - gross R9 724 = PayFast/total gross R9 829 − R100 enrolment − the R5 test,
+  - fees R179.53 = R182.01 − R2.48 for the test,
+  - the waterfall adds up exactly,
+  - October = 16 paid orders, R2 075.05.
+- Security:
+  - as a non-staff authenticated user: `ADMIN_ONLY` / `STAFF_ONLY`,
+  - anon and authenticated read `home,payments,timeslots` but not `finance`; admins can still update `home/payments/timeslots`,
+  - a guest `pending_payment` insert as anon still works (rolled back),
+  - `logistics_record_manual_payment` on a throw-away ORD order works: paid, cash, no delivery created; a second call gives `ALREADY_PAID` (rolled back).
+- `node --check` passes on the changed JS, and every inline script in admin/logistics/checkout parses.
+- Under `netlify dev` at 390 px, admin.html (redirects to login), logistics.html and checkout.html load without new console errors.
+
+**Untested:**
+- Anything behind a real login in the browser: the Finances page UI and dashboard cards against live data, the Change Password flow, the logistics record-payment buttons, and the New Order "Paid by" insert. No auth users were created.
+- Adding and voiding real entries from the UI.
+- CSV export in a browser.
+
+---
+
 ## 2026-11-16: Fix — guest orders failed with "Failed to create order"
 
 **Reported:** the founder turned the payment picker on and every Pay press said "Failed to create order". **Root cause:** the review fix `orders_payment_columns_guard` (BEFORE INSERT on orders, migration pp_payment_picker_review_fixes) ran as the caller and called `timeslot_is_staff()`, which `anon` is not allowed to execute — so every GUEST order insert was refused (PostgREST 401 / 42501), picker on or off. Signed-in buyers were not affected. Live for ~12 h; only the founder's two test presses hit it (no customer orders in that window). **Fix:** the guard is now SECURITY DEFINER (migration `fix_orders_payment_columns_guard_definer`, copy docs/plans/sql/9_…). Tested as anon in a rolled-back block: insert succeeds, a client-sent payment_flag is still nulled. **Gotcha for next time:** a SECURITY INVOKER trigger function runs with the inserting role's rights — any helper it calls must be executable by anon/authenticated, or make the trigger SECURITY DEFINER.

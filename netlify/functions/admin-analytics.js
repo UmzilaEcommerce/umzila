@@ -83,15 +83,14 @@ async function getOverview(admin) {
     { count: activeSellers },
     { count: totalUsers },
     { data: favSum },
-    { data: carts },
     { data: adCampaigns }
   ] = await Promise.all([
     admin.from('orders').select('total, payment_status, label').eq('payment_status', 'paid'),
     admin.from('products').select('*', { count: 'exact', head: true }).eq('visible', true),
-    admin.from('sellers').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+    // Real stores only: the house seller (Umzila Drinks, is_house) is Umzila's own, not a store
+    admin.from('sellers').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('is_house', false),
     admin.from('profiles').select('*', { count: 'exact', head: true }),
     admin.from('products').select('favourite_count').not('favourite_count', 'is', null),
-    admin.from('carts').select('items'),
     admin.from('ad_campaigns').select('amount_paid').eq('payment_status', 'paid')
   ]);
 
@@ -104,7 +103,6 @@ async function getOverview(admin) {
   const totalRevenue      = productRevenue + enrollmentRevenue + adRevenue;
 
   const totalFavourites = (favSum || []).reduce((s, p) => s + (Number(p.favourite_count) || 0), 0);
-  const cartsWithItems  = (carts || []).filter(c => Array.isArray(c.items) && c.items.length > 0).length;
 
   return {
     totalRevenue:       Math.round(totalRevenue       * 100) / 100,
@@ -116,7 +114,6 @@ async function getOverview(admin) {
     activeSellers:      activeSellers || 0,
     totalUsers:         totalUsers || 0,
     totalFavourites,
-    cartsWithItems,
     avgOrderValue: productSales.length ? Math.round((productRevenue / productSales.length) * 100) / 100 : 0
   };
 }
@@ -203,9 +200,12 @@ async function getCategoryIntelligence(admin) {
 async function getSellerIntelligence(admin) {
   const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
   const [{ data: sellers }, { data: products }, { data: orders }, { data: clickEvents }, { data: visitEvents }] = await Promise.all([
-    admin.from('sellers').select('id, shop_name, status').eq('status', 'active').limit(100),
-    admin.from('products').select('id, seller_id, favourite_count, name').limit(2000),
-    admin.from('orders').select('items, total, payment_status').eq('payment_status', 'paid').limit(1000),
+    admin.from('sellers').select('id, shop_name, status, is_house').eq('status', 'active').limit(100),
+    admin.from('products').select('id, seller_id, favourite_count, name').limit(5000),
+    // Paid sales only (never order_status), enrolment fee is not a sale. The
+    // 30-day window is applied below on coalesce(paid_at, created_at).
+    admin.from('orders').select('id, paid_at, created_at, label').eq('payment_status', 'paid')
+      .gte('created_at', new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString()).limit(2000),
     admin.from('user_events')
       .select('product_id')
       .eq('event_type', 'product_click')
@@ -223,7 +223,7 @@ async function getSellerIntelligence(admin) {
 
   const sellerMap = {};
   (sellers || []).forEach(s => {
-    sellerMap[s.id] = { id: s.id, shop_name: s.shop_name, productCount: 0, totalFavourites: 0, totalClicks: 0, revenue: 0, storeVisits: 0, storeVisitors: 0 };
+    sellerMap[s.id] = { id: s.id, shop_name: s.shop_name, is_house: !!s.is_house, productCount: 0, totalFavourites: 0, totalClicks: 0, goods30d: 0, orders30d: 0, storeVisits: 0, storeVisitors: 0 };
   });
 
   // Store visits (30 d) and distinct visitors (signed-in user, else browser id)
@@ -252,16 +252,40 @@ async function getSellerIntelligence(admin) {
     if (sid && sellerMap[sid]) sellerMap[sid].totalClicks++;
   });
 
-  // Parse order revenue per seller from items JSON
-  (orders || []).forEach(o => {
-    const items = Array.isArray(o.items) ? o.items : [];
-    items.forEach(item => {
-      const sid = item.seller_id || item.sellerId;
-      if (sid && sellerMap[sid]) {
-        sellerMap[sid].revenue += Number(item.total || item.price || 0) * Number(item.quantity || item.qty || 1);
-      }
-    });
+  // Goods sold per store in the last 30 days (fallback figure — the admin page
+  // prefers fin_store_breakdown(), the Finances engine, when it exists).
+  // Source = order_items (written only by populate_order_items_on_payment);
+  // store = order_items.seller_id, else products.seller_id (manual ORD- orders
+  // carry no seller_id on their lines). Value = line subtotal (list value,
+  // before any order-level discount) — labelled as such on the page.
+  const sinceMs = Date.now() - 30 * 24 * 3600 * 1000;
+  const recent = (orders || []).filter(o => {
+    if (o.label === 'seller_enrollment') return false;
+    // orders.created_at is timestamp WITHOUT time zone (UTC) — PostgREST returns it with no offset
+    const when = o.paid_at || (o.created_at ? (/(Z|[+-]\d{2}:?\d{2})$/.test(o.created_at) ? o.created_at : o.created_at + 'Z') : null);
+    return when && new Date(when).getTime() >= sinceMs;
   });
+  if (recent.length) {
+    const ids = recent.map(o => o.id);
+    const lines = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: chunk, error } = await admin.from('order_items')
+        .select('order_id, product_id, seller_id, subtotal, unit_price, quantity')
+        .in('order_id', ids.slice(i, i + 200));
+      if (error) throw error;
+      (chunk || []).forEach(l => lines.push(l));
+    }
+    const ordersPerSeller = {};
+    lines.forEach(l => {
+      const sid = l.seller_id || prodSellerMap[String(l.product_id)];
+      const s = sid && sellerMap[sid]; if (!s) return;
+      const v = l.subtotal != null ? Number(l.subtotal) : Number(l.unit_price || 0) * Number(l.quantity || 1);
+      s.goods30d += Number.isFinite(v) ? v : 0;
+      (ordersPerSeller[sid] = ordersPerSeller[sid] || new Set()).add(l.order_id);
+    });
+    Object.keys(ordersPerSeller).forEach(sid => { sellerMap[sid].orders30d = ordersPerSeller[sid].size; });
+  }
+  Object.values(sellerMap).forEach(s => { s.goods30d = Math.round(s.goods30d * 100) / 100; });
 
   const list = Object.values(sellerMap).sort((a, b) => b.totalFavourites - a.totalFavourites);
   return { sellers: list };
