@@ -64,7 +64,7 @@ This just records the sale.
 
 These were inserted by the browser with stock and `order_items` written at creation (`handle_logistics_order`). The `pay` action spots them because `pf_response.manual` is missing. It also catches any order whose status has already moved past `Pending`. For those it only sets `payment_status`/`paid_at`/`payment_method_code`: no emails, no rider, and no second stock decrement.
 
-The old RPCs `handle_logistics_order` and `logistics_record_manual_payment` are no longer called. `docs/plans/sql/13_drop_old_manual_order_rpcs.sql` drops them once this code is deployed.
+The old RPCs `handle_logistics_order` and `logistics_record_manual_payment` were dropped on 2026-11-17 after this code went live (migration `drop_old_manual_order_rpcs`, same SQL as `docs/plans/sql/13_drop_old_manual_order_rpcs.sql`). Do not bring them back: manual orders go only through manual-order.js.
 
 ## Gotchas / check before touching
 

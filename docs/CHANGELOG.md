@@ -211,7 +211,7 @@ On a slow connection that was several seconds of spinner. (The old cart had the 
   - `isManualOrder()` accepts `m_payment_id` = order number.
 - **Older ORD- orders** only get their payment columns set when paid (no emails, no rider, no double stock).
 - **Also fixed:** the "keep the typed house number" regex in checkout.html, profile.html and seller-dashboard.html had lost its backslashes. It was `/^s*(d+…)<backspace>/`, which never matched.
-- **To run after deploy:** `docs/plans/sql/13_drop_old_manual_order_rpcs.sql` drops `handle_logistics_order` and `logistics_record_manual_payment`.
+- **Done after deploy (2026-11-17):** `handle_logistics_order` and `logistics_record_manual_payment` were dropped (migration `drop_old_manual_order_rpcs`).
 
 **Files:** netlify/functions/manual-order.js (new), netlify/functions/lib/complete-order-payment.js, logistics.html, checkout.html, profile.html, seller-dashboard.html, docs/systems/manual-orders.md (new), docs/systems/ops-panels.md, docs/systems/finances.md, docs/plans/sql/13_drop_old_manual_order_rpcs.sql, CLAUDE.md.
 
