@@ -20,7 +20,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/product-sheet.js"></script>
+<!-- defer (2026-11-17): the page no longer waits for these to download before it can paint; boot() waits for them
+     (domReady) only where it needs the client. The config + store requests start straight away below. -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preload" href="/.netlify/functions/get-client-config" as="fetch" crossorigin>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script defer src="/presence.js"></script><script defer src="/input-guard.js"></script><script defer src="/product-sheet.js"></script>
 <style>
 /* Layout: Umzila chrome (navy) frames each store; store areas take the store's own accent. Hero → sticky shop toolbar → product sections → about → footer. Quick view + cart are sheets. */
 :root{
@@ -1100,10 +1104,13 @@ const storeSlug = (() => { const p = location.pathname.replace(/^\/+|\/+$/g, '')
 const storePromise = storeSlug
   ? fetch('/.netlify/functions/get-store?slug=' + encodeURIComponent(storeSlug)).then(r => r.ok ? r.json() : null).catch(() => null)
   : Promise.resolve(null);
+// The config request starts now too (it used to wait for boot), and the deferred scripts
+// (supabase-js, presence, product-sheet) have run by DOMContentLoaded.
+const configPromise = fetch('/.netlify/functions/get-client-config').then(r => r.json());
+const domReady = new Promise(r => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', r, { once: true }); else r(); });
 async function boot(){
   try {
-    const res = await fetch('/.netlify/functions/get-client-config');
-    const cfg = await res.json();
+    const [cfg] = await Promise.all([configPromise, domReady]);
     const url = cfg.supabaseUrl || cfg.SUPABASE_URL, key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY;
     if (!url || !key) throw new Error('config');
     sb = supabase.createClient(url, key);

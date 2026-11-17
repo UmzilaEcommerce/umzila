@@ -4,6 +4,35 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-17: Faster store pages and checkout; code box removed from the cart
+
+**Asked:**
+- Check every other page for slow loading.
+- Remove the discount-code box from the cart, which "doesn't even work".
+
+**Speed audit (buyer pages):**
+- **Already fine:** the home page (scripts after the content; config, catalogue, supabase-js and hero preloaded) and track.html (scripts after the page markup). Images are WebP thumbnails, lazy-loaded.
+- **shop.html (store pages):**
+  - supabase-js, presence, input-guard and product-sheet were render-blocking in `<head>` and are now `defer`;
+  - the config request starts at once (plus a preload), in parallel with get-store.js;
+  - `boot()` waits for `domReady` only where it needs the client;
+  - added a preconnect to cdn.jsdelivr.net.
+- **checkout.html:**
+  - the config request now starts in `<head>` (`window.__umzCfgP`), overlapping the supabase-js download, instead of waiting for DOMContentLoaded;
+  - the house-seller lookup (`ensureHouseIds`) runs alongside the cart load instead of before it;
+  - added a preconnect.
+  - The head scripts stay blocking: the big inline script was not audited for parse-time use, and the library is usually already cached from the page before.
+- **Not changed:** profile.html, seller-dashboard and admin still load scripts in `<head>`. They are not on the buying path.
+
+**Cart:**
+- **Removed from cart.html:** the code box, its validate-cart calls, the discount rows and the mystery-gift note.
+- **Codes are entered only at checkout,** which has the code box, the sign-in panel and the mystery-gift note. The cart says "Have a discount or gift code? You add it at checkout."
+- An `ss_coupon` stored earlier is still picked up by checkout as before.
+
+**Files:** shop.html, checkout.html, cart.html, CLAUDE.md.
+
+---
+
 ## 2026-11-17: Cart page loads instantly
 
 **Reported:** the redesigned cart took long to appear.

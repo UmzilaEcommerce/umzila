@@ -80,35 +80,12 @@
     .totals h2{font-size:16px;font-weight:600}
     .row{display:flex;justify-content:space-between;gap:12px;font-size:14px;font-variant-numeric:tabular-nums}
     .row > span:first-child{color:var(--muted)}
-    .row.discount > span:last-child{color:var(--ok);font-weight:600}
     .row.total{font-size:17px;font-weight:700;border-top:1px solid var(--line-2);padding-top:10px;margin-top:2px}
     .row.total > span:first-child{color:var(--ink)}
     .sum-note{font-size:12px;color:var(--muted)}
     .signin-note{font-size:12px;color:#e0284f;margin-top:-6px}
     .amount-roll{display:inline-block;transition:opacity .15s ease-out}
     .amount-roll.rolling{opacity:.35}
-
-    /* Code box */
-    .promo-toggle{align-self:flex-start;border:0;background:none;color:var(--accent);font-weight:600;font-size:14px;min-height:44px;padding:0 2px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
-    .promo-toggle svg{width:16px;height:16px}
-    .promo-panel{display:none;flex-direction:column;gap:6px}
-    .promo-panel.open{display:flex}
-    .promo-row{display:flex;gap:8px}
-    .promo-row input{flex:1;min-width:0;height:48px;border:1px solid var(--field);border-radius:12px;padding:0 14px;font:inherit;font-size:16px;text-transform:uppercase;color:var(--ink)}
-    .promo-row input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(10,47,102,.1)}
-    .promo-btn{height:48px;padding:0 18px;border-radius:12px;border:1px solid var(--accent);background:#fff;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer}
-    .promo-btn:hover{background:var(--tint)}
-    .promo-msg{font-size:13px;min-height:0}
-    .promo-msg.success{color:var(--ok);font-weight:500}
-    .promo-msg.error{color:var(--danger);font-weight:500}
-    .promo-check{display:inline-flex;width:14px;height:14px;margin-right:4px;vertical-align:-2px}
-
-    /* Mystery gift reminder */
-    .gift-note{background:#fff1f3;border:1px solid #fbd5dd;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
-    .gift-note-h{font-weight:700;font-size:14px;color:#9f1239;display:flex;gap:6px;align-items:center}
-    .gift-note p{font-size:13px;line-height:1.5;color:#4b1d2a}
-    .gift-note b{font-weight:700}
-    .gift-note-btn{align-self:flex-start;min-height:40px;display:inline-flex;align-items:center;padding:0 14px;border-radius:10px;background:#fff;border:1px solid #fbd5dd;color:#9f1239;font-weight:700;font-size:13px}
 
     /* Reassurance */
     .reassure{list-style:none;padding:4px 6px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--muted)}
@@ -227,31 +204,10 @@
         <div class="totals card">
           <h2>Summary</h2>
           <div class="row"><span>Items (<span id="sumCount">0</span>)</span><span id="sumSubtotal" class="amount-roll">R0.00</span></div>
-          <div class="row discount hidden" id="discountRow"><span>Discount</span><span id="discountAmount">-R0.00</span></div>
-          <div class="signin-note hidden" id="discountSignInNote">Sign in at checkout to use this code</div>
           <div class="row"><span>Delivery</span><span class="sum-note">Worked out at checkout</span></div>
           <div class="row total"><span>Total so far</span><span id="summaryTotal" class="amount-roll">R0.00</span></div>
 
-          <!-- Mystery gift waiting (index.html pop-up → localStorage umz_mystery_pending). Only says
-               WHERE the code is; the code itself only travels by email. -->
-          <div class="gift-note hidden" id="giftNote">
-            <div class="gift-note-h"><span aria-hidden="true">🎁</span> Your mystery gift code is in your email</div>
-            <p>Open <b id="giftNoteEmail"></b> and find the email from <b>Umzila</b> called <b id="giftNoteSubject"></b>. Can't see it? Look in Promotions or Spam. Copy the code, paste it below and press <b>Apply</b> to see your gift.</p>
-            <a class="gift-note-btn hidden" id="giftNoteGmail" href="https://mail.google.com/mail/u/0/#search/from%3Aumzila" target="_blank" rel="noopener">Open Gmail</a>
-          </div>
-
-          <button type="button" class="promo-toggle" id="promoToggle" aria-expanded="false" aria-controls="promoPanel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.25" fill="currentColor" stroke="none"/></svg>
-            Have a code?
-          </button>
-          <div class="promo-panel" id="promoPanel">
-            <div class="promo-row">
-              <label for="promoInput" class="hidden">Discount code</label>
-              <input type="text" id="promoInput" placeholder="Discount code" autocomplete="off" autocapitalize="characters">
-              <button type="button" id="promoApplyBtn" class="promo-btn">Apply</button>
-            </div>
-            <div id="promoMsg" class="promo-msg" role="status"></div>
-          </div>
+          <p class="sum-note">Have a discount or gift code? You add it at checkout.</p>
         </div>
 
         <div class="dock" id="payDock">
@@ -392,140 +348,18 @@
   }
   const itemCount = () => cart.reduce((n, it) => n + lineQty(it), 0);
 
-  // Discount code — server-validated via validate-cart.js's shared discount
-  // engine (netlify/functions/lib/discounts.js), never computed client-side
-  // or read directly from discount_codes (that'd expose seller-created
-  // codes' terms to anyone with the anon key, and let a tampered client
-  // trust its own math). Same localStorage['ss_coupon'] shape checkout.html
-  // reads on load, so a code applied here carries straight through — but
-  // checkout.html re-validates it again itself, never trusts this cache.
-  let appliedCoupon = null;      // { code }
-  let currentDiscountInfo = null; // last server response's `discount` object
-  (function loadStoredCoupon(){
-    try {
-      const saved = JSON.parse(localStorage.getItem('ss_coupon') || 'null');
-      if (saved && saved.code) appliedCoupon = { code: saved.code };
-    } catch(_) {}
-  })();
-
-  function currentDiscount(){
-    return (currentDiscountInfo && currentDiscountInfo.valid) ? (currentDiscountInfo.amount || 0) : 0;
-  }
-
-  // Re-validates the currently-applied code against the live cart —
-  // called after applying, and after any qty/remove change (a scoped code's
-  // amount depends on which eligible items are actually still in the cart).
-  async function refreshAppliedCoupon(){
-    if (!appliedCoupon?.code) { currentDiscountInfo = null; return; }
-    try {
-      // The buyer is identified by their session token (validate-cart.js
-      // ignores any userId in the body).
-      const headers = { 'Content-Type': 'application/json' };
-      try { const { data } = await sb.auth.getSession(); if (data?.session?.access_token) headers.Authorization = 'Bearer ' + data.session.access_token; } catch (_) {}
-      const res = await fetch('/.netlify/functions/validate-cart', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          cartItems: cart,
-          couponCode: appliedCoupon.code,
-          customerEmail: currentUser?.email || '',
-          persistCart: false
-        })
-      });
-      const result = res.ok ? await res.json() : null;
-      currentDiscountInfo = result?.discount || null;
-      if (!currentDiscountInfo || (!currentDiscountInfo.valid && !currentDiscountInfo.requiresSignIn)) {
-        // Code is no longer valid at all (expired, fully redeemed, etc.) —
-        // drop it rather than keep showing a dead code.
-        appliedCoupon = null;
-        localStorage.removeItem('ss_coupon');
-      }
-    } catch (e) {
-      console.warn('Coupon re-validation failed', e);
-    }
-  }
-
-  async function applyCoupon(code){
-    const msgEl = document.getElementById('promoMsg');
-    msgEl.className = 'promo-msg';
-    if (!code) { msgEl.classList.add('error'); msgEl.textContent = 'Enter a code first.'; return; }
-    const btn = document.getElementById('promoApplyBtn');
-    btn.disabled = true; btn.textContent = 'Checking…';
-    appliedCoupon = { code: code.trim().toUpperCase() };
-    await refreshAppliedCoupon();
-    btn.disabled = false; btn.textContent = 'Apply';
-    if (!currentDiscountInfo || !currentDiscountInfo.valid) {
-      const reasons = {
-        expired: 'This code has expired.',
-        email_required: 'Enter your email at checkout to apply this code.',
-        email_mismatch: 'This code is not valid for your account.',
-        not_first_order: 'This code is valid for first-time orders only.',
-        already_used: 'This code has already been used.',
-        already_redeemed_by_you: 'You’ve already used this code.',
-        fully_redeemed: 'This code has reached its usage limit.'
-      };
-      msgEl.classList.add('error');
-      msgEl.textContent = reasons[currentDiscountInfo?.reason] || 'Invalid or expired promo code';
-      appliedCoupon = null;
-      currentDiscountInfo = null;
-      localStorage.removeItem('ss_coupon');
-      updateSummary();
-      return;
-    }
-    localStorage.setItem('ss_coupon', JSON.stringify({ code: appliedCoupon.code }));
-    // The mystery gift has been found and used — stop reminding them where it is.
-    if (/^MYSTERY/i.test(appliedCoupon.code)) { try { localStorage.removeItem('umz_mystery_pending'); } catch (_) {} renderGiftNote(); }
-    msgEl.classList.add('success');
-    if (currentDiscountInfo.requiresSignIn) {
-      msgEl.textContent = `Sign in at checkout to use this code — ${fmt(currentDiscountInfo.previewAmount || 0)} off waiting for you`;
-    } else {
-      msgEl.innerHTML = `<svg class="promo-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>${esc(appliedCoupon.code)} applied: ${fmt(currentDiscount())} off`;
-    }
-    document.getElementById('promoInput').value = '';
-    updateSummary();
-  }
-
-  // Mystery gift reminder: only once the cart has something in it and no code is applied yet,
-  // so people pick what they want before they find out what the gift is.
-  function readPendingGift(){
-    try {
-      const p = JSON.parse(localStorage.getItem('umz_mystery_pending') || 'null');
-      if (!p || !p.email) return null;
-      if (p.until && new Date(p.until) < new Date()) { localStorage.removeItem('umz_mystery_pending'); return null; }
-      return p;
-    } catch (_) { return null; }
-  }
-  function renderGiftNote(){
-    const note = document.getElementById('giftNote');
-    if (!note) return;
-    const p = readPendingGift();
-    const show = !!p && cart.length > 0 && !(currentDiscountInfo && (currentDiscountInfo.valid || currentDiscountInfo.requiresSignIn));
-    note.classList.toggle('hidden', !show);
-    if (!show) return;
-    document.getElementById('giftNoteEmail').textContent = p.email;
-    document.getElementById('giftNoteSubject').textContent = '“' + (p.subject || 'Your mystery gift is waiting 🎁') + '”';
-    document.getElementById('giftNoteGmail').classList.toggle('hidden', !/@(gmail|googlemail)\.com$/i.test(p.email));
-    setPromoOpen(true);
-  }
-
   function updateSummary(){
     const subtotal = calcTotal();
-    const discount = currentDiscount();
-    const total = Math.max(0, subtotal - discount);
+    const total = subtotal;
     const n = itemCount();
     document.getElementById('cartCountBadge').textContent = n;
     document.getElementById('cartCountWord').textContent = n === 1 ? 'item' : 'items';
     document.getElementById('sumCount').textContent = n;
     setAmountText(document.getElementById('sumSubtotal'), fmt(subtotal));
-    const requiresSignIn = currentDiscountInfo?.requiresSignIn;
-    document.getElementById('discountRow').classList.toggle('hidden', discount <= 0 && !requiresSignIn);
-    document.getElementById('discountAmount').textContent = '-' + fmt(requiresSignIn ? (currentDiscountInfo.previewAmount || 0) : discount);
-    document.getElementById('discountSignInNote').classList.toggle('hidden', !requiresSignIn);
     setAmountText(document.getElementById('summaryTotal'), fmt(total));
     setAmountText(document.getElementById('dockTotal'), fmt(total));
     document.getElementById('checkoutBtn').disabled = cart.length === 0;
     document.body.classList.toggle('is-empty', cart.length === 0);
-    renderGiftNote();
   }
 
   function lineHtml(item, idx){
@@ -673,9 +507,6 @@
     const snapshot = cart.slice();
     pendingSync = (async () => {
       if(sb && currentUser) await writeSupabaseCart(snapshot);
-      // Re-check the applied code — a scoped code's amount depends on which
-      // eligible items are still in the cart after a qty change/removal.
-      await refreshAppliedCoupon();
       updateSummary();
     })().catch(()=>{}).finally(()=>{ pendingSync = null; });
     return pendingSync;
@@ -736,26 +567,10 @@
   // Another tab changed the cart.
   window.addEventListener('storage', async (e) => { if (e.key === 'ss_cart') { cart = readLocalCart(); renderCart(); enrich(); } });
 
-  document.getElementById('promoApplyBtn').addEventListener('click', ()=>{
-    applyCoupon(document.getElementById('promoInput').value.trim());
-  });
-  document.getElementById('promoInput').addEventListener('keydown', (e)=>{
-    if(e.key === 'Enter'){ e.preventDefault(); applyCoupon(e.target.value.trim()); }
-  });
-
-  function setPromoOpen(open){
-    document.getElementById('promoPanel').classList.toggle('open', open);
-    document.getElementById('promoToggle').setAttribute('aria-expanded', String(open));
-  }
-  document.getElementById('promoToggle').addEventListener('click', ()=>{
-    const open = !document.getElementById('promoPanel').classList.contains('open');
-    setPromoOpen(open);
-    if(open) document.getElementById('promoInput').focus();
-  });
-
   // Init — 1) paint at once from this phone's saved cart (no network); 2) once the database
   // client is ready: who is signed in, their saved cart if this phone has none, size options and
-  // store names (one request each); 3) re-check an applied code.
+  // store names (one request each). Codes are entered at checkout only (removed from the cart
+  // 2026-11-17: the box here was unreliable and duplicated checkout's).
   cart = readLocalCart();
   renderCart();
   await sbReady;
@@ -764,14 +579,6 @@
   if (sb) { try { const { data } = await sb.auth.getSession(); currentUser = data?.session?.user || null; } catch (e) {} }
   if (!cart.length && currentUser) { await loadCart(); renderCart(); }
   await enrich();
-  await refreshAppliedCoupon();
-  // A returning visitor with an already-applied code should see the panel
-  // open, not have to guess there's a toggle hiding their active discount.
-  if(appliedCoupon?.code){
-    setPromoOpen(true);
-    const msgEl = document.getElementById('promoMsg');
-    if (currentDiscountInfo?.valid) { msgEl.className = 'promo-msg success'; msgEl.textContent = `${appliedCoupon.code} applied: ${fmt(currentDiscount())} off`; }
-  }
   updateSummary();
 })();
 </script>

@@ -1414,6 +1414,10 @@
       .pay-options { grid-template-columns: 1fr; }
     }
   </style>
+  <!-- The config request starts here, in parallel with the supabase-js download (it used to wait
+       for DOMContentLoaded); fetchConfiguration() picks it up. -->
+  <script>window.__umzCfgP = fetch('/.netlify/functions/get-client-config').then(function (r) { if (!r.ok) throw new Error('HTTP error! status: ' + r.status); return r.json(); }); window.__umzCfgP.catch(function () {});</script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
   <!-- Include Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/auth-mail.js"></script><script src="/product-sheet.js"></script>
 </head>
@@ -2512,15 +2516,12 @@
     
     async function fetchConfiguration() {
       try {
-        console.log('Fetching configuration from Netlify function...');
-        const response = await fetch('/.netlify/functions/get-client-config');
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const config = await response.json();
-        
+        // Started in <head> (window.__umzCfgP) so it overlaps the script download.
+        const config = await (window.__umzCfgP || fetch('/.netlify/functions/get-client-config').then(r => {
+          if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
+          return r.json();
+        }));
+
         CONFIG = { ...CONFIG, ...config };
         state.configLoaded = true;
         console.log('Configuration loaded successfully');
@@ -3895,7 +3896,8 @@ async function saveCartToServer() {
     // Load cart with server validation
 async function loadCart() {
     try {
-        if (supabaseClient) await ensureHouseIds();
+        // The house-seller lookup runs alongside the cart load; only scopeCart() needs it.
+        const houseP = supabaseClient ? ensureHouseIds() : Promise.resolve();
         state.cartRest = [];
         const urlParams = new URLSearchParams(window.location.search);
         const couponCode = urlParams.get('coupon');
@@ -3906,7 +3908,7 @@ async function loadCart() {
         // localStorage for this page load only.
         if (urlParams.get('buynow') === '1' && localStorage.getItem('ss_buynow')) {
             state.isBuyNow = true;
-            await loadBuyNowItem();
+            await Promise.all([loadBuyNowItem(), houseP]);
             if (couponCode) await applyCoupon(couponCode);
             updateOrderSummary();
             return;
@@ -3940,6 +3942,7 @@ async function loadCart() {
             // Not logged in, use localStorage only
             await loadFromLocalStorage();
         }
+        await houseP;
         scopeCart(state.cart);
 
         // Apply coupon if provided
