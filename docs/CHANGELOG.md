@@ -4,6 +4,28 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-17: Cart page loads instantly
+
+**Reported:** the redesigned cart took long to appear.
+
+**Root cause:** nothing was drawn until a chain of network steps finished:
+1. supabase-js downloaded as a render-blocking `<head>` script;
+2. then get-client-config;
+3. then getSession;
+4. then **one `product_variants` request per product**;
+5. plus a sellers request.
+
+On a slow connection that was several seconds of spinner. (The old cart had the same chain; more lines made it worse.)
+
+**What changed (cart.html):**
+- The cart **paints at once from `ss_cart`** with no network calls.
+- The head scripts are `defer`, and the config request starts in parallel with the library download.
+- After that, size options for all products come in **one** `.in('product_id', …)` request, and store names in one request. Store names are cached in `localStorage umz_store_names`, so headings show instantly next time.
+- The saved `carts` row is only fetched when this phone's cart is empty.
+- `renderCart()` is now synchronous; `enrich()` fills in options and names and redraws.
+
+---
+
 ## 2026-11-17: Mystery gift: free item switch in admin, clearer "find your code" wording, cart/checkout reminder
 
 **Asked:**

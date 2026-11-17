@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700;800&display=swap">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/product-sheet.js"></script>
+  <!-- defer: the cart paints from this phone's saved cart straight away; these load alongside. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script defer src="/presence.js"></script><script defer src="/input-guard.js"></script><script defer src="/product-sheet.js"></script>
   <style>
     /* Redesigned 2026-11-17 to match the one-page checkout (checkout.html "ONE-PAGE CHECKOUT"
        tokens: warm background, white cards with a 1px line, Playfair title, orange pay button
@@ -166,19 +167,23 @@
   </style>
 
   <script>
-  (async function initSupabase(){
-    try{
-      const res = await fetch('/.netlify/functions/get-client-config');
-      const cfg = await res.json().catch(()=>({}));
-      const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url || '';
-      const key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey || '';
-      if(url && key){
-        window.supabaseClient = supabase.createClient(url, key);
-        window.supabase = window.supabaseClient;
-        if (window.umzilaPresence) umzilaPresence.start(window.supabaseClient, 'cart');
-      }
-      /* fired after the page is parsed so every listener is attached (see logistics.html) */ (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } })));
-    }catch(e){ (function(fire){ if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fire, { once: true }); else fire(); })(() => document.dispatchEvent(new CustomEvent('supabase-ready', { detail: {} }))); }
+  // The config request starts at once, in parallel with the (deferred) supabase-js download;
+  // the client is made once both are in. Deferred scripts have run by DOMContentLoaded.
+  (function initSupabase(){
+    const cfgP = fetch('/.netlify/functions/get-client-config').then(r => r.json()).catch(() => ({}));
+    const libP = new Promise(r => { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', r, { once: true }); else r(); });
+    Promise.all([cfgP, libP]).then(([cfg]) => {
+      try{
+        const url = cfg.supabaseUrl || cfg.SUPABASE_URL || cfg.url || '';
+        const key = cfg.supabaseAnonKey || cfg.SUPABASE_ANON_KEY || cfg.anonKey || '';
+        if(url && key && window.supabase && window.supabase.createClient){
+          window.supabaseClient = window.supabase.createClient(url, key);
+          window.supabase = window.supabaseClient;
+          if (window.umzilaPresence) umzilaPresence.start(window.supabaseClient, 'cart');
+        }
+      }catch(e){}
+      document.dispatchEvent(new CustomEvent('supabase-ready', { detail: { supabaseClient: window.supabaseClient } }));
+    });
   })();
 
   // "Back to shopping" = the last page the buyer shopped on (home or a store), never the cart
@@ -270,16 +275,20 @@
   document.getElementById('backLink').href = shopReturn;
   document.getElementById('keepShopping').href = shopReturn;
 
-  await new Promise(resolve=>{
+  // The page paints from this phone's saved cart first (see Init) and only then waits for the
+  // database client; sb is filled in once it is ready.
+  const sbReady = new Promise(resolve=>{
     if(window.supabaseClient) return resolve();
     document.addEventListener('supabase-ready', ()=>resolve());
-    setTimeout(resolve, 4000);
+    setTimeout(resolve, 6000);
   });
-
-  const sb = window.supabaseClient;
+  let sb = null;
   let cart = [];
   let variantsCache = {}; // product_id → variants[]
-  let storesCache = {};   // seller_id → { shop_name, slug, is_house }
+  // seller_id → { shop_name, slug, is_house }; remembered on this phone so store headings
+  // appear instantly on the next visit.
+  let storesCache = {};
+  try { storesCache = JSON.parse(localStorage.getItem('umz_store_names') || '{}') || {}; } catch (_) { storesCache = {}; }
   let currentUser = null;
 
   function esc(s){ return (s||'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -292,10 +301,6 @@
     if(!el || el.textContent === text) return;
     el.classList.add('rolling');
     setTimeout(()=>{ el.textContent = text; el.classList.remove('rolling'); }, 120);
-  }
-
-  if(sb){
-    try{ const { data } = await sb.auth.getSession(); currentUser = data?.session?.user || null; }catch(e){}
   }
 
   function readLocalCart(){
@@ -350,14 +355,16 @@
     return cart;
   }
 
-  async function fetchVariants(productId){
-    if(variantsCache[productId]) return variantsCache[productId];
-    if(!sb) return [];
+  // Size options for every product in the cart in ONE request (it used to be one per product).
+  async function fetchVariants(ids){
+    const need = ids.filter(id => id && !variantsCache[id]);
+    if(!need.length || !sb) return;
     try{
-      const { data } = await sb.from('product_variants').select('id,size,stock,price_override').eq('product_id', productId);
-      variantsCache[productId] = data || [];
-      return variantsCache[productId];
-    }catch(e){ return []; }
+      const { data, error } = await sb.from('product_variants').select('product_id,id,size,stock,price_override').in('product_id', need);
+      if (error) return;
+      need.forEach(id => { variantsCache[id] = []; });
+      (data || []).forEach(v => { (variantsCache[v.product_id] = variantsCache[v.product_id] || []).push(v); });
+    }catch(e){}
   }
   // Store names + links for the group headings (one query for every store in the cart).
   async function fetchStores(ids){
@@ -365,8 +372,18 @@
     if(!need.length || !sb) return;
     try{
       const { data } = await sb.from('sellers').select('id, shop_name, slug, is_house').in('id', need);
-      (data || []).forEach(s => { storesCache[s.id] = s; });
+      (data || []).forEach(s => { storesCache[s.id] = { shop_name: s.shop_name, slug: s.slug, is_house: s.is_house }; });
+      try { localStorage.setItem('umz_store_names', JSON.stringify(storesCache)); } catch (_) {}
     }catch(e){}
+  }
+  // Fills in size options + store names after the first paint, then re-draws if anything changed.
+  async function enrich(){
+    const productIds = [...new Set(cart.map(i=>i.product_id||i.id).filter(Boolean))];
+    const sellerIds = [...new Set(cart.map(i=>i.seller_id).filter(Boolean))];
+    const missing = productIds.some(id => !variantsCache[id]) || sellerIds.some(id => !storesCache[id]);
+    if (!missing || !sb) return;
+    await Promise.all([fetchVariants(productIds), fetchStores(sellerIds)]);
+    renderCart();
   }
 
   const lineQty = it => Number(it.quantity || it.qty || 1);
@@ -548,7 +565,8 @@
     </div>`;
   }
 
-  async function renderCart(){
+  // Draws straight from what is in memory (no network); enrich() fills in options/store names.
+  function renderCart(){
     const container = document.getElementById('cartItemsContainer');
     if(!container) return;
     if(!cart.length){
@@ -561,10 +579,6 @@
       updateSummary();
       return;
     }
-
-    const productIds = [...new Set(cart.map(i=>i.product_id||i.id).filter(Boolean))];
-    const sellerIds = [...new Set(cart.map(i=>i.seller_id).filter(Boolean))];
-    await Promise.all([...productIds.map(pid=>fetchVariants(pid)), fetchStores(sellerIds)]);
 
     // One card per store, in the order the buyer added them; Umzila's own drinks last.
     const groups = [];
@@ -717,10 +731,10 @@
     if(!e.persisted) return;
     const btn = document.getElementById('checkoutBtn');
     if(btn && btn.dataset.busy){ delete btn.dataset.busy; btn.classList.remove('is-busy'); btn.removeAttribute('aria-busy'); if(btn.dataset.label) btn.textContent = btn.dataset.label; }
-    cart = readLocalCart(); await renderCart();
+    cart = readLocalCart(); renderCart(); enrich();
   });
   // Another tab changed the cart.
-  window.addEventListener('storage', async (e) => { if (e.key === 'ss_cart') { cart = readLocalCart(); await renderCart(); } });
+  window.addEventListener('storage', async (e) => { if (e.key === 'ss_cart') { cart = readLocalCart(); renderCart(); enrich(); } });
 
   document.getElementById('promoApplyBtn').addEventListener('click', ()=>{
     applyCoupon(document.getElementById('promoInput').value.trim());
@@ -739,9 +753,17 @@
     if(open) document.getElementById('promoInput').focus();
   });
 
-  // Init
-  await loadCart();
-  await renderCart();
+  // Init — 1) paint at once from this phone's saved cart (no network); 2) once the database
+  // client is ready: who is signed in, their saved cart if this phone has none, size options and
+  // store names (one request each); 3) re-check an applied code.
+  cart = readLocalCart();
+  renderCart();
+  await sbReady;
+  sb = window.supabaseClient || null;
+  renderCart(); // product-sheet.js (picks summaries) has loaded by now
+  if (sb) { try { const { data } = await sb.auth.getSession(); currentUser = data?.session?.user || null; } catch (e) {} }
+  if (!cart.length && currentUser) { await loadCart(); renderCart(); }
+  await enrich();
   await refreshAppliedCoupon();
   // A returning visitor with an already-applied code should see the panel
   // open, not have to guess there's a toggle hiding their active discount.
