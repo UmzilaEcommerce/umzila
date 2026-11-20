@@ -56,6 +56,21 @@
       if (!localStorage.getItem(seenKey)) { localStorage.setItem(seenKey, '1'); pendingLanding = raw; }
     }
   } catch (e) { /* ignore */ }
+  // ── Email link tag (?ut=…, netlify/functions/lib/visitor-tag.js) ──
+  // Opened from a link in one of our emails: link this browser to that
+  // recipient (identify-visitor.js checks the tag) for admin → People, and
+  // take the tag out of the address bar so a shared link doesn't carry it.
+  try {
+    var utTag = new URLSearchParams(location.search).get('ut');
+    if (utTag) {
+      var clean = new URL(location.href); clean.searchParams.delete('ut');
+      if (window.history && history.replaceState) history.replaceState(history.state, '', clean.pathname + clean.search + clean.hash);
+      if (!BOT && /^[A-Za-z0-9_-]{40,600}$/.test(utTag)) {
+        fetch('/.netlify/functions/identify-visitor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+          body: JSON.stringify({ tag: utTag, anon: anonId() }) }).catch(function () {});
+      }
+    }
+  } catch (e) { /* ignore */ }
   window.umzilaSource = function () {
     try { var v = JSON.parse(localStorage.getItem(SRC_KEY) || 'null'); return v && v.src && Date.now() - v.at < 30 * 86400000 ? v.src : null; } catch (e) { return null; }
   };

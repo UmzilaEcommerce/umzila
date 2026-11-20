@@ -16,6 +16,7 @@ function clamp(str, max) {
 }
 
 const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
+const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
 
 exports.handler = async function (event) {
   const origin = process.env.ALLOWED_ORIGIN || '*';
@@ -105,7 +106,7 @@ exports.handler = async function (event) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject, html, headers: unsubscribeHeaders(unsubscribeUrl) })
+    body: JSON.stringify({ ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject, html: tagLinks(html, email, SITE_BASE_URL), headers: unsubscribeHeaders(unsubscribeUrl) })
   });
   if (!res.ok) {
     const errText = await res.text();

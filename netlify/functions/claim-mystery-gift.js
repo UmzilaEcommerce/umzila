@@ -12,6 +12,7 @@
 
 const { createClient } = require('@supabase/supabase-js');
 const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
+const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -222,7 +223,7 @@ async function issueMysteryCode(admin, email, funFact, SITE_BASE_URL, RESEND_KEY
           ...mailFrom('Umzila', 'noreply'),
           to: [email],
           subject,
-          html
+          html: tagLinks(html, email, SITE_BASE_URL)
         })
       });
       if (!res.ok) console.error('claim-mystery-gift: Resend error', res.status, await res.text());
@@ -264,7 +265,7 @@ async function reinstateCode(admin, row, SITE_BASE_URL, RESEND_KEY) {
           ...mailFrom('Umzila', 'noreply'),
           to: [updated.email],
           subject: 'Your mystery gift code is back 🎁',
-          html: buildReinstateEmail(updated.code, expiryLabel, SITE_BASE_URL)
+          html: tagLinks(buildReinstateEmail(updated.code, expiryLabel, SITE_BASE_URL), updated.email, SITE_BASE_URL)
         })
       });
       if (!res.ok) console.error('claim-mystery-gift: Resend error', res.status, await res.text());

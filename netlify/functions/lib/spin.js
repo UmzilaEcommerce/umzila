@@ -14,6 +14,7 @@
 const crypto = require('crypto');
 const { mailFrom } = require('./mail');
 const { unsubscribeUrl, unsubscribeHeaders } = require('./unsubscribe');
+const { tagLinks } = require('./visitor-tag'); // People: ?ut= on site links
 
 // Shown if a gift row is missing (e.g. a spin made before a gift was renamed).
 const FALLBACK_GIFT = { kind: 'gift', emoji: '🎁', label: 'Gift', title: 'Your gift', sub: 'Use it on your next order.', gift_type: 'percentage', amount: 10 };
@@ -269,7 +270,7 @@ function giftEmail(variant, { name, email, gift, code, expiresAt, useUrl, shareC
 async function sendGiftEmail(variant, to, data) {
   if (!process.env.RESEND_API_KEY || !SITE()) return false;
   const m = giftEmail(variant, { ...data, email: to });
-  const body = { ...mailFrom('Umzila', 'hello', variant === 'prize' ? undefined : 'news'), to: [to], subject: m.subject, html: m.html, text: m.text };
+  const body = { ...mailFrom('Umzila', 'hello', variant === 'prize' ? undefined : 'news'), to: [to], subject: m.subject, html: tagLinks(m.html, to, SITE()), text: m.text };
   if (m.headers) body.headers = m.headers;
   try {
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

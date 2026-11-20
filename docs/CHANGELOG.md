@@ -4,6 +4,28 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-20: People — email links identify the phone that opens them
+
+**Asked:** catch people like Luthando, who typed their email in April before browsers remembered it, by tagging links in marketing emails.
+
+**What changed:**
+- **New lib/visitor-tag.js:** `tagLinks` adds `?ut=<tag>` (the email AES-GCM encrypted, key from UNSUBSCRIBE_SECRET) to every site link in an email.
+- **Applied in:**
+  - campaigns
+  - admin direct emails
+  - basket nudges
+  - spin emails
+  - mystery-gift and reinstate emails
+  - store-promo code emails
+- **presence.js** strips `ut` from the address bar and posts it to the new **identify-visitor.js**. That function links the browser (`site_browsers`) to the email, and the visitor's past and future visits then show in admin → Intelligence → People.
+
+**Files:**
+- netlify/functions/lib/visitor-tag.js (new)
+- netlify/functions/identify-visitor.js (new)
+- admin-manage-marketing.js, admin-direct-email.js, send-engagement-email.js, lib/spin.js, claim-mystery-gift.js, claim-store-promo.js
+- presence.js
+- docs/systems/people.md
+
 ## 2026-11-20: People — find anyone and see when they were last on Umzila (guests included)
 
 **Asked:** be able to tell when an email was last on the site, including guests without an account, and link past visits too. An email typed once in the mystery pop-up should identify that browser, so admins can see individual people across Umzila.

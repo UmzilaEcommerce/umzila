@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
+const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
 const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
 
 exports.handler = async function(event) {
@@ -152,7 +153,7 @@ exports.handler = async function(event) {
                 ...mailFrom('Umzila', 'hello', 'news'),
                 to:      [customer_email],
                 subject,
-                html,
+                html: tagLinks(html, customer_email, SITE_BASE_URL),
                 headers: unsubscribeHeaders(unsubUrl)
             })
         });

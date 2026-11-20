@@ -31,6 +31,24 @@ A guest's email was only ever attached to the basket id, and only once they had 
 
   These rows have no `presence_id` until the browser returns, but their behaviour events link straight away.
 
+## Email link tags (added 2026-11-20)
+
+Marketing, gift and promo emails tag every link to the site with `?ut=<tag>`, so clicking one identifies that phone without the person typing anything. This catches people who typed their email before browsers remembered it, like April mystery-gift claims.
+
+- **lib/visitor-tag.js:**
+  - `tagLinks(html, email, site)` adds the tag to links on the SITE_BASE_URL host and skips `/.netlify/` links (unsubscribe, rating).
+  - The tag is the email encrypted with AES-256-GCM. The key is derived from UNSUBSCRIBE_SECRET with a "visitor:" label. The link never shows the email, and a forged tag fails to decrypt.
+- **Where it's applied:**
+  - campaigns (admin-manage-marketing.js)
+  - admin direct emails (admin-direct-email.js)
+  - basket nudges (send-engagement-email.js)
+  - spin emails (lib/spin.js sendGiftEmail)
+  - mystery-gift and reinstate emails (claim-mystery-gift.js)
+  - store-promo code emails (claim-store-promo.js)
+  - **Any new email that goes to a known person should wrap its html in `tagLinks`.** Order/receipt/tracking emails are not tagged.
+- **presence.js** reads `ut`, removes it from the address bar (`history.replaceState`, other params like `src` kept), and posts it with the basket id to **identify-visitor.js**. That function decrypts the tag and upserts `site_browsers` (email, contact_at) with the service role.
+- **Forwarded emails:** someone who opens a forwarded email is filed under the original recipient. That's the same trade-off as a shared phone.
+
 ## Admin functions (admins only: `people__assert_admin()` checks `admins`)
 
 - `admin_find_people(q)`: up to 30 emails matching an email, name or phone fragment (phones compared on the last 9 digits). It searches across:

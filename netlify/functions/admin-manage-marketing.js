@@ -10,6 +10,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
 
 const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
+const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
 
 function chunk(arr, size) {
   const out = [];
@@ -139,7 +140,7 @@ exports.handler = async function (event) {
         shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
         siteUrl: SITE_BASE_URL, unsubscribeUrl
       });
-      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html, headers: unsubscribeHeaders(unsubscribeUrl) };
+      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html: tagLinks(html, email, SITE_BASE_URL), headers: unsubscribeHeaders(unsubscribeUrl) };
     });
 
     const res = await fetch('https://api.resend.com/emails/batch', {

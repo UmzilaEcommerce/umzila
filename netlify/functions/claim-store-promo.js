@@ -14,6 +14,7 @@ const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 const { checkEmail } = require('./lib/contact-check');
 const { mailFrom } = require('./lib/mail');
+const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' };
 const reply = (code, body) => ({ statusCode: code, headers: CORS, body: JSON.stringify(body) });
@@ -120,7 +121,7 @@ exports.handler = async (event) => {
     try {
       await fetch('https://api.resend.com/emails', {
         method: 'POST', headers: { Authorization: 'Bearer ' + process.env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...mailFrom('Umzila', 'orders'), to: [email], subject: `Your ${promo.percent}% off ${seller.shop_name} code: ${code}`, html })
+        body: JSON.stringify({ ...mailFrom('Umzila', 'orders'), to: [email], subject: `Your ${promo.percent}% off ${seller.shop_name} code: ${code}`, html: tagLinks(html, email, SITE) })
       });
     } catch (e) { console.error('claim-store-promo email', e); }
   }
