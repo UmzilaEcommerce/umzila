@@ -353,6 +353,20 @@
   .ig-bars i { flex: 1; background: #2563eb; border-radius: 3px 3px 0 0; min-height: 1px; }
   .ig-axis { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--muted); margin-top: 3px; }
   .ig-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+  /* People (admin_find_people / admin_person / admin_recent_people) */
+  .pp-search { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .pp-search input { flex: 1 1 220px; min-width: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; }
+  .pp-row { display: flex; gap: 10px; align-items: center; padding: 9px 4px; border-bottom: 1px solid #f3f4f6; cursor: pointer; font-size: 13px; }
+  .pp-row:hover { background: #f9fafb; }
+  .pp-row b { display: block; font-size: 13.5px; } .pp-row small { color: var(--muted); font-size: 11.5px; word-break: break-all; }
+  .pp-row .pp-when { margin-left: auto; text-align: right; white-space: nowrap; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .pp-tag { display: inline-block; font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #eef2ff; color: #3730a3; margin-left: 4px; vertical-align: 1px; }
+  .pp-tag.guest { background: #f3f4f6; color: #4b5563; }
+  .pp-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 12px; }
+  .pp-head h3 { margin: 0; font-size: 18px; } .pp-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); word-break: break-all; }
+  .pp-day { padding: 8px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+  .pp-day > b { display: block; font-size: 12.5px; }
+  .pp-chip { display: inline-block; font-size: 11.5px; background: #f3f4f6; border-radius: 6px; padding: 2px 7px; margin: 3px 4px 0 0; }
   @media (max-width: 600px) { .ig-funnel div { grid-template-columns: 96px 1fr 80px; } .ig-grid { grid-template-columns: 1fr; } }
   .live-row span { margin-left: auto; color: var(--muted); font-size: 12px; font-weight: 600; }
   .live-row.bad span { color: #dc2626; }
@@ -729,6 +743,7 @@ const supabaseClient = supabase.createClient(
           <button class="sub-tab" data-itab="intel-products">Products</button>
           <button class="sub-tab" data-itab="intel-stores">Stores</button>
           <button class="sub-tab" data-itab="intel-customers">Customers</button>
+          <button class="sub-tab" data-itab="intel-people">People</button>
           <button class="sub-tab" data-itab="intel-demand">Demand &amp; timing</button>
         </div>
 
@@ -736,6 +751,21 @@ const supabaseClient = supabase.createClient(
         <div id="intel-products" style="display:none"></div>
         <div id="intel-stores" style="display:none"></div>
         <div id="intel-customers" style="display:none"></div>
+        <div id="intel-people" style="display:none">
+          <div class="ig-card" style="margin-bottom:16px">
+            <h4>Find a person</h4>
+            <p class="ig-sub">Type an email, name or phone number. Shows everything Umzila knows about them: when they were last on the site, the pages and products they looked at, baskets, orders and codes.</p>
+            <form class="pp-search" id="ppSearchForm"><input id="ppSearch" type="search" placeholder="e.g. nomasonto, ayabonga@gmail.com, 079…" autocomplete="off"><button class="small-btn" type="submit">Search</button></form>
+            <div id="ppResults"></div>
+          </div>
+          <div id="ppPerson"></div>
+          <div class="ig-card">
+            <h4>On the site recently
+              <select id="ppDays" style="margin-left:8px;font-size:12px"><option value="1">last 24 hours</option><option value="7" selected>last 7 days</option><option value="30">last 30 days</option></select></h4>
+            <p class="ig-sub">People we can put a name to: they have an account, or typed their email on that phone/browser (gift pop-up, checkout, spin, notify me). Tap one to see everything.</p>
+            <div id="ppRecent"><div class="ig-empty">Loading…</div></div>
+          </div>
+        </div>
         <div id="intel-demand" style="display:none"></div>
         <p class="muted" style="font-size:11.5px;margin-top:14px">Money = paid orders from the Finances engine (test orders left out, SA days). Views, carts and searches = shopper activity on the site (your staff accounts left out); one person = one signed-in account or one phone/browser.</p>
       </section>
@@ -2988,6 +3018,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (typeof loadIntelligence === 'function') loadIntelligence(false);
   });
   function showIntelTab(tabId) {
+    if (tabId === 'intel-people' && typeof loadPeople === 'function') loadPeople();
     document.querySelectorAll('.sub-tab[data-itab]').forEach(b => b.classList.toggle('active', b.dataset.itab === tabId));
     document.querySelectorAll('#section-intelligence > div[id^="intel-"]').forEach(el => {
       el.style.display = el.id === tabId ? '' : 'none';
@@ -3397,6 +3428,91 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       </div>
       <p class="muted" style="font-size:11.5px;margin-top:8px">A customer = one email address. Test orders marked in Finances are left out.</p>`;
   }
+
+  // ── People (admin-only RPCs over site_browsers — docs/systems/people.md) ──
+  const ppTime = d => d ? new Date(d).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  const ppClock = d => new Date(d).toLocaleTimeString('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit' });
+  function ppAgo(d) {
+    if (!d) return 'never seen';
+    const m = Math.round((Date.now() - new Date(d)) / 60000);
+    if (m < 3) return 'on the site now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.round(m / 60) + ' h ago';
+    const days = Math.round(m / 1440);
+    return days === 1 ? 'yesterday' : days + ' days ago';
+  }
+  const PP_PAGES = { home: 'Home', cart: 'Cart', checkout: 'Checkout', 'checkout-success': 'Paid ✓', spin: 'Spin & Win', track: 'Tracking', profile: 'Profile' };
+  const ppPage = p => p.label ? '🏪 ' + p.label : (PP_PAGES[p.page] || p.page);
+  const PP_EVENTS = { product_click: 'Opened', product_view: 'Viewed', add_to_cart: 'Added to cart', store_view: 'Opened store', search: 'Searched', category_view: 'Browsed', favourite_added: 'Saved ♥', favourite_removed: 'Unsaved', source_landing: 'Came in from a link', bundle_click: 'Opened bundle' };
+  const ppRow = p => `<div class="pp-row" data-pp-email="${escapeHtml(p.email)}">
+      <div style="min-width:0"><b>${escapeHtml(p.name || p.email)}<span class="pp-tag ${p.account ? '' : 'guest'}">${p.account ? 'account' : 'guest'}</span></b><small>${escapeHtml(p.email)}${p.store ? ' · last on ' + escapeHtml(p.store) : ''}${p.days > 1 ? ' · ' + p.days + ' days active' : ''}</small></div>
+      <div class="pp-when">${ppAgo(p.last_seen)}<br><small>${p.last_seen ? ppTime(p.last_seen) : ''}</small></div></div>`;
+  let peopleLoaded = false;
+  function loadPeople() {
+    if (peopleLoaded) return;
+    peopleLoaded = true;
+    loadRecentPeople();
+  }
+  async function loadRecentPeople() {
+    const box = document.getElementById('ppRecent');
+    box.innerHTML = '<div class="ig-empty">Loading…</div>';
+    const { data, error } = await supabaseClient.rpc('admin_recent_people', { p_days: Number(document.getElementById('ppDays').value) || 7 });
+    if (error) { box.innerHTML = `<div class="ig-empty" style="color:#b91c1c">Could not load: ${escapeHtml(error.message)}</div>`; peopleLoaded = false; return; }
+    const known = data?.known || [];
+    box.innerHTML = (known.length ? known.map(ppRow).join('') : '<div class="ig-empty">Nobody we can name yet in this period.</div>')
+      + `<p class="muted" style="font-size:11.5px;margin-top:8px">+ ${data?.unknown_browsers || 0} phones/browsers we can't name yet (they haven't typed an email or signed in on that device).</p>`;
+  }
+  async function searchPeople(q) {
+    const box = document.getElementById('ppResults');
+    if (q.trim().length < 2) { box.innerHTML = '<div class="ig-empty">Type at least 2 letters.</div>'; return; }
+    box.innerHTML = '<div class="ig-empty">Searching…</div>';
+    const { data, error } = await supabaseClient.rpc('admin_find_people', { p_q: q.trim() });
+    if (error) { box.innerHTML = `<div class="ig-empty" style="color:#b91c1c">Search failed: ${escapeHtml(error.message)}</div>`; return; }
+    box.innerHTML = (data || []).length ? data.map(ppRow).join('') : '<div class="ig-empty">Nobody found with that email, name or phone.</div>';
+    if ((data || []).length === 1) openPerson(data[0].email);
+  }
+  async function openPerson(email) {
+    const box = document.getElementById('ppPerson');
+    box.innerHTML = '<div class="ig-card" style="margin-bottom:16px"><div class="ig-empty">Loading…</div></div>';
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const { data: p, error } = await supabaseClient.rpc('admin_person', { p_email: email });
+    if (error || !p) { box.innerHTML = `<div class="ig-card" style="margin-bottom:16px;color:#b91c1c">Could not load: ${escapeHtml(error?.message || 'nothing found')}</div>`; return; }
+    const acc = (p.accounts || [])[0];
+    const linked = (p.browsers || []).filter(b => b.linked).length;
+    const sec = (title, sub, body) => `<div class="ig-card"><h4>${title}</h4>${sub ? `<p class="ig-sub">${sub}</p>` : ''}${body}</div>`;
+    const scroll = html => `<div class="ig-scroll" style="max-height:360px;overflow-y:auto">${html}</div>`;
+    const visits = (p.visits || []).map(v => `<div class="pp-day"><b>${igDate(v.day)} · ${ppClock(v.first)}–${ppClock(v.last)}</b>${(v.pages || []).map(x => `<span class="pp-chip">${escapeHtml(ppPage(x))}</span>`).join('')}</div>`).join('');
+    const acts = (p.activity || []).map(a => `<tr><td>${ppTime(a.at)}</td><td>${escapeHtml(PP_EVENTS[a.type] || a.type)}</td><td>${escapeHtml(a.product || (a.term ? '"' + a.term + '"' : '') || a.category || '')}${a.store ? `<small>${escapeHtml(a.store)}</small>` : ''}</td></tr>`).join('');
+    const baskets = (p.baskets || []).map(b => `<div class="pp-day"><b>${ppTime(b.updated_at)}${b.account ? ' · account basket' : ''}</b>${(b.items || []).map(i => `<span class="pp-chip">${escapeHtml(i.qty || 1)} × ${escapeHtml(i.name || 'item')}${i.price ? ' · R' + escapeHtml(i.price) : ''}</span>`).join('') || '<span class="pp-chip">empty</span>'}</div>`).join('');
+    const orders = (p.orders || []).map(o => `<tr><td>${ppTime(o.created_at)}<small>${escapeHtml(o.order_number || '')}</small></td><td>${o.payment_status === 'paid' ? '✅ paid' : 'not paid'}<small>${escapeHtml(o.order_status || '')}</small></td><td class="n">${fmt(Number(o.total) || 0)}</td></tr>`).join('');
+    const codes = (p.codes || []).map(c => `<tr><td>${escapeHtml(c.code)}<small>${escapeHtml(c.type)}</small></td><td>${ppTime(c.created_at)}</td><td>${c.used ? '✅ used' : (c.expires_at && new Date(c.expires_at) < new Date() ? 'expired' : 'unused')}</td></tr>`).join('');
+    box.innerHTML = `<div class="ig-card" style="margin-bottom:16px;border-top:3px solid #2563eb">
+        <div class="pp-head"><div style="flex:1;min-width:200px"><h3>${escapeHtml((p.names || [])[0] || p.email)}</h3>
+          <p>${escapeHtml(p.email)}${(p.phones || []).length ? ' · ' + p.phones.map(escapeHtml).join(', ') : ''}${(p.names || []).length > 1 ? '<br>Also: ' + p.names.slice(1).map(escapeHtml).join(', ') : ''}</p></div>
+          <div style="text-align:right"><b style="font-size:16px">${ppAgo(p.last_seen)}</b><p>${p.last_seen ? 'last seen ' + ppTime(p.last_seen) : ''}</p></div></div>
+        <div class="ig-kpis" style="margin-bottom:0">
+          <div><span>Account</span><b style="font-size:16px">${acc ? (acc.confirmed ? 'Yes' : 'Yes, email not confirmed') : 'Guest'}</b><span>${acc ? 'since ' + igDate(acc.created_at) : 'no account'}</span></div>
+          <div><span>Phones / browsers</span><b>${(p.browsers || []).length}</b><span>${linked} with visit history linked</span></div>
+          <div><span>Days on the site</span><b>${(p.visits || []).length}</b><span>visit history starts 7 Oct 2026</span></div>
+          <div><span>Paid orders</span><b>${(p.orders || []).filter(o => o.payment_status === 'paid').length}</b><span>${(p.orders || []).length} started</span></div>
+          <div><span>Mailing list</span><b style="font-size:16px">${p.subscriber ? (p.subscriber.unsubscribed ? 'Unsubscribed' : 'Subscribed') : 'No'}</b><span>${p.subscriber ? escapeHtml((p.subscriber.sources || []).join(', ')) : ''}</span></div>
+        </div>
+        <p class="muted" style="font-size:11.5px;margin:10px 0 0">A guest's email is what they typed on that phone/browser, not proven. A device's older visits are added the next time it comes back to the site.</p>
+      </div>
+      <div class="ig-grid" style="margin-bottom:16px">
+        ${sec('Visits by day', 'SA time. Pages they opened each day.', visits ? scroll(visits) : '<div class="ig-empty">No visits recorded on a linked device yet.</div>')}
+        ${sec('What they looked at', 'Latest first: products opened, added to cart, searches, stores.', acts ? scroll(`<table class="ig-tbl"><tbody>${acts}</tbody></table>`) : '<div class="ig-empty">Nothing recorded.</div>')}
+        ${sec('Baskets', '', baskets || '<div class="ig-empty">No saved basket.</div>')}
+        ${sec('Orders', '', orders ? `<table class="ig-tbl"><tbody>${orders}</tbody></table>` : '<div class="ig-empty">No orders.</div>')}
+        ${sec('Codes', 'Gift, promo and spin codes sent to this email.', codes ? `<div class="ig-scroll"><table class="ig-tbl"><tbody>${codes}</tbody></table></div>` : '<div class="ig-empty">No codes.</div>')}
+      </div>`;
+  }
+  document.getElementById('ppSearchForm').addEventListener('submit', e => { e.preventDefault(); searchPeople(document.getElementById('ppSearch').value); });
+  document.getElementById('ppDays').addEventListener('change', loadRecentPeople);
+  document.getElementById('intel-people').addEventListener('click', e => {
+    const r = e.target.closest('[data-pp-email]');
+    if (r) openPerson(r.dataset.ppEmail);
+  });
 
   // ── Demand & timing ──
   function renderIntelDemand(d, label) {

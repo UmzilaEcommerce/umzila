@@ -4,6 +4,32 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-20: People — find anyone and see when they were last on Umzila (guests included)
+
+**Asked:** be able to tell when an email was last on the site, including guests without an account, and link past visits too. An email typed once in the mystery pop-up should identify that browser, so admins can see individual people across Umzila.
+
+**Root cause:** each browser has two permanent ids that were never connected.
+- The visit counter (`umz_presence_id` → `site_visits`) recorded visits with no person attached.
+- The basket id (`ss_anon_id` → `carts`, `user_events`) only got an email once a guest had a basket.
+
+So guest visits were anonymous, and a pop-up email with no basket was linked to nothing.
+
+**What changed:**
+- **New table `public.site_browsers`** (one row per browser: both ids, account, latest typed email/name/phone). It is only reachable through SECURITY DEFINER functions, and was seeded from guest baskets and signed-in events.
+- **`touch_presence`** takes optional `p_anon`, `p_email`, `p_name` and `p_phone` and upserts the browser row.
+- **presence.js** sends them on every beat. `umzilaGuestContact()` beats immediately.
+- **Past visits and events** for a browser link as soon as it is identified. Returning guests are identified from the email already remembered in their localStorage.
+- **New admin-only RPCs:** `admin_find_people`, `admin_person`, `admin_recent_people` (with helpers `people__ids`, `people__last_seen` and `people__assert_admin`).
+- **New admin tab: admin.html → Intelligence → People.** It has search by email/name/phone, a person card (last seen, visits by day, products looked at, baskets, orders, codes, mailing list) and "On the site recently".
+
+**Files:**
+- docs/plans/sql/15_people.sql (migration `people_site_browsers`)
+- presence.js
+- admin.html
+- docs/systems/people.md (new): read it first.
+
+**Note:** there is no privacy page yet. One should mention that this is recorded (POPIA).
+
 ## 2026-11-17: Faster store pages and checkout; code box removed from the cart
 
 **Asked:**

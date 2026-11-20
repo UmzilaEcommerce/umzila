@@ -3,7 +3,9 @@
 // Each page calls umzilaPresence.start(supabaseClient, '<page label>') once its
 // client exists. One anonymous id per browser (localStorage), a heartbeat about
 // once a minute while the tab is visible (touch_presence RPC; signed-in visitors
-// are linked by their session token server-side). Never blocks or breaks a
+// are linked by their session token server-side; every beat also sends the
+// basket id ss_anon_id + any contact typed on this browser → site_browsers,
+// which links past and future visits to a person). Never blocks or breaks a
 // page: every failure is ignored.
 (function () {
   var KEY = 'umz_presence_id', BEAT_MS = 60000, MIN_GAP_MS = 15000;
@@ -27,7 +29,13 @@
     if (!force && now - last < MIN_GAP_MS) return;
     last = now;
     try {
-      client.rpc('touch_presence', { p_session: sid, p_page: page }).then(function () {}, function () {});
+      // p_anon + contact link this browser's visits to its basket id and to the
+      // email/name/phone typed on it (admin → Intelligence → People).
+      var c = contact || {};
+      client.rpc('touch_presence', {
+        p_session: sid, p_page: page, p_anon: anonId(),
+        p_email: c.email || null, p_name: c.name || null, p_phone: c.phone || null
+      }).then(function () {}, function () {});
     } catch (e) { /* ignore */ }
   }
   // ── Marketing source (?src=thandi / ?utm_source=tiktok on the landing link) ──
@@ -181,6 +189,7 @@
     };
     try { localStorage.setItem(CONTACT_KEY, JSON.stringify(contact)); } catch (e) {}
     syncGuestCart(true);
+    beat(true); // link this browser to the details straight away
   };
   setInterval(function () { syncGuestCart(false); }, 5000);
   window.addEventListener('storage', function (e) { if (e.key === 'ss_cart') syncGuestCart(false); });
