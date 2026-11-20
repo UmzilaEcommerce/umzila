@@ -101,6 +101,13 @@ exports.handler = async function (event) {
     cta_path = productShop && productShop.slug
       ? `/${productShop.slug}?product=${encodeURIComponent(body.cta_product_id)}`
       : `/shop.html?${productShop && productShop.shop_name ? `shop=${encodeURIComponent(productShop.shop_name)}&` : ''}product=${encodeURIComponent(body.cta_product_id)}`;
+  } else if (dest === 'store') {
+    if (!isAdmin || !body.cta_seller_id) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Choose which store the button opens.' }) };
+    // Platform campaign pointing at one store (admin only). src=email so the
+    // orders it brings show under "Where orders come from".
+    const { data: store } = await admin.from('sellers').select('id, slug').eq('id', body.cta_seller_id).maybeSingle();
+    if (!store || !store.slug) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Store not found.' }) };
+    cta_path = `/${store.slug}?src=email`;
   } else if (dest === 'checkout_with_code' && body.discount_code_id) {
     // resolved below once the code is verified
   } else {

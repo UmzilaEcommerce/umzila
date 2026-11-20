@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-20: Platform campaigns can link to a store
+
+**Asked:** a Black Friday teaser email to everyone, with a button to Isiqalo Kitchen.
+
+**Problem:** admin → Marketing → Platform Campaign could only point the button at the homepage or at checkout with a code.
+
+**What changed:**
+- **New button destination "A store"** with a store picker. The store list hides the house seller.
+- **submit-marketing-campaign.js** resolves the destination server-side (admin only) to `/<slug>?src=email`, so orders it brings show under "Where orders come from".
+- **Choosing "A store" without a store** is refused with a clear message.
+
+**Files:** admin.html, netlify/functions/submit-marketing-campaign.js.
+
 ## 2026-11-20: People — email links identify the phone that opens them
 
 **Asked:** catch people like Luthando, who typed their email in April before browsers remembered it, by tagging links in marketing emails.
