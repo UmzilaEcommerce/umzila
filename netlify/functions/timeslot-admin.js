@@ -116,16 +116,20 @@ exports.handler = async (event) => {
 
 // One order → { order_number, status, detail }. status: offered | batched | waiting_rider | already_moving | not_paid | no_delivery | failed
 async function releaseNow(supabase, orderId, adminId) {
-  const { data: o } = await supabase.from('orders').select('id, order_number, payment_status, order_status, slot_id, dispatch_released_at').eq('id', orderId).maybeSingle();
+  const { data: o } = await supabase.from('orders').select('id, order_number, payment_status, order_status, slot_id, slot_window_start, slot_window_end, dispatch_released_at, customer_name, customer_email').eq('id', orderId).maybeSingle();
   if (!o) return { status: 'failed', detail: 'not found' };
   const out = { order_number: o.order_number };
   if (o.payment_status !== 'paid' || ['refunded', 'cancelled'].includes(o.order_status)) return { ...out, status: 'not_paid' };
-  const { data: d } = await supabase.from('deliveries').select('id, status').eq('order_id', o.id).maybeSingle();
+  const { data: d } = await supabase.from('deliveries').select('id, status, tracking_token').eq('order_id', o.id).maybeSingle();
   if (!d) return { ...out, status: 'no_delivery' };
   if (!['PENDING', 'READY_FOR_DISPATCH'].includes(d.status)) return { ...out, status: 'already_moving', detail: d.status };
+  let firstRelease = false;
   if (o.slot_id && !o.dispatch_released_at) {
-    const { error } = await supabase.from('orders').update({ dispatch_released_at: new Date().toISOString(), dispatch_released_by: adminId }).eq('id', o.id);
+    // Claim (only the first press stamps it) so a double press never emails twice.
+    const { data: claimed, error } = await supabase.from('orders').update({ dispatch_released_at: new Date().toISOString(), dispatch_released_by: adminId })
+      .eq('id', o.id).is('dispatch_released_at', null).select('id');
     if (error) return { ...out, status: 'failed', detail: error.message };
+    firstRelease = !!(claimed && claimed.length);
   }
   if (d.status === 'PENDING') {
     // Admin's call: skip the closed-store wait too.
@@ -134,6 +138,15 @@ async function releaseNow(supabase, orderId, adminId) {
     if (!r.ok) return { ...out, status: 'failed', detail: r.reason };
   }
   const r = await offerDelivery(supabase, d.id).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
+  // Tell the buyer once, the first time a run order is moved forward.
+  if (firstRelease && o.customer_email) {
+    const site = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
+    const trackLink = d.tracking_token ? `${site}/track.html?order=${encodeURIComponent(o.id)}&t=${encodeURIComponent(d.tracking_token)}` : '';
+    out.emailed = await T.sendMail(o.customer_email, M.customerSentEarly({
+      firstName: T.firstName(o.customer_name), orderNumber: o.order_number,
+      run: { window_start: o.slot_window_start, window_end: o.slot_window_end }, siteUrl: site, trackLink
+    }));
+  }
   if (r.batched) return { ...out, status: 'batched' };
   if (r.dispatched) return { ...out, status: 'offered' };
   if (r.reason === 'already_offered') return { ...out, status: 'offered' };

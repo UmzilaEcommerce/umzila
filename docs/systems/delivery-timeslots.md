@@ -79,6 +79,8 @@ How it works:
 - A PENDING delivery (store still closed) is made ready with an admin actor.
 - `offerDelivery` runs at once. If no rider is free (or the rider's app hasn't checked in within 90 s), the order stays ready and the next sweep offers it.
 
+The buyer gets one "going out early" email (`timeslot-mail.js customerSentEarly`, with a tracking link). It's sent only on the first release of a run order.
+
 What doesn't change:
 - The sold window stays as it was.
 - Nothing is written to `delivery_run_moves`, because the customer's tracking page would show it as a run change.

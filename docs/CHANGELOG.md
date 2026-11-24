@@ -4,6 +4,21 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-24 — Buyer email when an order is sent to riders early
+
+When an admin presses "Send to riders now" (per order, or "Send whole run"), the buyer now gets one transactional email: "Good news — your order is going out early". It names the time the order was due to leave and has a Track your order link (`track.html?order&t=tracking_token`).
+
+- It's sent only on the first release: `dispatch_released_at` is claimed with `is null`, so a double press or a re-release never emails twice.
+- Orders without a run get no email, because nothing changed for them.
+- The admin toast says "buyer emailed" or "buyer email failed".
+
+**Files:**
+- netlify/functions/lib/timeslot-mail.js (`customerSentEarly`)
+- netlify/functions/timeslot-admin.js (`releaseNow`)
+- timeslots-admin.js
+
+---
+
 ## 2026-11-24 — "Send to riders now": admin fast-forward for run orders
 
 **Reported:** A customer on the 16:00–17:00 run (Nozy Zulu) wanted her order sooner, and a rider was already nearby. But the order was held until the rider-notice time (15:30), and the admin had no way to release it early.

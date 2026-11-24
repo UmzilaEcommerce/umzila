@@ -466,17 +466,17 @@
   var RELEASE_TXT = { offered: 'offered to a rider', batched: 'added to a rider’s trip', waiting_rider: 'released — no rider free right now, it goes to the first one who is', already_moving: 'already with a rider', not_paid: 'not paid (or refunded) — not sent', no_delivery: 'has no delivery (collection / service) — nothing to send', failed: 'could not be sent' };
   function releaseSummary(results) {
     if (!results || !results.length) return 'No paid orders in that run.';
-    return results.map(function (r) { return (r.order_number || 'Order') + ': ' + (RELEASE_TXT[r.status] || r.status) + (r.status === 'failed' && r.detail ? ' (' + r.detail + ')' : ''); }).join(' · ');
+    return results.map(function (r) { return (r.order_number || 'Order') + ': ' + (RELEASE_TXT[r.status] || r.status) + (r.status === 'failed' && r.detail ? ' (' + r.detail + ')' : '') + (r.emailed === true ? ', buyer emailed' : r.emailed === false ? ', buyer email failed' : ''); }).join(' · ');
   }
   async function releaseOrder(orderId, onum) {
-    var ok = await confirmBox('Send ' + (onum || 'this order') + ' to riders now?', '<p>It is offered to riders straight away instead of waiting for its run’s rider-notice time (and without waiting for a closed store to open). The rider is told to collect now.</p>', 'Send now');
+    var ok = await confirmBox('Send ' + (onum || 'this order') + ' to riders now?', '<p>It is offered to riders straight away instead of waiting for its run’s rider-notice time (and without waiting for a closed store to open). The rider is told to collect now, and the buyer gets a “your order is going out early” email (once).</p>', 'Send now');
     if (!ok) return;
     try { var j = await api(orderId ? { action: 'release_now', orderId: orderId } : { action: 'release_now', orderNumber: onum }); toast(releaseSummary(j.results)); }
     catch (e) { toast('Couldn’t send it: ' + e.message); return; }
     await loadAll(true);
   }
   async function releaseRun(slotId, runDate, win) {
-    var ok = await confirmBox('Send the whole ' + (win || '') + ' run to riders now?', '<p>Every paid order in this run is offered to riders straight away. Orders paid later for this run still wait for the normal time.</p>', 'Send run now');
+    var ok = await confirmBox('Send the whole ' + (win || '') + ' run to riders now?', '<p>Every paid order in this run is offered to riders straight away. Each buyer gets a “going out early” email (once). Orders paid later for this run still wait for the normal time.</p>', 'Send run now');
     if (!ok) return;
     try { var j = await api({ action: 'release_run', slotId: slotId, runDate: runDate }); toast(releaseSummary(j.results)); }
     catch (e) { toast('Couldn’t send the run: ' + e.message); return; }

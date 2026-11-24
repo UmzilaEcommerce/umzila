@@ -232,10 +232,23 @@ function customerRefunded({ firstName, orderNumber, total, siteUrl }) {
   };
 }
 
+// ---------- customer: sent early (admin "Send to riders now", timeslot-admin.js release_now) ----------
+function customerSentEarly({ firstName, orderNumber, run, siteUrl, trackLink }) {
+  const was = run && run.window_start ? ` (it was due to leave by ${esc(hhmm(run.window_start))})` : '';
+  const body =
+    p(`${firstName ? 'Hi ' + esc(firstName) + ', ' : 'Hi, '}good news on order <strong>${esc(orderNumber || '')}</strong>: we have moved it forward${was}.`) +
+    box(`<div style="font-size:20px;font-weight:800;color:${NAVY}">Your order is going out now</div><div style="font-size:14px;color:#374151;margin-top:6px">A rider is being sent to collect it &mdash; you can follow it live.</div>`) +
+    p(`Questions? Reply to this email or WhatsApp <a href="https://wa.me/${SUPPORT_WA}" style="color:${NAVY}">+27 79 766 2768</a>.`);
+  return {
+    subject: `Good news — your order is going out early — ${orderNumber || ''}`.trim(),
+    html: emailShell(siteUrl, 'Your order is going out early', body, trackLink ? cta(trackLink, 'Track your order') : ''),
+  };
+}
+
 module.exports = {
   storeRunSummary, adminRunSummary, storeRunAddition, adminRunAddition,
   customerRunChanged, customerNeedsAttention, adminNeedsAttention,
-  adminBusy, customerRunningLate, customerRefunded,
+  adminBusy, customerRunningLate, customerRefunded, customerSentEarly,
   // helpers other files may reuse (wording consistency)
   // windowLabel/timeRange = full window, STORE/ADMIN text only; dispatchLabel = customer text.
   hhmm, dayWord, windowLabel, timeRange, dispatchLabel, SUPPORT_EMAIL,
