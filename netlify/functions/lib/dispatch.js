@@ -49,7 +49,7 @@ async function getRunInfo(supabase, deliveryId, opts = {}) {
     const { data: d } = await supabase.from('deliveries').select('order_id').eq('id', deliveryId).maybeSingle();
     if (!d || !d.order_id) return null;
     const { data: o, error } = await supabase.from('orders')
-      .select('slot_id, slot_run_date, slot_window_start').eq('id', d.order_id).maybeSingle();
+      .select('slot_id, slot_run_date, slot_window_start, dispatch_released_at').eq('id', d.order_id).maybeSingle();
     if (error || !o || !o.slot_id || !o.slot_window_start) return null;
     const { data: s } = await supabase.from('site_settings').select('value').eq('key', 'timeslots').maybeSingle();
     const cfg = s && s.value;
@@ -65,7 +65,9 @@ async function getRunInfo(supabase, deliveryId, opts = {}) {
       orderId: d.order_id, slotId: o.slot_id, runDate: o.slot_run_date,
       runKey: o.slot_id + '|' + o.slot_run_date,
       windowStart: o.slot_window_start, cutoffAt: cutoffAt.toISOString(), releaseAt: releaseAt.toISOString(),
-      held: now.getTime() < releaseAt.getTime()
+      // Admin "Send to riders now" (timeslot-admin.js release_now) lifts the hold for this order.
+      releasedEarly: !!o.dispatch_released_at,
+      held: !o.dispatch_released_at && now.getTime() < releaseAt.getTime()
     };
   } catch (e) {
     console.warn('getRunInfo failed (treated as no run)', e && e.message);

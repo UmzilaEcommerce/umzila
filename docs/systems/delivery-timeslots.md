@@ -65,3 +65,22 @@ A delivery whose order has a run is held (`waiting_for_run`) until the rider-not
 4. Check the slots and settings in Delivery Times (default 12/14/16/18, cut-off 15, grace 5, days ahead 1, busy 6, tell riders 30 min before).
 5. Confirm `RESEND_API_KEY`, `SITE_BASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` are set on the production site (the tick runs there every minute) and that the `timeslot-tick` schedule appears in Netlify → Functions after deploy.
 6. Flip the switch in Admin → Delivery Times after the last cut-off of the day (the confirm dialog says so), then watch the run sheet and the alert inbox for every run in week one and write down the real times (store ready, driver left, last order arrived) to tune the settings.
+
+## Fast-forward: "Send to riders now" (added 2026-11-24)
+
+An admin can lift the run hold for one order or a whole run from Admin → Delivery Times:
+- the "Send an order to riders now" card (by order number);
+- per order on the run sheet;
+- "Send whole run" per run.
+
+How it works:
+- `timeslot-admin.js` `release_now` / `release_run` stamps `orders.dispatch_released_at` / `dispatch_released_by`. These are server-only and locked by the timeslot guards.
+- `lib/dispatch.js getRunInfo` treats a released order as not held.
+- A PENDING delivery (store still closed) is made ready with an admin actor.
+- `offerDelivery` runs at once. If no rider is free (or the rider's app hasn't checked in within 90 s), the order stays ready and the next sweep offers it.
+
+What doesn't change:
+- The sold window stays as it was.
+- Nothing is written to `delivery_run_moves`, because the customer's tracking page would show it as a run change.
+- The rider board shows no "be at the store by" time for released orders.
+

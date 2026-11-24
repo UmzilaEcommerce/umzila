@@ -4,6 +4,38 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-24 — "Send to riders now": admin fast-forward for run orders
+
+**Reported:** A customer on the 16:00–17:00 run (Nozy Zulu) wanted her order sooner, and a rider was already nearby. But the order was held until the rider-notice time (15:30), and the admin had no way to release it early.
+
+**Root cause:** `lib/dispatch.js getRunInfo` holds every run order until `slot_window_start − rider_notice_minutes`, and nothing could override that. Similarly, a PENDING delivery for a closed store waits for the store to open.
+
+**What changed:**
+- **New `orders.dispatch_released_at` / `dispatch_released_by` columns** (server-only):
+  - `timeslot_guard_insert` nulls them on client inserts, and `timeslot_guard_update` locks them for clients.
+  - When `dispatch_released_at` is set, `getRunInfo` returns `held: false`, so every offer path offers the order now.
+  - `get_driver_board` drops "Be at the store by …" for released orders.
+  - Released orders are deliberately **not** logged in `delivery_run_moves`. `order-status.js` reads the first move as "moved from", so a log row would make the customer's tracking page say their run changed.
+- **`timeslot-admin.js` actions:**
+  - `release_now` ({orderNumber | orderId}) and `release_run` ({slotId, runDate}) stamp the release.
+  - A PENDING delivery is made READY_FOR_DISPATCH with an admin actor, even if its store is closed (admin's call).
+  - The order is then offered immediately via `offerDelivery`.
+  - The reply reports per order: offered, batched, waiting_rider (no rider free yet; the sweep sends it to the first free one), already_moving, not_paid or no_delivery.
+- **Admin → Delivery Times** (timeslots-admin.js):
+  - a "🚀 Send an order to riders now" card (type any paid order number, with or without a run);
+  - "🚀 Send to riders now" on every run-sheet order;
+  - "🚀 Send whole run to riders now" on every run.
+
+**Files:**
+- migrations `orders_dispatch_released_at` and `driver_board_collect_by_released_early`
+- netlify/functions/lib/dispatch.js
+- netlify/functions/timeslot-admin.js
+- timeslots-admin.js
+- docs/systems/delivery-timeslots.md
+- CLAUDE.md
+
+---
+
 ## 2026-11-20: Platform campaigns can link to a store
 
 **Asked:** a Black Friday teaser email to everyone, with a button to Isiqalo Kitchen.

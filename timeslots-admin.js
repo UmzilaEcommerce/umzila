@@ -100,6 +100,8 @@
     h += msg('master');
     h += affectedHtml();
     h += attentionHtml();
+    h += '<div class="ts-card"><div class="ts-h"><h3>🚀 Send an order to riders now</h3></div><p class="ts-sub">Fast-forward any paid order (with or without a run): it is offered to riders straight away instead of waiting for its run time or a closed store.</p>' +
+      '<div class="ts-actions"><input type="text" id="tsReleaseNum" placeholder="Order number, e.g. UMZILA-…" autocomplete="off" style="flex:1;min-width:0;padding:10px;border:1px solid #d1d5db;border-radius:10px;font:inherit"><button type="button" class="ts-btn primary" data-act="release-num">Send now</button></div></div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Run sheet · today &amp; tomorrow</h3><div class="ts-actions"><button type="button" class="ts-btn" data-act="tick">Run cut-off job now</button><button type="button" class="ts-btn" data-act="reload">↻ Refresh</button></div></div>' + msg('sheet') + sheetHtml() + '</div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Slots</h3><button type="button" class="ts-btn primary" data-act="slot-new">+ Add slot</button></div>' + msg('slots') + slotsHtml() + '</div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Date controls</h3></div>' + dateCtlHtml() + '</div>';
@@ -164,7 +166,7 @@
   }
 
   function orderBtns(o) {
-    return '<div class="ts-actions"><button type="button" class="ts-btn" data-act="move" data-oid="' + esc(o.order_id || o.id) + '" data-onum="' + esc(o.order_number || '') + '">Move to another run</button><button type="button" class="ts-btn danger-o" data-act="refund" data-oid="' + esc(o.order_id || o.id) + '" data-onum="' + esc(o.order_number || '') + '">Mark for refund</button></div>';
+    return '<div class="ts-actions"><button type="button" class="ts-btn primary" data-act="release" data-oid="' + esc(o.order_id || o.id) + '" data-onum="' + esc(o.order_number || '') + '">🚀 Send to riders now</button><button type="button" class="ts-btn" data-act="move" data-oid="' + esc(o.order_id || o.id) + '" data-onum="' + esc(o.order_number || '') + '">Move to another run</button><button type="button" class="ts-btn danger-o" data-act="refund" data-oid="' + esc(o.order_id || o.id) + '" data-onum="' + esc(o.order_number || '') + '">Mark for refund</button></div>';
   }
   function itemsText(items) { return (items || []).map(function (i) { return (i.qty || i.quantity || 1) + '× ' + (i.name || i.title || 'Item') + (i.size ? ' (' + i.size + ')' : ''); }).join(', '); }
   function phoneLink(p) { return p ? '<a href="tel:' + esc(String(p).replace(/[^\d+]/g, '')) + '">' + esc(p) + '</a>' : '<span class="ts-muted">no phone</span>'; }
@@ -203,7 +205,7 @@
           });
           h += '</div>';
         });
-        if (cnt || (r.stores || []).length) h += '<div class="ts-actions"><button type="button" class="ts-btn" data-act="late" data-slot="' + esc(r.slot_id) + '" data-date="' + esc(String(r.run_date).slice(0, 10)) + '" data-win="' + esc(winOf(r)) + '">🕒 Running late</button></div>';
+        if (cnt || (r.stores || []).length) h += '<div class="ts-actions"><button type="button" class="ts-btn" data-act="late" data-slot="' + esc(r.slot_id) + '" data-date="' + esc(String(r.run_date).slice(0, 10)) + '" data-win="' + esc(winOf(r)) + '">🕒 Running late</button><button type="button" class="ts-btn" data-act="release-run" data-slot="' + esc(r.slot_id) + '" data-date="' + esc(String(r.run_date).slice(0, 10)) + '" data-win="' + esc(winOf(r)) + '">🚀 Send whole run to riders now</button></div>';
         return h + '</div>';
       }).join('');
     }).join('');
@@ -460,6 +462,31 @@
     catch (e) { toast('Couldn’t mark for refund: ' + e.message); return; }
     await refreshAffected();
   }
+  // Fast-forward (timeslot-admin.js release_now / release_run)
+  var RELEASE_TXT = { offered: 'offered to a rider', batched: 'added to a rider’s trip', waiting_rider: 'released — no rider free right now, it goes to the first one who is', already_moving: 'already with a rider', not_paid: 'not paid (or refunded) — not sent', no_delivery: 'has no delivery (collection / service) — nothing to send', failed: 'could not be sent' };
+  function releaseSummary(results) {
+    if (!results || !results.length) return 'No paid orders in that run.';
+    return results.map(function (r) { return (r.order_number || 'Order') + ': ' + (RELEASE_TXT[r.status] || r.status) + (r.status === 'failed' && r.detail ? ' (' + r.detail + ')' : ''); }).join(' · ');
+  }
+  async function releaseOrder(orderId, onum) {
+    var ok = await confirmBox('Send ' + (onum || 'this order') + ' to riders now?', '<p>It is offered to riders straight away instead of waiting for its run’s rider-notice time (and without waiting for a closed store to open). The rider is told to collect now.</p>', 'Send now');
+    if (!ok) return;
+    try { var j = await api(orderId ? { action: 'release_now', orderId: orderId } : { action: 'release_now', orderNumber: onum }); toast(releaseSummary(j.results)); }
+    catch (e) { toast('Couldn’t send it: ' + e.message); return; }
+    await loadAll(true);
+  }
+  async function releaseRun(slotId, runDate, win) {
+    var ok = await confirmBox('Send the whole ' + (win || '') + ' run to riders now?', '<p>Every paid order in this run is offered to riders straight away. Orders paid later for this run still wait for the normal time.</p>', 'Send run now');
+    if (!ok) return;
+    try { var j = await api({ action: 'release_run', slotId: slotId, runDate: runDate }); toast(releaseSummary(j.results)); }
+    catch (e) { toast('Couldn’t send the run: ' + e.message); return; }
+    await loadAll(true);
+  }
+  async function releaseByNumber() {
+    var el = $('tsReleaseNum'); var v = el ? el.value.trim() : '';
+    if (!v) { toast('Type the order number first'); return; }
+    await releaseOrder(null, v);
+  }
   async function refreshAffected() {
     var a = S.affected; await loadAll(true);
     if (a && a.params) await showAffected(a.title, a.params[0], a.params[1]);
@@ -548,6 +575,9 @@
       else if (a === 'settings-save') run(settingsSave());
       else if (a === 'move') run(moveOrder(b.dataset.oid, b.dataset.onum));
       else if (a === 'refund') run(refundOrder(b.dataset.oid, b.dataset.onum));
+      else if (a === 'release') run(releaseOrder(b.dataset.oid, b.dataset.onum));
+      else if (a === 'release-run') run(releaseRun(b.dataset.slot, b.dataset.date, b.dataset.win));
+      else if (a === 'release-num') run(releaseByNumber());
       else if (a === 'late') runningLate(b.dataset.slot, b.dataset.date, b.dataset.win);
       else if (a === 'aff-close') { S.affected = null; render(); }
       else if (a === 'aff-move-all') run(affBulk('move'));

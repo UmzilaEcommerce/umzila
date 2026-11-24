@@ -7,11 +7,16 @@
 //                                                       move row (reason 'refund'), customer email.
 //                                                       The money is refunded by hand in PayFast.
 //   { action: 'running_late', slotId, runDate, minutes } email every paid customer in the run
+//   { action: 'release_now', orderNumber | orderId }    fast-forward: offer to riders now (orders.dispatch_released_at
+//                                                       lifts the run hold; a PENDING delivery is made ready even
+//                                                       if its store is closed)
+//   { action: 'release_run', slotId, runDate }          the same for every paid order in a run
 // Admin = a row in public.admins (same rule as the database's timeslot_is_admin()).
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
 const T = require('./lib/timeslots');
 const M = require('./lib/timeslot-mail');
+const { offerDelivery } = require('./lib/batch-dispatch');
 
 const H = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const reply = (code, obj) => ({ statusCode: code, headers: H, body: JSON.stringify(obj) });
@@ -65,6 +70,27 @@ exports.handler = async (event) => {
       return reply(200, { ok: true, deliveryCancelled });
     }
 
+    // Fast-forward: offer an order to riders now instead of waiting for its run's
+    // rider-notice time (and, if its store is still closed, without waiting for it to open).
+    if (b.action === 'release_now' || b.action === 'release_run') {
+      let ids = [];
+      if (b.action === 'release_now') {
+        const q = String(b.orderId || b.orderNumber || '').trim();
+        if (!q) return reply(400, { error: 'Order number required.' });
+        const col = /^[0-9a-f-]{36}$/i.test(q) ? 'id' : 'order_number';
+        const { data: o } = await supabase.from('orders').select('id').eq(col, q).maybeSingle();
+        if (!o) return reply(404, { error: 'Order not found.' });
+        ids = [o.id];
+      } else {
+        if (!b.slotId || !b.runDate) return reply(400, { error: 'slotId and runDate are required.' });
+        const { data: rows } = await supabase.from('orders').select('id').eq('slot_id', b.slotId).eq('slot_run_date', b.runDate).eq('payment_status', 'paid');
+        ids = (rows || []).map(r => r.id);
+      }
+      const results = [];
+      for (const id of ids) results.push(await releaseNow(supabase, id, user.id));
+      return reply(200, { ok: true, results });
+    }
+
     if (b.action === 'running_late') {
       const minutes = parseInt(b.minutes, 10);
       if (!b.slotId || !b.runDate || !(minutes > 0 && minutes <= 600)) return reply(400, { error: 'slotId, runDate and minutes (1-600) are required.' });
@@ -87,3 +113,30 @@ exports.handler = async (event) => {
     return reply(500, { error: e.message || 'Server error' });
   }
 };
+
+// One order → { order_number, status, detail }. status: offered | batched | waiting_rider | already_moving | not_paid | no_delivery | failed
+async function releaseNow(supabase, orderId, adminId) {
+  const { data: o } = await supabase.from('orders').select('id, order_number, payment_status, order_status, slot_id, dispatch_released_at').eq('id', orderId).maybeSingle();
+  if (!o) return { status: 'failed', detail: 'not found' };
+  const out = { order_number: o.order_number };
+  if (o.payment_status !== 'paid' || ['refunded', 'cancelled'].includes(o.order_status)) return { ...out, status: 'not_paid' };
+  const { data: d } = await supabase.from('deliveries').select('id, status').eq('order_id', o.id).maybeSingle();
+  if (!d) return { ...out, status: 'no_delivery' };
+  if (!['PENDING', 'READY_FOR_DISPATCH'].includes(d.status)) return { ...out, status: 'already_moving', detail: d.status };
+  if (o.slot_id && !o.dispatch_released_at) {
+    const { error } = await supabase.from('orders').update({ dispatch_released_at: new Date().toISOString(), dispatch_released_by: adminId }).eq('id', o.id);
+    if (error) return { ...out, status: 'failed', detail: error.message };
+  }
+  if (d.status === 'PENDING') {
+    // Admin's call: skip the closed-store wait too.
+    const r = await transitionDelivery(supabase, d.id, 'READY_FOR_DISPATCH', { type: 'admin', id: adminId },
+      { eventType: 'ORDER_READY', metadata: { order_id: o.id, released_by_admin: true } });
+    if (!r.ok) return { ...out, status: 'failed', detail: r.reason };
+  }
+  const r = await offerDelivery(supabase, d.id).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
+  if (r.batched) return { ...out, status: 'batched' };
+  if (r.dispatched) return { ...out, status: 'offered' };
+  if (r.reason === 'already_offered') return { ...out, status: 'offered' };
+  // Released, but no rider free right now: the sweep (rider heartbeat / minute job) offers it as soon as one is.
+  return { ...out, status: 'waiting_rider', detail: r.reason };
+}
