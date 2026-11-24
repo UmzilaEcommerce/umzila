@@ -16,6 +16,7 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
   - When `dispatch_released_at` is set, `getRunInfo` returns `held: false`, so every offer path offers the order now.
   - `get_driver_board` drops "Be at the store by …" for released orders.
   - Released orders are deliberately **not** logged in `delivery_run_moves`. `order-status.js` reads the first move as "moved from", so a log row would make the customer's tracking page say their run changed.
+- **Seller dashboard:** a released order counts as "Prepare now". It's grouped under "Sent early · a rider is coming now" instead of "Do not prepare yet" (`seller-dashboard.html`: `slotHold` and the run grouping read `dispatch_released_at`). This was missed in the first commit, and the store was told not to prepare an order that riders could already see.
 - **`timeslot-admin.js` actions:**
   - `release_now` ({orderNumber | orderId}) and `release_run` ({slotId, runDate}) stamp the release.
   - A PENDING delivery is made READY_FOR_DISPATCH with an admin actor, even if its store is closed (admin's call).

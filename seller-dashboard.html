@@ -3715,7 +3715,7 @@
       if (orderIds.length) {
         try {
           var rsl = await SD.sb.from('orders')
-            .select('id, slot_id, slot_run_date, slot_window_start, slot_window_end, slot_needs_attention')
+            .select('id, slot_id, slot_run_date, slot_window_start, slot_window_end, slot_needs_attention, dispatch_released_at')
             .in('id', orderIds);
           if (!rsl.error) (rsl.data || []).forEach(function(r) { if (r.slot_id && r.slot_window_start) slotById[r.id] = r; });
         } catch (e) { slotById = {}; }
@@ -3739,7 +3739,7 @@
       deliveryRows.forEach(function(d) { deliveryByOrder[d.order_id] = d.status; });
       myOrders.forEach(function(o) {
         var s = slotById[o.id];
-        o._slot = s ? { id: s.slot_id, runDate: s.slot_run_date, start: s.slot_window_start, end: s.slot_window_end, needsAttention: !!s.slot_needs_attention } : null;
+        o._slot = s ? { id: s.slot_id, runDate: s.slot_run_date, start: s.slot_window_start, end: s.slot_window_end, needsAttention: !!s.slot_needs_attention, releasedEarly: !!s.dispatch_released_at } : null;
       });
       myOrders.forEach(function(o) {
         o._deliveryStatus = deliveryByOrder.hasOwnProperty(o.id) ? deliveryByOrder[o.id] : null;
@@ -3875,7 +3875,8 @@
     // ── Delivery timeslots: runs (all SAST; server clock via timeslot_public_config) ──
     function slotNow() { return Date.now() + ((SD._slotClock && SD._slotClock.offset) || 0); }
     function slotCutoffMs(sl) { return new Date(sl.start).getTime() - ((SD._slotClock && SD._slotClock.cutoff) || 15) * 60000; }
-    function slotHold(order) { return !!(order._slot && (order._slot.needsAttention || slotNow() < slotCutoffMs(order._slot))); }
+    // Released early by an admin ("Send to riders now", orders.dispatch_released_at) = prepare now.
+    function slotHold(order) { return !!(order._slot && !order._slot.releasedEarly && (order._slot.needsAttention || slotNow() < slotCutoffMs(order._slot))); }
     function sastTime(v) { return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)); }
     function sastDay(v) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Johannesburg', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(v)); }
     function sastDayLabel(v) {
@@ -4000,11 +4001,12 @@
       var plain = activeOrders.filter(function(o) { return !o._slot; });
       var groups = {}, groupKeys = [];
       activeOrders.filter(function(o) { return o._slot; }).forEach(function(o) {
-        var k = o._slot.needsAttention ? 'attn' : (o._slot.runDate + '|' + o._slot.start);
-        if (!groups[k]) { groups[k] = { key: k, slotId: o._slot.id, runDate: o._slot.runDate, start: o._slot.start, end: o._slot.end, attn: !!o._slot.needsAttention, orders: [] }; groupKeys.push(k); }
+        var k = o._slot.releasedEarly ? 'early' : o._slot.needsAttention ? 'attn' : (o._slot.runDate + '|' + o._slot.start);
+        if (!groups[k]) { groups[k] = { key: k, slotId: o._slot.id, runDate: o._slot.runDate, start: o._slot.start, end: o._slot.end, attn: !!o._slot.needsAttention && !o._slot.releasedEarly, early: k === 'early', orders: [] }; groupKeys.push(k); }
         groups[k].orders.push(o);
       });
       groupKeys.sort(function(a, b) {
+        if (groups[a].early !== groups[b].early) return groups[a].early ? -1 : 1;
         if (groups[a].attn !== groups[b].attn) return groups[a].attn ? 1 : -1;
         return new Date(groups[a].start) - new Date(groups[b].start);
       });
@@ -4012,6 +4014,10 @@
         var g = groups[k];
         if (g.attn) {
           return '<div class="run-group"><div class="run-head" style="background:#92400e"><div class="run-head-title">Waiting for a delivery time</div><span class="run-state wait">Do not prepare yet</span></div>' +
+            '<div class="run-body">' + g.orders.map(cardHtml).join('') + '</div></div>';
+        }
+        if (g.early) {
+          return '<div class="run-group"><div class="run-head"><div class="run-head-title">Sent early · a rider is coming now</div><span class="run-state now">Prepare now</span></div>' +
             '<div class="run-body">' + g.orders.map(cardHtml).join('') + '</div></div>';
         }
         var cutoffMs = slotCutoffMs({ start: g.start });

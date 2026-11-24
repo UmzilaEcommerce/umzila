@@ -83,4 +83,5 @@ What doesn't change:
 - The sold window stays as it was.
 - Nothing is written to `delivery_run_moves`, because the customer's tracking page would show it as a run change.
 - The rider board shows no "be at the store by" time for released orders.
+- The seller dashboard shows released orders as "Prepare now" under "Sent early". Any other screen that holds stores back by the cut-off must check `dispatch_released_at` too.
 
