@@ -4,7 +4,8 @@
  * rings) it asks for orders paid since it last looked (orders.payment_status =
  * 'paid', paid_at; staff RLS decides who can see them). For each new one it plays a
  * cash-register sound, shows a desktop notification and a banner at the top.
- *  - Sound: /cha-ching.mp3 if that file exists, else a cha-ching synthesised here.
+ *  - Sound: /cha-ching.mp3 if the server returns an audio file there, else a cha-ching
+ *    computed here as a WAV and played with an <audio> element.
  *  - Browsers only allow sound after you've clicked the page once since opening it:
  *    the pill (bottom-left) says "Click anywhere to arm" until then.
  *  - The pill switches it on/off (localStorage umz_bell, per device) and has Test.
@@ -16,7 +17,7 @@
 (function () {
   'use strict';
   var KEY = 'umz_bell', SEEN = 'umz_bell_seen', POLL_MS = 20000;
-  var client = null, since = null, timer = null, ctx = null, armed = false, mp3 = null, pill = null;
+  var client = null, since = null, timer = null, armed = false, pill = null;
 
   function on() { try { return localStorage.getItem(KEY) !== 'off'; } catch (e) { return true; } }
   function setOn(v) { try { localStorage.setItem(KEY, v ? 'on' : 'off'); } catch (e) {} render(); }
@@ -31,49 +32,60 @@
   }
 
   // ---------- sound ----------
-  function audio() {
-    if (!ctx) { var A = window.AudioContext || window.webkitAudioContext; if (!A) return null; ctx = new A(); }
-    return ctx;
-  }
-  function arm() {
-    var c = audio(); if (!c) return;
-    (c.state === 'suspended' ? c.resume() : Promise.resolve()).then(function () { armed = c.state === 'running'; render(); });
-    if (mp3 === null) {
-      mp3 = false;
-      fetch('/cha-ching.mp3', { cache: 'force-cache' }).then(function (r) { return r.ok ? r.arrayBuffer() : null; })
-        .then(function (b) { if (b) c.decodeAudioData(b, function (buf) { mp3 = buf; }, function () {}); }).catch(function () {});
-    }
-  }
-  ['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { document.addEventListener(ev, arm, { passive: true }); });
-
-  function synth(c) {
-    var t = c.currentTime + 0.02, out = c.createGain(); out.gain.value = 0.9; out.connect(c.destination);
-    // "cha": the drawer — two short bursts of filtered noise
+  // The cha-ching is computed once as a WAV in plain JS (no Web Audio) and played
+  // with an <audio> element — the most reliable way to play a sound in every browser.
+  // /cha-ching.mp3 replaces it only when the server really returns an audio file
+  // (the site answers unknown paths with a page, which can't be played).
+  var player = null, blocked = false;
+  function makeWav() {
+    var rate = 44100, n = Math.floor(rate * 1.6), pcm = new Float32Array(n), i;
+    // "cha": the drawer — two short noise bursts, slightly filtered
     [0, 0.07].forEach(function (d) {
-      var len = Math.floor(c.sampleRate * 0.09), b = c.createBuffer(1, len, c.sampleRate), x = b.getChannelData(0);
-      for (var i = 0; i < len; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-      var s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
-      s.buffer = b; f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 0.9; g.gain.value = 0.55;
-      s.connect(f); f.connect(g); g.connect(out); s.start(t + d);
+      var s0 = Math.floor(d * rate), len = Math.floor(0.09 * rate), prev = 0;
+      for (i = 0; i < len && s0 + i < n; i++) { var w = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); prev = prev * 0.35 + w * 0.65; pcm[s0 + i] += (w - prev) * 0.55; }
     });
     // "ching!": a bright bell, then a second coin
     function bell(at, base, vol) {
+      var s0 = Math.floor(at * rate);
       [1, 2.76, 5.4, 8.93].forEach(function (m, k) {
-        var o = c.createOscillator(), g = c.createGain();
-        o.type = 'sine'; o.frequency.value = base * m;
-        g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol / (k + 1), at + 0.006);
-        g.gain.exponentialRampToValueAtTime(0.0001, at + 1.4 / (k * 0.6 + 1));
-        o.connect(g); g.connect(out); o.start(at); o.stop(at + 1.6);
+        var f = base * m, a = vol / (k + 1), decay = 1.4 / (k * 0.6 + 1);
+        for (i = 0; s0 + i < n; i++) { var t = i / rate; if (t > decay * 1.2) break; pcm[s0 + i] += a * Math.min(1, t / 0.006) * Math.exp(-t * 5 / decay) * Math.sin(2 * Math.PI * f * t); }
       });
     }
-    bell(t + 0.17, 1318.5, 0.5);
-    bell(t + 0.30, 1760, 0.32);
+    bell(0.17, 1318.5, 0.5);
+    bell(0.30, 1760, 0.32);
+    var peak = 0; for (i = 0; i < n; i++) peak = Math.max(peak, Math.abs(pcm[i]));
+    var g = peak > 0 ? 0.9 / peak : 1, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    function str(o, s) { for (var j = 0; j < s.length; j++) v.setUint8(o + j, s.charCodeAt(j)); }
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+    v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+    for (i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i] * g)) * 32767, true);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   }
+  function getPlayer() {
+    if (player) return player;
+    player = new Audio(makeWav()); player.preload = 'auto'; player.volume = 1;
+    fetch('/cha-ching.mp3', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+      if (r.ok && /^audio\//i.test(r.headers.get('content-type') || '')) player.src = '/cha-ching.mp3';
+    }).catch(function () {});
+    return player;
+  }
+  // First click on the page: unlock audio (play silently once), so later rings can play in the background.
+  function arm() {
+    if (armed) return;
+    var p = getPlayer(); p.muted = true;
+    var r = p.play();
+    (r && r.then ? r : Promise.resolve()).then(function () { if (p.muted) { p.pause(); p.currentTime = 0; p.muted = false; } armed = true; blocked = false; render(); }) // a Test click may already be playing it
+      .catch(function () { p.muted = false; render(); });
+  }
+  ['pointerdown', 'keydown', 'touchend'].forEach(function (ev) { document.addEventListener(ev, arm, { passive: true }); });
   function play() {
-    var c = audio(); if (!c || !on()) return;
-    if (c.state !== 'running') { c.resume().catch(function () {}); }
-    if (mp3) { var s = c.createBufferSource(); s.buffer = mp3; s.connect(c.destination); s.start(); }
-    else synth(c);
+    if (!on()) return;
+    var p = getPlayer(); p.muted = false;
+    try { p.currentTime = 0; } catch (e) {}
+    var r = p.play();
+    if (r && r.catch) r.then(function () { if (blocked) { blocked = false; render(); } }).catch(function (e) { console.warn('order-bell: sound blocked —', e && e.name); blocked = true; armed = false; render(); });
   }
 
   // ---------- banner + notification ----------
@@ -141,12 +153,12 @@
         if (a === 'toggle') {
           var next = !on(); setOn(next);
           if (next) { arm(); try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (_) {} }
-        } else if (a === 'test') { arm(); setTimeout(function () { play(); banner({ id: 'test', total: 123.45, customer_name: 'Test order', order_number: 'TEST' }); }, 60); }
+        } else if (a === 'test') { play(); setTimeout(function () { banner({ id: 'test', total: 123.45, customer_name: 'Test order', order_number: 'TEST' }); }, 60); }
       });
       document.body.appendChild(pill);
     }
     var o = on();
-    var state = !o ? '🔕 Order sound off' : armed ? '🔔 Cha-ching on' : '🔔 Click anywhere to arm';
+    var state = !o ? '🔕 Order sound off' : blocked ? '🔇 Sound blocked — click here, then Test' : armed ? '🔔 Cha-ching on' : '🔔 Click anywhere to arm';
     pill.innerHTML = '<span title="Plays a cha-ching when an order is paid (this device)">' + state + '</span>' +
       '<button type="button" data-bell="toggle" style="border:0;border-radius:999px;padding:6px 10px;font:inherit;cursor:pointer;background:' + (o ? '#ecfdf5;color:#047857' : '#f1f5f9;color:#334155') + '">' + (o ? 'On' : 'Off') + '</button>' +
       (o ? '<button type="button" data-bell="test" style="border:0;border-radius:999px;padding:6px 10px;font:inherit;cursor:pointer;background:#0f172a;color:#fff">Test</button>' : '');

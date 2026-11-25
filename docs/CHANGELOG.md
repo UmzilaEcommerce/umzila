@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Order bell: fix "EncodingError" and silent Test
+
+**Reported:** "Uncaught (in promise) EncodingError: Unable to decode audio data" and nothing played on Test.
+
+**Root cause:**
+- `/cha-ching.mp3` doesn't exist, but Netlify's `/:slug` rewrite answers with a 200 HTML page. `decodeAudioData` then rejected without being caught.
+- The Web Audio synth path was also fragile: a context created in a passive pointerdown listener, scheduled on a possibly suspended clock.
+
+**Fix:**
+- `order-bell.js` now computes the cha-ching once as a 16-bit WAV in plain JS (drawer noise plus two bells, normalised) and plays it with an `<audio>` element.
+- The custom file is used only if a HEAD request returns an `audio/*` content-type.
+- The first click unlocks audio (a silent play/pause that never cancels a Test that's already playing).
+- A blocked play shows "Sound blocked — click here, then Test" in the pill instead of failing silently.
+
+---
+
 ## 2026-11-25 — Cha-ching sound on admin/logistics + money-first admin email
 
 **Asked:** play a cha-ching on the admin panel when an order is paid (even with the tab in the background), and make the admin email scream "you just made money".
