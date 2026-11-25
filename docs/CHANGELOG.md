@@ -4,6 +4,40 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — New-order emails to stores and admins rebuilt
+
+**Reported:** the store and admin new-order emails were out of date. They had no delivery timeslot or customer phone, and the store email still had the old "you will be contacted via WhatsApp / mark as fulfilled" steps.
+
+**What changed:**
+- **New `netlify/functions/lib/order-alert-mail.js`:**
+  - `load()` reads the full order, delivery and tracking token, quote, stores, timeslot settings, finance store prices and `order_closed_store`. `storeEmail()` and `adminEmail()` build the emails from that.
+  - **Store email:**
+    - A big "when" box: "Ready by 12:00 today · start preparing at 11:45" for a run. It changes for "Prepare now", "Make it when you open at 08:00", "sent to riders early" and needs-attention ("Don't start yet").
+    - A priority flag, and "what to make" with quantities and the picks or option breakdown.
+    - The customer's name, phone (call and WhatsApp), address and note.
+    - Which other stores the same rider collects from.
+    - Current hand-over steps (label the bag, hand to the rider, nothing to tap).
+    - Subject: "New order — ready by 12:00 today — Khwezi — UMZILA-…".
+  - **Admin email:**
+    - The amount, customer, stores, how it was paid and the source.
+    - The run window with cut-off, rider-notice time and the "sent early" flag. Otherwise it shows now, after-hours or needs attention.
+    - Priority, payment flag and road km.
+    - The full customer contact.
+    - Each store's lines with prices and what the store is owed (finance store price, else an estimate). House drinks are marked.
+    - A money breakdown (items, discount + code, delivery, priority, tip, total).
+    - Live tracking and Logistics buttons.
+    - Subject: "💰 R223.24 — 12:00 run today — Khwezi — Isiqalo Kitchen — UMZILA-…".
+- **lib/complete-order-payment.js (email lines only, no payment logic):**
+  - Goods orders use the new builders; service, booking and voucher emails are unchanged.
+  - Admin recipients now come from `admin_alert_emails` (Admin → Delivery Times → Alert emails), with env `ADMIN_EMAILS` as the fallback.
+  - The old builders are kept as the fallback if the new module fails to load.
+
+**Files:**
+- netlify/functions/lib/order-alert-mail.js
+- netlify/functions/lib/complete-order-payment.js
+
+---
+
 ## 2026-11-25 — Checkout explainers, simpler delivery-time picker, sales-based ranking, Plata for 12
 
 **Asked:**

@@ -16,6 +16,8 @@
 // used for a regular buyer product/service order.
 const { computeDiscount } = require('./discounts');
 const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to @umzila.store
+// New-order emails to stores + admins (timeslot, customer contact, picks, money) — lib/order-alert-mail.js
+let OrderAlert = null; try { OrderAlert = require('./order-alert-mail'); } catch (_) { /* older builders below */ }
 // Delivery timeslots: window wording (SAST). Guarded so a problem in the timeslot lib can
 // never stop a PayFast completion — without it the email just uses today's wording.
 let slotDispatchLabel = () => '', slotHhmm = () => '', slotDayWord = () => '';
@@ -714,6 +716,10 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
         grouped[sellerId].push(Object.assign({}, item, { _instant: !!instantProduct[pid] }));
     });
 
+    // Full order context for the new-order email (timeslot, phone, notes, closed store…).
+    let alertCtx = null;
+    if (OrderAlert && order.id) { try { alertCtx = await OrderAlert.load(supabase, order.id); } catch (_) { alertCtx = null; } }
+
     // Send one email per seller
     for (const [sellerId, sellerItems] of Object.entries(grouped)) {
         const seller = sellerMap[sellerId];
@@ -736,11 +742,12 @@ async function sendSellerOrderNotifications(supabase, order, mPaymentId, siteUrl
         const hasServices = sellerItems.some(i => i.listing_type === 'service');
         const allInstant = hasServices && sellerItems.filter(i => i.listing_type === 'service').every(i => i._instant);
         const allVouchers = hasServices && sellerItems.every(i => serviceKind(i) === 'voucher');
-        const emailSubject = hasServices
+        const alertMail = (!hasServices && alertCtx && alertCtx.order) ? OrderAlert.storeEmail(alertCtx, seller, sellerItems, siteUrl || '') : null;
+        const emailSubject = alertMail ? alertMail.subject : hasServices
             ? (allVouchers ? `🎁 Gift voucher sold — ${order.order_number || mPaymentId}`
                 : allInstant ? `📅 New booking confirmed — ${order.order_number || mPaymentId}` : `🔧 New service order — accept required — ${order.order_number || mPaymentId}`)
             : `New order for ${seller.shop_name || 'your store'} — ${order.order_number || mPaymentId}`;
-        const emailHtml = hasServices
+        const emailHtml = alertMail ? alertMail.html : hasServices
             ? buildSellerServiceOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl)
             : buildSellerOrderEmail(seller, sellerItems, order, mPaymentId, siteUrl);
 
@@ -1215,9 +1222,13 @@ async function sendAdminOrderNotification(supabase, order, mPaymentId, siteUrl) 
     const RESEND_KEY = process.env.RESEND_API_KEY || '';
     if (!RESEND_KEY) return;
 
-    const adminEmailsRaw = process.env.ADMIN_EMAILS || '';
-    const adminEmails = adminEmailsRaw.split(',').map(e => e.trim()).filter(Boolean);
+    // Recipients: admin_alert_emails (Admin → Delivery Times → Alert emails), else env ADMIN_EMAILS.
+    let adminEmails = [];
+    try { adminEmails = await require('./timeslots').adminAlertEmails(supabase); } catch (_) { adminEmails = []; }
+    if (!adminEmails.length) adminEmails = String(process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
     if (!adminEmails.length) return;
+    let alertMail = null;
+    if (OrderAlert && order.id) { try { const ctx = await OrderAlert.load(supabase, order.id); if (ctx && ctx.order) alertMail = OrderAlert.adminEmail(ctx, siteUrl || ''); } catch (e) { console.warn('admin order alert build failed', e && e.message); } }
 
     const orderRef   = order.order_number || mPaymentId || 'N/A';
     const total      = parseFloat(order.total || 0);
@@ -1354,8 +1365,8 @@ async function sendAdminOrderNotification(supabase, order, mPaymentId, siteUrl) 
             body: JSON.stringify({
                 ...mailFrom('Umzila Orders', 'orders'),
                 to:      adminEmails,
-                subject: `CHA-CHING! New order — ${fmt(total)} — ${orderRef}`,
-                html:    adminHtml
+                subject: alertMail ? alertMail.subject : `CHA-CHING! New order — ${fmt(total)} — ${orderRef}`,
+                html:    alertMail ? alertMail.html : adminHtml
             })
         });
         if (!res.ok) {
