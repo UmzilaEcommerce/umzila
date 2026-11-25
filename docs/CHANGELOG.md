@@ -4,6 +4,33 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Cha-ching sound on admin/logistics + money-first admin email
+
+**Asked:** play a cha-ching on the admin panel when an order is paid (even with the tab in the background), and make the admin email scream "you just made money".
+
+**What changed:**
+- **New `order-bell.js`**, loaded on admin.html and logistics.html right after supabase-js.
+  - It starts on the page's `supabase-ready` / `sb-ready` event with the page's own signed-in client. It's staff-only through orders RLS; if the read fails, there's no bell.
+  - Every 20 s it reads orders paid since the newest one it has seen. Background tabs are slowed to about once a minute and still ring.
+  - Each new order gets a cha-ching, a "CHA-CHING! R…" banner and a desktop notification (permission asked when the switch is turned on).
+  - The sound is `/cha-ching.mp3` if that file exists, otherwise a Web Audio synth (drawer noise plus two bells).
+  - Browsers need one click on the page before sound plays, so the bottom-left pill says "Click anywhere to arm" until then.
+  - The pill has On/Off (localStorage `umz_bell`, per device) and Test.
+  - Several tabs on one device ring once: there's a claim per order in localStorage `umz_bell_seen`.
+  - **Phones:** it rings only while the page is open on screen. A locked phone would need web push (not built).
+- **lib/order-alert-mail.js admin email:**
+  - A dark green "CHA-CHING! 💸 / You just made R… " header with chips for customer, stores, payment and time.
+  - "Umzila keeps ≈ R…" (total − store payouts, before PayFast fees; marked "est." when any line has no store price), also in the money table.
+  - Subject: "💸 Cha-ching! R… — …".
+
+**Files:**
+- order-bell.js
+- admin.html
+- logistics.html
+- netlify/functions/lib/order-alert-mail.js
+
+---
+
 ## 2026-11-25 — New-order emails to stores and admins rebuilt
 
 **Reported:** the store and admin new-order emails were out of date. They had no delivery timeslot or customer phone, and the store email still had the old "you will be contacted via WhatsApp / mark as fulfilled" steps.

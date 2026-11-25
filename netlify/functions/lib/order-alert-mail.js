@@ -220,11 +220,18 @@ function adminEmail(ctx, site) {
   }
   const delivery = Number(o.shipping_cost || 0), prio = Number(o.priority_fee || 0), tip = Number(o.tip_amount || 0), disc = Number(o.discount || 0);
   const itemsSum = (Array.isArray(o.items) ? o.items : []).reduce((s, i) => s + priceOf(i) * qtyOf(i), 0);
-  const top = `<div style="background:linear-gradient(135deg,${NAVY},#1a4f8a);padding:22px 26px;color:#fff">
-    <div style="font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#ffd700">💰 Cha-ching${manual ? ' · manual order' : ''}</div>
-    <div style="font-size:30px;font-weight:900;margin-top:2px">${money(o.total)}</div>
-    <div style="font-size:14px;opacity:.9;margin-top:2px">${esc(o.customer_name || 'Customer')} · ${esc(storeNames.join(' + '))}</div>
-    <div style="font-size:12.5px;opacity:.75;margin-top:4px">${esc(ref)} · paid ${esc(hhmm(o.paid_at || new Date()))} with ${esc(paidWith(o))}${o.source && !manual ? ' · from ' + esc(o.source) : ''}</div>
+  // Umzila's cut ≈ total − what the stores are owed (and house drinks' cost), before PayFast fees.
+  let owedAll = 0, owedEst = false;
+  groups.forEach(g => g.items.forEach(i => { const w = owedFor(ctx, i); owedAll += w.amount; owedEst = owedEst || w.estimate; }));
+  const cut = Math.max(0, Number(o.total || 0) - owedAll);
+  const chip = t => `<span style="display:inline-block;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#e5e7eb;border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;margin:3px 4px 0 0">${t}</span>`;
+  const top = `<div style="background-color:#06140d;background-image:radial-gradient(circle at 85% -10%,rgba(52,211,153,.35),transparent 55%),radial-gradient(circle at 0% 120%,rgba(252,211,77,.18),transparent 50%);padding:30px 26px 26px;color:#fff">
+    <div style="font-size:13px;font-weight:900;letter-spacing:.22em;color:#fcd34d">CHA-CHING! 💸${manual ? ' <span style="letter-spacing:.05em;color:#a7f3d0;font-weight:700">· manual order</span>' : ''}</div>
+    <div style="font-size:15px;color:#a7f3d0;margin-top:14px;font-weight:600">You just made</div>
+    <div style="font-size:52px;line-height:1.02;font-weight:900;color:#34d399;letter-spacing:-1.5px">${money(o.total)}</div>
+    <div style="margin-top:12px;display:inline-block;background:#34d399;color:#052e1b;border-radius:12px;padding:8px 14px;font-size:14px;font-weight:800">Umzila keeps ≈ ${money(cut)}${owedEst ? '<span style="font-weight:600"> · est.</span>' : ''}</div>
+    <div style="margin-top:14px">${chip('👤 ' + esc(o.customer_name || 'Customer'))}${chip('🏪 ' + esc(storeNames.join(' + ')))}${chip('💳 ' + esc(paidWith(o)))}${chip('🕒 paid ' + esc(hhmm(o.paid_at || new Date())))}${o.source && !manual ? chip('📣 ' + esc(o.source)) : ''}</div>
+    <div style="font-size:12px;color:#6ee7b7;opacity:.8;margin-top:10px">${esc(ref)}</div>
   </div>`;
   const storesHtml = groups.map(g => {
     const s = g.seller, house = s && s.is_house;
@@ -254,13 +261,15 @@ function adminEmail(ctx, site) {
       ${prio > 0 ? row('Priority', money(prio)) : ''}
       ${tip > 0 ? row('Tip', money(tip)) : ''}
       ${row('<b>Total paid</b>', `<b>${money(o.total)}</b> · ${esc(paidWith(o))}`)}
+      ${row('Stores are owed', money(owedAll) + (owedEst ? ' <span style="color:#6b7280;font-weight:500">(some estimated)</span>' : ''))}
+      ${row('<b style="color:#047857">Umzila keeps</b>', `<b style="color:#047857">≈ ${money(cut)}</b> <span style="color:#6b7280;font-weight:500">before PayFast fees</span>`)}
     </table>`) +
     `<div style="text-align:center;margin-top:22px">
       ${tl ? `<a href="${esc(tl)}" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">Live tracking →</a>` : ''}
       <a href="${esc(site)}/logistics.html" style="display:inline-block;background:${NAVY};color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;margin:4px">Logistics →</a>
     </div>`;
   return {
-    subject: `💰 ${money(o.total)} — ${subjWhen} — ${firstName(o.customer_name)} — ${storeNames.join(' + ')} — ${ref}`,
+    subject: `💸 Cha-ching! ${money(o.total)} — ${subjWhen} — ${firstName(o.customer_name)} — ${storeNames.join(' + ')} — ${ref}`,
     html: shell(site, top, body, 'Umzila admin alert')
   };
 }
