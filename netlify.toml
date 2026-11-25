@@ -25,6 +25,10 @@
 # while re-checking in the background for a week (instant repeat visits). When
 # replacing one of these files with a different picture, give it a new name.
 [[headers]]
+  for = "/hero-isiqalo-kitchen-v2.webp"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+[[headers]]
   for = "/hero-velaphi-shisanyama.webp"
   [headers.values]
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"

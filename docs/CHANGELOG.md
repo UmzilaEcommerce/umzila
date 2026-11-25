@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — New Isiqalo Kitchen hero slide
+
+The founder asked for a better Isiqalo hero, especially the plate photo. The old slide used a soft, low-res phone photo cropped into a circle, with the kitchen still visible behind the plate.
+
+**What changed:**
+- **New `hero-isiqalo-kitchen-v2.webp`** (1600×900, 123 KB):
+  - It's built around the November studio shoot's `isiqalo-shoot-platter-dark` photo: a black plate on black, faded into the dark slide with a warm red glow.
+  - It keeps the headline, logo, "Share a platter" badge and chips.
+  - It adds prices: plates from R75 (Plata for 1 R75.50) and platters for 2–6 from R137 (Plata for 2 R137.50). Update the slide if those prices change.
+- **References updated:**
+  - `index.html` preload
+  - `script.js` stand-in slide
+  - `site_settings` 'home' heroSlides (after the deploy)
+  - a `netlify.toml` cache header
+- **New filename:** per the cache rule, a different picture gets a new name. The old `hero-isiqalo-kitchen.webp` stays until nothing points to it.
+
+---
+
 ## 2026-11-25 — "Email buyer only" for orders already sent early
 
 **Reported:** Khwezi Khuzwayo's order (UMZILA-1795596742186-qu7gh9dgw) was sent to riders early, but no "going out early" email reached him.

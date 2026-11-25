@@ -1971,7 +1971,7 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [   
-  `/hero-isiqalo-kitchen.webp`,
+  `/hero-isiqalo-kitchen-v2.webp`,
   `/hero-nceks-quad-biking.webp`,
   `/hero-velaphi-shisanyama.webp`,
   `thumbnail1.webp`  // 4th slide fallback
