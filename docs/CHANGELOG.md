@@ -4,6 +4,44 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Platform Campaign emails: conversion design + scheduling
+
+**Reported:** the Platform Campaign email looked bad (a plain navy text card) and couldn't be scheduled.
+
+**What changed:**
+- **lib/marketing-template.js redesign:**
+  - Table-based so Gmail, Outlook and phone mail apps render it the same.
+  - Layout: logo bar → full-width photo (linked) → red eyebrow → big headline → price block (big price, crossed-out "was", "Save R…" pill) → orange urgency strip → message → ✓ highlights → full-width button → code block → trust row (delivered / PayFast / WhatsApp) → unsubscribe.
+  - It also has preheader text.
+  - All rich slots are optional, so old campaigns and admin direct emails still render.
+- **marketing_campaigns** (migration `marketing_campaigns_rich_scheduled`):
+  - New columns: `image_url`, `eyebrow`, `urgency`, `highlights[]`, `offer_price`, `offer_was`, `scheduled_for`.
+  - Status adds `scheduled`, `sending` and `cancelled`.
+- **submit-marketing-campaign.js:**
+  - Validates the new slots. The photo must be https on the site or our Supabase host, and "was" must be above the price.
+  - New `schedule` action (admins only; 1 minute to 60 days ahead) → status `scheduled`.
+- **New lib/campaign-send.js** (`sendCampaign`, `slotsFor`): the one sender. admin-manage-marketing.js "approve" claims the row first (→ `sending`) so it can't go twice, and there's a new `cancel` action for scheduled rows.
+- **New send-scheduled-campaigns.js** (every 5 min in netlify.toml): claims due `scheduled` rows (scheduled → sending) and sends them.
+- **admin.html → Marketing → Platform Campaign:**
+  - "Make it convert" fields: feature a product (fills photo + price, and the was-price when on sale), photo, eyebrow, price, was, urgency, highlights, and a send time in SA time.
+  - A 🕗 Schedule button.
+  - A "Scheduled emails" list with Preview and Cancel.
+- **Queued:**
+  - "R100 lunch today. Yes, really. 🔥" for Thu 26 Nov 08:30.
+  - "New week. R100 lunch is back 🍖" for Mon 30 Nov 08:30.
+  - Both link to the Special on Isiqalo's page.
+
+**Files:**
+- netlify/functions/lib/marketing-template.js
+- netlify/functions/lib/campaign-send.js
+- netlify/functions/send-scheduled-campaigns.js
+- netlify/functions/admin-manage-marketing.js
+- netlify/functions/submit-marketing-campaign.js
+- admin.html
+- netlify.toml
+
+---
+
 ## 2026-11-25 — Store page: timed deal outside its hours sinks and says so
 
 **Reported:** outside Mon–Thu 9am–1pm the R100 Special still sat near the top of Isiqalo's page, and it wasn't clear it couldn't be ordered.

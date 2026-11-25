@@ -937,7 +937,8 @@ const supabaseClient = supabase.createClient(
 
         <div class="card">
           <div class="section-top"><h2>✍️ Platform Campaign</h2></div>
-          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Compose a promotional email from Umzila itself. Submitting sends it immediately — there's no queue for your own campaigns.</p>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 16px">Compose a promotional email from Umzila. Add a photo and a price for the best results, then <b>Send now</b> or <b>Schedule</b> it (e.g. 08:30 tomorrow). Always Preview first.</p>
+          <div id="mcScheduled" style="margin-bottom:16px"></div>
 
           <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fafafa;margin-bottom:20px">
             <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Attach a platform code (optional)</label>
@@ -960,10 +961,29 @@ const supabaseClient = supabase.createClient(
               <div id="mcCtaStoreWrap" style="display:none"><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Which store</label>
                 <select id="mcCtaStoreSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px"><option value="">Loading stores…</option></select></div>
             </div>
+            <div style="border-top:1px dashed #d1d5db;margin:4px 0 14px;padding-top:14px">
+              <div style="font-size:13px;font-weight:700;color:#0a2f66;margin-bottom:10px">✨ Make it convert (optional, but recommended)</div>
+              <div id="mcProductWrap" style="display:none;margin-bottom:12px"><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Feature a product (fills the photo + price)</label>
+                <select id="mcProductSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px"><option value="">Choose a product…</option></select></div>
+              <div style="margin-bottom:12px"><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Photo (https link from umzila.store or our image storage)</label>
+                <input type="url" id="mcImageInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="https://umzila.store/img/…"></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:12px">
+                <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Small red line above the headline</label><input type="text" id="mcEyebrowInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" maxlength="40" placeholder="e.g. Lunch special"></div>
+                <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Price (R)</label><input type="number" inputmode="decimal" min="0" step="0.01" id="mcPriceInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="100"></div>
+                <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Was (R) — shown crossed out</label><input type="number" inputmode="decimal" min="0" step="0.01" id="mcWasInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="250"></div>
+              </div>
+              <div style="margin-bottom:12px"><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Urgency line (orange strip)</label>
+                <input type="text" id="mcUrgencyInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" maxlength="90" placeholder="e.g. Mon–Thu only · 9am–1pm · order by 12:45"></div>
+              <div style="margin-bottom:12px"><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Highlights — one per line, shown with ✓ (max 6)</label>
+                <textarea id="mcHighlightsInput" style="min-height:70px;width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px" placeholder="Braai meat, wings and wors&#10;Pap, spinach, potato & tomato salad"></textarea></div>
+              <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Schedule for (South African time)</label>
+                <input type="datetime-local" id="mcScheduleInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px"></div>
+            </div>
             <div id="mcError" style="display:none;color:#dc2626;font-size:13px;margin-bottom:10px"></div>
             <div id="mcSuccess" style="display:none;color:#059669;font-size:13px;margin-bottom:10px"></div>
             <div style="display:flex;gap:10px">
               <button class="btn" id="mcPreviewBtn" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:8px 20px;border-radius:8px;cursor:pointer">Preview</button>
+              <button class="btn" id="mcScheduleBtn" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:8px 20px;border-radius:8px;cursor:pointer">🕗 Schedule</button>
               <button class="btn" id="mcSendBtn" style="background:#0a2f66;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer">Send now</button>
             </div>
           </div>
@@ -2853,9 +2873,88 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       body_message: document.getElementById('mcMessageInput').value,
       cta_text: document.getElementById('mcCtaTextInput').value || 'Shop now',
       cta_destination: document.getElementById('mcCtaDestSelect').value,
-      cta_seller_id: document.getElementById('mcCtaStoreSelect').value || null
+      cta_seller_id: document.getElementById('mcCtaStoreSelect').value || null,
+      image_url: document.getElementById('mcImageInput').value.trim(),
+      eyebrow: document.getElementById('mcEyebrowInput').value,
+      urgency: document.getElementById('mcUrgencyInput').value,
+      highlights: document.getElementById('mcHighlightsInput').value,
+      offer_price: document.getElementById('mcPriceInput').value,
+      offer_was: document.getElementById('mcWasInput').value,
+      scheduled_for: mcScheduleIso()
     };
   }
+  // datetime-local is read as South African time (UTC+2), whatever the computer's zone.
+  function mcScheduleIso() {
+    const v = document.getElementById('mcScheduleInput').value;
+    return v ? new Date(v + ':00+02:00').toISOString() : null;
+  }
+  // "Feature a product": photo + price (and the crossed-out price when it's on sale).
+  let mcProducts = [];
+  async function mcLoadProducts(sellerId) {
+    const wrap = document.getElementById('mcProductWrap'), sel = document.getElementById('mcProductSelect');
+    if (!sellerId) { wrap.style.display = 'none'; return; }
+    const { data } = await supabaseClient.from('products').select('id, name, price, sale, sale_price, image').eq('seller_id', sellerId).eq('visible', true).order('price', { ascending: false });
+    mcProducts = data || [];
+    sel.innerHTML = '<option value="">Choose a product…</option>' + mcProducts.map(p => `<option value="${p.id}">${pcEsc(p.name)} — R${Number(p.sale && p.sale_price ? p.sale_price : p.price).toFixed(2)}</option>`).join('');
+    wrap.style.display = mcProducts.length ? '' : 'none';
+  }
+  document.getElementById('mcCtaStoreSelect')?.addEventListener('change', e => mcLoadProducts(e.target.value));
+  document.getElementById('mcProductSelect')?.addEventListener('change', e => {
+    const p = mcProducts.find(x => x.id === e.target.value); if (!p) return;
+    const onSale = p.sale && Number(p.sale_price) > 0 && Number(p.sale_price) < Number(p.price);
+    if (p.image) document.getElementById('mcImageInput').value = p.image;
+    document.getElementById('mcPriceInput').value = Number(onSale ? p.sale_price : p.price).toFixed(2);
+    document.getElementById('mcWasInput').value = onSale ? Number(p.price).toFixed(2) : '';
+  });
+  // Scheduled campaigns (cancel before they go).
+  async function mcLoadScheduled() {
+    const box = document.getElementById('mcScheduled'); if (!box) return;
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/admin-manage-marketing?status=scheduled', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const rows = (data.campaigns || []).slice().sort((a, b) => String(a.scheduled_for).localeCompare(String(b.scheduled_for)));
+      if (!rows.length) { box.innerHTML = ''; return; }
+      const when = iso => new Intl.DateTimeFormat('en-ZA', { timeZone: 'Africa/Johannesburg', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
+      box.innerHTML = '<div style="font-size:13px;font-weight:700;color:#0a2f66;margin-bottom:8px">🕗 Scheduled emails</div>' + rows.map(c => `
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff">
+          <div style="flex:1;min-width:200px"><b>${pcEsc(c.subject)}</b><div style="font-size:12px;color:#6b7280">Sends ${when(c.scheduled_for)} · to all subscribers</div></div>
+          <button class="btn" data-mc-preview="${c.id}" style="background:#fff;color:#0a2f66;border:1px solid #0a2f66;padding:6px 12px;border-radius:8px;cursor:pointer">Preview</button>
+          <button class="btn" data-mc-cancel="${c.id}" style="background:#fff;color:#dc2626;border:1px solid #dc2626;padding:6px 12px;border-radius:8px;cursor:pointer">Cancel</button>
+        </div>`).join('');
+    } catch (e) { box.innerHTML = ''; }
+  }
+  document.getElementById('mcScheduled')?.addEventListener('click', async e => {
+    const id = e.target.dataset.mcCancel || e.target.dataset.mcPreview; if (!id) return;
+    const token = await pcGetToken();
+    if (e.target.dataset.mcCancel) {
+      if (!confirm('Cancel this scheduled email? It will not be sent.')) return;
+      const r = await fetch('/.netlify/functions/admin-manage-marketing', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ campaign_id: id, action: 'cancel' }) });
+      const j = await r.json(); if (!r.ok) { alert(j.error || 'Could not cancel'); return; }
+      mcLoadScheduled(); return;
+    }
+    const r = await fetch('/.netlify/functions/admin-manage-marketing', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ campaign_id: id, action: 'preview' }) });
+    const j = await r.json(); if (!r.ok) { alert(j.error || 'Could not preview'); return; }
+    document.getElementById('mcPreviewWrap').style.display = 'block'; document.getElementById('mcPreviewFrame').srcdoc = j.html;
+    document.getElementById('mcPreviewWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  setTimeout(mcLoadScheduled, 1500);
+  document.getElementById('mcScheduleBtn')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('mcError'); const okEl = document.getElementById('mcSuccess');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    const at = mcScheduleIso();
+    if (!at) { errEl.style.display = 'block'; errEl.textContent = 'Pick the date and time to send it (South African time).'; return; }
+    const btn = document.getElementById('mcScheduleBtn'); btn.disabled = true; btn.textContent = 'Scheduling…';
+    try {
+      const token = await pcGetToken();
+      const res = await fetch('/.netlify/functions/submit-marketing-campaign', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(mcBuildPayload('schedule')) });
+      const data = await res.json();
+      if (!res.ok) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Could not schedule.'; return; }
+      okEl.style.display = 'block'; okEl.textContent = '✓ Scheduled. It sends by itself at that time (within 5 minutes). You can cancel it above.';
+      mcLoadScheduled();
+    } catch (e) { errEl.style.display = 'block'; errEl.textContent = 'Network error — please try again.'; }
+    finally { btn.disabled = false; btn.textContent = '🕗 Schedule'; }
+  });
   // "A store" destination: pick the store the button opens (umzila.store/<slug>).
   let mcStoresLoaded = false;
   document.getElementById('mcCtaDestSelect')?.addEventListener('change', async e => {

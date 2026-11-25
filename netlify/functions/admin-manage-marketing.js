@@ -1,22 +1,12 @@
 // netlify/functions/admin-manage-marketing.js
 //
 // Admin-only: review pending seller marketing campaigns, preview the actual
-// rendered email, approve (which sends immediately — no scheduler exists in
-// this codebase) or reject with a reason. Structural sibling of
-// admin-manage-ads.js.
-const crypto = require('crypto');
-const { mailFrom } = require('./lib/mail'); // sender: mail.umzila.store, replies to @umzila.store
+// rendered email, approve (sends immediately), cancel a scheduled one, or reject
+// with a reason. Sending itself lives in lib/campaign-send.js (shared with the
+// send-scheduled-campaigns.js scheduler). Structural sibling of admin-manage-ads.js.
 const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
-
-const { unsubscribeUrl: makeUnsubUrl, unsubscribeHeaders } = require('./lib/unsubscribe');
-const { tagLinks } = require('./lib/visitor-tag'); // People: ?ut= on site links
-
-function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
+const { sendCampaign, slotsFor } = require('./lib/campaign-send');
 
 exports.handler = async function (event) {
   const origin = process.env.ALLOWED_ORIGIN || '*';
@@ -71,8 +61,8 @@ exports.handler = async function (event) {
   try { body = JSON.parse(event.body || '{}'); } catch { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   const { campaign_id, action } = body;
-  if (!campaign_id || !['preview', 'approve', 'reject'].includes(action)) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'campaign_id and action (preview|approve|reject) required' }) };
+  if (!campaign_id || !['preview', 'approve', 'reject', 'cancel'].includes(action)) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'campaign_id and action (preview|approve|reject|cancel) required' }) };
   }
 
   const { data: campaign } = await admin
@@ -81,20 +71,21 @@ exports.handler = async function (event) {
     .eq('id', campaign_id).maybeSingle();
   if (!campaign) return { statusCode: 404, headers, body: JSON.stringify({ error: 'Campaign not found' }) };
 
-  const shopName = campaign.sellers ? campaign.sellers.shop_name : null;
-  const ctaUrl = `${SITE_BASE_URL}${campaign.cta_path || '/'}`;
-
   if (action === 'preview') {
-    const html = renderMarketingEmail({
-      headline: campaign.headline, bodyMessage: campaign.body_message, ctaText: campaign.cta_text, ctaUrl,
-      shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
-      siteUrl: SITE_BASE_URL, unsubscribeUrl: `${SITE_BASE_URL}/.netlify/functions/unsubscribe?e=preview%40example.com&t=preview`
-    });
+    const html = renderMarketingEmail(slotsFor(campaign, SITE_BASE_URL, `${SITE_BASE_URL}/.netlify/functions/unsubscribe?e=preview%40example.com&t=preview`));
     return { statusCode: 200, headers, body: JSON.stringify({ html }) };
   }
 
-  if (campaign.status === 'sent') {
+  if (campaign.status === 'sent' || campaign.status === 'sending') {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'This campaign was already sent.' }) };
+  }
+
+  if (action === 'cancel') {
+    const { data: c2, error } = await admin.from('marketing_campaigns').update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', campaign_id).eq('status', 'scheduled').select('id').maybeSingle();
+    if (error) return { statusCode: 500, headers, body: JSON.stringify({ error: error.message }) };
+    if (!c2) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Only a scheduled campaign can be cancelled.' }) };
+    return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
   }
 
   if (action === 'reject') {
@@ -106,64 +97,14 @@ exports.handler = async function (event) {
     return { statusCode: 200, headers, body: JSON.stringify({ ok: true }) };
   }
 
-  // ── Approve = send immediately ──────────────────────────────────────────
-  if (!RESEND_KEY) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Email service not configured' }) };
-
-  // Mass sends only ever reach marketing-eligible contacts — never the
-  // 'transactional' tier (stock alerts, seller applications, bare account
-  // signups), who only ever gave an email for one specific purpose.
-  const { data: subs, error: subsErr } = await admin
-    .from('subscribers')
-    .select('email')
-    .eq('unsubscribed', false)
-    .in('consent', ['opted_in', 'soft_opt_in']);
-  if (subsErr) return { statusCode: 500, headers, body: JSON.stringify({ error: subsErr.message }) };
-
-  const seen = new Set();
-  const recipients = (subs || []).filter(s => {
-    const email = (s.email || '').toLowerCase().trim();
-    if (!email || seen.has(email)) return false;
-    seen.add(email);
-    return true;
-  }).map(s => s.email.toLowerCase().trim());
-
-  if (!recipients.length) {
-    return { statusCode: 400, headers, body: JSON.stringify({ error: 'No subscribers to send to.' }) };
+  // ── Approve = send immediately (claim first so it can't go twice) ─────
+  const { data: claimed } = await admin.from('marketing_campaigns').update({ status: 'sending', updated_at: new Date().toISOString() })
+    .eq('id', campaign_id).in('status', ['pending', 'approved', 'scheduled']).select('*, sellers(shop_name), discount_codes(*)').maybeSingle();
+  if (!claimed) return { statusCode: 400, headers, body: JSON.stringify({ error: 'This campaign is already being sent.' }) };
+  const r = await sendCampaign(admin, claimed, SITE_BASE_URL, user.id);
+  if (!r.ok) {
+    if (r.status !== 502) await admin.from('marketing_campaigns').update({ status: campaign.status }).eq('id', campaign_id);
+    return { statusCode: r.status, headers, body: JSON.stringify({ error: r.error }) };
   }
-
-  const batches = chunk(recipients, 100);
-  for (const batch of batches) {
-    const payload = batch.map(email => {
-      const unsubscribeUrl = makeUnsubUrl(SITE_BASE_URL, email);
-      const html = renderMarketingEmail({
-        headline: campaign.headline, bodyMessage: campaign.body_message, ctaText: campaign.cta_text, ctaUrl,
-        shopName, codeRow: campaign.discount_codes || null, sellerShopName: shopName,
-        siteUrl: SITE_BASE_URL, unsubscribeUrl
-      });
-      return { ...mailFrom('Umzila', 'promos', 'news'), to: [email], subject: campaign.subject, html: tagLinks(html, email, SITE_BASE_URL), headers: unsubscribeHeaders(unsubscribeUrl) };
-    });
-
-    const res = await fetch('https://api.resend.com/emails/batch', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error('admin-manage-marketing: Resend batch error', res.status, errText);
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'Email send failed partway through — please check Resend before retrying.' }) };
-    }
-  }
-
-  const { error: updErr } = await admin.from('marketing_campaigns').update({
-    status: 'sent',
-    sent_at: new Date().toISOString(),
-    recipient_count: recipients.length,
-    approved_by: user.id,
-    approved_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }).eq('id', campaign_id);
-  if (updErr) return { statusCode: 500, headers, body: JSON.stringify({ error: updErr.message }) };
-
-  return { statusCode: 200, headers, body: JSON.stringify({ ok: true, recipient_count: recipients.length }) };
+  return { statusCode: 200, headers, body: JSON.stringify({ ok: true, recipient_count: r.recipient_count }) };
 };

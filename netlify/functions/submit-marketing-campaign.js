@@ -8,7 +8,19 @@
 const { createClient } = require('@supabase/supabase-js');
 const { renderMarketingEmail } = require('./lib/marketing-template');
 
-const MAX_LEN = { subject: 80, headline: 60, body_message: 500, cta_text: 30 };
+const MAX_LEN = { subject: 80, headline: 60, body_message: 500, cta_text: 30, eyebrow: 40, urgency: 90, highlight: 70 };
+// Rich slots (photo, price/was, urgency, highlights) — 2026-11-25. A photo must be an https
+// image on our own site or our Supabase storage (never an arbitrary host).
+function cleanImage(u) {
+  const v = String(u || '').trim();
+  if (!v) return null;
+  try {
+    const url = new URL(v), site = new URL(process.env.SITE_BASE_URL || 'https://umzila.store'), sb = new URL(process.env.SUPABASE_URL || 'https://x.supabase.co');
+    if (url.protocol !== 'https:' || (url.host !== site.host && url.host !== sb.host)) return null;
+    return url.toString();
+  } catch (e) { return null; }
+}
+function cleanMoney(v) { const n = Number(v); return v === '' || v == null || !Number.isFinite(n) || n < 0 || n > 100000 ? null : Math.round(n * 100) / 100; }
 
 function clamp(str, max) {
   return String(str || '').trim().replace(/[<>]/g, '').slice(0, max);
@@ -80,6 +92,15 @@ exports.handler = async function (event) {
   if (!subject || !headline || !body_message) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Subject, headline, and message are required.' }) };
   }
+  const image_url = cleanImage(body.image_url);
+  if (body.image_url && !image_url) return { statusCode: 400, headers, body: JSON.stringify({ error: 'The photo must be an https image from umzila.store or our image storage.' }) };
+  const eyebrow = clamp(body.eyebrow, MAX_LEN.eyebrow) || null;
+  const urgency = clamp(body.urgency, MAX_LEN.urgency) || null;
+  const highlights = String(body.highlights || '').split('\n').map(x => clamp(x, MAX_LEN.highlight)).filter(Boolean).slice(0, 6);
+  const offer_price = cleanMoney(body.offer_price);
+  const offer_was = offer_price != null ? cleanMoney(body.offer_was) : null;
+  if (offer_was != null && offer_was <= offer_price) return { statusCode: 400, headers, body: JSON.stringify({ error: 'The "was" price must be higher than the price.' }) };
+  const rich = { image_url, eyebrow, urgency, highlights: highlights.length ? highlights : null, offer_price, offer_was };
 
   // ── Resolve CTA destination from a fixed set of options — never a raw
   // client-supplied URL, so a campaign can never link somewhere unintended.
@@ -138,13 +159,25 @@ exports.handler = async function (event) {
     const html = renderMarketingEmail({
       headline, bodyMessage: body_message, ctaText: cta_text, ctaUrl, shopName,
       codeRow: codeRowForPreview, sellerShopName: shopName,
+      imageUrl: rich.image_url, eyebrow: rich.eyebrow, urgency: rich.urgency, highlights: rich.highlights,
+      offerPrice: rich.offer_price, offerWas: rich.offer_was,
       siteUrl: SITE_BASE_URL, unsubscribeUrl: `${SITE_BASE_URL}/.netlify/functions/unsubscribe?e=preview%40example.com&t=preview`
     });
     return { statusCode: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': origin }, body: JSON.stringify({ html }) };
   }
 
-  if (body.action !== 'submit') {
+  if (body.action !== 'submit' && body.action !== 'schedule') {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Unknown action' }) };
+  }
+  // Schedule (admins only): send-scheduled-campaigns.js sends it at scheduled_for.
+  let scheduled_for = null;
+  if (body.action === 'schedule') {
+    if (!isAdmin) return { statusCode: 403, headers, body: JSON.stringify({ error: 'Only admins can schedule campaigns.' }) };
+    const at = new Date(body.scheduled_for);
+    if (isNaN(at) || at.getTime() < Date.now() + 60000 || at.getTime() > Date.now() + 60 * 86400000) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'Pick a send time at least a minute from now and within 60 days.' }) };
+    }
+    scheduled_for = at.toISOString();
   }
 
   const insertRow = {
@@ -154,7 +187,9 @@ exports.handler = async function (event) {
     subject, headline, body_message: body_message,
     cta_text, cta_path,
     audience: 'subscribers',
-    status: isAdmin ? 'approved' : 'pending'
+    ...rich,
+    scheduled_for,
+    status: scheduled_for ? 'scheduled' : isAdmin ? 'approved' : 'pending'
   };
   if (isAdmin) {
     insertRow.approved_by = user.id;
