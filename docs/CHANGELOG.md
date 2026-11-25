@@ -4,6 +4,21 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Store page: timed deal outside its hours sinks and says so
+
+**Reported:** outside Mon–Thu 9am–1pm the R100 Special still sat near the top of Isiqalo's page, and it wasn't clear it couldn't be ordered.
+
+**Fix** (shop.html):
+- The featured order sinks a timed deal outside its hours below every in-stock item (`later()`). It's pinned first only while it's on.
+- The card gets `is-later`: a greyed photo, a dark "Not available right now" bar over the photo, a faded price and a grey "Later" button.
+- The existing "Back Mon 09:00" pill still shows under the price.
+- Adding it was already blocked.
+
+**Files:**
+- shop.html
+
+---
+
 ## 2026-11-25 — 12% mark-up, manual-order clean-up, bigger-basket nudge, R100 weekday Plata Special
 
 **What changed:**

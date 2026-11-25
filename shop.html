@@ -233,6 +233,10 @@ button,input,select{font:inherit;color:inherit}
 @keyframes dealPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.25)}50%{box-shadow:0 0 0 5px rgba(220,38,38,0)}}
 @media (prefers-reduced-motion:reduce){.deal-pill{animation:none}}
 .card.is-out .media > img,.card.is-out .ph{filter:grayscale(1);opacity:.6}
+.card.is-later .media > img,.card.is-later .ph{filter:grayscale(.85);opacity:.55}
+.card.is-later .media::after{content:'Not available right now';position:absolute;left:10px;right:10px;bottom:10px;z-index:2;padding:.5rem .6rem;border-radius:10px;background:rgba(17,24,39,.88);color:#fff;font-weight:800;font-size:.8rem;text-align:center}
+.card.is-later .price,.card.is-later .was{opacity:.55}
+.card.is-later .qadd{background:#e5e7eb;color:#6b7280}
 @media (hover:none){.qadd{opacity:1;transform:none}}
 @media (max-width:1040px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}.qadd .label{display:none}.qadd{width:40px;padding:0;justify-content:center}}
@@ -698,8 +702,10 @@ function filtered(){
   const anchor = new Set(), top = {};
   list.forEach(p => { if (!inStock(p) || p.lower || p.top) return; const t = top[p.section]; if (!t || priceOf(p) > priceOf(t)) top[p.section] = p; });
   Object.values(top).forEach(p => { if (list.filter(x => x.section === p.section).length > 2) anchor.add(p.id); });
-  list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (a.lower - b.lower)
-    || (b.top - a.top) || (anchor.has(b.id) - anchor.has(a.id)) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))));
+  const later = p => !!(p.avail && !(availState(p) || {}).open); // a timed deal outside its hours
+  const pin = p => p.top && !later(p) ? 1 : 0;
+  list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (later(a) - later(b)) || (a.lower - b.lower)
+    || (pin(b) - pin(a)) || (anchor.has(b.id) - anchor.has(a.id)) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))));
   return list;
 }
 // Sections read like a menu: cheapest section first.
@@ -717,10 +723,11 @@ function renderCats(){
 function card(p, i){
   const out = !inStock(p), svc = isService(p);
   const needsChoice = p.sizes.length > 0;
-  const btnLabel = out ? 'Notify me' : svc ? (p.booking_mode === 'scheduled' ? 'Book' : 'Set up') : needsChoice ? 'Choose' : 'Add';
+  const av = availState(p), later = !!(av && !av.open);
+  const btnLabel = later ? 'Later' : out ? 'Notify me' : svc ? (p.booking_mode === 'scheduled' ? 'Book' : 'Set up') : needsChoice ? 'Choose' : 'Add';
   const badge = out ? '<span class="badge out">Sold out</span>' : p.sale ? `<span class="badge sale">Save ${money(p.price - p.salePrice)}</span>` : p.badge ? `<span class="badge">${esc(p.badge)}</span>` : '';
   const sub = svc ? (p.booking_mode === 'scheduled' ? 'Pick your day and time' : p.is_voucher ? 'Sent by email' : 'Service') : needsChoice ? esc(p.sizes.join(', ')) : esc(p.section);
-  return `<article class="card${out ? ' is-out' : ''}" style="--i:${Math.min(i, 12)}" data-id="${esc(p.id)}">
+  return `<article class="card${out ? ' is-out' : ''}${later ? ' is-later' : ''}" style="--i:${Math.min(i, 12)}" data-id="${esc(p.id)}">
     <div class="media" data-open="${esc(p.id)}">${media(p)}${badge}${sponsored.has(p.id) ? '<span class="badge spons">Sponsored</span>' : ''}
       <button class="fav" type="button" data-fav="${esc(p.id)}" aria-pressed="${favs.has(p.id)}" aria-label="Save ${esc(p.title)}">${ICON.heart}</button>
       ${unpriced(p) ? '' : `<button class="qadd" type="button" data-add="${esc(p.id)}" aria-label="${btnLabel} ${esc(p.title)}">${out ? '' : ICON.plus}<span class="label">${btnLabel}</span></button>`}
