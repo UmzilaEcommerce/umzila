@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="alternate icon" href="/umzila.webp" type="image/webp">
   <title>Your Profile — Umzila</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/umzila-wa.js" defer></script>
   <link rel="stylesheet" href="style.css">
 
   <style>
@@ -889,6 +889,7 @@
     // Hero
     const { data: prof } = await sb.from('profiles').select('*').eq('user_id', user.id).maybeSingle();
     const firstName = prof?.first_name || '';
+    if (firstName && window.UmzilaWA) window.UmzilaWA.setName(firstName);
     const lastName  = prof?.last_name  || '';
     const initials  = ((firstName[0]||'') + (lastName[0]||'')).toUpperCase() || (user.email?.[0]||'?').toUpperCase();
     document.getElementById('pAvatar').textContent    = initials;

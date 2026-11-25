@@ -168,7 +168,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script src="/presence.js"></script><script src="/input-guard.js"></script><script src="/umzila-wa.js" defer></script>
 <script>
 (async function(){
   // ── bootstrap (same pattern as profile.html / logistics.html: no shared
@@ -237,13 +237,18 @@
   // by the founder 2026-09-17. Same number used in confirm-delivery-pin's
   // FAILED-delivery email (netlify/functions/lib/notify.js's UMZILA_WA).
   const UMZILA_WA = '27797662768';
-  function supportCard() {
-    const msg = encodeURIComponent('Hi Umzila! I need help with my delivery (order ' + orderId + ').');
-    return `<div class="t-card" style="text-align:center">
-      <div style="font-weight:700;font-size:14px;margin-bottom:8px">Need help?</div>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <a href="https://wa.me/${UMZILA_WA}?text=${msg}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700;font-size:13px">💬 WhatsApp us</a>
-        <a href="tel:+${UMZILA_WA}" style="display:inline-flex;align-items:center;gap:6px;background:var(--accent-light);color:var(--accent);padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:700;font-size:13px">📞 Call us</a>
+  // Order NUMBER (UMZILA-…), never the uuid; the buyer's first name comes via umzila-wa.js (UmzilaWA.setName).
+  function supportCard(row) {
+    const ref = (row && row.order_number) || '';
+    const msg = encodeURIComponent('Hi Umzila! I need help with my delivery' + (ref ? ' (order #' + ref + ')' : '') + '.');
+    return `<div class="t-card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:170px">
+        <div style="font-weight:800;font-size:15px">Need a hand?</div>
+        <div style="font-size:13px;color:var(--muted,#64748b);margin-top:2px">${ref ? 'Order #' + esc(ref) + ' · ' : ''}chat to the Umzila team</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <a href="https://wa.me/${UMZILA_WA}?text=${msg}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;background:#25d366;color:#fff;padding:11px 18px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;box-shadow:0 6px 18px rgba(37,211,102,.3)">💬 WhatsApp</a>
+        <a href="tel:+${UMZILA_WA}" aria-label="Call Umzila" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:var(--accent-light);color:var(--accent);border-radius:999px;text-decoration:none;font-size:17px">📞</a>
       </div>
     </div>`;
   }
@@ -614,6 +619,7 @@
   async function loadTracking() {
     const { data, error } = await sb.rpc('get_delivery_tracking', { p_order_id: orderId, p_token: trackToken });
     const row = Array.isArray(data) ? data[0] : data;
+    if (row && row.customer_first_name && window.UmzilaWA) window.UmzilaWA.setName(row.customer_first_name);
     if (row && HEADING.includes(row.status) && !carAsked) {
       carAsked = true;
       try { const v = await sb.rpc('get_delivery_vehicle', { p_order_id: orderId, p_token: trackToken }); riderCar = (v && typeof v.data === 'string' && v.data) || null; } catch (e) { riderCar = null; }
@@ -697,7 +703,7 @@
         <div class="t-card" id="stepsCard"${isProblem ? ' hidden' : ''}><div id="stepsWrap"></div></div>
         <div class="t-card t-hero"><div class="t-scene" id="scene" title="Tap me" style="margin:0"></div></div>
         <div id="feedbackMount"></div>
-        ${supportCard()}
+        ${supportCard(row)}
         ${backLink()}
       `;
       document.getElementById('scene').addEventListener('click', () => sceneTap(shownStep));

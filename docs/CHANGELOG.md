@@ -4,6 +4,39 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — WhatsApp help: real order number + who's chatting
+
+**Reported:**
+- The tracking page's "WhatsApp us" message said "order <uuid>" instead of the order number customers see (UMZILA-…).
+- The founder wanted each message to say who is writing.
+
+**Root cause:** `track.html supportCard()` used the page's `orderId` (`orders.id`, a uuid), because `get_delivery_tracking` returned no order number.
+
+**What changed:**
+- **`get_delivery_tracking`** (migration `delivery_tracking_order_number_name`) also returns `order_number` and `customer_first_name`. Access is unchanged: the owner or the private tracking token.
+- **`track.html`:**
+  - the message says "order #UMZILA-…";
+  - the help card is redesigned (order number shown, WhatsApp pill plus a round call button);
+  - the buyer's first name is passed to umzila-wa.js.
+- **New `umzila-wa.js`**, loaded on index, profile, track, spin, shop, checkout-success and ncekeniquads. It handles every click on a link to Umzila's support number:
+  - If a first name is known, the message becomes "Hi Umzila, it's <Name>! …". It looks for one in this order: a page hint (track = the order's name, profile = the account's), `umz_guest_contact`, then the Supabase session metadata.
+  - If not, a slim pill bar ("Your first name, so we know who's chatting" · Skip · Chat →) slides up once. The name is saved through `umzilaGuestContact`, so the browser is also linked in admin → People. Skip is remembered for the session.
+  - `data-wa-order` on a link appends the order number.
+- **`profile.html`** already used `order_number` and now also passes the account's first name.
+
+**Files:**
+- umzila-wa.js
+- track.html
+- profile.html
+- index.html
+- spin.html
+- shop.html
+- checkout-success.html
+- ncekeniquads/index.html
+- migration `delivery_tracking_order_number_name`
+
+---
+
 ## 2026-11-25 — New Isiqalo Kitchen hero slide
 
 The founder asked for a better Isiqalo hero, especially the plate photo. The old slide used a soft, low-res phone photo cropped into a circle, with the kitchen still visible behind the plate.
