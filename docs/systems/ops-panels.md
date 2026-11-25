@@ -152,3 +152,13 @@ If an RPC isn't deployed (PostgREST `PGRST202`) the screen shows "not available 
   - fees: `item_name/unit_price/total`.
 - Admin mobile layout relies on CSS overrides for its many inline `grid-template-columns` styles (`main [style*="grid-template-columns"]` stacks at ≤600 px), and tables become horizontally scrollable at ≤900 px. If a new admin section looks wrong on a phone, give it real classes rather than adding more inline grids.
 - The admin bottom bar (`.admin-bnav`) just clicks the matching sidebar `<li>`, so all existing section loaders keep working. Group headings are `li.menu-group` and are excluded from the section click handler.
+
+## Staff override: move a delivery along (added 2026-11-25)
+
+logistics.html → order → "Move this delivery along" calls `staff-delivery-step.js` ({orderId, step}).
+
+- It walks the delivery through every normal status up to the chosen step via `transitionDelivery` (actor 'admin'). There are no raw status writes.
+- It keeps that order's route stops in step exactly like the rider app, and completes the trip (payout trigger) when all of its stops are done.
+- "Delivered" skips the PIN.
+- Never write `deliveries.status` directly for overrides; extend this function instead.
+

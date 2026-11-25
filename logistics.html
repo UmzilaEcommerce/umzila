@@ -1462,6 +1462,29 @@ document.addEventListener('sb-ready', function(e){
   /* ═══════════════════════════════════════════
      ORDER DETAILS MODAL
   ═══════════════════════════════════════════ */
+  // Staff override: move a delivery along when the rider can't (staff-delivery-step.js).
+  const STEP_PATH = ['PENDING','READY_FOR_DISPATCH','OFFERED','ASSIGNED','DRIVER_AT_PICKUP','PARTIALLY_PICKED_UP','PICKED_UP','IN_ROUTE','NEXT_STOP','ARRIVING','PIN_REQUIRED','DELIVERED'];
+  const STEP_UI = [['at_store','🏪 At the store','DRIVER_AT_PICKUP'],['collected','📦 Collected','PICKED_UP'],['on_the_way','🛵 On the way','IN_ROUTE'],['arrived','📍 Arrived','ARRIVING'],['delivered','✅ Delivered','DELIVERED']];
+  function stepControlHtml(ds){
+    const at = STEP_PATH.indexOf(ds);
+    if(at < 0) return `<div style="margin-top:18px;font-size:12px;color:var(--muted)">This delivery is ${esc(String(ds).replace(/_/g,' ').toLowerCase())} — nothing to move along.</div>`;
+    const beforeRider = at < STEP_PATH.indexOf('ASSIGNED');
+    return `<div style="margin-top:18px">
+      <div class="form-section-title" style="margin-bottom:6px">Move this delivery along</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Use this when the rider can't tap it (phone off, forgot, delivered by hand). The customer gets the same updates as usual; other orders on the trip aren't touched.${beforeRider?' No rider has it yet: only “Delivered” works (if staff delivered it).':''}</div>
+      <div class="status-actions">${STEP_UI.map(([k,l,s])=>{ const done = STEP_PATH.indexOf(s) <= at || (k==='at_store' && ds==='PARTIALLY_PICKED_UP'); const off = done || (beforeRider && k!=='delivered');
+        return `<button class="status-action-btn${done?' Delivered':''}" data-step="${k}" ${off?'disabled style="opacity:.45;cursor:default"':''}>${done?'✓ ':''}${l}</button>`; }).join('')}</div>
+    </div>`;
+  }
+  async function runDeliveryStep(o, step, label){
+    const { data:{ session } } = await sb.auth.getSession();
+    const res = await fetch('/.netlify/functions/staff-delivery-step', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+(session?.access_token||'') }, body: JSON.stringify({ orderId: o.dbId, step }) });
+    const j = await res.json().catch(()=>({}));
+    if(!res.ok){ toast(j.error || 'Could not move it along', 'error'); return; }
+    toast(`${o.id}: ${label}${j.routeCompleted?' · trip completed':''}`, 'success');
+    await loadOps(); renderOrders(); try{ renderOverview(); }catch(_){}
+    openDetailsModal(o.id);
+  }
   function openDetailsModal(orderId){
     const o=ORDERS.find(x=>x.id===orderId);
     if(!o) return toast('Order not found','error');
@@ -1544,7 +1567,7 @@ document.addEventListener('sb-ready', function(e){
 
       ${o.notes?`<div style="margin-top:14px"><div class="form-section-title" style="margin-bottom:6px">Notes</div><div style="font-size:13px;color:var(--text2);padding:8px;background:var(--surface2);border-radius:8px">${esc(o.notes)}</div></div>`:''}
 
-      ${st.delivery ? `<div style="margin-top:18px;font-size:12px;color:var(--muted)">This order is moving through the delivery network — its status updates itself as the store and rider progress (see Today).</div>` : `<div style="margin-top:18px">
+      ${st.delivery ? stepControlHtml(st.delivery) : `<div style="margin-top:18px">
         <div class="form-section-title" style="margin-bottom:8px">Update Status</div>`}
         ${st.delivery ? '' : `<div class="status-actions">
           ${['Pending','Packaging','Fulfilled','Delivered','Returned'].map(s=>`
@@ -1565,8 +1588,17 @@ document.addEventListener('sb-ready', function(e){
        <button class="btn btn-ghost" onclick="closeModal()">Close</button>`
     );
 
+    // Move-along steps (staff override)
+    modalBody.querySelectorAll('[data-step]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const k=btn.dataset.step, label=(STEP_UI.find(x=>x[0]===k)||[])[1]||k;
+        const msg = k==='delivered' ? `Mark ${o.id} as DELIVERED? This skips the customer's PIN — only do it if you know they have it.` : `Move ${o.id} to “${label.replace(/^\S+\s/,'')}”?`;
+        showInlineConfirm(msg, async()=>{ modalBody.querySelectorAll('[data-step]').forEach(b=>b.disabled=true); await runDeliveryStep(o, k, label); });
+      });
+    });
+
     // Status buttons
-    modalBody.querySelectorAll('.status-action-btn').forEach(btn=>{
+    modalBody.querySelectorAll('.status-action-btn:not([data-step])').forEach(btn=>{
       btn.addEventListener('click',()=>{
         const ns=btn.dataset.status;
         if(ns===o.status){toast('Already '+ns);return;}

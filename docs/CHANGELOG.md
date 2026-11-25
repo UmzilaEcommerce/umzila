@@ -4,6 +4,28 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Staff can move a delivery along (rider override)
+
+**Reported:** once a rider had an order, only the rider could move it on (collected → on the way → delivered). Admins were stuck when the rider couldn't tap.
+
+**What changed:**
+- **New `netlify/functions/staff-delivery-step.js`:**
+  - Allowed for admins and active logistics/admin user_roles (the same rule as `timeslot_is_staff`).
+  - Input: POST {orderId, step}, where step is at_store, collected, on_the_way, arrived or delivered.
+  - It walks the delivery through each normal status in between, each via `transitionDelivery` with actor 'admin' and metadata `staff_override`. The usual customer emails fire.
+  - It updates that order's own route stops the way advance-route.js / confirm-delivery-pin.js do: pickups active → completed, drop active → arriving → completed. It completes the trip (rider payout trigger) when every stop is done.
+  - It expires any pending offer.
+  - "Delivered" skips the customer PIN; staff confirm first.
+  - With no rider yet, only "Delivered" is allowed (staff delivered by hand).
+  - Other orders on the same trip are never touched.
+- **logistics.html order popup:** the "updates itself" note is replaced by "Move this delivery along", with step buttons (🏪 At the store · 📦 Collected · 🛵 On the way · 📍 Arrived · ✅ Delivered). Past steps are ticked and disabled, each step asks for confirmation, and the board refreshes after.
+
+**Files:**
+- netlify/functions/staff-delivery-step.js
+- logistics.html
+
+---
+
 ## 2026-11-25 — Deploy fix: no hard-coded site address
 
 **Problem:** the deploy of 8f95cea failed ("Build script returned non-zero exit code: 2").
