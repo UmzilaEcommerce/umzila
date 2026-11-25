@@ -6,9 +6,9 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ## 2026-11-25 — Order bell uses the founder's own cha-ching
 
-The founder's WhatsApp recording (5.8 s, MP3) was decoded in Chrome, trimmed to the 0.92 s where it actually makes noise (2.28–3.20 s, with a 15 ms lead-in and a 120 ms tail plus fade), soft-saturated (tanh) and normalised to −0.5 dBFS. That's about twice the loudness (RMS 0.116 → 0.241).
+The founder's WhatsApp recording (5.8 s, MP3) was decoded in Chrome, trimmed to 1.32 s (2.28–3.60 s: from where it starts until the ring fades below 0.4 % of peak, plus a 250 ms tail and a 350 ms fade-out; a first 0.92 s cut ended the ring too early), soft-saturated (tanh) and normalised to −0.5 dBFS. That's about twice the loudness (RMS 0.116 → 0.241).
 
-It's saved as `/cha-ching.wav` (16-bit mono, 82 KB). `order-bell.js` now looks for `/cha-ching.wav`, used only when it's served as `audio/*`; the generated sound stays as the fallback.
+It's saved as `/cha-ching.wav` (16-bit mono, 117 KB). `order-bell.js` now looks for `/cha-ching.wav`, used only when it's served as `audio/*`; the generated sound stays as the fallback.
 
 **Files:**
 - cha-ching.wav
