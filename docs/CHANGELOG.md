@@ -4,6 +4,16 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Logistics "Create order →" did nothing
+
+**Reported:** In logistics → New Order, pressing **Create order →** did nothing: no error and no order.
+
+**Root cause:** `openModal()` puts the footer buttons in `#modal-foot`, but the create-order code wired the button with `$('#co-submit')`. That helper only searches `#modal-body`, so it found nothing. The `.addEventListener` call threw a TypeError while the modal was being set up, and the button never got a click handler. The form above it rendered normally, so nothing looked wrong.
+
+**Fix:** `logistics.html` now looks the button up with `document.getElementById('co-submit')`, both for wiring it and for the "Creating…" state. No other footer button is looked up through the body.
+
+---
+
 ## 2026-11-24 — Buyer email when an order is sent to riders early
 
 When an admin presses "Send to riders now" (per order, or "Send whole run"), the buyer now gets one transactional email: "Good news — your order is going out early". It names the time the order was due to leave and has a Track your order link (`track.html?order&t=tracking_token`).

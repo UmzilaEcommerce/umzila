@@ -2169,7 +2169,7 @@ document.addEventListener('sb-ready', function(e){
     $('#co-add').addEventListener('click',()=>addRow());
     renderPayOptions(); refresh(); addRow();
 
-    $('#co-submit').addEventListener('click',async()=>{
+    document.getElementById('co-submit').addEventListener('click',async()=>{
       const errEl=$('#co-error'); errEl.style.display='none';
       const showErr=m=>{ errEl.textContent=m; errEl.style.display='block'; };
       const m=modeOf();
@@ -2187,7 +2187,7 @@ document.addEventListener('sb-ready', function(e){
       if(m==='deliver'&&(!address||!geo)) return showErr('Pick the delivery address from the suggestions so the rider can find it.');
       const paid=$('#co-paid-by').value;
       if(m==='done'&&!paid) return showErr('Choose how it was paid.');
-      const btn=$('#co-submit'); btn.disabled=true; btn.textContent='Creating…';
+      const btn=document.getElementById('co-submit'); btn.disabled=true; btn.textContent='Creating…';
       try{
         const r=await manualOrderApi({
           action:'create', mode:m,
