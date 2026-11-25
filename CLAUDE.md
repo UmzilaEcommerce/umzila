@@ -188,7 +188,7 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 🧾 NEW-ORDER ALERTS (2026-11-25): store + admin "new paid order" emails are built ONLY by lib/order-alert-mail.js (storeEmail/adminEmail, fed by load()) — timeslot/when, customer phone, picks, store payout; admins = admin_alert_emails (env ADMIN_EMAILS fallback). Change wording there, not in complete-order-payment.js.
 
-🔔 ORDER BELL (2026-11-25): order-bell.js on admin.html + logistics.html polls paid orders (page's own client, staff RLS) and plays the cha-ching (/cha-ching.mp3 if present, else synth) + banner + desktop notification; per-device On/Off pill. Load it right after supabase-js on any new staff page that should ring.
+🔔 ORDER BELL (2026-11-25): order-bell.js on admin.html + logistics.html polls paid orders (page's own client, staff RLS) and plays the cha-ching (/cha-ching.wav — the founder's sound, trimmed + boosted — else a generated WAV) + banner + desktop notification; per-device On/Off pill. Load it right after supabase-js on any new staff page that should ring.
 
 📧 EMAIL SENDING (added 2026-10-06): every email is sent via Resend using netlify/functions/lib/mail.js mailFrom(name, local[, 'news']): transactional from mail.umzila.store, marketing (campaigns, promos, nudges) from news.umzila.store; open+click tracking on both (links.*); DNS lives in Netlify DNS (reply_to = umzilaecommerce@gmail.com, env MAIL_REPLY_TO). Never hardcode a from address. Every marketing email (news stream) carries the unsubscribe link + headers from lib/unsubscribe.js (on the site's own domain — never a mailto to another domain) and is never sent to subscribers.unsubscribed = true; UNSUBSCRIBE_SECRET lives in Netlify env.
 

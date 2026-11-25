@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Order bell uses the founder's own cha-ching
+
+The founder's WhatsApp recording (5.8 s, MP3) was decoded in Chrome, trimmed to the 0.92 s where it actually makes noise (2.28–3.20 s, with a 15 ms lead-in and a 120 ms tail plus fade), soft-saturated (tanh) and normalised to −0.5 dBFS. That's about twice the loudness (RMS 0.116 → 0.241).
+
+It's saved as `/cha-ching.wav` (16-bit mono, 82 KB). `order-bell.js` now looks for `/cha-ching.wav`, used only when it's served as `audio/*`; the generated sound stays as the fallback.
+
+**Files:**
+- cha-ching.wav
+- order-bell.js
+- CLAUDE.md
+
+---
+
 ## 2026-11-25 — Order bell: fix "EncodingError" and silent Test
 
 **Reported:** "Uncaught (in promise) EncodingError: Unable to decode audio data" and nothing played on Test.

@@ -4,7 +4,7 @@
  * rings) it asks for orders paid since it last looked (orders.payment_status =
  * 'paid', paid_at; staff RLS decides who can see them). For each new one it plays a
  * cash-register sound, shows a desktop notification and a banner at the top.
- *  - Sound: /cha-ching.mp3 if the server returns an audio file there, else a cha-ching
+ *  - Sound: /cha-ching.wav if the server returns an audio file there, else a cha-ching
  *    computed here as a WAV and played with an <audio> element.
  *  - Browsers only allow sound after you've clicked the page once since opening it:
  *    the pill (bottom-left) says "Click anywhere to arm" until then.
@@ -34,7 +34,7 @@
   // ---------- sound ----------
   // The cha-ching is computed once as a WAV in plain JS (no Web Audio) and played
   // with an <audio> element — the most reliable way to play a sound in every browser.
-  // /cha-ching.mp3 replaces it only when the server really returns an audio file
+  // /cha-ching.wav (the founder's own sound, trimmed + boosted) replaces it only when the server really returns an audio file
   // (the site answers unknown paths with a page, which can't be played).
   var player = null, blocked = false;
   function makeWav() {
@@ -66,8 +66,8 @@
   function getPlayer() {
     if (player) return player;
     player = new Audio(makeWav()); player.preload = 'auto'; player.volume = 1;
-    fetch('/cha-ching.mp3', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
-      if (r.ok && /^audio\//i.test(r.headers.get('content-type') || '')) player.src = '/cha-ching.mp3';
+    fetch('/cha-ching.wav', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+      if (r.ok && /^audio\//i.test(r.headers.get('content-type') || '')) player.src = '/cha-ching.wav';
     }).catch(function () {});
     return player;
   }
