@@ -222,6 +222,16 @@ button,input,select{font:inherit;color:inherit}
 .price{font:800 1.12rem/1 var(--font-display);font-stretch:108%;font-variant-numeric:tabular-nums}
 .was{color:var(--ink-2);font-size:.88rem;text-decoration:line-through}
 .free{color:#1F6B42;font-size:.8rem;font-weight:700}
+.nudge{display:grid;gap:6px;margin:10px 0;padding:12px;border-radius:14px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:.86rem;color:#14532D}
+.nudge b{font-size:.95rem}
+.nudge-add{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;padding:.6rem .75rem;border:1px solid #86EFAC;border-radius:10px;background:#fff;font:inherit;color:#14532D;cursor:pointer;text-align:left}
+.nudge-add strong{white-space:nowrap}
+.deal-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px}
+.deal-pill{display:inline-flex;align-items:center;gap:4px;padding:.3rem .55rem;border-radius:999px;background:#FEE2E2;color:#B91C1C;font-size:.74rem;font-weight:800;animation:dealPulse 1.8s ease-in-out infinite}
+.deal-pill.off{background:#F1F5F9;color:#475569;animation:none}
+.deal-when{font-size:.72rem;color:var(--muted,#6b7280);font-weight:600}
+@keyframes dealPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.25)}50%{box-shadow:0 0 0 5px rgba(220,38,38,0)}}
+@media (prefers-reduced-motion:reduce){.deal-pill{animation:none}}
 .card.is-out .media > img,.card.is-out .ph{filter:grayscale(1);opacity:.6}
 @media (hover:none){.qadd{opacity:1;transform:none}}
 @media (max-width:1040px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -552,6 +562,8 @@ function mapProduct(row){
     favourite_count: Number(row.favourite_count || 0),
     sold: Number(row.order_count || 0), // units sold on paid orders (exact, database-kept)
     lower: meta.store_pin === 'bottom', // admin → Manage Products → "⬇ Lower"
+    top: meta.store_pin === 'top', // pinned first (e.g. the weekday Special)
+    avail: meta.available && Array.isArray(meta.available.days) ? meta.available : null, // order window (validate-cart + timeslots enforce it)
     seller_id: row.seller_id, listing_type: row.listing_type || 'product',
     booking_mode: row.booking_mode || null, fulfillment_type: row.fulfillment_type || null,
     delivery_class: row.delivery_class || 'small', free_delivery: row.free_delivery === true,
@@ -567,6 +579,33 @@ function mapProduct(row){
 const isService = p => p.listing_type === 'service';
 const priceOf = p => p.displayPrice;
 const inStock = p => isService(p) || (p.stock != null && p.stock > 0);
+// Order window (products.metadata.available, SAST): open now? + ms left / when it reopens.
+const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function sastNow(){
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', weekday: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date());
+  const g = t => (parts.find(x => x.type === t) || {}).value;
+  return { wd: DAY_SHORT.indexOf(g('weekday')), mins: (Number(g('hour')) % 24) * 60 + Number(g('minute')), secs: Number(g('second')) };
+}
+const toMins = hm => { const p = String(hm || '00:00').split(':').map(Number); return p[0] * 60 + (p[1] || 0); };
+function availState(p){
+  if (!p.avail) return null;
+  const n = sastNow(), days = p.avail.days.map(Number), from = toMins(p.avail.from), to = toMins(p.avail.to || '24:00');
+  if (days.includes(n.wd) && n.mins >= from && n.mins < to) return { open: true, left: (to - n.mins) * 60 - n.secs };
+  for (let k = 0; k < 8; k++) {
+    const d = (n.wd + k) % 7;
+    if (days.includes(d) && (k > 0 || n.mins < from)) {
+      const at = String(Math.floor(from / 60)).padStart(2, '0') + ':' + String(from % 60).padStart(2, '0');
+      return { open: false, next: (k === 0 ? 'today' : k === 1 ? 'tomorrow' : DAY_SHORT[d]) + ' ' + at };
+    }
+  }
+  return { open: false, next: '' };
+}
+function availPill(p){
+  const a = availState(p); if (!a) return '';
+  if (a.open) { const m = Math.max(0, Math.floor(a.left / 60)); return `<span class="deal-pill" data-avail="${esc(p.id)}">⏱ Ends in ${m >= 60 ? Math.floor(m / 60) + 'h ' : ''}${m % 60}m</span>`; }
+  return `<span class="deal-pill off" data-avail="${esc(p.id)}">Back ${esc(a.next)}</span>`;
+}
+setInterval(() => document.querySelectorAll('[data-avail]').forEach(el => { const p = byId(el.dataset.avail); if (p) el.outerHTML = availPill(p); }), 30000);
 const unpriced = p => !isService(p) && !(p.displayPrice > 0);
 const initials = s => String(s || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 // Optimised photos (<name>.w1280.webp) have a 480px twin for cards/thumbnails
@@ -657,10 +696,10 @@ function filtered(){
   // lowered last; then per section the most expensive item opens it (a price anchor),
   // then best sellers (most bought first), then the rest cheapest first.
   const anchor = new Set(), top = {};
-  list.forEach(p => { if (!inStock(p) || p.lower) return; const t = top[p.section]; if (!t || priceOf(p) > priceOf(t)) top[p.section] = p; });
+  list.forEach(p => { if (!inStock(p) || p.lower || p.top) return; const t = top[p.section]; if (!t || priceOf(p) > priceOf(t)) top[p.section] = p; });
   Object.values(top).forEach(p => { if (list.filter(x => x.section === p.section).length > 2) anchor.add(p.id); });
   list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (a.lower - b.lower)
-    || (anchor.has(b.id) - anchor.has(a.id)) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))));
+    || (b.top - a.top) || (anchor.has(b.id) - anchor.has(a.id)) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))));
   return list;
 }
 // Sections read like a menu: cheapest section first.
@@ -689,6 +728,7 @@ function card(p, i){
     <h3><button type="button" data-open="${esc(p.id)}">${esc(p.title)}</button></h3>
     <p class="sub">${sub}</p>
     <div class="price-row"><span class="price">${unpriced(p) ? 'Ask in store' : money(priceOf(p))}</span>${p.sale ? `<span class="was">${money(p.price)}</span>` : ''}${p.free_delivery ? '<span class="free">No delivery fee</span>' : ''}</div>
+    ${p.avail ? `<div class="deal-row">${availPill(p)}<span class="deal-when">${esc(p.avail.label || '')}</span></div>` : ''}
   </article>`;
 }
 function renderCatalog(){
@@ -868,6 +908,8 @@ const byId = id => S.products.find(p => p.id === id);
 function quickAdd(id, btn){
   const p = byId(id);
   if (!p) return;
+  const av = availState(p);
+  if (av && !av.open) { toast(p.title, 'Available ' + (p.avail.label || 'at set times') + (av.next ? ' — back ' + av.next : '')); return; }
   if (!inStock(p)) { openQV(id); return; }
   if (p.picks || p.sizes.length) { openQV(id, 'quick'); return; }
   if (isService(p)) { serviceSetup(p); return; }
@@ -963,6 +1005,8 @@ function buildCartItem(p, size, qty, picks){
   };
 }
 function addToCart(p, size, qty, from, picks){
+  const av = availState(p);
+  if (av && !av.open) { toast(p.title, 'Available ' + (p.avail.label || 'at set times') + (av.next ? ' — back ' + av.next : '')); return; }
   const cart = getCart();
   const cap = p.stock > 0 ? p.stock : 99;
   if (picks && picks.length) {
@@ -1007,6 +1051,17 @@ function syncCart(bump){
   if (cartDlg.open) renderCart();
 }
 const cartDlg = $('#cart');
+// Bigger baskets (2026-11-25): one delivery fee covers the whole order, so suggest the store's
+// best sellers that aren't in the cart yet (in stock, not lowered, inside their order window).
+function basketNudge(ls){
+  if (!ls.some(l => l.listing_type !== 'service')) return '';
+  const inCart = new Set(ls.map(l => l.id || l.product_id));
+  const picks = S.products.filter(p => !inCart.has(p.id) && inStock(p) && !isService(p) && !p.lower && !unpriced(p) && (!p.avail || (availState(p) || {}).open))
+    .sort((a, b) => (b.top - a.top) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))).slice(0, 2);
+  if (!picks.length) return '';
+  return `<div class="nudge"><b>🛵 Same delivery, more food</b><span>Your delivery fee covers the whole order — add a plate for a friend at no extra delivery.</span>
+    ${picks.map(p => `<button type="button" class="nudge-add" data-nudge="${esc(p.id)}"><span>${esc(p.title)}</span><strong>+ ${money(priceOf(p))}</strong></button>`).join('')}</div>`;
+}
 function renderCart(){
   const s = S.seller, body = $('#cartBody'), ls = storeLines(), others = otherLines();
   const otherN = others.reduce((a, l) => a + qtyOf(l), 0);
@@ -1032,11 +1087,14 @@ function renderCart(){
         <div><b>${esc(title)}</b>${picked ? `<span>${esc(UmzilaPicks.summary(l.picks, l.picks_cfg))} · ${money(l.price || 0)} each</span><button type="button" class="chg" data-edit="${key}" style="padding:0;border:0;background:none;color:var(--ink);text-decoration:underline;font-weight:600;cursor:pointer;font-size:.86rem;justify-self:start">Change ${esc((l.picks_cfg && l.picks_cfg.label) || 'choice')}es</button>` : ''}<span${picked ? ' hidden' : ''}>${showSize ? (/^(xxs|xs|s|m|l|xl|xxl|xxxl|\d+(\.\d+)?)$/i.test(l.size) ? 'Size ' : '') + esc(l.size) + ' · ' : ''}${esc(when)}${l.booking_id && qtyOf(l) > 1 ? qtyOf(l) + ' × ' : ''}${money(l.price || 0)}</span></div>${control}</li>`;
     }).join('')}</ul>
     ${closed ? `<p class="others" style="background:#FFF7E8;color:#6B4A0E">${esc(s.shop_name)} is closed right now${S.hours.next_open_at ? ' and opens ' + esc(whenLabel(S.hours.next_open_at)) : ''}. You can still order; goods are prepared when they open${ls.some(l => l.listing_type === 'service') ? ' (services go ahead as booked)' : ''}.</p>` : ''}
+    ${basketNudge(ls)}
     <div class="sum"><div><span>Subtotal</span><span>${money(sum)}</span></div><div><span>Delivery</span><span>Worked out at checkout</span></div><div class="total"><span>Total so far</span><span>${money(sum)}</span></div>
     <a class="btn btn-accent btn-block" data-checkout href="/checkout.html?store=${encodeURIComponent(s.id)}" style="margin-top:6px;padding-block:1rem">Check out ${esc(s.shop_name)} · ${money(sum)}</a>
     ${othersLine || '<p class="note">Secure checkout with PayFast. Delivery fee depends on your distance.</p>'}</div>`;
 }
 $('#cartBody').addEventListener('click', e => {
+  const nu = e.target.closest('[data-nudge]');
+  if (nu) { const p = byId(nu.dataset.nudge); if (p && (p.picks || p.sizes.length)) { cartDlg.close(); openQV(p.id, 'quick'); } else if (p) quickAdd(p.id, nu); return; }
   const go = e.target.closest('a[data-checkout]');
   if (go) { e.preventDefault(); if (!showAddons(go.href)) goCheckout(go.href); return; }
   const b = e.target.closest('[data-inc],[data-dec],[data-rm],[data-edit]');

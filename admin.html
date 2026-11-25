@@ -1721,7 +1721,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       toggleLower.title = 'Show this item near the bottom of its store page (e.g. its photo isn’t great). Off = normal order: priciest first, then best sellers.';
       toggleLower.onclick = ()=> toggleProductLower(p.id);
 
-      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis); actionsTd.appendChild(toggleFreeDel); actionsTd.appendChild(toggleLower);
+      const av = p.metadata && p.metadata.available;
+      const hoursBtn = document.createElement('button');
+      hoursBtn.textContent = av ? '🕘 ' + (av.label || 'Hours set') : '🕘 Any time';
+      hoursBtn.title = 'Limit when this item can be ordered (e.g. Mon–Thu 09:00–13:00). Also limits its delivery times to that window.';
+      hoursBtn.onclick = ()=> editProductHours(p.id);
+
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis); actionsTd.appendChild(toggleFreeDel); actionsTd.appendChild(toggleLower); actionsTd.appendChild(hoursBtn);
       tbody.appendChild(tr);
     });
   }
@@ -2200,6 +2206,42 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       await fetchProducts();
       showToast(on ? 'Shown near the bottom of its store' : 'Back to the normal store order');
     } catch(e){ showToast('Toggle failed'); }
+  }
+
+  // Order window (products.metadata.available): days + from/to (SAST). Enforced by validate-cart and the
+  // delivery-time rules (timeslot_open_runs → 'item_window'); shown as a countdown on the store page.
+  async function editProductHours(productId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin'); return; }
+    const p = productsCache.find(x => x.id === productId); if(!p) return;
+    const cur = (p.metadata && p.metadata.available) || null;
+    const NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const d = prompt('Which days can it be ordered? Use Mon,Tue,Wed,Thu,Fri,Sat,Sun (comma separated). Leave EMPTY to allow any time.', cur ? cur.days.map(x => NAMES[x]).join(',') : 'Mon,Tue,Wed,Thu');
+    if (d === null) return;
+    let available = null;
+    if (d.trim()) {
+      const days = d.split(',').map(x => NAMES.findIndex(n => n.toLowerCase() === x.trim().slice(0,3).toLowerCase())).filter(x => x >= 0);
+      if (!days.length) { showToast('Days not recognised — use Mon,Tue,…'); return; }
+      const t = prompt('Hours (24h), e.g. 09:00-13:00', cur ? (cur.from + '-' + cur.to) : '09:00-13:00');
+      if (t === null) return;
+      const m = String(t).match(/^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$/);
+      if (!m) { showToast('Use the format 09:00-13:00'); return; }
+      const from = m[1].padStart(2,'0') + ':' + m[2], to = m[3].padStart(2,'0') + ':' + m[4];
+      if (to <= from) { showToast('The end time must be after the start time'); return; }
+      const sorted = days.slice().sort((a,b) => ((a+6)%7) - ((b+6)%7));
+      const run = sorted.length > 2 && sorted.every((x,i) => i === 0 || ((x+6)%7) === ((sorted[i-1]+6)%7) + 1);
+      const label = (run ? NAMES[sorted[0]] + '–' + NAMES[sorted[sorted.length-1]] : sorted.map(x => NAMES[x]).join(', ')) + ', ' + from + '–' + to;
+      available = { days: sorted, from, to, label };
+    }
+    try {
+      const { data: row, error: rErr } = await supabaseClient.from('products').select('metadata').eq('id', productId).maybeSingle();
+      if (rErr || !row) { showToast('Save failed'); return; }
+      const meta = Object.assign({}, row.metadata || {});
+      if (available) meta.available = available; else delete meta.available;
+      const { error } = await supabaseClient.from('products').update({ metadata: meta }).eq('id', productId);
+      if (error) { showToast('Save failed'); return; }
+      await fetchProducts();
+      showToast(available ? 'Orderable ' + available.label + ' only' : 'Orderable any time');
+    } catch(e){ showToast('Save failed'); }
   }
 
   // change image for a product

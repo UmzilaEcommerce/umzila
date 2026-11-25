@@ -259,6 +259,20 @@ variants.forEach(v => {
   if (!pcfg && item.variant_id) variant = variantMap[item.variant_id];
   if (!pcfg && !variant && item.size) variant = variantMap[`${pid}::${item.size}`];
 
+  // Order window (products.metadata.available = { days:[0=Sun..6], from:'09:00', to:'13:00', label }),
+  // e.g. the weekday lunch Special. SAST. The delivery round's own limits are enforced in the
+  // database (timeslot_open_runs → 'item_window'); this covers ordering time, timeslots on or off.
+  const avail = product.metadata && product.metadata.available;
+  if (avail && typeof avail === 'object' && Array.isArray(avail.days)) {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf((parts.find(p => p.type === 'weekday') || {}).value);
+    const hm = String((parts.find(p => p.type === 'hour') || {}).value).replace('24', '00') + ':' + (parts.find(p => p.type === 'minute') || {}).value;
+    const open = avail.days.map(Number).includes(wd) && hm >= String(avail.from || '00:00') && hm < String(avail.to || '24:00');
+    if (!open) {
+      return { statusCode: 400, body: JSON.stringify({ error: `"${product.name}" is only available ${avail.label || 'at set times'}. Remove it from your cart to continue.`, code: 'ITEM_UNAVAILABLE', productId: product.id }) };
+    }
+  }
+
   // A required option (products.metadata.option_required, e.g. Velaphi's
   // starch) must match one of the product's options — an old "One Size" line
   // or a missing choice is refused so the store never gets a plate without it.

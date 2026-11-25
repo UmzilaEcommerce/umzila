@@ -56,6 +56,7 @@
     var c = sb(); var mount = $('timeslotsMount'); if (!mount) return;
     if (!c) { mount.innerHTML = '<p class="ts-muted">Supabase not available</p>'; return; }
     if (!S.loaded && !quiet) mount.innerHTML = '<p class="ts-muted">Loading…</p>';
+    if (!S.prodList) { try { var pr0 = await c.from('products').select('id, name').eq('visible', true).order('name').limit(500); S.prodList = pr0.data || []; } catch (e) { S.prodList = []; } } // names for product-only slots
     var today = sastDate();
     try {
       var res = await Promise.all([
@@ -117,7 +118,8 @@
     return '<div class="ts-list">' + S.slots.map(function (s) {
       var days = (s.days || []).slice().sort();
       var chips = [0, 1, 2, 3, 4, 5, 6].map(function (d) { return '<span class="ts-day' + (days.indexOf(d) >= 0 ? ' on' : '') + '">' + DAY_NAMES[d] + '</span>'; }).join('');
-      return '<div class="ts-item' + (s.active ? '' : ' dim') + '"><div class="ts-item-top"><div><b class="ts-big">' + hm(s.start_time) + '–' + hm(s.end_time) + '</b><div class="ts-sub">Cut-off ' + minusMin(s.start_time, cut) + ' (' + cut + ' min before)' + (s.max_orders ? ' · max ' + s.max_orders + ' orders' : ' · no order limit') + '</div></div>' +
+      return '<div class="ts-item' + (s.active ? '' : ' dim') + '"><div class="ts-item-top"><div><b class="ts-big">' + hm(s.start_time) + '–' + hm(s.end_time) + '</b><div class="ts-sub">Cut-off ' + minusMin(s.start_time, cut) + ' (' + cut + ' min before)' + (s.max_orders ? ' · max ' + s.max_orders + ' orders' : ' · no order limit') + '</div>' +
+        (s.only_for_product_ids && s.only_for_product_ids.length ? '<div class="ts-sub"><span class="ts-pill mute">Only for: ' + esc(((S.prodList || []).filter(function (p) { return s.only_for_product_ids.indexOf(p.id) >= 0; })[0] || {}).name || 'one product') + '</span></div>' : '') + '</div>' +
         '<label class="ts-switch" title="Switch this slot on or off"><input type="checkbox" data-act="slot-toggle" data-id="' + esc(s.id) + '"' + (s.active ? ' checked' : '') + '><span></span></label></div>' +
         '<div class="ts-days">' + chips + '</div>' +
         '<div class="ts-actions"><button type="button" class="ts-btn" data-act="slot-edit" data-id="' + esc(s.id) + '">Edit</button><button type="button" class="ts-btn danger-o" data-act="slot-del" data-id="' + esc(s.id) + '">Delete</button></div></div>';
@@ -325,11 +327,15 @@
     return '<h3>' + (s ? 'Edit slot' : 'Add slot') + '</h3><div class="ts-body"><div class="ts-form"><div class="ts-field"><label>Starts</label><input type="time" id="tsfStart" value="' + (s ? hm(s.start_time) : '12:00') + '"></div><div class="ts-field"><label>Ends</label><input type="time" id="tsfEnd" value="' + (s ? hm(s.end_time) : '13:00') + '"></div></div>' +
       '<div class="ts-field"><label>Days it runs</label><div class="ts-daypick">' + [0, 1, 2, 3, 4, 5, 6].map(function (d) { return '<label class="ts-dchip"><input type="checkbox" value="' + d + '"' + (days.indexOf(d) >= 0 ? ' checked' : '') + '><span>' + DAY_NAMES[d] + '</span></label>'; }).join('') + '</div></div>' +
       '<div class="ts-field"><label>Maximum orders (optional)</label><input type="number" inputmode="numeric" min="1" id="tsfMax" placeholder="No limit" value="' + (s && s.max_orders ? s.max_orders : '') + '"><div class="ts-help">Leave empty for no limit. Customers see the run as full once this many paid orders are in it.</div></div>' +
+      '<div class="ts-field"><label for="tsfOnly">Only for one product (optional)</label><select id="tsfOnly"><option value="">Everyone — a normal slot</option>' +
+        (S.prodList || []).map(function (p) { var on = s && s.only_for_product_ids && s.only_for_product_ids.indexOf(p.id) >= 0; return '<option value="' + esc(p.id) + '"' + (on ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('') +
+        '</select><div class="ts-help">Pick a product to make this a special slot: it appears ONLY when that product is in the cart (e.g. the 13:00 run just for the weekday lunch Special). Everyone else never sees it.</div></div>' +
       '<label class="ts-check"><input type="checkbox" id="tsfActive"' + (!s || s.active ? ' checked' : '') + '> Slot is on</label><div class="ts-msg bad" id="tsfErr" style="display:none"></div></div>' +
       '<div class="ts-actions end"><button type="button" class="ts-btn" id="tsfCancel">Cancel</button><button type="button" class="ts-btn primary" id="tsfSave">Save slot</button></div>';
   }
-  function openSlotForm(id) {
+  async function openSlotForm(id) {
     var s = id ? S.slots.filter(function (x) { return x.id === id; })[0] : null;
+    if (!S.prodList) { try { var pr = await sb().from('products').select('id, name').eq('visible', true).order('name').limit(500); S.prodList = pr.data || []; } catch (e) { S.prodList = []; } }
     modal(slotForm(s), function (o) {
       o.querySelector('#tsfCancel').onclick = closeModal;
       o.querySelector('#tsfSave').onclick = async function () {
@@ -339,7 +345,8 @@
         var mx = o.querySelector('#tsfMax').value.trim();
         var problem = !start || !end ? 'Enter a start and an end time.' : end <= start ? 'The end time must be after the start time.' : !days.length ? 'Pick at least one day.' : (mx && !/^[1-9]\d*$/.test(mx)) ? 'Maximum orders must be a whole number of 1 or more, or empty.' : null;
         if (problem) { err.textContent = problem; err.style.display = 'block'; return; }
-        var row = { start_time: start, end_time: end, days: days, max_orders: mx ? parseInt(mx, 10) : null, active: o.querySelector('#tsfActive').checked, updated_at: new Date().toISOString() };
+        var only = o.querySelector('#tsfOnly') ? o.querySelector('#tsfOnly').value : '';
+        var row = { start_time: start, end_time: end, days: days, max_orders: mx ? parseInt(mx, 10) : null, active: o.querySelector('#tsfActive').checked, only_for_product_ids: only ? [only] : null, updated_at: new Date().toISOString() };
         var btn = o.querySelector('#tsfSave'); btn.disabled = true; btn.textContent = 'Saving…';
         var q = s ? sb().from('delivery_slots').update(row).eq('id', s.id) : sb().from('delivery_slots').insert(row);
         var r = await q;

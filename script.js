@@ -369,6 +369,8 @@ async function validateCartPrices() {
 async function addToCart(id, qty = 1, size = 'M', preferred_delivery = '', serviceExtra = null, picks = null) {
   const p = state.products.find(x => x.id === id);
   if (!p) return;
+  // Order window (metadata.available, e.g. the Mon–Thu 9am–1pm Special) — validate-cart enforces it too.
+  if (!availableNow(p)) { showNotification(`${p.title} is only available ${(p.metadata.available.label) || 'at set times'}.`); return; }
   // A picked item (e.g. a plate) never goes in without its picks — any other
   // add path (bundle suggestion, old quick add…) opens the picker instead.
   if (p.picks && !(picks && picks.length)) { openProductSheet(p, 'quick'); return; }
@@ -1976,9 +1978,9 @@ let filterOptions = {
  * HERO init — clean clickable slides (no text overlay)
  ********************/
 const heroPlaceholders = [   
-  `/hero-isiqalo-kitchen-v2.webp`,
+  `/hero-isiqalo-kitchen-v3.webp`,
   `/hero-nceks-quad-biking.webp`,
-  `/hero-velaphi-shisanyama.webp`,
+  `/hero-velaphi-shisanyama-v2.webp`,
   `thumbnail1.webp`  // 4th slide fallback
 ];
 // The slides themselves come from the admin's Home Page settings (heroSlides,
@@ -2738,11 +2740,22 @@ function effectivePrice(p) { return p.sale && p.salePrice ? p.salePrice : p.pric
 function isStarStore(p) { return HOME_CURATION.starStores.indexOf(storeSlugOf(p)) !== -1; }
 // All Workshop plates in one list: each store's items cheapest first, then
 // interleaved store by store (preferred store first), so both show up front.
+// Order window check (SAST) for products.metadata.available { days:[0..6], from, to, label }.
+function availableNow(p) {
+  const a = p && p.metadata && p.metadata.available;
+  if (!a || !Array.isArray(a.days)) return true;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Johannesburg', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const g = t => (parts.find(x => x.type === t) || {}).value;
+  const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(g('weekday'));
+  const hm = String(Number(g('hour')) % 24).padStart(2, '0') + ':' + g('minute');
+  return a.days.map(Number).includes(wd) && hm >= String(a.from || '00:00') && hm < String(a.to || '24:00');
+}
 function workshopPlates(prods) {
   // Most bought first (products.order_count = units sold on paid orders, kept exact
   // by the database); unsold plates after, cheapest first.
   const sold = p => Number(p.order_count) || 0;
-  const lists = HOME_CURATION.starStores.map(slug => prods.filter(p => storeSlugOf(p) === slug).sort((a, b) => (sold(b) - sold(a)) || (effectivePrice(a) - effectivePrice(b))));
+  const top = p => (p.metadata && p.metadata.store_pin === 'top' && availableNow(p)) ? 1 : 0; // e.g. the weekday Special, while it's on
+  const lists = HOME_CURATION.starStores.map(slug => prods.filter(p => storeSlugOf(p) === slug).sort((a, b) => (top(b) - top(a)) || (sold(b) - sold(a)) || (effectivePrice(a) - effectivePrice(b))));
   const out = [];
   for (let i = 0; lists.some(l => i < l.length); i++) lists.forEach(l => { if (l[i]) out.push(l[i]); });
   return out;

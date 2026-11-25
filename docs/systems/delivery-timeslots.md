@@ -87,3 +87,17 @@ What doesn't change:
 - The rider board shows no "be at the store by" time for released orders.
 - The seller dashboard shows released orders as "Prepare now" under "Sent early". Any other screen that holds stores back by the cut-off must check `dispatch_released_at` too.
 
+## Product windows and product-only rounds (added 2026-11-25)
+
+**Product order window:** `products.metadata.available = {days:[0=Sun..6], from:'09:00', to:'13:00', label}`.
+- The item can be ordered only on those days between from and to (SAST). validate-cart enforces this with ITEM_UNAVAILABLE.
+- It can only go on rounds that leave on those days between from and to inclusive. `timeslot_item_block(product_ids, at, window_start)` decides this, and `timeslot_open_runs` returns state `item_window` with blocking_store = the product's name.
+- **Every caller passes the order's products:** `timeslot_open_runs(p_seller_ids, p_at, p_product_ids)`, where the third argument comes from `timeslot_item_products(items)`. Callers are the insert and paid triggers, `payment_order_recheck`, `admin_runs_for_order`, and `timeslot_runs_for_cart(p_seller_ids, p_product_ids)` (checkout passes the cart's products).
+- A call without products behaves as before.
+
+**Product-only round:** `delivery_slots.only_for_product_ids`. The round is left out entirely unless the cart holds one of those products, so other customers never see it (e.g. 13:00 Mon–Thu for the R100 Special).
+
+**Admin:**
+- The slot form has "Only for one product".
+- Manage Products → "🕘 Hours" sets the product window.
+

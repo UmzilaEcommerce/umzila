@@ -4991,6 +4991,9 @@ async function validateCheckout() {
     function tsGoodsSellerIds() {
       return [...new Set((state.cart || []).filter(waitsForOpenStore).map(i => i.seller_id).filter(id => id && !HOUSE_IDS.has(id)))].sort();
     }
+    // The cart's products (a product can limit its rounds, or unlock a product-only round — the weekday Special).
+    function tsProductIds() { return [...new Set((state.cart || []).filter(waitsForOpenStore).map(i => i.product_id || i.id).filter(Boolean))].sort(); }
+    function tsCartKey() { return tsGoodsSellerIds().join(',') + '|' + tsProductIds().join(','); }
     function tsActive() { return TS.enabled && cartHasProducts(state.cart || []) && tsGoodsSellerIds().length > 0; }
     const tsFmt = (iso, o) => new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'Africa/Johannesburg' }, o)).format(new Date(iso));
     const tsT = iso => tsFmt(iso, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -5032,9 +5035,9 @@ async function validateCheckout() {
       const ids = tsGoodsSellerIds();
       if (!ids.length || !cartHasProducts(state.cart || [])) return;
       TS.busy = true;
-      const key = ids.join(',');
+      const key = tsCartKey();
       try {
-        const { data, error } = await supabaseClient.rpc('timeslot_runs_for_cart', { p_seller_ids: ids });
+        const { data, error } = await supabaseClient.rpc('timeslot_runs_for_cart', { p_seller_ids: ids, p_product_ids: tsProductIds() });
         if (error || !data) throw (error || new Error('empty response'));
         TS.key = key;
         const sn = Date.parse(data.server_now);
@@ -5060,7 +5063,7 @@ async function validateCheckout() {
     function tsSync() {
       if (!supabaseClient || TS.busy) return;
       const ids = tsGoodsSellerIds();
-      if (ids.length && ids.join(',') !== TS.key) tsRefresh();
+      if (ids.length && tsCartKey() !== TS.key) tsRefresh();
     }
     function tsStart() {
       if (TS.timer) return;
@@ -5109,7 +5112,10 @@ async function validateCheckout() {
       if (TS.notice) h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(TS.notice) + '</div>';
       if (!open.length) {
         const blocked = TS.runs.find(r => r.state === 'store_closed' && r.blocking_store);
-        h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(blocked
+        const itemWin = TS.runs.find(r => r.state === 'item_window' && r.blocking_store);
+        h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(itemWin && !blocked
+          ? itemWin.blocking_store + ' is a weekday lunch deal (Mon–Thu, 9am–1pm), so no delivery time fits it right now. Remove it to see the other times.'
+          : blocked
           ? blocked.blocking_store + ' is closed at those times, so no delivery times are available right now.'
           : 'No delivery times are available right now. Please try again later.') + '</div>';
       } else {
@@ -5929,7 +5935,7 @@ function postPayFastForm(actionUrl, params) {
         // Timeslots: make sure the delivery list matches this cart's stores,
         // and never go on without a chosen run (the server re-checks at insert).
         if (TS.enabled) {
-          if (tsGoodsSellerIds().join(',') !== TS.key) await tsRefresh();
+          if (tsCartKey() !== TS.key) await tsRefresh();
           if (tsActive() && !TS.selRun) {
             const nx = TS.nextOpen;
             const msg = nx && nx.window_start && nx.run_date

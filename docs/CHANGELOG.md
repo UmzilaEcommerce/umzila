@@ -4,6 +4,49 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — 12% mark-up, manual-order clean-up, bigger-basket nudge, R100 weekday Plata Special
+
+**What changed:**
+- **Manual orders (data):** 9 Isiqalo/Velaphi ORD- orders had delivery typed into the item price.
+  - The orders: ORD-320113, 925635, 606970, 956923, 886198, 287145, 244614, 163567, 260713.
+  - Each item now carries the price it listed at on that date (from online orders at the time: Velaphi plate R76.30, Plata for 1 meat & wors R87.20, meat R75.50, curry R54.50), and the rest of the cash is `shipping_cost`.
+  - Totals are unchanged (each rechecked: item × qty + delivery − discount = total). `orders.items` and `order_items` were both updated.
+  - ORD-702942 (R10 off, no delivery) and ORD-819344 (already split) were left alone.
+- **Prices (data):** every Isiqalo and Velaphi product now sells at exactly store price × 1.12. Items shown with a crossed-out price keep it and get the 12% as the deal price. The staff test item is untouched.
+- **Bigger baskets:** shop.html's cart has a "🛵 Same delivery, more food" card with two quick-adds of the store's best sellers not yet in the cart (in stock, not lowered, inside their order window). The drinks step before checkout was already on for both stores.
+- **New product "Plata Special: Weekday Lunch Deal"** (Isiqalo): R100, shown as down from R250.
+  - Pap only. Braai meat, wings, wors, spinach, potato salad, tomato salad.
+  - Store price R100, so Umzila earns R0 on it (a loss-leader).
+  - `metadata.store_pin` 'top' and `available` {days:[1,2,3,4], from 09:00, to 13:00}. The image is a composite in `img/products/isiqalo/`.
+- **Product order windows** (`products.metadata.available`):
+  - validate-cart refuses ordering outside the window (ITEM_UNAVAILABLE).
+  - Database: `timeslot_open_runs(p_seller_ids, p_at, p_product_ids)` (new third parameter, passed by every caller via `timeslot_item_products(items)`) marks rounds 'item_window' when the order time or the round's leave time is outside a cart product's window (`timeslot_item_block`).
+  - Checkout explains it when nothing fits.
+  - shop.html shows a pulsing "⏱ Ends in 2h 13m" / "Back Mon 09:00" pill and blocks adding outside the window. script.js blocks home adds and pins the Special first while it's on.
+  - Admin → Manage Products "🕘 Hours" sets or clears it.
+- **Product-only rounds:**
+  - `delivery_slots.only_for_product_ids`: such a round appears only for carts holding that product.
+  - New 13:00–14:00 Mon–Thu round only for the Special (cut-off 12:45).
+  - Admin → Delivery Times → slot form "Only for one product", and the slot list shows "Only for: …".
+- **Banners:**
+  - `hero-isiqalo-kitchen-v3.webp`: Plates from R78, weekday lunch deal R100 (R250 crossed out).
+  - `hero-velaphi-shisanyama-v2.webp`: the price block patched to R78 and "with wings from R145".
+  - References updated in index.html, script.js, netlify.toml and site_settings 'home' (after the deploy).
+
+**Files:**
+- checkout.html
+- shop.html
+- script.js
+- admin.html
+- timeslots-admin.js
+- netlify/functions/validate-cart.js
+- netlify.toml
+- index.html
+- the two banner images and img/products/isiqalo/*
+- migrations `timeslot_product_windows` and `fin_store_price_fixed_amount`
+
+---
+
 ## 2026-11-25 — Finance: store prices are fixed amounts
 
 **Reported:** "owed to store" behaved like a percentage even though a rand figure was typed per item.
