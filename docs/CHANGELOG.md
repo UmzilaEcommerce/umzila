@@ -4,6 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Finance: store prices are fixed amounts
+
+**Reported:** "owed to store" behaved like a percentage even though a rand figure was typed per item.
+
+**Root cause:** `fin__order_lines` computed owed = line subtotal × store_price ÷ today's selling price. So any line sold at a different price than today's (manual orders with the delivery typed into the item price, old menu prices, manual R80 sales of an R87.20 plate) got a proportional, percentage-like figure instead of the typed amount.
+
+**Fix** (migration `fin_store_price_fixed_amount`):
+- owed = store_price × qty whenever a store price exists.
+- `owed_est` is now only "no store price".
+- docs/systems/finances.md is updated.
+
+Every fin_* screen picks this up with no code change.
+
+**Found while checking:**
+- SPECIAL (Isiqalo, R163.50) has store price **R19**, probably a typo.
+- 19 paid orders (R3,447) look like tests (staff emails or the test item) and aren't excluded. Many may be real manual sales entered under staff names, so it's the founder's call one by one.
+- Velaphi's +3/+4/+6-wing plates and Lemé/Sweet Corner items still have no store price (9 % estimate).
+
+---
+
 ## 2026-11-25 — Order bell uses the founder's own cha-ching
 
 The founder's WhatsApp recording (5.8 s, MP3) was decoded in Chrome, trimmed to 1.32 s (2.28–3.60 s: from where it starts until the ring fades below 0.4 % of peak, plus a 250 ms tail and a 350 ms fade-out; a first 0.92 s cut ended the ring too early), soft-saturated (tanh) and normalised to −0.5 dBFS. That's about twice the loudness (RMS 0.116 → 0.241).
