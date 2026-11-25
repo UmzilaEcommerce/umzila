@@ -775,6 +775,11 @@
     .prio-tip { display: none; position: absolute; right: 0; bottom: calc(100% + 8px); width: 220px; background: #1f2937; color: #fff; font-size: 12.5px; font-weight: 500; line-height: 1.4; padding: 9px 11px; border-radius: 10px; text-align: left; z-index: 20; box-shadow: 0 8px 20px rgba(0,0,0,.2); }
     .prio-help:hover .prio-tip, .prio-help:focus .prio-tip, .prio-help.open .prio-tip { display: block; }
     /* Delivery-time picker (timeslots) — only rendered while the admin switch is on. */
+    /* "?" explainers (2026-11-25): tap to open, tap anywhere else to close. */
+    .qtip { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-left: 6px; border-radius: 50%; border: 1.5px solid #cbd5e1; background: #fff; color: #475569; font-family: inherit; font-size: 12px; font-weight: 800; line-height: 1; cursor: pointer; vertical-align: middle; padding: 0; flex: none; }
+    .qtip[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .qtip-pop { position: fixed; z-index: 3000; max-width: min(320px, calc(100vw - 32px)); background: #0f172a; color: #f8fafc; font-size: 13.5px; font-weight: 500; line-height: 1.5; padding: 12px 14px; border-radius: 14px; box-shadow: 0 16px 40px rgba(15,23,42,.3); text-align: left; white-space: normal; letter-spacing: 0; text-transform: none; }
+    .qtip-pop b { color: #fff; }
     .ts-picker { margin-bottom: 16px; padding: 12px; border-radius: 14px; background: #eef2f8; color: var(--accent); }
     .ts-picker .ts-title { font-size: 14px; font-weight: 800; margin: 0 0 8px; }
     .ts-picker .ts-day { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 10px 0 6px; }
@@ -1270,6 +1275,25 @@
     #stepTime .ts-picker .ts-by.urgent { color: var(--warn); }
     #stepTime .ts-picker .ts-warn { font-size: 12px; }
     #stepTime .ts-picker .ts-how { margin: 0; font-size: 13px; display: flex; gap: 8px; }
+    /* Delivery time, simple version (2026-11-25): one line of explanation, a day switch, one list of times, one confirmation. */
+    #stepTime .ts-intro { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.45; }
+    #stepTime .ts-days { background: #f1f5f9; padding: 4px; border-radius: 14px; gap: 4px; }
+    #stepTime .ts-daychip { min-height: 40px; border: 0; background: transparent; flex-direction: row; gap: 6px; border-radius: 10px; }
+    #stepTime .ts-daychip[aria-pressed="true"] { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(15,23,42,.12); border: 0; }
+    #stepTime .ts-daychip[aria-pressed="true"] .d2 { color: var(--muted); }
+    #stepTime .ts-runs { display: flex; flex-direction: column; gap: 8px; }
+    #stepTime .ts-picker .ts-run { flex-direction: row; align-items: center; min-height: 60px; gap: 12px; padding: 10px 14px; }
+    #stepTime .ts-picker .ts-run.on { padding: 9px 13px; }
+    #stepTime .ts-run .ts-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #94a3b8; flex: none; position: relative; }
+    #stepTime .ts-run.on .ts-radio { border-color: var(--accent); }
+    #stepTime .ts-run.on .ts-radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+    #stepTime .ts-run .ts-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    #stepTime .ts-run .ts-win { font-size: 17px; }
+    #stepTime .ts-run .ts-win small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+    #stepTime .ts-run .ts-tag { flex: none; font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: #ecfdf5; color: #047857; }
+    #stepTime .ts-done { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: #ecfdf5; color: #065f46; font-size: 14px; line-height: 1.45; }
+    #stepTime .ts-done b { color: #064e3b; }
+    #stepTime .ts-done svg { flex: none; margin-top: 2px; }
 
     /* Payment options (picker) */
     .pay-panel { margin-top: 0; border-top: 0; padding-top: 0; }
@@ -1666,9 +1690,9 @@
             <label class="prio-card hidden" id="priorityCard">
               <input type="checkbox" id="priorityToggle">
               <span class="prio-switch" aria-hidden="true"></span>
-              <span class="prio-text"><strong>⚡ Priority delivery <span id="priorityFeeLabel"></span></strong><small>Your order is delivered first.</small></span>
-              <button type="button" class="prio-help" id="priorityHelp" aria-label="What is priority delivery?">?
-                <span class="prio-tip" role="tooltip">Your order is delivered first, so it gets to you faster.</span>
+              <span class="prio-text"><strong>⚡ Be the first drop-off <span id="priorityFeeLabel"></span></strong><small>The rider brings yours first, before the other orders on the trip.</small></span>
+              <button type="button" class="prio-help" id="priorityHelp" aria-label="What does priority do?">?
+                <span class="prio-tip" role="tooltip">A rider takes several orders on one trip. Priority puts you first on that trip, so you get yours before everyone else on it. It does <b>not</b> make the trip leave earlier.</span>
               </button>
             </label>
 
@@ -1694,7 +1718,7 @@
         <li class="co-step hidden" id="stepTime" data-step="time" aria-labelledby="stepTimeTitle">
           <div class="step-head">
             <span class="step-num" aria-hidden="true">3</span>
-            <h2 class="step-title" id="stepTimeTitle">Delivery time</h2>
+            <h2 class="step-title" id="stepTimeTitle">When should it leave?</h2><button type="button" class="qtip" aria-label="How delivery times work" aria-expanded="false" data-qtip="time">?</button><span class="qtip-pop" id="qtip-time" role="tooltip" hidden><b>How delivery times work</b><br>We deliver in rounds. Pick a time, and your food is made fresh and leaves the store with a rider by then.<br><br>Each time has an <b>order-by</b> time. Pay before it to make that round. If you miss it, pick the next one.<br><br>Delivery after it leaves depends on how far you are.</span>
             <span class="sr-only step-state"></span>
           </div>
           <div class="step-body" id="etaHostTime"></div>
@@ -1722,7 +1746,7 @@
                 <label class="save-switch" id="saveCardCheckboxGroup">
                   <input type="checkbox" id="saveCardCheckbox" checked>
                   <span class="save-switch-ui" aria-hidden="true"></span>
-                  <span class="save-switch-text"><strong>Save this card</strong><small id="saveCardSub">Pay in one tap next time.</small></span>
+                  <span class="save-switch-text"><strong>Save this card <button type="button" class="qtip" aria-label="About saving your card" aria-expanded="false" data-qtip="card">?</button><span class="qtip-pop" id="qtip-card" role="tooltip" hidden>PayFast, our payment provider, keeps your card safe. Umzila never sees or stores your full card number. Next time, you pay in one tap.</span></strong><small id="saveCardSub">Pay in one tap next time.</small></span>
                 </label>
                 <div class="form-group card-name-group" id="cardNameGroup">
                   <label class="form-label" for="cardNameInput">Card nickname</label>
@@ -1825,8 +1849,8 @@
               <span>Discount</span>
               <span id="discountAmount">-R0.00</span>
             </div>
-            <div class="summary-row shipping" title="Delivery is based on distance, not basket size — we handle the trip, fuel and hassle, so you don't have to.">
-              <span>Delivery</span>
+            <div class="summary-row shipping">
+              <span>Delivery <button type="button" class="qtip" aria-label="How the delivery fee works" aria-expanded="false" data-qtip="fee">?</button><span class="qtip-pop" id="qtip-fee" role="tooltip" hidden>The fee depends on how far you are from the store by road, not on how much you buy.</span></span>
               <span id="shippingAmount">—</span>
             </div>
             <div class="summary-row hidden" id="priorityRow">
@@ -5081,7 +5105,7 @@ async function validateCheckout() {
       }
       const open = tsOpenRuns();
       const now = tsNow();
-      let h = '<p class="ts-title">Choose your delivery time</p>';
+      let h = '<p class="ts-title">Choose your delivery time</p><p class="ts-intro">We deliver in rounds. Pick when your order should leave the store, and pay before its cut-off.</p>';
       if (TS.notice) h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(TS.notice) + '</div>';
       if (!open.length) {
         const blocked = TS.runs.find(r => r.state === 'store_closed' && r.blocking_store);
@@ -5102,20 +5126,22 @@ async function validateCheckout() {
           h += '<div class="ts-days" role="group" aria-label="Delivery day">' + days.map(d => {
             const r0 = open.find(r => r.run_date === d);
             return '<button type="button" class="ts-daychip" data-tsday="' + escapeHtmlLite(d) + '" aria-pressed="' + (d === TS.viewDay) + '">' +
-              '<span class="d1">' + escapeHtmlLite(tsDayWord(r0)) + '</span><span class="d2">' + escapeHtmlLite(tsFmt(r0.window_start, { weekday: 'short', day: 'numeric', month: 'short' })) + '</span></button>';
+              '<span class="d1">' + escapeHtmlLite(tsDayWord(r0)) + '</span><span class="d2">' + escapeHtmlLite(tsFmt(r0.window_start, { day: 'numeric', month: 'short' })) + '</span></button>';
           }).join('') + '</div>';
         }
         h += '<div class="ts-runs" role="radiogroup" aria-label="Delivery time">';
-        open.filter(r => r.run_date === TS.viewDay).forEach(r => {
+        open.filter(r => r.run_date === TS.viewDay).forEach((r, i) => {
           const ms = Date.parse(r.cutoff_at) - now, mins = Math.max(1, Math.ceil(ms / 60000));
           const by = ms <= 3600000 ? 'Order in the next ' + mins + ' min' : 'Order by ' + tsT(r.cutoff_at);
           const on = tsKeyOf(r) === TS.sel;
           h += '<button type="button" class="ts-run' + (on ? ' on' : '') + '" role="radio" aria-checked="' + on + '" tabindex="' + (on ? '0' : '-1') + '" data-ts="' + escapeHtmlLite(tsKeyOf(r)) + '">' +
-            '<span class="ts-k">Dispatched by</span><span class="ts-win">' + tsT(r.window_start) + '</span><span class="ts-by' + (ms <= 3600000 ? ' urgent' : '') + '">' + by + '</span>' +
-            (ms <= 300000 ? '<span class="ts-warn">Pay in the next ' + mins + ' min to get this time.</span>' : '') + '</button>';
+            '<span class="ts-radio" aria-hidden="true"></span>' +
+            '<span class="ts-main"><span class="ts-win">' + tsT(r.window_start) + ' <small>leaves the store</small></span><span class="ts-by' + (ms <= 3600000 ? ' urgent' : '') + '">' + by + '</span>' +
+            (ms <= 300000 ? '<span class="ts-warn">Pay in the next ' + mins + ' min to get this time.</span>' : '') + '</span>' +
+            (i === 0 ? '<span class="ts-tag">Soonest</span>' : '') + '</button>';
         });
         h += '</div>';
-        if (TS.selRun) h += '<div class="ts-how"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Order by ' + tsT(TS.selRun.cutoff_at) + ' and it’s ' + tsDisp(TS.selRun) + '.</span></div>';
+        if (TS.selRun) h += '<div class="ts-done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Your order leaves the store <b>' + escapeHtmlLite(tsDayWord(TS.selRun).toLowerCase()) + ' by ' + tsT(TS.selRun.window_start) + '</b>. Pay by <b>' + tsT(TS.selRun.cutoff_at) + '</b> to make this round.</span></div>';
       }
       const fresh = !el.classList.contains('ts-picker') || el._tsHtml !== h;
       el.className = 'ts-picker';
@@ -5153,9 +5179,9 @@ async function validateCheckout() {
       document.getElementById('priorityFeeLabel').textContent = '+' + formatCurrency(q.priorityFee);
       // Timeslots on: priority = delivered first on your run (same fee as today).
       const pSmall = card.querySelector('.prio-text small'), pTip = card.querySelector('.prio-tip');
-      if (pSmall && !pSmall.dataset.orig) { pSmall.dataset.orig = pSmall.textContent; if (pTip) pTip.dataset.orig = pTip.textContent; }
-      if (pSmall) pSmall.textContent = tsActive() ? 'Delivered first on your run' : pSmall.dataset.orig;
-      if (pTip && pTip.dataset.orig) pTip.textContent = tsActive() ? 'Your order is delivered first on your run.' : pTip.dataset.orig;
+      if (pSmall && !pSmall.dataset.orig) { pSmall.dataset.orig = pSmall.textContent; if (pTip) pTip.dataset.orig = pTip.innerHTML; }
+      if (pSmall) pSmall.textContent = tsActive() ? 'You get yours first in your delivery round.' : pSmall.dataset.orig;
+      if (pTip && pTip.dataset.orig) pTip.innerHTML = tsActive() ? 'Everyone in a round leaves the store at the same time on one trip. Priority makes you the rider\u2019s <b>first drop-off</b> on it. It does <b>not</b> change the time your round leaves. To get it sooner, pick an earlier time above.' : pTip.dataset.orig;
       document.getElementById('priorityToggle').checked = !!state.priorityDelivery;
       card.classList.toggle('on', !!state.priorityDelivery);
     }
@@ -7185,6 +7211,28 @@ function postPayFastForm(actionUrl, params) {
         fetchDeliveryQuote();
         updateOrderSummary();
       });
+      // "?" explainers: one open at a time, placed under (or above) its button.
+      (function () {
+        let openBtn = null;
+        function close() { if (!openBtn) return; openBtn.setAttribute('aria-expanded', 'false'); const p = document.getElementById('qtip-' + openBtn.dataset.qtip); if (p) p.hidden = true; openBtn = null; }
+        document.addEventListener('click', (e) => {
+          const b = e.target.closest && e.target.closest('.qtip');
+          if (!b) { if (!(e.target.closest && e.target.closest('.qtip-pop'))) close(); return; }
+          e.preventDefault(); e.stopPropagation();
+          if (openBtn === b) { close(); return; }
+          close();
+          const p = document.getElementById('qtip-' + b.dataset.qtip); if (!p) return;
+          if (p.parentNode !== document.body) document.body.appendChild(p);
+          p.hidden = false; b.setAttribute('aria-expanded', 'true'); openBtn = b;
+          const r = b.getBoundingClientRect(), w = p.offsetWidth, hgt = p.offsetHeight;
+          const left = Math.max(16, Math.min(window.innerWidth - w - 16, r.left + r.width / 2 - w / 2));
+          const below = r.bottom + 10 + hgt < window.innerHeight;
+          p.style.left = left + 'px'; p.style.top = (below ? r.bottom + 10 : Math.max(10, r.top - hgt - 10)) + 'px';
+        }, true);
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+        window.addEventListener('scroll', close, { passive: true });
+        window.addEventListener('resize', close);
+      })();
       document.getElementById('priorityHelp')?.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
         e.currentTarget.classList.toggle('open');

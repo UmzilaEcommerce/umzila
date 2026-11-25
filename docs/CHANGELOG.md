@@ -4,6 +4,51 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Checkout explainers, simpler delivery-time picker, sales-based ranking, Plata for 12
+
+**Asked:**
+- Explain things with "?" through checkout. People read priority as "get it ASAP" and don't understand timeslots.
+- Make the delivery-time picker uncluttered.
+- Rank home-page plates by most bought.
+- On store pages, open with the priciest plate (a price anchor), then the best sellers, then the least bought, and push the curry (weak photo) down.
+- Add a R654 platter for small events (double the Plata for 6; R600 cost).
+
+**What changed:**
+- **checkout.html:**
+  - A reusable "?" explainer (`.qtip` button with a `.qtip-pop` popover: tap to open, tap elsewhere, Esc or scroll to close). It's on the delivery-time step, the Delivery fee row and "Save this card".
+  - The priority card now reads "⚡ Be the first drop-off": the rider brings yours first on the trip, and it does **not** make the trip or round leave earlier. With timeslots on, it says "You get yours first in your delivery round".
+  - The delivery-time step is now "When should it leave?". It has a one-line explanation, a segmented Today/Tomorrow switch, one list of times ("12:00 leaves the store · Order by 11:45", "Soonest" tag) and a green confirmation: "Your order leaves the store today by 12:00. Pay by 11:45 to make this round."
+  - The promise is still dispatch-only (never an arrival time).
+- **products.order_count is now exact** (migration `products_order_count_exact`):
+  - It equals units on payment_status 'paid' orders from order_items, recomputed by `product_units_sold()`.
+  - It's kept current by a new order_items AFTER INSERT trigger and by `increment_product_engagement('order_count')`, which now recomputes instead of adding, so there's no drift and the PayFast JS is untouched.
+  - `sync_product_order_counts` was fixed: it counted `order_status in ('paid','Delivered')`, which missed Fulfilled orders and others.
+- **script.js:**
+  - The product loader dropped order_count, cart_count, click_count and last_engaged_at, so `computeScore`'s order signal was always 0. They're now mapped. Home rankings that use `computeScore` now see real sales.
+  - `workshopPlates()` puts the most bought first (unsold ones after, cheapest first).
+- **shop.html featured order:**
+  - Sponsored items come first, then in-stock ones.
+  - Items an admin lowered (`metadata.store_pin='bottom'`) go last.
+  - The most expensive in-stock item opens each section of 3+ items (a price anchor), then most bought, then cheapest.
+- **admin.html → Manage Products:** a new "⬇ Lower: On/Off" button per product (`toggleProductLower`). The cache now keeps metadata. Beef curry is set to Lower.
+- **New product "Plata for 12 (Event Platter)":**
+  - R654, a copy of Plata For 6's options (the same 4 starch variants, stock 10), delivery class large.
+  - Finance store price R600 via `fin_store_price_set`. Plata for 6 is R300, so this is exactly double.
+  - Images are two composites made from the November shoot (a top-down "feast" spread and a "Plata for 6 ×2" card) in `img/products/isiqalo/`, served from the site because there's no storage access from here, plus the existing spread and sides shots.
+  - It was created hidden and is switched on after the deploy. The images can be replaced in admin → 📷 Image.
+- **netlify.toml:** `/img/products/*` is cached immutable (unique names only).
+
+**Files:**
+- checkout.html
+- script.js
+- shop.html
+- admin.html
+- netlify.toml
+- img/products/isiqalo/*
+- migration `products_order_count_exact`
+
+---
+
 ## 2026-11-25 — WhatsApp help: real order number + who's chatting
 
 **Reported:**

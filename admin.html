@@ -1606,6 +1606,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         
         return {
           id: r.id,
+          metadata: r.metadata || {},
           name: r.name,
           sku: r.sku || '',
           category_id: r.category_id || null,
@@ -1713,7 +1714,13 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       toggleFreeDel.title = 'Toggle free delivery for this product (in-house/residence stock)';
       toggleFreeDel.onclick = ()=> toggleProductFreeDelivery(p.id);
 
-      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis); actionsTd.appendChild(toggleFreeDel);
+      const lowered = !!(p.metadata && p.metadata.store_pin === 'bottom');
+      const toggleLower = document.createElement('button');
+      toggleLower.textContent = lowered ? '⬇ Lower: On' : '⬇ Lower: Off';
+      toggleLower.title = 'Show this item near the bottom of its store page (e.g. its photo isn’t great). Off = normal order: priciest first, then best sellers.';
+      toggleLower.onclick = ()=> toggleProductLower(p.id);
+
+      actionsTd.appendChild(editBtn); actionsTd.appendChild(delBtn); actionsTd.appendChild(changeImg); actionsTd.appendChild(toggleVis); actionsTd.appendChild(toggleFreeDel); actionsTd.appendChild(toggleLower);
       tbody.appendChild(tr);
     });
   }
@@ -2174,6 +2181,23 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if(error){ showToast('Toggle failed'); return; }
       await fetchProducts();
       showToast(p.free_delivery ? 'Delivery fee re-enabled' : 'Delivery now free for this product');
+    } catch(e){ showToast('Toggle failed'); }
+  }
+
+  // Store page order (shop.html): metadata.store_pin = 'bottom' puts the item near the
+  // bottom of its store; otherwise priciest first, then most bought.
+  async function toggleProductLower(productId){
+    if(!(await isAdminAuthenticated())) { showToast('Must be signed in as admin'); return; }
+    try {
+      const { data: row, error: rErr } = await supabaseClient.from('products').select('metadata').eq('id', productId).maybeSingle();
+      if(rErr || !row){ showToast('Toggle failed'); return; }
+      const meta = Object.assign({}, row.metadata || {});
+      const on = meta.store_pin !== 'bottom';
+      if(on) meta.store_pin = 'bottom'; else delete meta.store_pin;
+      const { error } = await supabaseClient.from('products').update({ metadata: meta }).eq('id', productId);
+      if(error){ showToast('Toggle failed'); return; }
+      await fetchProducts();
+      showToast(on ? 'Shown near the bottom of its store' : 'Back to the normal store order');
     } catch(e){ showToast('Toggle failed'); }
   }
 

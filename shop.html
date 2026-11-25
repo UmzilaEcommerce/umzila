@@ -550,6 +550,8 @@ function mapProduct(row){
     badge: row.badge || '', stock: row.stock, sizes: choosable ? sizes : [], defaultSize: sizes[0] || 'One Size',
     images: imgs, primary_image: imgs[0] || '',
     favourite_count: Number(row.favourite_count || 0),
+    sold: Number(row.order_count || 0), // units sold on paid orders (exact, database-kept)
+    lower: meta.store_pin === 'bottom', // admin → Manage Products → "⬇ Lower"
     seller_id: row.seller_id, listing_type: row.listing_type || 'product',
     booking_mode: row.booking_mode || null, fulfillment_type: row.fulfillment_type || null,
     delivery_class: row.delivery_class || 'small', free_delivery: row.free_delivery === true,
@@ -651,8 +653,14 @@ function filtered(){
     (S.min == null || priceOf(p) >= S.min) &&
     (S.max == null || priceOf(p) <= S.max));
   const by = {low: (a, b) => priceOf(a) - priceOf(b), high: (a, b) => priceOf(b) - priceOf(a), az: (a, b) => a.title.localeCompare(b.title)}[S.sort];
-  // Featured: paid sponsored placements first, then in-stock before sold out.
-  list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (priceOf(a) - priceOf(b))));
+  // Featured (2026-11-25): sponsored first, in stock before sold out, items an admin
+  // lowered last; then per section the most expensive item opens it (a price anchor),
+  // then best sellers (most bought first), then the rest cheapest first.
+  const anchor = new Set(), top = {};
+  list.forEach(p => { if (!inStock(p) || p.lower) return; const t = top[p.section]; if (!t || priceOf(p) > priceOf(t)) top[p.section] = p; });
+  Object.values(top).forEach(p => { if (list.filter(x => x.section === p.section).length > 2) anchor.add(p.id); });
+  list = list.slice().sort(by || ((a, b) => (sponsored.has(b.id) - sponsored.has(a.id)) || (inStock(b) - inStock(a)) || (a.lower - b.lower)
+    || (anchor.has(b.id) - anchor.has(a.id)) || (b.sold - a.sold) || (priceOf(a) - priceOf(b))));
   return list;
 }
 // Sections read like a menu: cheapest section first.

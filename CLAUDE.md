@@ -212,4 +212,6 @@ shop.html is the default template for every store without a bespoke folder. Stor
 
 💬 WHATSAPP HELP (added 2026-11-25): every buyer-page link to Umzila's support number (wa.me/27797662768) is handled by umzila-wa.js (include it on any new buyer page). It adds "it's <first name>" (page hint UmzilaWA.setName → umz_guest_contact → session metadata), else shows the one-line "Who's chatting?" bar (saved via umzilaGuestContact). Order messages carry orders.order_number (UMZILA-…), never the uuid; use the text or data-wa-order.
 
+📈 RANKING (added 2026-11-25): products.order_count = units on PAID orders (order_items), recomputed by product_units_sold() via the order_items trigger and increment_product_engagement — never add to it by hand. Home Workshop row = most bought first. shop.html featured order = sponsored → in stock → not lowered (metadata.store_pin 'bottom', admin → Manage Products "⬇ Lower") → priciest item opens each 3+ item section (price anchor) → most bought → cheapest. Any new product field the home page needs must be added to script.js's product mapping (it drops unlisted columns).
+
 🎨 BESPOKE STOREFRONTS — see docs/systems/bespoke-storefronts.md. A folder named after a store's slug (e.g. /ncekeniquads/) overrides the generic shop page; it is a skin over Umzila data/cart/checkout, never its own payment flow.

@@ -1282,6 +1282,11 @@ async function loadProducts() {
         metadata: row.metadata || {},
         seller: row.sellers || null,
         favourite_count: Number(row.favourite_count || 0),
+        // ranking signals (computeScore, workshopPlates): were dropped here, so "most bought" always read 0
+        order_count: Number(row.order_count || 0),
+        cart_count: Number(row.cart_count || 0),
+        click_count: Number(row.click_count || 0),
+        last_engaged_at: row.last_engaged_at || null,
         listing_type: row.listing_type || 'product',
         fulfillment_type: row.fulfillment_type || null,
         service_turnaround: row.service_turnaround || null,
@@ -2734,7 +2739,10 @@ function isStarStore(p) { return HOME_CURATION.starStores.indexOf(storeSlugOf(p)
 // All Workshop plates in one list: each store's items cheapest first, then
 // interleaved store by store (preferred store first), so both show up front.
 function workshopPlates(prods) {
-  const lists = HOME_CURATION.starStores.map(slug => prods.filter(p => storeSlugOf(p) === slug).sort((a, b) => effectivePrice(a) - effectivePrice(b)));
+  // Most bought first (products.order_count = units sold on paid orders, kept exact
+  // by the database); unsold plates after, cheapest first.
+  const sold = p => Number(p.order_count) || 0;
+  const lists = HOME_CURATION.starStores.map(slug => prods.filter(p => storeSlugOf(p) === slug).sort((a, b) => (sold(b) - sold(a)) || (effectivePrice(a) - effectivePrice(b))));
   const out = [];
   for (let i = 0; lists.some(l => i < l.length); i++) lists.forEach(l => { if (l[i]) out.push(l[i]); });
   return out;
