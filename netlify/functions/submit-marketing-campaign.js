@@ -15,8 +15,8 @@ function cleanImage(u) {
   const v = String(u || '').trim();
   if (!v) return null;
   try {
-    const url = new URL(v), site = new URL(process.env.SITE_BASE_URL || 'https://umzila.store'), sb = new URL(process.env.SUPABASE_URL || 'https://x.supabase.co');
-    if (url.protocol !== 'https:' || (url.host !== site.host && url.host !== sb.host)) return null;
+    const url = new URL(v), hosts = [process.env.SITE_BASE_URL, process.env.URL, process.env.SUPABASE_URL].filter(Boolean).map(h => { try { return new URL(h).host; } catch (e) { return ''; } });
+    if (url.protocol !== 'https:' || !hosts.includes(url.host)) return null;
     return url.toString();
   } catch (e) { return null; }
 }

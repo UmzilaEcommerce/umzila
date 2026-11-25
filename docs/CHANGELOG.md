@@ -4,6 +4,16 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Deploy fix: no hard-coded site address
+
+**Problem:** the deploy of 8f95cea failed ("Build script returned non-zero exit code: 2").
+
+**Cause:** the commit added the literal site address in two places: a fallback in submit-marketing-campaign.js `cleanImage` and an admin.html placeholder. Netlify's secret scan treats that as the value of a Netlify setting and stops the build. It also breaks the "never write the site in the frontend" rule.
+
+**Fix:** allowed photo hosts now come only from env (SITE_BASE_URL, URL, SUPABASE_URL), and the placeholder text is generic.
+
+---
+
 ## 2026-11-25 — Platform Campaign emails: conversion design + scheduling
 
 **Reported:** the Platform Campaign email looked bad (a plain navy text card) and couldn't be scheduled.
