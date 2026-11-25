@@ -11,6 +11,7 @@
 //                                                       lifts the run hold; a PENDING delivery is made ready even
 //                                                       if its store is closed)
 //   { action: 'release_run', slotId, runDate }          the same for every paid order in a run
+//   { action: 'email_early', orderNumber | orderId }    (re)send the buyer's "going out early" email for a released order
 // Admin = a row in public.admins (same rule as the database's timeslot_is_admin()).
 const { createClient } = require('@supabase/supabase-js');
 const { transitionDelivery } = require('./lib/delivery-state');
@@ -91,6 +92,19 @@ exports.handler = async (event) => {
       return reply(200, { ok: true, results });
     }
 
+    // Send (or re-send) the buyer's "going out early" email for an order that was already sent to riders.
+    if (b.action === 'email_early') {
+      const q = String(b.orderId || b.orderNumber || '').trim();
+      if (!q) return reply(400, { error: 'Order number required.' });
+      const col = /^[0-9a-f-]{36}$/i.test(q) ? 'id' : 'order_number';
+      const { data: o } = await supabase.from('orders').select('id, order_number, customer_name, customer_email, slot_window_start, slot_window_end, dispatch_released_at').eq(col, q).maybeSingle();
+      if (!o) return reply(404, { error: 'Order not found.' });
+      if (!o.dispatch_released_at) return reply(400, { error: 'This order was not sent to riders early — use “Send now” first.' });
+      if (!o.customer_email) return reply(400, { error: 'This order has no customer email.' });
+      const ok = await sendEarlyEmail(supabase, o, site);
+      return ok ? reply(200, { ok: true, emailed: o.customer_email }) : reply(502, { error: 'The email could not be sent — try again.' });
+    }
+
     if (b.action === 'running_late') {
       const minutes = parseInt(b.minutes, 10);
       if (!b.slotId || !b.runDate || !(minutes > 0 && minutes <= 600)) return reply(400, { error: 'slotId, runDate and minutes (1-600) are required.' });
@@ -113,6 +127,16 @@ exports.handler = async (event) => {
     return reply(500, { error: e.message || 'Server error' });
   }
 };
+
+// The buyer's "your order is going out early" email (timeslot-mail.js customerSentEarly) with their private tracking link.
+async function sendEarlyEmail(supabase, o, site) {
+  const { data: d } = await supabase.from('deliveries').select('tracking_token').eq('order_id', o.id).maybeSingle();
+  const trackLink = d && d.tracking_token ? `${site}/track.html?order=${encodeURIComponent(o.id)}&t=${encodeURIComponent(d.tracking_token)}` : '';
+  return T.sendMail(o.customer_email, M.customerSentEarly({
+    firstName: T.firstName(o.customer_name), orderNumber: o.order_number,
+    run: { window_start: o.slot_window_start, window_end: o.slot_window_end }, siteUrl: site, trackLink
+  }));
+}
 
 // One order → { order_number, status, detail }. status: offered | batched | waiting_rider | already_moving | not_paid | no_delivery | failed
 async function releaseNow(supabase, orderId, adminId) {
@@ -140,12 +164,7 @@ async function releaseNow(supabase, orderId, adminId) {
   const r = await offerDelivery(supabase, d.id).catch(e => ({ dispatched: false, reason: 'error', detail: e.message }));
   // Tell the buyer once, the first time a run order is moved forward.
   if (firstRelease && o.customer_email) {
-    const site = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
-    const trackLink = d.tracking_token ? `${site}/track.html?order=${encodeURIComponent(o.id)}&t=${encodeURIComponent(d.tracking_token)}` : '';
-    out.emailed = await T.sendMail(o.customer_email, M.customerSentEarly({
-      firstName: T.firstName(o.customer_name), orderNumber: o.order_number,
-      run: { window_start: o.slot_window_start, window_end: o.slot_window_end }, siteUrl: site, trackLink
-    }));
+    out.emailed = await sendEarlyEmail(supabase, o, (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, ''));
   }
   if (r.batched) return { ...out, status: 'batched' };
   if (r.dispatched) return { ...out, status: 'offered' };

@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — "Email buyer only" for orders already sent early
+
+**Reported:** Khwezi Khuzwayo's order (UMZILA-1795596742186-qu7gh9dgw) was sent to riders early, but no "going out early" email reached him.
+
+**Root cause:** It wasn't a code bug. The button was pressed at 09:10:26 UTC, while `315735b` was live. The email (`dd0648c`) only went live at 09:11:44 UTC. Re-pressing can't help either: `dispatch_released_at` was already set, and the email is sent only on the first release.
+
+**What changed:**
+- `timeslot-admin.js` has a new `email_early` action ({orderNumber | orderId}). It (re)sends `customerSentEarly` for an order that has `dispatch_released_at`.
+- The shared `sendEarlyEmail()` helper is now also used by `releaseNow`.
+- Admin → Delivery Times → "Send an order to riders now" has a new **📧 Email buyer only** button next to Send now.
+
+**Files:**
+- netlify/functions/timeslot-admin.js
+- timeslots-admin.js
+- docs/systems/delivery-timeslots.md
+
+---
+
 ## 2026-11-25 — Logistics "Create order →" did nothing
 
 **Reported:** In logistics → New Order, pressing **Create order →** did nothing: no error and no order.

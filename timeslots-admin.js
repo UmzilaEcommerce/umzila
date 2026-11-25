@@ -101,7 +101,8 @@
     h += affectedHtml();
     h += attentionHtml();
     h += '<div class="ts-card"><div class="ts-h"><h3>🚀 Send an order to riders now</h3></div><p class="ts-sub">Fast-forward any paid order (with or without a run): it is offered to riders straight away instead of waiting for its run time or a closed store.</p>' +
-      '<div class="ts-actions"><input type="text" id="tsReleaseNum" placeholder="Order number, e.g. UMZILA-…" autocomplete="off" style="flex:1;min-width:0;padding:10px;border:1px solid #d1d5db;border-radius:10px;font:inherit"><button type="button" class="ts-btn primary" data-act="release-num">Send now</button></div></div>';
+      '<div class="ts-actions"><input type="text" id="tsReleaseNum" placeholder="Order number, e.g. UMZILA-…" autocomplete="off" style="flex:1;min-width:0;padding:10px;border:1px solid #d1d5db;border-radius:10px;font:inherit"><button type="button" class="ts-btn primary" data-act="release-num">Send now</button><button type="button" class="ts-btn" data-act="email-early-num">📧 Email buyer only</button></div>' +
+      '<p class="ts-sub">“Email buyer only” (re)sends the “your order is going out early” email for an order that was already sent to riders.</p></div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Run sheet · today &amp; tomorrow</h3><div class="ts-actions"><button type="button" class="ts-btn" data-act="tick">Run cut-off job now</button><button type="button" class="ts-btn" data-act="reload">↻ Refresh</button></div></div>' + msg('sheet') + sheetHtml() + '</div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Slots</h3><button type="button" class="ts-btn primary" data-act="slot-new">+ Add slot</button></div>' + msg('slots') + slotsHtml() + '</div>';
     h += '<div class="ts-card"><div class="ts-h"><h3>Date controls</h3></div>' + dateCtlHtml() + '</div>';
@@ -487,6 +488,14 @@
     if (!v) { toast('Type the order number first'); return; }
     await releaseOrder(null, v);
   }
+  async function emailEarlyByNumber() {
+    var el = $('tsReleaseNum'); var v = el ? el.value.trim() : '';
+    if (!v) { toast('Type the order number first'); return; }
+    var ok = await confirmBox('Email the buyer of ' + v + '?', '<p>They get “Good news — your order is going out early” with their tracking link. Nothing else changes.</p>', 'Send email');
+    if (!ok) return;
+    try { var j = await api({ action: 'email_early', orderNumber: v }); toast('Email sent to ' + j.emailed); }
+    catch (e) { toast('Couldn’t send it: ' + e.message); }
+  }
   async function refreshAffected() {
     var a = S.affected; await loadAll(true);
     if (a && a.params) await showAffected(a.title, a.params[0], a.params[1]);
@@ -578,6 +587,7 @@
       else if (a === 'release') run(releaseOrder(b.dataset.oid, b.dataset.onum));
       else if (a === 'release-run') run(releaseRun(b.dataset.slot, b.dataset.date, b.dataset.win));
       else if (a === 'release-num') run(releaseByNumber());
+      else if (a === 'email-early-num') run(emailEarlyByNumber());
       else if (a === 'late') runningLate(b.dataset.slot, b.dataset.date, b.dataset.win);
       else if (a === 'aff-close') { S.affected = null; render(); }
       else if (a === 'aff-move-all') run(affBulk('move'));
