@@ -4,6 +4,24 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-25 — Finances: Umzila's own stores (Lumina)
+
+**Reported:** Lumina Shop is Umzila's own store, but Finances treated it like an outside store: what it sold was split into "owed to Lumina" plus a mark-up, so Lumina's profit never showed as Umzila's.
+
+**Root cause:** the engine only knew one kind of Umzila-owned seller, the house drinks (`sellers.is_house`). Lumina can't be flagged `is_house`, because that flag also changes dispatch and store counting.
+
+**What changed:**
+- **New setting:** `site_settings 'finance' → own_store_ids`. Lumina is seeded into it, and `site_settings_finance_validate` checks it.
+  - Helper `fin__own_store_ids()`.
+  - Admin → Finances → Assumptions → **Umzila's own stores** (tick boxes).
+- **`fin__order_lines`:** an own store is treated like the house drinks.
+  - Nothing is owed to it, and its store price is the **cost of the stock**.
+  - When no cost has been typed in, the cost is estimated as price ÷ (1 + default mark-up) and flagged `cogs_missing`, so profit is never overstated.
+- **Other functions:** `fin_store_prices_list` and `fin_store_price_set` list and save own-store products as costs. `fin_entry_save` doesn't count an own store as a store to pay.
+- **`finances-admin.js`:** "Drinks cost" is renamed "Own stock cost" everywhere, and the cost list shows the store name.
+- **Result:** gross profit is unchanged at R3,033.32 all-time, because Lumina's store prices were already its stock costs. Lumina now shows R0 owed and R3,483 stock cost (R362 of it estimated), and its R2,064 margin counts as Umzila's.
+- **Files:** `docs/plans/sql/30_fin_own_stores.sql` (migration `fin_own_stores`), `finances-admin.js`, `docs/systems/finances.md`, `CLAUDE.md`.
+
 ## 2026-11-25 — Staff can move a delivery along (rider override)
 
 **Reported:** once a rider had an order, only the rider could move it on (collected → on the way → delivered). Admins were stuck when the rider couldn't tap.

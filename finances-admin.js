@@ -39,7 +39,8 @@
     manual_discount_funded_by: 'umzila',
     fee_rates: FEE_DEFAULTS,
     expense_categories: ['Fuel', 'Marketing', 'Printing', 'Salaries', 'Rider wages', 'Software', 'Packaging', 'PayFast payout fee', 'Bank charges', 'Other'],
-    income_categories: ['Prize', 'Grant', 'Sponsorship', 'Other']
+    income_categories: ['Prize', 'Grant', 'Sponsorship', 'Other'],
+    own_store_ids: []
   };
   var ADJ = {
     exclude_test: 'Marked as test',
@@ -48,11 +49,11 @@
     rider_pay_override: 'Rider pay (override)',
     payment_fee_override: 'Payment fee (override)',
     payment_method_set: 'Payment method set',
-    cogs_override: 'Drinks cost (override)',
+    cogs_override: 'Own stock cost (override)',
     note: 'Note'
   };
   var FLAG = {
-    totals_mismatch: 'Totals differ', items_fallback: 'Items from order JSON', cogs_missing: 'Drink cost missing',
+    totals_mismatch: 'Totals differ', items_fallback: 'Items from order JSON', cogs_missing: 'Stock cost missing (estimated)',
     store_price_estimated: 'Store price estimated', no_lines: 'No items found', delivery_cancelled: 'Delivery cancelled',
     looks_like_test: 'Looks like a test'
   };
@@ -134,6 +135,7 @@
     });
     if (!Array.isArray(out.expense_categories) || !out.expense_categories.length) out.expense_categories = DEFAULTS.expense_categories.slice();
     if (!Array.isArray(out.income_categories) || !out.income_categories.length) out.income_categories = DEFAULTS.income_categories.slice();
+    if (!Array.isArray(out.own_store_ids)) out.own_store_ids = [];
     if (out.expense_categories.indexOf('PayFast payout fee') < 0) out.expense_categories.push('PayFast payout fee');
     return out;
   }
@@ -254,10 +256,10 @@
     if (num(t.tips_to_rider)) rows.push({ key: 'tips', label: 'Tips passed to riders', amount: num(t.tips_to_rider), sign: -1 });
     rows.push(
       { key: 'fees', label: 'PayFast fees', amount: num(t.payfast_fees), sign: -1, est: feesEst > 0, note: feesEst > 0 ? money(feesEst) + ' of this is estimated from the fee rates' : 'as reported by PayFast' },
-      { key: 'cogs', label: 'Drinks cost of goods', amount: num(t.house_cogs), sign: -1, note: num(t.house_sales) ? 'Umzila Drinks sold ' + money(t.house_sales) : '' },
+      { key: 'cogs', label: 'Cost of our own stock', amount: num(t.house_cogs), sign: -1, note: num(t.house_sales) ? 'Our own stores (Umzila Drinks + own stores) sold ' + money(t.house_sales) : '' },
       { key: 'refunds', label: 'Refunds', amount: num(t.refunds), sign: -1 },
       { key: 'gp', label: 'Umzila gross profit', amount: num(t.umzila_gross_profit), total: true,
-        note: 'Mark-up ' + money(t.umzila_commission) + ' · delivery & priority ' + money(t.umzila_delivery_income) + ' · drinks margin ' + money(t.umzila_house_margin) + (num(t.discounts_umzila) ? ' · Umzila codes −' + money(t.discounts_umzila) : '') },
+        note: 'Mark-up ' + money(t.umzila_commission) + ' · delivery & priority ' + money(t.umzila_delivery_income) + ' · own stores margin ' + money(t.umzila_house_margin) + (num(t.discounts_umzila) ? ' · Umzila codes −' + money(t.discounts_umzila) : '') },
       { key: 'income', label: 'Other income', amount: num(amountOf(t.other_income)), sign: 1, items: oiItems },
       { key: 'expenses', label: 'Expenses', amount: num(amountOf(t.expenses)), sign: -1, items: exItems, note: 'Monthly costs count once for every month the period touches.' },
       { key: 'net', label: 'Net profit / loss', amount: num(t.net_profit), total: true, big: true }
@@ -310,7 +312,7 @@
     if (q) rows = rows.filter(function (r) { return (r.num + ' ' + r.customer + ' ' + r.storeNames + ' ' + r.method).toLowerCase().indexOf(q) >= 0; });
     return rows;
   }
-  var FILTER_LABEL = { payouts: 'orders with money owed to stores', rider: 'orders with rider pay', fees: 'orders with PayFast fees', cogs: 'orders with drinks', refunds: 'refunded orders', est: 'orders with estimated figures', check: 'orders to check', tests: 'orders marked as test', maybe: 'orders that may be tests' };
+  var FILTER_LABEL = { payouts: 'orders with money owed to stores', rider: 'orders with rider pay', fees: 'orders with PayFast fees', cogs: 'orders with our own stock', refunds: 'refunded orders', est: 'orders with estimated figures', check: 'orders to check', tests: 'orders marked as test', maybe: 'orders that may be tests' };
   function filterLabel(f) {
     if (!f) return '';
     if (FILTER_LABEL[f]) return FILTER_LABEL[f];
@@ -399,7 +401,7 @@
         house ? '<span class="fn-muted">— (ours)</span>' : moneyE(r.owed, est),
         pct(num(r.margin_pct) / 100)] };
     }));
-    return h + '<p class="fn-help">“Umzila earned” is the mark-up: what customers paid for the goods minus the store’s price. Store promo codes come out of the store’s share; Umzila’s codes (spin, mystery gift, platform) are Umzila’s cost. Umzila Drinks is ours: sales minus cost of goods.</p></div>';
+    return h + '<p class="fn-help">“Umzila earned” is the mark-up: what customers paid for the goods minus the store’s price. Store promo codes come out of the store’s share; Umzila’s codes (spin, mystery gift, platform) are Umzila’s cost. Umzila Drinks and our own stores (Assumptions → Umzila’s own stores) are ours: sales minus the cost of the stock.</p></div>';
   }
   function timeCard() {
     var h = '<div class="fn-card"><div class="fn-h"><h3>Over time</h3><div class="fn-chips"><button type="button" class="fn-chip' + (S.gran === 'day' ? ' on' : '') + '" data-act="gran" data-g="day">Day</button><button type="button" class="fn-chip' + (S.gran === 'week' ? ' on' : '') + '" data-act="gran" data-g="week">Week</button></div></div>';
@@ -514,6 +516,8 @@
       '<div class="fn-field"><label for="fnSellerCodes">Store promo codes are paid by</label><select id="fnSellerCodes"><option value="seller"' + (st.seller_codes_funded_by !== 'umzila' ? ' selected' : '') + '>The store (comes off what it is owed)</option><option value="umzila"' + (st.seller_codes_funded_by === 'umzila' ? ' selected' : '') + '>Umzila</option></select></div>' +
       '<div class="fn-field"><label for="fnManualDisc">Discounts typed in by hand on logistics orders are paid by</label><select id="fnManualDisc"><option value="umzila"' + (st.manual_discount_funded_by !== 'seller' ? ' selected' : '') + '>Umzila</option><option value="seller"' + (st.manual_discount_funded_by === 'seller' ? ' selected' : '') + '>The store</option></select></div>' +
       '<div class="fn-field"><label for="fnTips">Tips go to</label><select id="fnTips"><option value="umzila"' + (st.tips_go_to !== 'rider' ? ' selected' : '') + '>Umzila (riders are staff)</option><option value="rider"' + (st.tips_go_to === 'rider' ? ' selected' : '') + '>The rider (taken off Umzila’s figures)</option></select></div>' +
+      '<div class="fn-field" style="grid-column:1/-1"><label>Umzila’s own stores</label><div class="fn-help">Tick stores Umzila owns (e.g. Lumina). Nothing is owed to them: their whole margin is Umzila’s, and their “store price” is the cost of the stock (estimated with the mark-up above until you type it in).</div><div style="display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px">' +
+        (S.sellers || []).filter(function (x) { return !x.is_house && x.status !== 'disabled'; }).map(function (x) { return '<label class="fn-check"><input type="checkbox" data-own="' + esc(x.id) + '"' + (st.own_store_ids.indexOf(x.id) >= 0 ? ' checked' : '') + '> ' + esc(x.shop_name || 'Store') + '</label>'; }).join('') + '</div></div>' +
       '<div class="fn-field"><label>Umzila’s own codes, delivery and priority</label><div class="fn-sub">Spin, mystery gift and platform codes are Umzila’s cost. Delivery and priority fees are Umzila revenue.</div></div>' +
       '</div><div class="fn-actions"><button type="button" class="fn-btn primary" data-act="assump-save">Save</button></div>';
 
@@ -529,15 +533,15 @@
       }).join('') + '</tbody></table></div><div class="fn-help">Fee = max(minimum, amount × % + fixed) × (1 + VAT ' + esc(num(st.vat_percent) || 15) + ' %) when VAT is ticked. Cash and manual EFT are never charged a fee. Apple, Google and Samsung Pay are charged like cards.</div>' +
       '<div class="fn-actions"><button type="button" class="fn-btn primary" data-act="fees-save">Save fee rates</button><button type="button" class="fn-btn" data-act="fees-reset">Reset to PayFast defaults</button></div>';
 
-    h += '<h4>Umzila Drinks — cost of goods</h4>' + msg('cogs');
+    h += '<h4>Our own stock — cost of goods <span class="fn-muted">(Umzila Drinks + our own stores)</span></h4>' + msg('cogs');
     if (S.pricesErr) h += '<div class="fn-warn">' + esc(S.pricesErr) + '</div>';
     else if (!S.house) h += '<p class="fn-muted">Loading…</p>';
     else if (!S.house.length) h += '<p class="fn-muted">No house products found.</p>';
     else h += '<div class="fn-list">' + S.house.map(function (p) {
       var c = p.store_price;
-      return '<div class="fn-item fn-price"><div class="fn-grow"><b>' + esc(p.name) + '</b><div class="fn-sub">sells at ' + money(p.sell_price) + (has(c) ? ' · Umzila keeps ' + money(num(p.sell_price) - num(c)) + ' a unit' : ' · <span class="fn-pill warn">cost missing</span>') + '</div></div>' +
+      return '<div class="fn-item fn-price"><div class="fn-grow"><b>' + esc(p.name) + '</b><div class="fn-sub">' + esc(p.shop_name || '') + ' · sells at ' + money(p.sell_price) + (has(c) ? ' · Umzila keeps ' + money(num(p.sell_price) - num(c)) + ' a unit' : ' · <span class="fn-pill warn">cost missing</span>' + (p.own_store && has(p.estimated_store_price) ? ' ≈ ' + money(p.estimated_store_price) + ' used' : '')) + '</div></div>' +
         '<div class="fn-pin"><label class="fn-sr" for="fnCogs' + esc(p.product_id) + '">Cost</label><span>R</span><input type="number" inputmode="decimal" min="0" step="0.01" id="fnCogs' + esc(p.product_id) + '" data-cogs="' + esc(p.product_id) + '" data-was="' + (has(c) ? esc(num(c).toFixed(2)) : '') + '" value="' + (has(c) ? esc(num(c).toFixed(2)) : '') + '"></div></div>';
-    }).join('') + '</div><div class="fn-actions"><button type="button" class="fn-btn primary" data-act="cogs-save">Save drink costs</button></div>';
+    }).join('') + '</div><div class="fn-actions"><button type="button" class="fn-btn primary" data-act="cogs-save">Save costs</button></div>';
 
     h += '<h4>Categories</h4>' + msg('cats') + '<div class="fn-grid">' +
       '<div class="fn-field"><label for="fnExpCats">Expense categories (one per line)</label><textarea id="fnExpCats" rows="6">' + esc(st.expense_categories.join('\n')) + '</textarea></div>' +
@@ -579,7 +583,7 @@
     h += '<h4>Goods</h4>' + dRow('Goods at list price', money(g.list_value)) +
       (num(g.discount) ? dRow('Discount', '− ' + money(g.discount), g.discount_funder === 'seller' ? 'store promo — comes off the store’s share' : 'Umzila code — Umzila’s cost') : '') +
       r.stores.map(function (s) {
-        if (s.is_house) return dRow((s.shop_name || 'Umzila Drinks') + ' (ours)', money(pick(s, 'goods_after_discount', 'goods_list')), 'cost of goods ' + money(s.cogs) + (s.cogs_missing ? ' — cost missing, set it in Assumptions' : '') + (adjOf(r, 'cogs_override') ? ' · ' + ovNote(r, 'cogs_override') : ''));
+        if (s.is_house) return dRow((s.shop_name || 'Umzila Drinks') + ' (ours)', money(pick(s, 'goods_after_discount', 'goods_list')), 'cost of goods ' + money(s.cogs) + (s.cogs_missing ? ' — some costs not typed in (≈ estimated), set them in Assumptions' : '') + (adjOf(r, 'cogs_override') ? ' · ' + ovNote(r, 'cogs_override') : ''));
         var est = !!s.owed_est;
         return dRow(s.shop_name || 'Store', money(pick(s, 'goods_after_discount', 'goods_list')), (num(s.seller_discount) ? 'store promo ' + money(s.seller_discount) + ' · ' : '') + 'Umzila earns ' + moneyE(s.commission, est)) +
           dRow('Owed to ' + (s.shop_name || 'store'), moneyE(s.owed, est), s.payout_override ? ovNote(r, 'seller_payout_override') : est ? 'estimate: no store price set — default ' + S.settings.default_markup_percent + ' % mark-up' : 'store price per product');
@@ -591,10 +595,10 @@
     if (r.tips) h += dRow('Tip', money(r.tips), num(l.tips_to_rider) ? 'passed to the rider' : 'Umzila revenue');
     if (r.refund) h += dRow('Refunded', '− ' + money(r.refund), ovNote(r, 'refund').replace(/^override/, 'recorded'));
     h += '<h4>Umzila</h4>' + dRow('Customer paid', money(r.gross)) + dRow('Owed to stores', '− ' + moneyE(u.owed_to_stores, r.storeEst)) +
-      (num(u.fees_paid) ? dRow('Payment fee', '− ' + moneyE(u.fees_paid, r.feeEst)) : '') + (num(u.house_cogs) ? dRow('Drinks cost', '− ' + money(u.house_cogs)) : '') +
+      (num(u.fees_paid) ? dRow('Payment fee', '− ' + moneyE(u.fees_paid, r.feeEst)) : '') + (num(u.house_cogs) ? dRow('Own stock cost', '− ' + money(u.house_cogs)) : '') +
       (num(u.refunds) ? dRow('Refund', '− ' + money(u.refunds)) : '') + (num(u.rider_cost) ? dRow('Rider pay', '− ' + money(u.rider_cost)) : '') + (num(u.tips_to_rider) ? dRow('Tip to rider', '− ' + money(u.tips_to_rider)) : '') +
       dRow('Umzila net on this order', '<span class="' + (r.umz < 0 ? 'fn-neg' : 'fn-pos') + '">' + money(r.umz) + '</span>',
-        'mark-up ' + money(u.commission) + ' · delivery & priority ' + money(u.delivery_income) + (num(u.house_margin) ? ' · drinks ' + money(u.house_margin) : '') + (num(u.discounts_funded) ? ' · Umzila codes −' + money(u.discounts_funded) : '') + (num(u.unexplained) ? ' · unexplained ' + money(u.unexplained) : ''));
+        'mark-up ' + money(u.commission) + ' · delivery & priority ' + money(u.delivery_income) + (num(u.house_margin) ? ' · own stores ' + money(u.house_margin) : '') + (num(u.discounts_funded) ? ' · Umzila codes −' + money(u.discounts_funded) : '') + (num(u.unexplained) ? ' · unexplained ' + money(u.unexplained) : ''));
     var adjAll = list(l.adjustments);
     if (adjAll.length) h += '<h4>Corrections &amp; notes</h4><div class="fn-list">' + adjAll.map(function (a) {
       var t = a.type || a.adjustment_type, v = !!a.voided_at;
@@ -619,7 +623,7 @@
     });
   }
   function adjForm(r, kind) {
-    var types = kind === 'override' ? [['payment_fee_override', 'Payment fee'], ['seller_payout_override', 'Owed to store'], ['rider_pay_override', 'Rider pay'], ['cogs_override', 'Drinks cost of goods'], ['payment_method_set', 'Payment method']] : null;
+    var types = kind === 'override' ? [['payment_fee_override', 'Payment fee'], ['seller_payout_override', 'Owed to store'], ['rider_pay_override', 'Rider pay'], ['cogs_override', 'Own stock cost'], ['payment_method_set', 'Payment method']] : null;
     var sellers = r.stores.filter(function (s) { return !s.is_house; });
     var methods = Object.keys(S.settings.fee_rates).map(function (k) { return '<option value="' + esc(k) + '">' + esc(S.settings.fee_rates[k].name) + '</option>'; }).join('');
     var h = '<h3>' + (kind === 'refund' ? 'Record a refund' : kind === 'note' ? 'Add a note' : 'Override a figure') + ' · ' + esc(r.num) + '</h3>' +
@@ -735,9 +739,10 @@
   async function saveAssump() {
     var mk = $('fnMarkup').value.trim(); if (!/^\d+(\.\d+)?$/.test(mk)) { setMsg('assump', 'Enter the mark-up as a number, e.g. 9.', false); return render(); }
     var rider = $('fnRiderCost').checked, sc = $('fnSellerCodes').value, md = $('fnManualDisc').value, tp = $('fnTips').value;
-    var res = await saveWith(function (v) { v.default_markup_percent = Number(mk); v.count_rider_pay_as_cost = rider; v.seller_codes_funded_by = sc; v.manual_discount_funded_by = md; v.tips_go_to = tp; });
+    var own = Array.prototype.map.call(document.querySelectorAll('#fnAssump [data-own]:checked'), function (i) { return i.dataset.own; });
+    var res = await saveWith(function (v) { v.own_store_ids = own; v.default_markup_percent = Number(mk); v.count_rider_pay_as_cost = rider; v.seller_codes_funded_by = sc; v.manual_discount_funded_by = md; v.tips_go_to = tp; });
     setMsg('assump', res.ok ? 'Saved. Figures updated.' : res.error, res.ok); S.openAssump = true;
-    if (res.ok) await reloadMoney(); else render();
+    if (res.ok) { await Promise.all([reloadMoney(), loadPrices()]); render(); } else render();
   }
   async function saveFees(reset) {
     var rates = {};
@@ -771,7 +776,7 @@
       try { await rpc('fin_store_price_set', { p_product_id: changed[i], p_variant_id: null, p_price: has(map[changed[i]]) ? map[changed[i]] : null }); done++; }
       catch (e) { err = friendly(e); }
     }
-    setMsg('cogs', err ? 'Saved ' + done + ' of ' + changed.length + '. ' + err : 'Drink costs saved (' + done + ').', !err); S.openAssump = true;
+    setMsg('cogs', err ? 'Saved ' + done + ' of ' + changed.length + '. ' + err : 'Costs saved (' + done + ').', !err); S.openAssump = true;
     await Promise.all([loadPrices(), loadMoney()]); render();
   }
   async function saveCats() {
@@ -820,7 +825,7 @@
   function exportCsv() {
     if (!S.lines) return;
     var rg = S.range;
-    var rows = [['Order', 'When (SAST)', 'Day', 'Customer', 'Source', 'Test (excluded)', 'Paid with', 'Method code', 'Customer paid (R)', 'Fee (R)', 'Fee estimated', 'Goods list (R)', 'Discount (R)', 'Discount paid by', 'Stores', 'Owed to stores (R)', 'Owed estimated', 'Umzila mark-up (R)', 'Delivery fee (R)', 'Priority (R)', 'Tips (R)', 'Rider pay (R)', 'Rider pay estimated', 'Drinks cost (R)', 'Refund (R)', 'Umzila net (R)', 'Flags', 'Corrections']];
+    var rows = [['Order', 'When (SAST)', 'Day', 'Customer', 'Source', 'Test (excluded)', 'Paid with', 'Method code', 'Customer paid (R)', 'Fee (R)', 'Fee estimated', 'Goods list (R)', 'Discount (R)', 'Discount paid by', 'Stores', 'Owed to stores (R)', 'Owed estimated', 'Umzila mark-up (R)', 'Delivery fee (R)', 'Priority (R)', 'Tips (R)', 'Rider pay (R)', 'Rider pay estimated', 'Own stock cost (R)', 'Refund (R)', 'Umzila net (R)', 'Flags', 'Corrections']];
     S.lines.map(L).forEach(function (r) {
       var u = r.umzObj, g = r.goods, d = r.delivery;
       rows.push([r.num, fmtWhen(r.when), r.day || '', r.customer, r.source || '', yn(r.excluded), r.method, r.methodCode || '', n2(r.gross), n2(r.fee), yn(r.feeEst), n2(g.list_value), n2(g.discount), g.discount_funder || '', r.storeNames, n2(r.payout), yn(r.storeEst), n2(u.commission), n2(d.fee_customer), n2(d.priority), n2(r.tips), n2(r.rider), yn(r.riderEst), n2(r.cogs), n2(r.refund), n2(r.umz),
@@ -910,7 +915,7 @@
       var card = function (label, val, sub, cls) { return '<a href="#" class="fn-dcard ' + (cls || '') + '" data-fin-open="1"><span>' + esc(label) + '</span><b>' + val + '</b><small>' + sub + '</small></a>'; };
       mount.innerHTML = '<div class="fn-dash-h"><span>💰 Money — this month</span><a href="#" data-fin-open="1">Finances →</a></div><div class="fn-dash">' +
         card('Order value (incl. delivery)', money(tt.gross), 'what customers paid') +
-        card('Umzila gross profit', money(tt.umzila_gross_profit), 'after stores, fees, drinks cost', num(tt.umzila_gross_profit) >= 0 ? 'pos' : 'neg') +
+        card('Umzila gross profit', money(tt.umzila_gross_profit), 'after stores, fees, own stock cost', num(tt.umzila_gross_profit) >= 0 ? 'pos' : 'neg') +
         card('Net after costs', money(net), 'after expenses, plus other income', net >= 0 ? 'pos' : 'neg') +
         card('Paid orders', String(num(s.orders)), num(s.excluded_orders) ? esc(num(s.excluded_orders) + ' test hidden') : 'test orders excluded') + '</div>';
     }
