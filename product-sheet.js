@@ -79,12 +79,18 @@
 .uq-nav.prev{left:12px}.uq-nav.next{right:92px}
 .uq-nav:disabled{opacity:0;pointer-events:none}
 .uq-count{position:absolute;left:12px;top:12px;z-index:2;padding:3px 10px;border-radius:999px;background:rgb(21 23 26/.6);color:#fff;font-size:.78rem;font-weight:700;font-variant-numeric:tabular-nums}
-.uq-zoom{position:fixed;inset:0;z-index:20;background:#0a0b0d;display:flex;flex-direction:column}
-.uq-zoom .uq-track{position:relative;inset:auto;flex:1}
+/* Full-screen photos = its own modal <dialog> in the top layer (not inside the sheet: on phones the
+   sheet is a bottom sheet, so a child of it was clipped and its × sat under the status bar). */
+.uq-zoom{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:#0a0b0d;color:#fff;overflow:hidden}
+.uq-zoom[open]{display:flex;flex-direction:column}
+.uq-zoom::backdrop{background:#0a0b0d}
+.uq-zoom *,.uq-zoom *::before,.uq-zoom *::after{box-sizing:border-box}
+.uq-zoom img{display:block;max-width:100%}
+.uq-zoom .uq-track{position:relative;inset:auto;flex:1;min-height:0}
 .uq-zoom .uq-slide{cursor:default}
 .uq-zoom .uq-slide .fg{inset:12px;width:calc(100% - 24px);height:calc(100% - 24px)}
-.uq-zoom .uq-x{position:absolute;right:14px;top:calc(14px + env(safe-area-inset-top,0px));z-index:3;background:rgb(255 255 255/.95);border-color:transparent}
-.uq-zoom .uq-count{top:calc(20px + env(safe-area-inset-top,0px));left:16px}
+.uq-zoom .uq-x{position:absolute;right:max(14px,env(safe-area-inset-right,0px));top:calc(14px + env(safe-area-inset-top,0px));z-index:3;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;border:0;background:#fff;color:#15171A;font:400 1.6rem/1 system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 20px rgb(0 0 0/.5)}
+.uq-zoom .uq-count{top:calc(26px + env(safe-area-inset-top,0px));left:16px}
 .uq-thumbs{position:absolute;right:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;max-height:calc(100% - 24px);overflow-y:auto;scrollbar-width:none}
 .uq-thumbs button{flex:0 0 auto;width:68px;height:68px;padding:0;border-radius:12px;overflow:hidden;border:2px solid #fff;background:#fff;cursor:pointer;opacity:.8;box-shadow:0 6px 16px -6px rgb(0 0 0/.45)}
 .uq-thumbs button[aria-pressed="true"]{opacity:1;box-shadow:0 0 0 2px var(--uq-ink)}
@@ -270,18 +276,20 @@
     }
     if (track && many) track.addEventListener('scroll', () => { const i = idxOf(track); if (i !== cur) syncGallery(i); }, { passive: true });
     function openZoom(i) {
-      const z = document.createElement('div');
-      z.className = 'uq-zoom'; z.setAttribute('role', 'dialog'); z.setAttribute('aria-label', 'Photos');
+      // its own modal dialog (top layer), so it covers the whole screen above the sheet
+      const z = document.createElement('dialog');
+      z.className = 'uq-zoom'; z.setAttribute('aria-label', 'Photos');
       z.innerHTML = '<button type="button" class="uq-x" data-zx aria-label="Close photos">×</button>' + (many ? '<span class="uq-count">' + (i + 1) + ' / ' + imgs.length + '</span>' : '') + '<div class="uq-track">' + slides(true) + '</div>';
-      d.appendChild(z);
+      document.body.appendChild(z);
+      z.showModal();
       const zt = z.querySelector('.uq-track'), zc = z.querySelector('.uq-count');
       const jump = (tr, k) => { tr.style.scrollBehavior = 'auto'; tr.scrollLeft = k * tr.clientWidth; tr.style.scrollBehavior = ''; };
       requestAnimationFrame(() => jump(zt, i));
-      zt.addEventListener('scroll', () => { if (zc) zc.textContent = (idxOf(zt) + 1) + ' / ' + imgs.length; }, { passive: true });
-      const onEsc = e => { e.preventDefault(); shut(); }; // Esc closes the photos first, not the whole pop-up
-      function shut() { const k = idxOf(zt); z.remove(); d.removeEventListener('cancel', onEsc); if (track) { jump(track, k); syncGallery(k); } }
-      d.addEventListener('cancel', onEsc);
-      z.addEventListener('click', e => { if (e.target.closest('[data-zx]') || e.target === z) shut(); });
+      let at = i; // remembered while swiping: once closed the dialog is hidden and can't be measured
+      zt.addEventListener('scroll', () => { at = idxOf(zt); if (zc) zc.textContent = (at + 1) + ' / ' + imgs.length; }, { passive: true });
+      // Esc / back closes only the photos (the dialog's own cancel), then the sheet shows that photo
+      z.addEventListener('close', () => { z.remove(); if (track) { jump(track, at); syncGallery(at); } });
+      z.addEventListener('click', e => { if (e.target.closest('[data-zx]')) z.close(); });
       z.querySelector('[data-zx]').focus();
     }
     const choose = $('#uqChoose'), sum = $('#uqSum'), add = $('#uqAdd');

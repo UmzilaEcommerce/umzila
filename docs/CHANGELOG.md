@@ -20,7 +20,7 @@ Earlier flat-R39 orders, e.g. Simphiwe on 12 Nov, had no live quote at Pay eithe
 - **`product-sheet.js` (the one product pop-up):**
   - A swipeable photo gallery (scroll-snap), plus arrows, dots, a "1 / 4" counter and the thumbnails on desktop.
   - Each photo is shown whole (`contain`) over a blurred copy of itself, so nothing is cut off.
-  - Tapping a photo opens a full-screen viewer you can swipe through; Esc closes the viewer first.
+  - Tapping a photo opens a full-screen viewer you can swipe through; Esc closes the viewer first. The viewer is its own modal `<dialog>` in the top layer (same day fix: as a child of the sheet it was clipped by the phone bottom-sheet, and its × sat under the status bar).
 - **Files:** `netlify/functions/lib/road-distance.js`, `product-sheet.js`, `CLAUDE.md`.
 
 
