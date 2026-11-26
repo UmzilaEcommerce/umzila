@@ -64,8 +64,27 @@
 .uq img{display:block;max-width:100%}
 .uq button,.uq input{font:inherit;color:inherit}
 .uq-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-.uq-media{position:relative;min-height:420px;background:color-mix(in srgb,var(--uq-accent) 9%,#fff)}
-.uq-media>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.uq-media{position:relative;min-height:420px;overflow:hidden;background:color-mix(in srgb,var(--uq-accent) 9%,#fff)}
+/* Gallery (2026-11-26): swipe/scroll-snap track; every photo shown WHOLE (contain) over a blurred
+   cover copy of itself, so nothing is cut off and there are no empty bars. Tap = full screen. */
+.uq-track{position:absolute;inset:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+.uq-track::-webkit-scrollbar{display:none}
+.uq-slide{position:relative;flex:0 0 100%;height:100%;scroll-snap-align:center;scroll-snap-stop:always;overflow:hidden;border:0;padding:0;margin:0;background:none;cursor:zoom-in}
+.uq-slide .bg{position:absolute;inset:-24px;width:calc(100% + 48px);height:calc(100% + 48px);max-width:none;object-fit:cover;filter:blur(22px) saturate(1.15);opacity:.6}
+.uq-slide .fg{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.uq-dots{position:absolute;left:0;right:0;bottom:12px;z-index:2;display:flex;justify-content:center;gap:6px;pointer-events:none}
+.uq-dots i{width:7px;height:7px;border-radius:999px;background:rgb(255 255 255/.6);box-shadow:0 1px 4px rgb(0 0 0/.35);transition:width .2s,background-color .2s}
+.uq-dots i.on{width:20px;background:#fff}
+.uq-nav{position:absolute;top:50%;z-index:2;display:grid;place-items:center;width:40px;height:40px;margin-top:-20px;border:0;border-radius:50%;background:rgb(255 255 255/.92);color:var(--uq-ink);box-shadow:0 6px 16px -6px rgb(0 0 0/.45);cursor:pointer;font-size:1.25rem;line-height:1}
+.uq-nav.prev{left:12px}.uq-nav.next{right:92px}
+.uq-nav:disabled{opacity:0;pointer-events:none}
+.uq-count{position:absolute;left:12px;top:12px;z-index:2;padding:3px 10px;border-radius:999px;background:rgb(21 23 26/.6);color:#fff;font-size:.78rem;font-weight:700;font-variant-numeric:tabular-nums}
+.uq-zoom{position:fixed;inset:0;z-index:20;background:#0a0b0d;display:flex;flex-direction:column}
+.uq-zoom .uq-track{position:relative;inset:auto;flex:1}
+.uq-zoom .uq-slide{cursor:default}
+.uq-zoom .uq-slide .fg{inset:12px;width:calc(100% - 24px);height:calc(100% - 24px)}
+.uq-zoom .uq-x{position:absolute;right:14px;top:calc(14px + env(safe-area-inset-top,0px));z-index:3;background:rgb(255 255 255/.95);border-color:transparent}
+.uq-zoom .uq-count{top:calc(20px + env(safe-area-inset-top,0px));left:16px}
 .uq-thumbs{position:absolute;right:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;max-height:calc(100% - 24px);overflow-y:auto;scrollbar-width:none}
 .uq-thumbs button{flex:0 0 auto;width:68px;height:68px;padding:0;border-radius:12px;overflow:hidden;border:2px solid #fff;background:#fff;cursor:pointer;opacity:.8;box-shadow:0 6px 16px -6px rgb(0 0 0/.45)}
 .uq-thumbs button[aria-pressed="true"]{opacity:1;box-shadow:0 0 0 2px var(--uq-ink)}
@@ -129,8 +148,8 @@
   .uq[open]{animation:uqUp .35s cubic-bezier(.2,.9,.3,1)}
   .uq-grid{grid-template-columns:1fr}
   .uq-media{min-height:0;aspect-ratio:4/3}
-  .uq-thumbs{right:10px;top:10px;gap:6px;max-height:calc(100% - 20px)}
-  .uq-thumbs button{width:52px;height:52px;border-radius:10px}
+  .uq-thumbs,.uq-nav{display:none} /* phones swipe; the dots show where you are */
+  .uq-media{aspect-ratio:1/1}
   .uq-body{padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px))}
 }
 @media (prefers-reduced-motion:reduce){.uq[open]{animation:none}}`;
@@ -191,8 +210,19 @@
     if (cfg && cfg.max === 2 && !plates.length) plates = [[]];
     if (opt && !opt.required) picked = opt.values[0];
 
-    const media = !quick ? (p.images && p.images.length
-      ? `<img id="uqMain" src="${esc(p.images[0])}" alt="${esc(p.title)}">` + (p.images.length > 1 ? `<div class="uq-thumbs">${p.images.map((u, i) => `<button type="button" data-img="${i}" aria-pressed="${i === 0}" aria-label="Image ${i + 1}"><img src="${esc(String(u).replace(/\.w1280\.webp$/, '.w480.webp'))}" data-full="${esc(u)}" onerror="if(this.src!==this.dataset.full)this.src=this.dataset.full" alt=""></button>`).join('')}</div>` : '')
+    const imgs = (p.images || []).filter(Boolean);
+    const many = imgs.length > 1;
+    const thumbOf = u => String(u).replace(/\.w1280\.webp$/, '.w480.webp');
+    const slides = zoom => imgs.map((u, i) => '<button type="button" class="uq-slide" data-slide="' + i + '" aria-label="' + (zoom ? 'Photo ' + (i + 1) : 'Open photo ' + (i + 1) + ' full screen') + '">' +
+      (zoom ? '' : '<img class="bg" src="' + esc(thumbOf(u)) + '" data-full="' + esc(u) + '" onerror="if(this.src!==this.dataset.full)this.src=this.dataset.full" alt="" aria-hidden="true">') +
+      '<img class="fg" src="' + esc(u) + '" alt="' + esc(p.title) + (many ? ' — photo ' + (i + 1) : '') + '"' + (i ? ' loading="lazy"' : '') + '></button>').join('');
+    const media = !quick ? (imgs.length
+      ? '<div class="uq-track" id="uqTrack">' + slides(false) + '</div>' + (many
+        ? '<span class="uq-count" id="uqCount">1 / ' + imgs.length + '</span>' +
+          '<button type="button" class="uq-nav prev" data-nav="-1" aria-label="Previous photo" disabled>‹</button><button type="button" class="uq-nav next" data-nav="1" aria-label="Next photo">›</button>' +
+          '<div class="uq-dots" aria-hidden="true">' + imgs.map((_, i) => '<i' + (i ? '' : ' class="on"') + '></i>').join('') + '</div>' +
+          '<div class="uq-thumbs">' + imgs.map((u, i) => '<button type="button" data-img="' + i + '" aria-pressed="' + (i === 0) + '" aria-label="Photo ' + (i + 1) + '"><img src="' + esc(thumbOf(u)) + '" data-full="' + esc(u) + '" onerror="if(this.src!==this.dataset.full)this.src=this.dataset.full" alt=""></button>').join('') + '</div>'
+        : '')
       : `<div class="uq-ph">${esc(p.title)}</div>`) : '';
     const assure = [
       p.closedNote ? `${ICONS.clock}<span>${esc(p.closedNote)}</span>` : '',
@@ -224,6 +254,36 @@
       </form></div>`;
 
     const $ = s => d.querySelector(s);
+    // ---- gallery: swipe / arrows / dots / thumbs, tap → full screen ----
+    const track = $('#uqTrack');
+    let cur = 0;
+    const goTo = (tr, i) => { if (tr) tr.scrollTo({ left: i * tr.clientWidth, behavior: 'smooth' }); };
+    const idxOf = tr => Math.max(0, Math.min(imgs.length - 1, Math.round(tr.scrollLeft / Math.max(1, tr.clientWidth))));
+    function syncGallery(i) {
+      cur = i;
+      const c = $('#uqCount'); if (c) c.textContent = (i + 1) + ' / ' + imgs.length;
+      d.querySelectorAll('.uq-media .uq-dots i').forEach((x, k) => x.classList.toggle('on', k === i));
+      d.querySelectorAll('.uq-thumbs button').forEach((b, k) => b.setAttribute('aria-pressed', String(k === i)));
+      const pv = d.querySelector('.uq-media .uq-nav.prev'), nx = d.querySelector('.uq-media .uq-nav.next');
+      if (pv) pv.disabled = i <= 0;
+      if (nx) nx.disabled = i >= imgs.length - 1;
+    }
+    if (track && many) track.addEventListener('scroll', () => { const i = idxOf(track); if (i !== cur) syncGallery(i); }, { passive: true });
+    function openZoom(i) {
+      const z = document.createElement('div');
+      z.className = 'uq-zoom'; z.setAttribute('role', 'dialog'); z.setAttribute('aria-label', 'Photos');
+      z.innerHTML = '<button type="button" class="uq-x" data-zx aria-label="Close photos">×</button>' + (many ? '<span class="uq-count">' + (i + 1) + ' / ' + imgs.length + '</span>' : '') + '<div class="uq-track">' + slides(true) + '</div>';
+      d.appendChild(z);
+      const zt = z.querySelector('.uq-track'), zc = z.querySelector('.uq-count');
+      const jump = (tr, k) => { tr.style.scrollBehavior = 'auto'; tr.scrollLeft = k * tr.clientWidth; tr.style.scrollBehavior = ''; };
+      requestAnimationFrame(() => jump(zt, i));
+      zt.addEventListener('scroll', () => { if (zc) zc.textContent = (idxOf(zt) + 1) + ' / ' + imgs.length; }, { passive: true });
+      const onEsc = e => { e.preventDefault(); shut(); }; // Esc closes the photos first, not the whole pop-up
+      function shut() { const k = idxOf(zt); z.remove(); d.removeEventListener('cancel', onEsc); if (track) { jump(track, k); syncGallery(k); } }
+      d.addEventListener('cancel', onEsc);
+      z.addEventListener('click', e => { if (e.target.closest('[data-zx]') || e.target === z) shut(); });
+      z.querySelector('[data-zx]').focus();
+    }
     const choose = $('#uqChoose'), sum = $('#uqSum'), add = $('#uqAdd');
     const unit = cfg ? cfg.unit : 'item';
 
@@ -280,11 +340,10 @@
       const t = e.target.closest('button,input');
       if (!t) return;
       if (t.dataset.x !== undefined) { d.close(); return; }
-      if (t.dataset.img !== undefined) {
-        const i = +t.dataset.img; const m = $('#uqMain'); if (m) m.src = p.images[i];
-        d.querySelectorAll('.uq-thumbs button').forEach((b, bi) => b.setAttribute('aria-pressed', String(bi === i)));
-        return;
-      }
+      if (t.closest('.uq-zoom')) return; // the full-screen viewer handles its own clicks
+      if (t.dataset.img !== undefined) { goTo(track, +t.dataset.img); syncGallery(+t.dataset.img); return; }
+      if (t.dataset.nav !== undefined) { const i = Math.max(0, Math.min(imgs.length - 1, cur + Number(t.dataset.nav))); goTo(track, i); syncGallery(i); return; }
+      if (t.dataset.slide !== undefined) { openZoom(+t.dataset.slide); return; }
       if (t.dataset.inc) { if (seq.length < stockCap) seq.push(t.dataset.inc); render(); return; }
       if (t.dataset.dec) { const k = seq.lastIndexOf(t.dataset.dec); if (k > -1) seq.splice(k, 1); render(); return; }
       if (t.dataset.plate !== undefined) {

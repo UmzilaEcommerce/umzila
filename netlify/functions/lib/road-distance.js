@@ -16,15 +16,32 @@
 // class-based fallback price).
 const round4 = n => Math.round(Number(n) * 1e4) / 1e4;
 
+// HeiGIT moved the API: api.openrouteservice.org was switched off on
+// 2026-11-24 (every call → 410 "Deprecated HeiGIT API URL"), which made every
+// uncached address fall back to the flat R39. Same key, new host + prefix.
+// ORS_BASE_URL (Netlify env) can override it if they move it again.
+const ORS_BASE = (process.env.ORS_BASE_URL || 'https://api.heigit.org/openrouteservice').replace(/\/+$/, '');
+const ORS_TIMEOUT_MS = 6000; // a slow provider must not hang checkout into "couldn't check delivery"
+function orsFetch(path, body, accept) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ORS_TIMEOUT_MS);
+  return fetch(ORS_BASE + path, {
+    method: 'POST', signal: ctl.signal,
+    headers: { Authorization: process.env.ORS_API_KEY, 'Content-Type': 'application/json', Accept: accept || 'application/json' },
+    body: JSON.stringify(body)
+  }).finally(() => clearTimeout(t));
+}
+// A pin within ~110 m of one already routed from the same store reuses that
+// road distance (same building/street — a few cents of difference at R0.40/km)
+// instead of a new lookup: a returning buyer whose pin moved slightly, or the
+// same res picked from a different suggestion, never depends on the provider.
+const NEAR_DEG = 0.001;
+
 async function fetchOrs(from, to) {
   const key = process.env.ORS_API_KEY;
   if (!key) return { error: 'ORS_API_KEY not configured' };
   try {
-    const res = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', {
-      method: 'POST',
-      headers: { Authorization: key, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ coordinates: [[from.lon, from.lat], [to.lon, to.lat]], units: 'm', instructions: false })
-    });
+    const res = await orsFetch('/v2/directions/driving-car', { coordinates: [[from.lon, from.lat], [to.lon, to.lat]], units: 'm', instructions: false });
     const json = await res.json().catch(() => null);
     if (!res.ok || !json || !Array.isArray(json.routes) || !json.routes.length) {
       return { error: `OpenRouteService ${res.status}: ${json && json.error ? JSON.stringify(json.error).slice(0, 200) : 'no route'}` };
@@ -50,6 +67,16 @@ async function getRoadLeg(supabase, from, to) {
       .eq('from_lat', k.from_lat).eq('from_lon', k.from_lon).eq('to_lat', k.to_lat).eq('to_lon', k.to_lon)
       .then(() => {}, () => {});
     return { distanceKm: hit.distance_m / 1000, durationMin: hit.duration_s != null ? hit.duration_s / 60 : null, cached: true };
+  }
+
+  const { data: near } = await supabase.from('route_distance_cache').select('to_lat, to_lon, distance_m, duration_s')
+    .eq('from_lat', k.from_lat).eq('from_lon', k.from_lon)
+    .gte('to_lat', round4(k.to_lat - NEAR_DEG)).lte('to_lat', round4(k.to_lat + NEAR_DEG))
+    .gte('to_lon', round4(k.to_lon - NEAR_DEG)).lte('to_lon', round4(k.to_lon + NEAR_DEG)).limit(20);
+  if (near && near.length) {
+    const d2 = r => (r.to_lat - k.to_lat) ** 2 + (r.to_lon - k.to_lon) ** 2;
+    const best = near.slice().sort((a, b) => d2(a) - d2(b))[0];
+    return { distanceKm: best.distance_m / 1000, durationMin: best.duration_s != null ? best.duration_s / 60 : null, cached: true, near: true };
   }
 
   const r = await fetchOrs(from, to);
@@ -90,11 +117,7 @@ async function getRoadMatrix(supabase, points) {
   const apiKey = process.env.ORS_API_KEY;
   if (missing && apiKey) {
     try {
-      const res = await fetch('https://api.openrouteservice.org/v2/matrix/driving-car', {
-        method: 'POST',
-        headers: { Authorization: apiKey, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ locations: pts.map(p => [p.lon, p.lat]), metrics: ['distance', 'duration'], units: 'm' })
-      });
+      const res = await orsFetch('/v2/matrix/driving-car', { locations: pts.map(p => [p.lon, p.lat]), metrics: ['distance', 'duration'], units: 'm' });
       const json = await res.json().catch(() => null);
       if (res.ok && json && Array.isArray(json.distances)) {
         const toCache = [];
@@ -131,11 +154,7 @@ async function getRoadPath(from, to) {
   const key = process.env.ORS_API_KEY;
   if (!key) return null;
   try {
-    const res = await fetch('https://api.openrouteservice.org/v2/directions/driving-car/geojson', {
-      method: 'POST',
-      headers: { Authorization: key, 'Content-Type': 'application/json', Accept: 'application/geo+json, application/json' },
-      body: JSON.stringify({ coordinates: [[from.lon, from.lat], [to.lon, to.lat]], units: 'm', instructions: false })
-    });
+    const res = await orsFetch('/v2/directions/driving-car/geojson', { coordinates: [[from.lon, from.lat], [to.lon, to.lat]], units: 'm', instructions: false }, 'application/geo+json, application/json');
     const json = await res.json().catch(() => null);
     const f = json && Array.isArray(json.features) && json.features[0];
     const coords = f && f.geometry && Array.isArray(f.geometry.coordinates) ? f.geometry.coordinates : null;

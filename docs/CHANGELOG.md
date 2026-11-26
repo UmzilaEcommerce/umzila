@@ -4,7 +4,26 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
-## 2026-11-25 — Finances: Umzila's own stores (Lumina)
+## 2026-11-26 — Checkout charged a flat R39: the routing API moved; product pop-up gallery
+
+**Reported:** checkout sometimes didn't work out the distance and charged a flat R39. Sometimes it said delivery was unavailable, even for repeat customers.
+
+**Root cause:** HeiGIT switched off `api.openrouteservice.org` on 2026-11-24. Every call now returns 410, with a page titled "Deprecated HeiGIT API URL" (seen in the get-delivery-quote logs). So every address that wasn't already in `route_distance_cache` → `routingDown()` (503) → checkout's standard flat R39.
+
+Earlier flat-R39 orders, e.g. Simphiwe on 12 Nov, had no live quote at Pay either. The DB stand-in quote was created after payment. There was also no timeout on the routing call, so a slow provider could run the function past Netlify's limit, and checkout then showed "We couldn't check delivery".
+
+**What changed:**
+- **`lib/road-distance.js`:**
+  - Uses `https://api.heigit.org/openrouteservice` (same key), overridable with env `ORS_BASE_URL`.
+  - A 6 s timeout on every routing call.
+  - A *near-cache*: a pin within ~110 m of one already routed from the same store reuses that road distance without a lookup. That covers repeat customers whose pin moved slightly, and the same res picked from a different suggestion.
+- **`product-sheet.js` (the one product pop-up):**
+  - A swipeable photo gallery (scroll-snap), plus arrows, dots, a "1 / 4" counter and the thumbnails on desktop.
+  - Each photo is shown whole (`contain`) over a blurred copy of itself, so nothing is cut off.
+  - Tapping a photo opens a full-screen viewer you can swipe through; Esc closes the viewer first.
+- **Files:** `netlify/functions/lib/road-distance.js`, `product-sheet.js`, `CLAUDE.md`.
+
+
 
 **Reported:** Lumina Shop is Umzila's own store, but Finances treated it like an outside store: what it sold was split into "owed to Lumina" plus a mark-up, so Lumina's profit never showed as Umzila's.
 
