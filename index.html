@@ -1192,6 +1192,7 @@
   <script src="auth-mail.js"></script>
   <script src="product-sheet.js"></script>
   <script src="script.js"></script>
+  <script src="announce.js" defer></script>
   <script>
   (function() {
 
@@ -1904,6 +1905,7 @@
           if (sessRes && sessRes.data && sessRes.data.session) return; // logged in — never show
         }
       } catch (e) { /* ignore — fall through to showing the popup */ }
+      if (window.umzAnnounceOpen) { setTimeout(maybeOpenMystery, 15000); return; } // site pop-up (announce.js) first
       openMystery();
     }
     setTimeout(maybeOpenMystery, 20000);

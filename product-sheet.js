@@ -105,6 +105,8 @@
 .uq-price{display:flex;align-items:baseline;gap:10px}
 .uq-price b{font:800 1.7rem/1 "Archivo","Arial Black",sans-serif;font-variant-numeric:tabular-nums}
 .uq-price s{color:var(--uq-ink2);font-size:.9rem}
+.uq-store-sale s{color:#111;font-size:1.05rem}.uq-store-sale b{color:#e11d2e}
+.uq-off{display:inline-block;margin-top:6px;padding:4px 10px;border:1.5px solid #e11d2e;border-radius:999px;background:#fff;color:#e11d2e;font-weight:800;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase}
 .uq-stock{font-size:.88rem;font-weight:600;color:#B7791F}
 .uq-body p{margin:0;color:var(--uq-ink2);white-space:pre-line}
 .uq-group{display:grid;gap:8px;margin:0;padding:0;border:0}
@@ -245,7 +247,8 @@
                   : `<div><span class="uq-store">${esc(p.store || '')}</span><h2 id="uqTitle">${esc(p.title)}</h2></div>`}
           <button class="uq-x" type="button" data-x aria-label="Close">×</button>
         </div>
-        <div class="uq-price">${p.unpriced ? '<span class="uq-store">Price on request</span>' : `<b>${money(p.price)}</b>${p.was ? `<s>${money(p.was)}</s>` : ''}${cfg ? `<span class="uq-store">per ${esc(cfg.unit)}</span>` : ''}`}</div>
+        <div class="uq-price${p.saleTag ? ' uq-store-sale' : ''}">${p.unpriced ? '<span class="uq-store">Price on request</span>' : p.saleTag ? `<s>${money(p.was)}</s><b>${money(p.price)}</b>${cfg ? `<span class="uq-store">per ${esc(cfg.unit)}</span>` : ''}` : `<b>${money(p.price)}</b>${p.was ? `<s>${money(p.was)}</s>` : ''}${cfg ? `<span class="uq-store">per ${esc(cfg.unit)}</span>` : ''}`}</div>
+        ${p.saleTag && !p.unpriced ? `<span class="uq-off">${esc(p.saleTag)}</span>` : ''}
         ${!quick && !p.isService && !p.soldOut && p.stock > 0 && p.stock < 5 ? `<span class="uq-stock">Only ${p.stock} left</span>` : ''}
         ${!quick && p.desc ? `<p>${esc(p.desc)}</p>` : ''}
         <div id="uqChoose"></div>

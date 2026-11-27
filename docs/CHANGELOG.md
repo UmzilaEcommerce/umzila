@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-27 — Black Friday: store-wide sale tool, "10% off" price look, site pop-up
+
+**Asked for:** every Isiqalo item 10% off (specials untouched), a "10% off" tag on each item (old price black and struck through, new price red, a white "10% off" pill with a red border under it), and a modern pop-up on the home page announcing the sale.
+
+**What changed:**
+- **Store-wide sale** (admin.html → Marketing → 🏷️ Store-wide sale). This uses no new pricing path: `admin_store_sale_apply(seller, percent, label, skip[])` sets the products' own `sale = true, sale_price = price × (1 − %)`, which validate-cart, checkout, cart and every card already honour. It tags each changed product with `products.metadata.store_sale {percent, label, at}`. `admin_store_sale_end(seller)` reverts exactly the tagged products. Items on a special of their own (`sale` with a lower `sale_price` and no tag) are never touched and are reported back. Both functions are SECURITY DEFINER and admin-only (`fin__assert_admin`). SQL: `docs/plans/sql/31_store_sale.sql` (migration `store_wide_sale`). The sale does **not** end by itself: press "End sale".
+- **Price look** for tagged items only (specials look as before): script.js `storeSaleTag()` + `makeCardHTML`, with the badge set to the sale name (e.g. "Black Friday"); shop.html `mapProduct` saleTag/saleLabel + `card()`; product-sheet.js `uq-store-sale` / `uq-off`; style.css `.price-store-sale` / `.off-tag`.
+- **Site pop-up** (admin.html → Marketing → 📣 Site pop-up, with Preview): `public.site_settings` key `announcement` {enabled, kicker, title (\*word\* = red), body, note, cta_text, link, image, starts_at, ends_at}. It is served with the home catalogue by get-catalog.js (`announcement`, version = updated_at) and shown by the new `announce.js` on index.html. It shows once per browser per SAST day, and re-saving shows it again. Links must start with `/` or `https://`. The mystery-gift pop-up waits while it is open (`window.umzAnnounceOpen`). admin.html loads announce.js in preview-only mode (`UMZ_ANNOUNCE_MANUAL`).
+- **Live now:** Isiqalo has 9 items at 10% off ("Black Friday"). "SPECIAL" and "Plata Special: Weekday Lunch Deal" are untouched. The pop-up runs until Sun 29 Nov 23:59 SAST.
+
+**Money note:** Isiqalo's store prices (finance → store_prices) are unchanged, so the store is still owed its full price and the 10% comes out of Umzila's mark-up. That leaves about R0.50–R4.80 per item before PayFast fees.
+
+**Files:** announce.js (new), admin.html, index.html, script.js, shop.html, product-sheet.js, style.css, netlify/functions/get-catalog.js, docs/plans/sql/31_store_sale.sql, CLAUDE.md.
+
+---
+
 ## 2026-11-26 — Checkout charged a flat R39: the routing API moved; product pop-up gallery
 
 **Reported:** checkout sometimes didn't work out the distance and charged a flat R39. Sometimes it said delivery was unavailable, even for repeat customers.

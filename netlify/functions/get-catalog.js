@@ -7,7 +7,8 @@
 // and store, every product option (product_variants), the active stores
 // (Featured Shops) and the running ads (sponsored products, featured shops,
 // hero banners — the page re-checks ends_at itself) and the admin's Home Page
-// settings (site_settings 'home': curated stores, row texts, hero slides).
+// settings (site_settings 'home': curated stores, row texts, hero slides) and
+// the site pop-up (site_settings 'announcement', shown by announce.js).
 //
 // Cached at the edge for 60 s (then refreshed in the background), so 2,000
 // visitors in a minute cost ~1 database read instead of ~4,000. A product
@@ -23,7 +24,7 @@ exports.handler = async function (event) {
   }
   try {
     const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY, { auth: { persistSession: false } });
-    const [prods, vars, stores_, ads_, home_] = await Promise.all([
+    const [prods, vars, stores_, ads_, home_, ann_] = await Promise.all([
       sb.from('products')
         .select(`
           *,
@@ -36,7 +37,8 @@ exports.handler = async function (event) {
       sb.from('sellers').select('id,shop_name,slug,banner_url,logo_url,description').eq('status', 'active').eq('is_house', false), // house add-on store (Umzila Drinks) isn't a browsable store
       sb.from('ad_campaigns').select('type, product_id, seller_id, image_url, link_url, ends_at')
         .eq('status', 'active').gt('ends_at', new Date().toISOString()),
-      sb.from('site_settings').select('value').eq('key', 'home').maybeSingle()
+      sb.from('site_settings').select('value').eq('key', 'home').maybeSingle(),
+      sb.from('site_settings').select('value, updated_at').eq('key', 'announcement').maybeSingle()
     ]);
     if (prods.error) throw prods.error;
     if (vars.error) throw vars.error;
@@ -44,6 +46,8 @@ exports.handler = async function (event) {
     const stores = stores_.error ? null : (stores_.data || []);
     const ads = ads_.error ? null : (ads_.data || []);
     const home = home_.error || !home_.data ? null : home_.data.value;
+    // version = when it was last saved: a re-saved pop-up shows again to people who closed the old one
+    const announcement = ann_.error || !ann_.data ? null : Object.assign({}, ann_.data.value, { version: ann_.data.updated_at });
     return {
       statusCode: 200,
       headers: {
@@ -51,7 +55,7 @@ exports.handler = async function (event) {
         'Cache-Control': 'public, max-age=0, must-revalidate',
         'Netlify-CDN-Cache-Control': 'public, durable, max-age=60, stale-while-revalidate=300'
       },
-      body: JSON.stringify({ products: prods.data || [], variants: vars.data || [], stores, ads, home, at: new Date().toISOString() })
+      body: JSON.stringify({ products: prods.data || [], variants: vars.data || [], stores, ads, home, announcement, at: new Date().toISOString() })
     };
   } catch (err) {
     // Never cache a failure.

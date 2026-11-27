@@ -444,6 +444,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
 <script src="/order-bell.js"></script>
 <script src="/image-upload.js"></script>
+<script>window.UMZ_ANNOUNCE_MANUAL = true; /* announce.js: preview only here */</script>
+<script src="/announce.js"></script>
 
 <script>
 (async function initSupabaseClient(){
@@ -907,6 +909,44 @@ const supabaseClient = supabase.createClient(
           <div class="section-top"><h2>🎁 Store promo pop-ups</h2></div>
           <p style="color:#6b7280;font-size:14px;margin:0 0 16px">A time-boxed % off for one store. While it runs, the store page shows a pop-up where each visitor gets their own one-off code (locked to their email, no account needed) — up to the max number of orders.</p>
           <div id="storePromosMount"><p style="color:#6b7280">Loading…</p></div>
+        </div>
+
+        <!-- Store-wide sale: X% off every item of one store via products.sale/sale_price
+             (admin_store_sale_apply / admin_store_sale_end). Specials are never touched. -->
+        <div class="card">
+          <div class="section-top"><h2>🏷️ Store-wide sale</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 14px">Put every item of a store on X% off — no code needed. Cards show the old price struck through, the new price in red and an “X% off” tag. Items that are already on a special of their own are left exactly as they are. “End sale” puts the items back to full price.</p>
+          <div id="ssMount"><p style="color:#6b7280">Loading…</p></div>
+        </div>
+
+        <!-- Site pop-up: public.site_settings key 'announcement', shown on the home page by announce.js
+             (served with get-catalog.js). Once per visitor per day; saving again shows it again. -->
+        <div class="card">
+          <div class="section-top"><h2>📣 Site pop-up</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 14px">A pop-up people see when they open the home page (e.g. a Black Friday sale). Each visitor sees it once a day while it runs; after you save changes, everyone sees the new version. Shows within about a minute of saving.</p>
+          <div id="anMount" style="display:grid;gap:10px;max-width:620px">
+            <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px"><input type="checkbox" id="anOn"> Pop-up on</label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div><label class="an-l">Small red label</label><input id="anKicker" type="text" maxlength="30" placeholder="BLACK FRIDAY"></div>
+              <div><label class="an-l">Button text</label><input id="anCta" type="text" maxlength="40" placeholder="Shop the sale"></div>
+            </div>
+            <div><label class="an-l">Headline — put *stars* around words to make them red</label><input id="anTitle" type="text" maxlength="80" placeholder="Everything *10% off*"></div>
+            <div><label class="an-l">Text</label><textarea id="anBody" rows="2" maxlength="240" placeholder="Storewide at Isiqalo Kitchen — every plate, no code needed."></textarea></div>
+            <div><label class="an-l">Small print (optional)</label><input id="anNote" type="text" maxlength="160" placeholder="Specials stay at their special price."></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div><label class="an-l">Button goes to (a page on the site, e.g. /isiqalokitchen)</label><input id="anLink" type="text" maxlength="200" placeholder="/isiqalokitchen"></div>
+              <div><label class="an-l">Picture (image link, optional)</label><input id="anImg" type="text" maxlength="400" placeholder="https://…w1280.webp"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div><label class="an-l">Starts (SAST, optional)</label><input id="anStart" type="datetime-local"></div>
+              <div><label class="an-l">Ends (SAST — shows “Ends …” in the pop-up)</label><input id="anEnd" type="datetime-local"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="small-btn" type="button" id="anSave" style="background:#0a2f66;color:#fff">Save pop-up</button>
+              <button class="small-btn" type="button" id="anPreview">Preview</button>
+              <span id="anMsg" style="font-size:13px"></span>
+            </div>
+          </div>
         </div>
 
         <!-- Mystery gift pop-up (home page): the free item for people whose mystery code is already
@@ -3182,6 +3222,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     if (!platformCodesLoaded) { platformCodesLoaded = true; loadPlatformCodes(); }
     if (!mcQueueLoaded) { mcQueueLoaded = true; loadMcQueue(); }
     window.loadStorePromosAdmin?.();
+    window.loadStoreSaleAdmin?.();
+    window.loadAnnouncementAdmin?.();
     loadMysteryGiftAdmin();
     loadMcCodeSelect();
     if (document.getElementById('deResults') && !document.getElementById('deResults').dataset.loaded) {
@@ -5998,6 +6040,116 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
         };
       }
     }
+  })();
+
+  // ── Store-wide sale (Marketing tab) — admin_store_sale_apply / admin_store_sale_end ──
+  // The sale is the products' own sale/sale_price (every price path already uses
+  // it); products.metadata.store_sale marks what the sale changed, so "End sale"
+  // undoes exactly that. Items on a special of their own are never touched.
+  (function(){
+    let stores = [], pick = null;
+    window.loadStoreSaleAdmin = async function(){
+      const mount = document.getElementById('ssMount');
+      if (!mount || !supabaseClient) return;
+      const { data, error } = await supabaseClient.from('sellers').select('id, shop_name').eq('status', 'active').eq('is_house', false).order('shop_name');
+      if (error) { mount.innerHTML = `<p style="color:#dc2626">Couldn't load stores: ${escapeHtml(error.message)}</p>`; return; }
+      stores = data || [];
+      if (!pick && stores.length) pick = (stores.find(s => /isiqalo/i.test(s.shop_name)) || stores[0]).id;
+      render();
+    };
+    const isSpecial = p => !(p.metadata && p.metadata.store_sale) && p.sale && Number(p.sale_price) > 0 && Number(p.sale_price) < Number(p.price);
+    async function render(){
+      const mount = document.getElementById('ssMount');
+      const { data: prods = [] } = pick ? await supabaseClient.from('products').select('id, name, price, sale, sale_price, metadata, visible').eq('seller_id', pick).order('name') : { data: [] };
+      const live = prods.filter(p => p.metadata && p.metadata.store_sale);
+      const cur = live[0] && live[0].metadata.store_sale;
+      const money = n => 'R' + Number(n || 0).toFixed(2);
+      mount.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;max-width:620px">
+          <div><label class="ss-l">Store</label><select id="ssStore">${stores.map(s => `<option value="${s.id}" ${s.id === pick ? 'selected' : ''}>${escapeHtml(s.shop_name)}</option>`).join('')}</select></div>
+          <div><label class="ss-l">% off</label><input id="ssPct" type="number" min="1" max="90" value="${cur ? cur.percent : 10}"></div>
+          <div><label class="ss-l">Sale name (on the card badge)</label><input id="ssLabel" type="text" maxlength="40" placeholder="Black Friday" value="${escapeHtml(cur && cur.label || '')}"></div>
+        </div>
+        <p style="font-size:13px;margin:12px 0 6px;color:${cur ? '#065f46' : '#6b7280'}"><b>${cur ? `Running: ${cur.percent}% off on ${live.length} item${live.length === 1 ? '' : 's'}${cur.label ? ' (' + escapeHtml(cur.label) + ')' : ''}` : 'No store-wide sale running at this store.'}</b></p>
+        <div style="max-height:240px;overflow:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;padding:6px 10px;max-width:620px">
+          ${prods.length ? prods.map(p => { const sp = isSpecial(p);
+            return `<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:3px 0;${sp ? 'color:#9ca3af' : ''}"><input type="checkbox" data-ss-item="${p.id}" ${sp ? 'disabled' : 'checked'}${!sp && cur && !(p.metadata && p.metadata.store_sale) ? ' data-was-out="1"' : ''}> ${escapeHtml(p.name || 'Item')}
+              <span style="color:#6b7280">${sp ? `special — ${money(p.sale_price)}, left alone` : (p.metadata && p.metadata.store_sale) ? `<s>${money(p.price)}</s> <b style="color:#e11d2e">${money(p.sale_price)}</b>` : money(p.price)}${p.visible ? '' : ' · hidden'}</span></label>`; }).join('') : '<span style="font-size:13px;color:#6b7280">This store has no items.</span>'}
+        </div>
+        <p style="font-size:12px;color:#6b7280;margin:4px 0 10px">Untick an item to leave it at full price. Items added to the store later aren't included until you press Apply again.</p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="small-btn" type="button" id="ssApply" style="background:#e11d2e;color:#fff">${cur ? 'Update sale' : 'Start sale'}</button>
+          ${cur ? '<button class="small-btn" type="button" id="ssEnd">End sale</button>' : ''}
+          <span id="ssMsg" style="font-size:13px"></span>
+        </div>`;
+      mount.querySelectorAll('.ss-l').forEach(l => l.style.cssText = 'display:block;font-size:12px;color:#6b7280;margin-bottom:4px');
+      mount.querySelectorAll('input[type=text], input[type=number], select').forEach(i => i.style.cssText += ';width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font:inherit');
+      // An item that was left out of a running sale stays unticked when you come back.
+      mount.querySelectorAll('[data-was-out]').forEach(i => { i.checked = false; });
+      const say = (t, ok) => { const m = document.getElementById('ssMsg'); m.textContent = t; m.style.color = ok ? '#065f46' : '#b91c1c'; };
+      document.getElementById('ssStore').onchange = e => { pick = e.target.value; render(); };
+      document.getElementById('ssApply').onclick = async () => {
+        const pct = parseInt(document.getElementById('ssPct').value, 10);
+        if (!(pct >= 1 && pct <= 90)) return say('% off must be between 1 and 90.');
+        const skip = [...mount.querySelectorAll('[data-ss-item]:not(:disabled):not(:checked)')].map(i => i.dataset.ssItem);
+        const label = document.getElementById('ssLabel').value.trim();
+        if (!confirm(`Put ${prods.length - skip.length - prods.filter(isSpecial).length} item(s) on ${pct}% off now? Prices change on the site within about a minute.`)) return;
+        const btn = document.getElementById('ssApply'); btn.disabled = true; say('Saving…', true);
+        const { data, error } = await supabaseClient.rpc('admin_store_sale_apply', { p_seller: pick, p_percent: pct, p_label: label || null, p_skip: skip });
+        btn.disabled = false;
+        if (error) return say(error.message);
+        showToast(`Sale on ✓ — ${data.applied} item(s) at ${pct}% off${(data.specials || []).length ? ', specials left alone' : ''}.`);
+        render();
+      };
+      const end = document.getElementById('ssEnd');
+      if (end) end.onclick = async () => {
+        if (!confirm('End the sale? Every item it changed goes back to full price.')) return;
+        end.disabled = true;
+        const { data, error } = await supabaseClient.rpc('admin_store_sale_end', { p_seller: pick });
+        if (error) { end.disabled = false; return say(error.message); }
+        showToast(`Sale ended — ${data.ended} item(s) back to full price.`);
+        render();
+      };
+    }
+  })();
+
+  // ── Site pop-up (Marketing tab) — site_settings key 'announcement' → announce.js ──
+  (function(){
+    let cur = {};
+    const $ = id => document.getElementById(id);
+    const toLocal = d => d ? new Date(new Date(d).getTime() + 2 * 3600e3).toISOString().slice(0, 16) : '';
+    const fromLocal = v => v ? new Date(v + ':00+02:00').toISOString() : null;
+    const FIELDS = { anKicker: 'kicker', anCta: 'cta_text', anTitle: 'title', anBody: 'body', anNote: 'note', anLink: 'link', anImg: 'image' };
+    const read = () => {
+      const v = Object.assign({}, cur, { enabled: $('anOn').checked, starts_at: fromLocal($('anStart').value), ends_at: fromLocal($('anEnd').value) });
+      Object.entries(FIELDS).forEach(([id, k]) => { v[k] = $(id).value.trim(); });
+      return v;
+    };
+    window.loadAnnouncementAdmin = async function(){
+      if (!$('anMount') || !supabaseClient) return;
+      document.querySelectorAll('.an-l').forEach(l => l.style.cssText = 'display:block;font-size:12px;color:#6b7280;margin-bottom:4px');
+      document.querySelectorAll('#anMount input[type=text], #anMount input[type=datetime-local], #anMount textarea').forEach(i => i.style.cssText += ';width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font:inherit');
+      const { data } = await supabaseClient.from('site_settings').select('value').eq('key', 'announcement').maybeSingle();
+      cur = (data && data.value) || {};
+      $('anOn').checked = cur.enabled === true;
+      Object.entries(FIELDS).forEach(([id, k]) => { $(id).value = cur[k] || ''; });
+      $('anStart').value = toLocal(cur.starts_at); $('anEnd').value = toLocal(cur.ends_at);
+    };
+    $('anPreview')?.addEventListener('click', () => { if (window.UmzilaAnnounce) UmzilaAnnounce.preview(read()); });
+    $('anSave')?.addEventListener('click', async () => {
+      const msg = $('anMsg'), v = read(), say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#065f46' : '#b91c1c'; };
+      if (v.enabled && !v.title) return say('Write a headline first.');
+      if (v.link && !/^\/(?!\/)/.test(v.link) && !/^https:\/\//i.test(v.link)) return say('The button link must start with / (a page on the site) or https://');
+      if (v.image && !/^https:\/\//i.test(v.image) && !/^\/(?!\/)/.test(v.image)) return say('The picture must be an https:// link.');
+      if (v.starts_at && v.ends_at && !(new Date(v.ends_at) > new Date(v.starts_at))) return say('The end must be after the start.');
+      $('anSave').disabled = true; say('Saving…', true);
+      const { data: u } = await supabaseClient.auth.getUser();
+      const { error } = await supabaseClient.from('site_settings').upsert({ key: 'announcement', value: v, updated_at: new Date().toISOString(), updated_by: u?.user?.id || null }, { onConflict: 'key' });
+      $('anSave').disabled = false;
+      if (error) return say('Could not save: ' + error.message);
+      cur = v;
+      say(v.enabled ? 'Saved — the pop-up shows on the home page within about a minute.' : 'Saved — the pop-up is off.', true);
+    });
   })();
 
   window.loadDeliveryPricing = async function loadDeliveryPricing(){

@@ -221,6 +221,10 @@ button,input,select{font:inherit;color:inherit}
 .price-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
 .price{font:800 1.12rem/1 var(--font-display);font-stretch:108%;font-variant-numeric:tabular-nums}
 .was{color:var(--ink-2);font-size:.88rem;text-decoration:line-through}
+/* store-wide sale: old price black + struck, new price red, "10% off" tag under it */
+.price-row.is-store-sale .was{color:#111;opacity:1}
+.price-row.is-store-sale .price{color:#e11d2e}
+.off-tag{display:inline-block;margin-top:6px;padding:3px 9px;border:1.5px solid #e11d2e;border-radius:999px;background:#fff;color:#e11d2e;font:800 .72rem/1.1 var(--font-mono);letter-spacing:.04em;text-transform:uppercase}
 .free{color:#1F6B42;font-size:.8rem;font-weight:700}
 .nudge{display:grid;gap:6px;margin:10px 0;padding:12px;border-radius:14px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:.86rem;color:#14532D}
 .nudge b{font-size:.95rem}
@@ -560,6 +564,9 @@ function mapProduct(row){
   return {
     id: row.id, title: row.name || 'Item', desc: row.description || '',
     price, salePrice, sale: onSale, displayPrice: onSale ? salePrice : price,
+    // store-wide sale (admin → Marketing → Store-wide sale): "10% off" tag + red price
+    saleTag: onSale && meta.store_sale ? (Number(meta.store_sale.percent) || Math.round(100 * (1 - salePrice / price))) + '% off' : '',
+    saleLabel: onSale && meta.store_sale ? String(meta.store_sale.label || '') : '',
     section: String(meta.store_section || '').trim() || row.category || 'More',
     badge: row.badge || '', stock: row.stock, sizes: choosable ? sizes : [], defaultSize: sizes[0] || 'One Size',
     images: imgs, primary_image: imgs[0] || '',
@@ -725,7 +732,7 @@ function card(p, i){
   const needsChoice = p.sizes.length > 0;
   const av = availState(p), later = !!(av && !av.open);
   const btnLabel = later ? 'Later' : out ? 'Notify me' : svc ? (p.booking_mode === 'scheduled' ? 'Book' : 'Set up') : needsChoice ? 'Choose' : 'Add';
-  const badge = out ? '<span class="badge out">Sold out</span>' : p.sale ? `<span class="badge sale">Save ${money(p.price - p.salePrice)}</span>` : p.badge ? `<span class="badge">${esc(p.badge)}</span>` : '';
+  const badge = out ? '<span class="badge out">Sold out</span>' : p.saleTag ? `<span class="badge sale">${esc(p.saleLabel || 'Sale')}</span>` : p.sale ? `<span class="badge sale">Save ${money(p.price - p.salePrice)}</span>` : p.badge ? `<span class="badge">${esc(p.badge)}</span>` : '';
   const sub = svc ? (p.booking_mode === 'scheduled' ? 'Pick your day and time' : p.is_voucher ? 'Sent by email' : 'Service') : needsChoice ? esc(p.sizes.join(', ')) : esc(p.section);
   return `<article class="card${out ? ' is-out' : ''}${later ? ' is-later' : ''}" style="--i:${Math.min(i, 12)}" data-id="${esc(p.id)}">
     <div class="media" data-open="${esc(p.id)}">${media(p)}${badge}${sponsored.has(p.id) ? '<span class="badge spons">Sponsored</span>' : ''}
@@ -734,7 +741,8 @@ function card(p, i){
     </div>
     <h3><button type="button" data-open="${esc(p.id)}">${esc(p.title)}</button></h3>
     <p class="sub">${sub}</p>
-    <div class="price-row"><span class="price">${unpriced(p) ? 'Ask in store' : money(priceOf(p))}</span>${p.sale ? `<span class="was">${money(p.price)}</span>` : ''}${p.free_delivery ? '<span class="free">No delivery fee</span>' : ''}</div>
+    <div class="price-row${p.saleTag ? ' is-store-sale' : ''}">${p.saleTag ? `<span class="was">${money(p.price)}</span>` : ''}<span class="price">${unpriced(p) ? 'Ask in store' : money(priceOf(p))}</span>${p.sale && !p.saleTag ? `<span class="was">${money(p.price)}</span>` : ''}${p.free_delivery ? '<span class="free">No delivery fee</span>' : ''}</div>
+    ${p.saleTag ? `<span class="off-tag">${esc(p.saleTag)}</span>` : ''}
     ${p.avail ? `<div class="deal-row">${availPill(p)}<span class="deal-when">${esc(p.avail.label || '')}</span></div>` : ''}
   </article>`;
 }
@@ -933,7 +941,7 @@ function serviceSetup(p){ location.href = '/?product=' + encodeURIComponent(p.id
 function sheetProduct(p){
   const s = S.seller, svc = isService(p);
   return {
-    id: p.id, title: p.title, desc: p.desc, price: priceOf(p), was: p.sale ? p.price : null,
+    id: p.id, title: p.title, desc: p.desc, price: priceOf(p), was: p.sale ? p.price : null, saleTag: p.saleTag || '',
     images: p.images, stock: svc ? null : p.stock, store: s.shop_name, location: s.location,
     accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8553A',
     isService: svc, soldOut: !inStock(p), unpriced: unpriced(p), freeDelivery: p.free_delivery,

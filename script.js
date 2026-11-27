@@ -1272,7 +1272,7 @@ async function loadProducts() {
         secondary_image: allImages[1] || null,
         all_images: allImages,
         size: availableSizes,
-        badge: row.badge || (sale ? 'Sale' : ''),
+        badge: row.badge || (sale ? ((row.metadata && row.metadata.store_sale && row.metadata.store_sale.label) || 'Sale') : ''), // store-wide sale name, e.g. "Black Friday"
         stock: totalStock,
         variants: variants,
         visible: row.visible === true,
@@ -2958,9 +2958,18 @@ async function toggleFavourite(btn) {
 /********************
  * Rendering helpers (updated with lazy loading)
  ********************/
+// Store-wide sale (admin → Marketing → Store-wide sale): "10% off" under the price,
+// old price black + struck, new price red. Specials (own sale, no tag) look as before.
+function storeSaleTag(p) {
+  const s = p && p.metadata && p.metadata.store_sale;
+  if (!s || !(p.sale && p.salePrice && p.salePrice < p.price)) return '';
+  return (Number(s.percent) || Math.round(100 * (1 - p.salePrice / p.price))) + '% off';
+}
+
 function makeCardHTML(p){
   // Check if product is on sale
   const isOnSale = p.sale || false;
+  const saleTag = storeSaleTag(p);
   const salePrice = p.salePrice || 0;
   const displayPrice = isOnSale ? salePrice : p.price;
   const originalPrice = isOnSale ? p.price : null;
@@ -3001,7 +3010,7 @@ function makeCardHTML(p){
     <div class="product-media" role="button" aria-label="Open ${esc(p.title)}">
       <div class="badges">
         ${(window._sponsoredProductIds && window._sponsoredProductIds.has(p.id)) ? '<span class="badge badge-sponsored">Sponsored</span>' : ''}
-        ${isVoucherCard ? '<span class="badge badge-service" style="background:#DB8410!important">Gift</span>' : isServiceCard ? '<span class="badge badge-service">Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' ? 'sale' : ''}">${esc(p.badge)}</span>`:'')}
+        ${isVoucherCard ? '<span class="badge badge-service" style="background:#DB8410!important">Gift</span>' : isServiceCard ? '<span class="badge badge-service">Service</span>' : (p.badge?`<span class="badge ${p.badge === 'Sale' || saleTag ? 'sale' : ''}">${esc(p.badge)}</span>`:'')}
         ${isOnSale && !p.badge && !isServiceCard ? '<span class="badge sale">Sale</span>' : ''}
         ${outOfStock ? '<span class="badge badge-soldout">Sold out</span>' : ''}
       </div>
@@ -3015,9 +3024,10 @@ function makeCardHTML(p){
       <div class="title">${esc(p.title)}</div>
       ${metaParts.length ? `<div class="meta-sub">${esc(metaParts.join(' · '))}</div>` : ''}
       <div class="price-row">
-        <div class="price${isOnSale ? ' price-sale' : ''}">
+        <div class="price${isOnSale ? ' price-sale' : ''}${saleTag ? ' price-store-sale' : ''}">
           ${isOnSale && originalPrice ? `<span class="original">${format(originalPrice)}</span>` : ''}
           ${format(displayPrice)}
+          ${saleTag ? `<span class="off-tag">${esc(saleTag)}</span>` : ''}
         </div>
         ${outOfStock ? '' : isServiceCard ? `<button class="add-circle add-pill" data-id="${p.id}" aria-label="${ctaLabel} ${esc(p.title)}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${isScheduledService ? '<rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>' : '<path d="M4 12h16M14 6l6 6-6 6"/>'}</svg>
@@ -3410,7 +3420,7 @@ function openProductSheet(p, mode) {
   const real = (p.all_images || []).filter(u => u && !/picsum\.photos/.test(u));
   if (mode !== 'quick') trackEvent('product_click', { product_id: p.id, seller_id: p.seller && p.seller.id ? p.seller.id : null, category: p.category });
   UmzilaSheet.open({
-    id: p.id, title: p.title, desc: p.desc, price: p.sale && p.salePrice ? p.salePrice : p.price, was: p.sale && p.salePrice ? p.price : null,
+    id: p.id, title: p.title, desc: p.desc, price: p.sale && p.salePrice ? p.salePrice : p.price, was: p.sale && p.salePrice ? p.price : null, saleTag: storeSaleTag(p),
     images: real, stock: p.stock, store: p.seller && p.seller.shop_name, location: null,
     soldOut: (p.stock || 0) <= 0, unpriced: !((p.sale && p.salePrice ? p.salePrice : p.price) > 0), freeDelivery: p.free_delivery === true,
     options: p.picks ? null : homeOptions(p), picks: p.picks || null
