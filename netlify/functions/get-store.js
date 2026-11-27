@@ -44,13 +44,15 @@ exports.handler = async function (event) {
     const seller = (sellerRes.data || [])[0] || null;
     if (!seller) return { statusCode: 200, headers: cached, body: JSON.stringify({ seller: null }) };
     const nowIso = new Date().toISOString();
-    const [prods, avail, hours, ads, promo] = await Promise.all([
+    const [prods, avail, hours, ads, promo, ann] = await Promise.all([
       sb.from('products').select('*, product_images!fk_product_images_product(*)').eq('seller_id', seller.id).eq('visible', true).order('created_at', { ascending: false }),
       sb.from('seller_availability').select('day_of_week, start_time, end_time').eq('seller_id', seller.id),
       sb.rpc('get_store_hours_status', { p_seller_ids: [seller.id] }),
       sb.from('ad_campaigns').select('product_id').eq('type', 'sponsored_product').eq('status', 'active').gt('ends_at', nowIso),
       sb.from('store_promos').select('percent, starts_at, ends_at, max_orders, thing, note').eq('seller_id', seller.id).eq('active', true)
-        .lte('starts_at', nowIso).gt('ends_at', nowIso).order('ends_at', { ascending: false }).limit(1)
+        .lte('starts_at', nowIso).gt('ends_at', nowIso).order('ends_at', { ascending: false }).limit(1),
+      // the site pop-up (announce.js) — shown here only if this store is in its store_slugs
+      sb.from('site_settings').select('value, updated_at').eq('key', 'announcement').maybeSingle()
     ]);
     if (prods.error) throw prods.error;
     return {
@@ -63,6 +65,7 @@ exports.handler = async function (event) {
         hours: hours.error ? null : ((hours.data || [])[0] || null),
         sponsored: ads.error ? [] : (ads.data || []).map(a => a.product_id).filter(id => (prods.data || []).some(p => p.id === id)),
         promo: promo.error ? null : ((promo.data || [])[0] || null),
+        announcement: ann.error || !ann.data ? null : Object.assign({}, ann.data.value, { version: ann.data.updated_at }),
         at: new Date().toISOString()
       })
     };

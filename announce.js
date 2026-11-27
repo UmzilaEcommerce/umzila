@@ -1,7 +1,9 @@
 /* announce.js — the site pop-up (e.g. "Black Friday: everything 10% off at Isiqalo").
    Settings = public.site_settings key 'announcement' (admin.html → Marketing → Site pop-up),
-   served with the home catalogue by get-catalog.js (`announcement`, + version = last save).
-   Shows once per browser per day (localStorage umz_ann_seen = version|SAST day); a re-save in
+   served with the home catalogue by get-catalog.js and with each store by get-store.js
+   (`announcement`, + version = last save). Where: the home page unless show_on_home = false,
+   and the store pages listed in store_slugs (shop.html calls UmzilaAnnounce.show(a, 'store:<slug>');
+   there a button linking to that same store just closes the pop-up). Shows once per browser per page per day (localStorage umz_ann_seen = version|SAST day); a re-save in
    admin shows it again. While it is open window.umzAnnounceOpen is true so the mystery-gift
    pop-up waits its turn. No-op when switched off, outside starts_at/ends_at, or on any error. */
 (function () {
@@ -11,13 +13,14 @@
   var safeUrl = function (u) { u = String(u || '').trim(); return /^\/(?!\/)/.test(u) || /^https:\/\//i.test(u) ? u : ''; };
   var day = function () { return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' }); };
 
-  function shouldShow(a) {
+  function shouldShow(a, page) {
     if (!a || a.enabled !== true || !a.title) return false;
+    if (page === 'home' ? a.show_on_home === false : !(Array.isArray(a.store_slugs) && a.store_slugs.indexOf(String(page).slice(6)) !== -1)) return false;
     var now = Date.now();
     if (a.starts_at && new Date(a.starts_at).getTime() > now) return false;
     if (a.ends_at && new Date(a.ends_at).getTime() <= now) return false;
     if (navigator.webdriver) return false;
-    try { if (localStorage.getItem(KEY) === a.version + '|' + day()) return false; } catch (e) {}
+    try { if (localStorage.getItem(KEY + ':' + page) === a.version + '|' + day()) return false; } catch (e) {}
     return true;
   }
 
@@ -53,10 +56,14 @@
     '.uan-ends{display:inline-block;margin-left:8px;font-size:12px;font-weight:700;color:#ffb4ba;letter-spacing:.02em}' +
     '@media(prefers-reduced-motion:reduce){.uan,.uan-card{transition:none}.uan-kick i{animation:none}}';
 
-  function open(a) {
+  function open(a, page) {
+    page = page || 'home';
     if (document.getElementById('uanRoot')) return;
     if (!document.getElementById('uanCss')) { var st = document.createElement('style'); st.id = 'uanCss'; st.textContent = CSS; document.head.appendChild(st); }
     var link = safeUrl(a.link), img = safeUrl(a.image), ends = endsLabel(a);
+    // already on the page the button points to (e.g. the Isiqalo store) → the button just closes
+    var here = link && link.charAt(0) === '/' && link.replace(/\/+$/, '').toLowerCase() === location.pathname.replace(/\/+$/, '').toLowerCase();
+    var ctaText = here ? (a.store_cta_text || 'Start shopping') : (a.cta_text || 'Shop now');
     // *word* in the title is shown in red, e.g. "Everything *10% off*"
     var title = esc(a.title).replace(/\*([^*]+)\*/g, '<em>$1</em>');
     var root = document.createElement('div');
@@ -71,7 +78,7 @@
         '<h2 class="uan-t" id="uanT">' + title + '</h2>' +
         (a.body ? '<p class="uan-p">' + esc(a.body) + '</p>' : '') +
         (a.note ? '<p class="uan-note"><span>ⓘ</span><span>' + esc(a.note) + '</span></p>' : '') +
-        (link ? '<a class="uan-cta" href="' + esc(link) + '">' + esc(a.cta_text || 'Shop now') + ' <span aria-hidden="true">→</span></a>' : '') +
+        (here ? '<button class="uan-cta" type="button">' + esc(ctaText) + ' <span aria-hidden="true">→</span></button>' : link ? '<a class="uan-cta" href="' + esc(link) + '">' + esc(ctaText) + ' <span aria-hidden="true">→</span></a>' : '') +
         '<button class="uan-later" type="button">Maybe later</button>' +
       '</div></div>';
     document.body.appendChild(root);
@@ -80,7 +87,7 @@
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(function () { root.classList.add('in'); });
     var close = function () {
-      try { localStorage.setItem(KEY, a.version + '|' + day()); } catch (e) {}
+      try { localStorage.setItem(KEY + ':' + page, a.version + '|' + day()); } catch (e) {}
       root.classList.remove('in');
       document.removeEventListener('keydown', onKey);
       setTimeout(function () { root.remove(); document.body.style.overflow = prevOverflow; window.umzAnnounceOpen = false; }, 260);
@@ -91,8 +98,9 @@
     root.querySelector('.uan-x').onclick = close;
     root.querySelector('.uan-later').onclick = close;
     var cta = root.querySelector('.uan-cta');
-    if (cta) cta.addEventListener('click', function () {
-      try { localStorage.setItem(KEY, a.version + '|' + day()); } catch (e) {}
+    if (here && cta) cta.onclick = close;
+    else if (cta) cta.addEventListener('click', function () {
+      try { localStorage.setItem(KEY + ':' + page, a.version + '|' + day()); } catch (e) {}
       if (window.umzilaTrack) try { umzilaTrack('announcement_click', { metadata: { link: link } }); } catch (e) {}
     });
   }
@@ -106,10 +114,14 @@
         var r = await sb.from('site_settings').select('value, updated_at').eq('key', 'announcement').maybeSingle();
         if (r && r.data) a = Object.assign({}, r.data.value, { version: r.data.updated_at });
       }
-      if (shouldShow(a)) setTimeout(function () { open(a); }, 1200);
+      if (shouldShow(a, 'home')) setTimeout(function () { open(a, 'home'); }, 1200);
     } catch (e) { /* the pop-up is never worth breaking the page */ }
   }
-  window.UmzilaAnnounce = { preview: function (a) { open(Object.assign({ version: 'preview' }, a)); } };
+  window.UmzilaAnnounce = {
+    preview: function (a) { open(Object.assign({ version: 'preview' }, a), 'preview'); },
+    // store pages: show as soon as they land (if this store is ticked in admin)
+    show: function (a, page) { try { if (shouldShow(a, page)) setTimeout(function () { open(a, page); }, 500); } catch (e) {} }
+  };
   if (window.UMZ_ANNOUNCE_MANUAL) return; // admin.html: preview only
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

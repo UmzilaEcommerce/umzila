@@ -926,6 +926,10 @@ const supabaseClient = supabase.createClient(
           <p style="color:#6b7280;font-size:14px;margin:0 0 14px">A pop-up people see when they open the home page (e.g. a Black Friday sale). Each visitor sees it once a day while it runs; after you save changes, everyone sees the new version. Shows within about a minute of saving.</p>
           <div id="anMount" style="display:grid;gap:10px;max-width:620px">
             <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px"><input type="checkbox" id="anOn"> Pop-up on</label>
+            <div><label class="an-l">Where it shows</label>
+              <label style="display:flex;gap:8px;align-items:center;font-size:14px;margin-bottom:6px"><input type="checkbox" id="anHome"> Home page</label>
+              <div id="anStores" style="max-height:150px;overflow:auto;border:1px solid #d1d5db;border-radius:8px;background:#fff;padding:6px 10px;font-size:13px"><span style="color:#6b7280">Loading stores…</span></div>
+              <p style="font-size:12px;color:#6b7280;margin:4px 0 0">Ticked stores show it the moment someone lands on their page (not while that store has its own promo pop-up running). On the store the button links to, it says “Start shopping” and just closes.</p></div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
               <div><label class="an-l">Small red label</label><input id="anKicker" type="text" maxlength="30" placeholder="BLACK FRIDAY"></div>
               <div><label class="an-l">Button text</label><input id="anCta" type="text" maxlength="40" placeholder="Shop the sale"></div>
@@ -6121,7 +6125,8 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     const fromLocal = v => v ? new Date(v + ':00+02:00').toISOString() : null;
     const FIELDS = { anKicker: 'kicker', anCta: 'cta_text', anTitle: 'title', anBody: 'body', anNote: 'note', anLink: 'link', anImg: 'image' };
     const read = () => {
-      const v = Object.assign({}, cur, { enabled: $('anOn').checked, starts_at: fromLocal($('anStart').value), ends_at: fromLocal($('anEnd').value) });
+      const v = Object.assign({}, cur, { enabled: $('anOn').checked, starts_at: fromLocal($('anStart').value), ends_at: fromLocal($('anEnd').value),
+        show_on_home: $('anHome').checked, store_slugs: [...document.querySelectorAll('#anStores input:checked')].map(i => i.value) });
       Object.entries(FIELDS).forEach(([id, k]) => { v[k] = $(id).value.trim(); });
       return v;
     };
@@ -6129,9 +6134,15 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if (!$('anMount') || !supabaseClient) return;
       document.querySelectorAll('.an-l').forEach(l => l.style.cssText = 'display:block;font-size:12px;color:#6b7280;margin-bottom:4px');
       document.querySelectorAll('#anMount input[type=text], #anMount input[type=datetime-local], #anMount textarea').forEach(i => i.style.cssText += ';width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font:inherit');
-      const { data } = await supabaseClient.from('site_settings').select('value').eq('key', 'announcement').maybeSingle();
+      const [{ data }, st] = await Promise.all([
+        supabaseClient.from('site_settings').select('value').eq('key', 'announcement').maybeSingle(),
+        supabaseClient.from('sellers').select('shop_name, slug').eq('status', 'active').eq('is_house', false).order('shop_name')
+      ]);
       cur = (data && data.value) || {};
       $('anOn').checked = cur.enabled === true;
+      $('anHome').checked = cur.show_on_home !== false;
+      const picked = Array.isArray(cur.store_slugs) ? cur.store_slugs : [];
+      $('anStores').innerHTML = (st.data || []).map(s => `<label style="display:flex;gap:8px;align-items:center;padding:3px 0"><input type="checkbox" value="${escapeHtml(s.slug)}" ${picked.includes(s.slug) ? 'checked' : ''}> ${escapeHtml(s.shop_name)} <span style="color:#9ca3af">/${escapeHtml(s.slug)}</span></label>`).join('') || '<span style="color:#6b7280">No stores.</span>';
       Object.entries(FIELDS).forEach(([id, k]) => { $(id).value = cur[k] || ''; });
       $('anStart').value = toLocal(cur.starts_at); $('anEnd').value = toLocal(cur.ends_at);
     };
@@ -6139,6 +6150,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     $('anSave')?.addEventListener('click', async () => {
       const msg = $('anMsg'), v = read(), say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#065f46' : '#b91c1c'; };
       if (v.enabled && !v.title) return say('Write a headline first.');
+      if (v.enabled && !v.show_on_home && !v.store_slugs.length) return say('Tick the home page or at least one store.');
       if (v.link && !/^\/(?!\/)/.test(v.link) && !/^https:\/\//i.test(v.link)) return say('The button link must start with / (a page on the site) or https://');
       if (v.image && !/^https:\/\//i.test(v.image) && !/^\/(?!\/)/.test(v.image)) return say('The picture must be an https:// link.');
       if (v.starts_at && v.ends_at && !(new Date(v.ends_at) > new Date(v.starts_at))) return say('The end must be after the start.');

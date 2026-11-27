@@ -24,7 +24,7 @@
      (domReady) only where it needs the client. The config + store requests start straight away below. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="preload" href="/.netlify/functions/get-client-config" as="fetch" crossorigin>
-<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script defer src="/presence.js"></script><script defer src="/input-guard.js"></script><script defer src="/umzila-wa.js"></script><script defer src="/product-sheet.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script><script defer src="/presence.js"></script><script defer src="/input-guard.js"></script><script defer src="/umzila-wa.js"></script><script defer src="/product-sheet.js"></script><script>window.UMZ_ANNOUNCE_MANUAL = true; /* announce.js: shop.html calls UmzilaAnnounce.show */</script><script defer src="/announce.js"></script>
 <style>
 /* Layout: Umzila chrome (navy) frames each store; store areas take the store's own accent. Hero → sticky shop toolbar → product sections → about → footer. Quick view + cart are sheets. */
 :root{
@@ -1258,7 +1258,15 @@ async function boot(){
   // straight away (and skip the promo pop-up, which would cover it).
   const openCartNow = location.hash === '#cart';
   if (openCartNow) { history.replaceState(null, '', location.pathname + location.search); openCart(); }
-  loadStorePromo(seller, cachedStore).then(() => { if (!openCartNow) setTimeout(() => showStorePromo(seller), 1800); });
+  loadStorePromo(seller, cachedStore).then(() => {
+    if (!openCartNow) setTimeout(() => showStorePromo(seller), 1800);
+    // Site pop-up (admin → Marketing → Site pop-up → store pages) — only when the store has no promo pop-up of its own
+    if (!openCartNow && !STORE_PROMO && window.UmzilaAnnounce) {
+      const a = cachedStore && 'announcement' in cachedStore ? Promise.resolve(cachedStore.announcement)
+        : sb.from('site_settings').select('value, updated_at').eq('key', 'announcement').maybeSingle().then(r => r.data ? Object.assign({}, r.data.value, { version: r.data.updated_at }) : null, () => null);
+      a.then(ann => UmzilaAnnounce.show(ann, 'store:' + seller.slug));
+    }
+  });
   loadHouseAddons(seller).then(() => syncCart(false));
   if (prodRes.error) $('#catalog').innerHTML = '<div class="empty"><b>Couldn’t load the items</b><span>Check your connection and refresh the page.</span></div>';
 
