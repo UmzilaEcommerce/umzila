@@ -14,6 +14,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { sweepWaitingDeliveries } = require('./lib/batch-dispatch');
 const { transitionDelivery } = require('./lib/delivery-state');
+const { notify } = require('./lib/notify');
 
 const headers = {
   'Content-Type': 'application/json',
@@ -124,6 +125,20 @@ exports.handler = async function (event) {
       return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to update driver record' }) };
     }
     driverRow = updated;
+  }
+
+  // "Almost there" email (2026-11-27): once the rider is within the admin's distance of the
+  // customer they're heading to (near_drop_deliveries reads site_settings 'delivery_emails'),
+  // send it now instead of at the door. notify() logs it as ARRIVING, so the "I've arrived"
+  // tap doesn't send it again. Best-effort: never fails the heartbeat.
+  if (isOnline && hasLocation && driverRow) {
+    try {
+      const { data: near, error: nearErr } = await admin.rpc('near_drop_deliveries', { p_driver: driverRow.id, p_lat: lat, p_lon: lon });
+      if (nearErr) console.warn('driver-heartbeat: near_drop_deliveries failed', nearErr.message);
+      for (const id of near || []) await notify(admin, id, 'ARRIVING', { near: true });
+    } catch (e) {
+      console.warn('driver-heartbeat: almost-there email failed', e && e.message);
+    }
   }
 
   // Keep orders moving (2026-10-04 — they used to stall forever):

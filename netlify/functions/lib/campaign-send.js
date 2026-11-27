@@ -26,15 +26,26 @@ function slotsFor(campaign, siteUrl, unsubscribeUrl) {
   };
 }
 
-async function sendCampaign(admin, campaign, siteUrl, approverId) {
+// opts.recipients: send to this list instead of every subscriber (the daily lunch reminder,
+// lib/visitor-nudge.js) — unsubscribed people are still always left out.
+async function sendCampaign(admin, campaign, siteUrl, approverId, opts = {}) {
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
   if (!RESEND_KEY) return { ok: false, status: 500, error: 'Email service not configured' };
 
-  const { data: subs, error: subsErr } = await admin.from('subscribers').select('email')
-    .eq('unsubscribed', false).in('consent', ['opted_in', 'soft_opt_in']);
-  if (subsErr) return { ok: false, status: 500, error: subsErr.message };
+  let list;
+  if (Array.isArray(opts.recipients)) {
+    const { data: unsub, error: uErr } = await admin.from('subscribers').select('email').eq('unsubscribed', true);
+    if (uErr) return { ok: false, status: 500, error: uErr.message };
+    const out = new Set((unsub || []).map(s => (s.email || '').toLowerCase().trim()));
+    list = opts.recipients.map(e => String(e || '').toLowerCase().trim()).filter(e => !out.has(e));
+  } else {
+    const { data: subs, error: subsErr } = await admin.from('subscribers').select('email')
+      .eq('unsubscribed', false).in('consent', ['opted_in', 'soft_opt_in']);
+    if (subsErr) return { ok: false, status: 500, error: subsErr.message };
+    list = (subs || []).map(s => (s.email || '').toLowerCase().trim());
+  }
   const seen = new Set();
-  const recipients = (subs || []).map(s => (s.email || '').toLowerCase().trim()).filter(e => e && !seen.has(e) && seen.add(e));
+  const recipients = list.filter(e => e && e.includes('@') && !seen.has(e) && seen.add(e));
   if (!recipients.length) return { ok: false, status: 400, error: 'No subscribers to send to.' };
 
   for (const batch of chunk(recipients, 100)) {

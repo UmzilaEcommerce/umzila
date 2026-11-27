@@ -8,6 +8,7 @@
 // as 'sending' for an admin to check in Resend.
 const { createClient } = require('@supabase/supabase-js');
 const { sendCampaign } = require('./lib/campaign-send');
+const { runVisitorNudge } = require('./lib/visitor-nudge'); // daily lunch reminder (Marketing → Lunch reminder)
 
 exports.handler = async function () {
   const SITE = (process.env.SITE_BASE_URL || process.env.URL || '').replace(/\/$/, '');
@@ -25,5 +26,8 @@ exports.handler = async function () {
     out.push({ id: row.id, ...r });
     console.log('send-scheduled-campaigns', row.id, JSON.stringify(r));
   }
-  return { statusCode: 200, body: JSON.stringify({ sent: out }) };
+  let nudge = null;
+  try { nudge = await runVisitorNudge(admin, SITE); if (nudge && !nudge.skipped) console.log('visitor-nudge', JSON.stringify(nudge)); }
+  catch (e) { console.error('visitor-nudge failed', e && e.message); }
+  return { statusCode: 200, body: JSON.stringify({ sent: out, nudge }) };
 };

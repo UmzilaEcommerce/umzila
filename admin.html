@@ -953,6 +953,40 @@ const supabaseClient = supabase.createClient(
           </div>
         </div>
 
+        <!-- Lunch reminder: site_settings key 'visitor_nudge' → lib/visitor-nudge.js (run by
+             send-scheduled-campaigns.js every 5 min). One email a day to this morning's visitors who
+             left an email but haven't paid today. Who = admin_visitor_nudge_preview / visitor_nudge_recipients. -->
+        <div class="card">
+          <div class="section-top"><h2>⏰ Lunch reminder</h2></div>
+          <p style="color:#6b7280;font-size:14px;margin:0 0 14px">One email a day (e.g. at 13:00) to people who visited the site this morning and left their email (typed at checkout, a pop-up, or signed in) but haven't paid today — so they can still catch the next delivery run. Staff, riders, store owners and anyone who unsubscribed never get it. It goes out within 5 minutes of the send time, at most once a day.</p>
+          <div id="vnMount" style="display:grid;gap:10px;max-width:620px">
+            <label style="display:flex;gap:8px;align-items:center;font-weight:600;font-size:14px"><input type="checkbox" id="vnOn"> Reminder on</label>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+              <div><label class="vn-l">Send at (SAST)</label><input id="vnAt" type="time"></div>
+              <div><label class="vn-l">Morning visitors from</label><input id="vnFrom" type="time"></div>
+              <div><label class="vn-l">…until</label><input id="vnTo" type="time"></div>
+            </div>
+            <div><label class="vn-l">Days</label><div id="vnDays" style="display:flex;gap:10px;flex-wrap:wrap;font-size:14px"></div></div>
+            <div><label class="vn-l">Subject</label><input id="vnSubject" type="text" maxlength="120"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div><label class="vn-l">Small label above the headline</label><input id="vnEyebrow" type="text" maxlength="30" placeholder="LUNCH RUN"></div>
+              <div><label class="vn-l">Button text</label><input id="vnCta" type="text" maxlength="40" placeholder="Order lunch"></div>
+            </div>
+            <div><label class="vn-l">Headline</label><input id="vnHeadline" type="text" maxlength="90"></div>
+            <div><label class="vn-l">Message — keep the times in line with Delivery Times (cut-off = run time − 15 min)</label><textarea id="vnBody" rows="3" maxlength="600"></textarea></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+              <div><label class="vn-l">Button goes to (a page on the site)</label><input id="vnPath" type="text" maxlength="200" placeholder="/"></div>
+              <div><label class="vn-l">Picture (https link, optional)</label><input id="vnImg" type="text" maxlength="400" placeholder="https://…w1280.webp"></div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="small-btn" type="button" id="vnSave" style="background:#0a2f66;color:#fff">Save reminder</button>
+              <button class="small-btn" type="button" id="vnWho">Who would get it today?</button>
+              <span id="vnMsg" style="font-size:13px"></span>
+            </div>
+            <div id="vnOut" style="font-size:13px;color:#374151"></div>
+          </div>
+        </div>
+
         <!-- Mystery gift pop-up (home page): the free item for people whose mystery code is already
              used/expired. site_settings key 'mystery_gift', read by claim-mystery-gift.js. -->
         <div class="card">
@@ -1182,6 +1216,18 @@ const supabaseClient = supabase.createClient(
           <button id="refreshDeliveryPricingBtn" class="small-btn" onclick="window.loadDeliveryPricing?.()">↻ Refresh</button>
         </div>
         <div id="deliveryPricingMount"></div>
+        <!-- "Almost there" email: site_settings key 'delivery_emails'.almost_there_km, read by
+             near_drop_deliveries() on every rider GPS heartbeat (driver-heartbeat.js). -->
+        <div class="card" style="margin-top:16px">
+          <h3 style="font-size:15px;font-weight:800;margin:0 0 6px">🛵 “Almost there” email</h3>
+          <p style="font-size:13px;color:#6b7280;margin:0 0 12px">Customers get “Your rider is a few minutes away — have your PIN ready” once the rider's live location is this close to them (straight line). Set 0 to send it only when the rider taps “I've arrived” at the door. If the rider's GPS is off it also goes at the door.</p>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label for="atKm" style="font-size:13px">Send when the rider is within</label>
+            <input id="atKm" type="number" min="0" max="10" step="0.1" style="width:90px;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px"> <span style="font-size:13px">km</span>
+            <button class="small-btn" type="button" id="atSave" style="background:#0a2f66;color:#fff">Save</button>
+            <span id="atMsg" style="font-size:13px"></span>
+          </div>
+        </div>
       </section>
 
       <!-- Delivery Analytics — rebuilt 2026-11-16 (audit A8/A9): period picker,
@@ -3228,6 +3274,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     window.loadStorePromosAdmin?.();
     window.loadStoreSaleAdmin?.();
     window.loadAnnouncementAdmin?.();
+    window.loadVisitorNudgeAdmin?.();
     loadMysteryGiftAdmin();
     loadMcCodeSelect();
     if (document.getElementById('deResults') && !document.getElementById('deResults').dataset.loaded) {
@@ -3281,7 +3328,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   // as service-orders/disputes above).
   document.querySelector('[data-section="delivery-ops"]')?.addEventListener('click', () => window.loadDeliveryOps?.());
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
-  document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => window.loadDeliveryPricing?.());
+  document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => { window.loadDeliveryPricing?.(); window.loadAlmostThereAdmin?.(); });
   document.querySelector('[data-section="delivery-times"]')?.addEventListener('click', () => window.loadTimeslotsAdmin?.());
   document.querySelector('[data-section="payments"]')?.addEventListener('click', () => window.loadPaymentsAdmin?.());
   document.querySelector('[data-section="dashboard"]')?.addEventListener('click', () => window.loadPaymentsBadge?.());
@@ -6117,6 +6164,61 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     }
   })();
 
+  // ── Lunch reminder (Marketing tab) — site_settings key 'visitor_nudge' → lib/visitor-nudge.js ──
+  (function(){
+    let cur = {};
+    const $ = id => document.getElementById(id);
+    const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const TXT = { vnSubject: 'subject', vnEyebrow: 'eyebrow', vnCta: 'cta_text', vnHeadline: 'headline', vnBody: 'body', vnPath: 'cta_path', vnImg: 'image_url' };
+    const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Johannesburg' });
+    const read = () => {
+      const v = Object.assign({}, cur, { enabled: $('vnOn').checked, send_at: $('vnAt').value, window_from: $('vnFrom').value, window_to: $('vnTo').value,
+        days: [...document.querySelectorAll('#vnDays input:checked')].map(i => +i.value) });
+      Object.entries(TXT).forEach(([id, k]) => { v[k] = $(id).value.trim(); });
+      return v;
+    };
+    window.loadVisitorNudgeAdmin = async function(){
+      if (!$('vnMount') || !supabaseClient) return;
+      document.querySelectorAll('.vn-l').forEach(l => l.style.cssText = 'display:block;font-size:12px;color:#6b7280;margin-bottom:4px');
+      document.querySelectorAll('#vnMount input[type=text], #vnMount input[type=time], #vnMount textarea').forEach(i => i.style.cssText += ';width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font:inherit');
+      const { data } = await supabaseClient.from('site_settings').select('value').eq('key', 'visitor_nudge').maybeSingle();
+      cur = (data && data.value) || {};
+      $('vnOn').checked = cur.enabled === true;
+      $('vnAt').value = cur.send_at || '13:00'; $('vnFrom').value = cur.window_from || '05:00'; $('vnTo').value = cur.window_to || '12:30';
+      const days = Array.isArray(cur.days) && cur.days.length ? cur.days : [1, 2, 3, 4, 5, 6, 7];
+      $('vnDays').innerHTML = DAYS.map((d, i) => `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" value="${i + 1}" ${days.includes(i + 1) ? 'checked' : ''}> ${d}</label>`).join('');
+      Object.entries(TXT).forEach(([id, k]) => { $(id).value = cur[k] || ''; });
+    };
+    $('vnSave')?.addEventListener('click', async () => {
+      const msg = $('vnMsg'), v = read(), say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#065f46' : '#b91c1c'; };
+      if (!v.send_at || !v.window_from || !v.window_to) return say('Fill in the send time and the morning window.');
+      if (!(v.window_from < v.window_to)) return say('“From” must be before “until”.');
+      if (!(v.window_to <= v.send_at)) return say('The send time must be after the morning window ends.');
+      if (v.enabled && (!v.subject || !v.headline || !v.body)) return say('Write a subject, headline and message first.');
+      if (v.enabled && !v.days.length) return say('Tick at least one day.');
+      if (v.cta_path && !/^\/(?!\/)/.test(v.cta_path)) return say('The button link must start with / (a page on the site).');
+      if (v.image_url && !/^https:\/\//i.test(v.image_url)) return say('The picture must be an https:// link.');
+      $('vnSave').disabled = true; say('Saving…', true);
+      const { data: u } = await supabaseClient.auth.getUser();
+      const { error } = await supabaseClient.from('site_settings').upsert({ key: 'visitor_nudge', value: v, updated_at: new Date().toISOString(), updated_by: u?.user?.id || null }, { onConflict: 'key' });
+      $('vnSave').disabled = false;
+      if (error) return say('Could not save: ' + error.message);
+      cur = v;
+      say(v.enabled ? `Saved — goes out at ${v.send_at} on the ticked days.` : 'Saved — the reminder is off.', true);
+    });
+    $('vnWho')?.addEventListener('click', async () => {
+      const out = $('vnOut'), v = read();
+      out.textContent = 'Checking…';
+      const { data, error } = await supabaseClient.rpc('admin_visitor_nudge_preview', { p_day: today(), p_from: v.window_from || '05:00', p_to: v.window_to || '12:30' });
+      if (error) { out.textContent = 'Could not check: ' + error.message; return; }
+      const ppl = data.people || [], sends = data.sends || [];
+      const t = d => new Date(d).toLocaleTimeString('en-ZA', { timeZone: 'Africa/Johannesburg', hour: '2-digit', minute: '2-digit' });
+      out.innerHTML = `<p style="margin:6px 0"><b>${ppl.length}</b> ${ppl.length === 1 ? 'person' : 'people'} would get it right now (anyone who pays before the send time drops off by themselves).</p>` +
+        (ppl.length ? '<ul style="margin:0 0 10px;padding-left:18px">' + ppl.map(p => `<li>${escapeHtml(p.name ? p.name + ' · ' : '')}${escapeHtml(p.email)} <span style="color:#9ca3af">first visit ${t(p.first_visit)}</span></li>`).join('') + '</ul>' : '') +
+        (sends.length ? '<p style="margin:6px 0 2px;font-weight:700">Last sends</p><ul style="margin:0;padding-left:18px">' + sends.map(c => `<li>${escapeHtml(c.day)} — ${c.status === 'sent' ? (c.count || 0) + ' sent at ' + t(c.sent_at) : escapeHtml(c.status)}</li>`).join('') + '</ul>' : '<p style="margin:6px 0;color:#6b7280">Not sent yet.</p>');
+    });
+  })();
+
   // ── Site pop-up (Marketing tab) — site_settings key 'announcement' → announce.js ──
   (function(){
     let cur = {};
@@ -6161,6 +6263,31 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
       if (error) return say('Could not save: ' + error.message);
       cur = v;
       say(v.enabled ? 'Saved — the pop-up shows on the home page within about a minute.' : 'Saved — the pop-up is off.', true);
+    });
+  })();
+
+  // ── "Almost there" email distance (Delivery Pricing tab) — site_settings key 'delivery_emails' ──
+  (function(){
+    let cur = {};
+    const $ = id => document.getElementById(id);
+    window.loadAlmostThereAdmin = async function(){
+      if (!$('atKm') || !supabaseClient) return;
+      const { data } = await supabaseClient.from('site_settings').select('value').eq('key', 'delivery_emails').maybeSingle();
+      cur = (data && data.value) || {};
+      $('atKm').value = cur.almost_there_km != null ? cur.almost_there_km : 1.5;
+    };
+    $('atSave')?.addEventListener('click', async () => {
+      const msg = $('atMsg'), say = (t, ok) => { msg.textContent = t; msg.style.color = ok ? '#065f46' : '#b91c1c'; };
+      const km = parseFloat($('atKm').value);
+      if (!Number.isFinite(km) || km < 0 || km > 10) return say('Enter a distance from 0 to 10 km.');
+      $('atSave').disabled = true; say('Saving…', true);
+      const { data: u } = await supabaseClient.auth.getUser();
+      const v = Object.assign({}, cur, { almost_there_km: Math.round(km * 10) / 10 });
+      const { error } = await supabaseClient.from('site_settings').upsert({ key: 'delivery_emails', value: v, updated_at: new Date().toISOString(), updated_by: u?.user?.id || null }, { onConflict: 'key' });
+      $('atSave').disabled = false;
+      if (error) return say('Could not save: ' + error.message);
+      cur = v;
+      say(km > 0 ? `Saved — sent when the rider is within ${v.almost_there_km} km.` : 'Saved — sent only when the rider taps “I’ve arrived”.', true);
     });
   })();
 

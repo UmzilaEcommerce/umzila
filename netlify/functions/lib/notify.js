@@ -80,7 +80,10 @@ function pinBlock(pin) {
 }
 
 // Plan §58/59 tone: fresh/warm, not "Order dispatched" / "Delivery successful".
-function buildEmailContent(eventType, order, delivery, siteBaseUrl) {
+// opts.near (2026-11-27): the "almost there" email sent from the rider's live GPS
+// (driver-heartbeat.js → lib/near-drop.js, within site_settings 'delivery_emails'.almost_there_km)
+// instead of when they tap "I've arrived" at the door. Without GPS it still goes at the door.
+function buildEmailContent(eventType, order, delivery, siteBaseUrl, opts = {}) {
   const orderRef = order.order_number || String(order.id).slice(0, 8).toUpperCase();
 
   if (eventType === 'IN_ROUTE') {
@@ -93,9 +96,11 @@ function buildEmailContent(eventType, order, delivery, siteBaseUrl) {
   }
   if (eventType === 'ARRIVING') {
     return {
-      subject: 'Your rider is almost there!',
-      html: emailShell(siteBaseUrl, "You're up next 👋",
-        `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is arriving now with order <strong>#${esc(orderRef)}</strong>.</p>${pinBlock(delivery.delivery_pin)}`,
+      subject: opts.near ? 'Your rider is a few minutes away 🛵' : 'Your rider is almost there!',
+      html: emailShell(siteBaseUrl, opts.near ? 'Almost there — get ready 👋' : "You're up next 👋",
+        (opts.near
+          ? `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is a few minutes away with order <strong>#${esc(orderRef)}</strong>. Please head to the gate or door and have your PIN ready.</p>`
+          : `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is arriving now with order <strong>#${esc(orderRef)}</strong>.</p>`) + pinBlock(delivery.delivery_pin),
         trackCta(siteBaseUrl, order.id, 'Track your order', delivery.tracking_token))
     };
   }
@@ -130,7 +135,7 @@ function buildEmailContent(eventType, order, delivery, siteBaseUrl) {
 // `supabase` must be a service-role client (notification_log has no client
 // write policy). Never throws -- returns { skipped: true, reason } or
 // { skipped: false, status: 'sent'|'failed' } for callers that want to log it.
-async function notify(supabase, deliveryId, eventType) {
+async function notify(supabase, deliveryId, eventType, opts = {}) {
   if (!NOTIFIABLE_EVENTS.has(eventType)) return { skipped: true, reason: 'not_notifiable' };
 
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
@@ -163,7 +168,7 @@ async function notify(supabase, deliveryId, eventType) {
       .maybeSingle();
     if (existing) return { skipped: true, reason: 'already_sent' };
 
-    const content = buildEmailContent(eventType, order, delivery, SITE_BASE_URL);
+    const content = buildEmailContent(eventType, order, delivery, SITE_BASE_URL, opts);
     if (!content) return { skipped: true, reason: 'no_template' };
 
     let sendStatus = 'sent';

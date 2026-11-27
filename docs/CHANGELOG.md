@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-27 — Lunch reminder email to morning visitors + "almost there" email from the rider's GPS
+
+**Asked for (after reviewing Nomvuzo's order UMZILA-…6q578ozit):** (1) a 13:00 email to everyone who visited in the morning but didn't order, so they can still make the 14:00 run (she put Plata for 2 in her basket at 08:37, left, and only paid at 14:01 — 16 min after the 14:00 cut-off); (2) the "Your rider is almost there!" email reached her when the rider was already at her door (it was sent on the "I've arrived" tap).
+
+**What changed:**
+- **Lunch reminder** (admin.html → Marketing → ⏰ Lunch reminder; off until switched on). Settings = `site_settings` key `visitor_nudge` {enabled, send_at, window_from, window_to, days[1–7], subject, eyebrow, headline, body, cta_text, cta_path, image_url}. `send-scheduled-campaigns.js` (every 5 min) calls `lib/visitor-nudge.js runVisitorNudge`: at send_at (never more than 60 min late) it inserts one `marketing_campaigns` row with audience `morning_visitors:<SAST day>` — the partial unique index `marketing_campaigns_morning_visitors_once` makes that the once-a-day lock — then sends through `lib/campaign-send.js sendCampaign` with the new `opts.recipients` (marketing stream, unsubscribe link + headers, People link tag; unsubscribed people are always dropped). Recipients = `visitor_nudge_recipients()` (service role only) → `visitor_nudge__list()`: browsers whose first page view today (SAST) is inside the window, with an email typed on that browser (`site_browsers`) or a confirmed account; minus staff/riders/store owners/co-owners, unsubscribed subscribers, and anyone with a PAID order since midnight SAST (checked at send time). The admin card's "Who would get it today?" uses `admin_visitor_nudge_preview()` (people__assert_admin) and lists the last sends. Note: only visitors who left an email can be reached — most morning visitors are anonymous (0–1 people a day over 18–26 Nov).
+- **"Almost there" email** now goes from the rider's live GPS: every rider heartbeat (`driver-heartbeat.js`, ~12 s on a drop leg) calls `near_drop_deliveries(driver, lat, lon)` → the drop the rider is heading to (stop 'active', delivery IN_ROUTE) within `site_settings` `delivery_emails`.almost_there_km (default 1.5 km; admin.html → Delivery Pricing → 🛵 "Almost there" email; 0 = door only), once the "on the way" email is 2+ min old, never twice → `notify(admin, id, 'ARRIVING', { near: true })` ("Your rider is a few minutes away 🛵 — head to the gate and have your PIN ready"). It is logged as ARRIVING in notification_log, so the "I've arrived" tap's normal ARRIVING notify is deduped; without GPS the door email goes as before. Delivery status flow is unchanged.
+- Also found in the review: the other order on her trip (34 Umgudulu Rd) stuck at PARTIALLY_PICKED_UP in the rider app and was pushed through by staff override (16:29–16:34) — not changed here.
+
+**Files:** `docs/plans/sql/32_visitor_nudge.sql`, `docs/plans/sql/33_almost_there_email.sql` (both applied), `netlify/functions/lib/visitor-nudge.js` (new), `netlify/functions/lib/campaign-send.js`, `netlify/functions/send-scheduled-campaigns.js`, `netlify/functions/lib/notify.js`, `netlify/functions/driver-heartbeat.js`, `admin.html`.
+
+---
+
 ## 2026-11-27 — Black Friday: store-wide sale tool, "10% off" price look, site pop-up
 
 **Asked for:** every Isiqalo item 10% off (specials untouched), a "10% off" tag on each item (old price black and struck through, new price red, a white "10% off" pill with a red border under it), and a modern pop-up on the home page announcing the sale.
