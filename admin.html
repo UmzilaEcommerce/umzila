@@ -1021,6 +1021,11 @@ const supabaseClient = supabase.createClient(
           <div style="border:1px solid #e5e7eb;border-radius:12px;padding:18px;background:#fafafa;margin-bottom:20px">
             <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Attach a platform code (optional)</label>
               <select id="mcCodeSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px"><option value="">No code — just an announcement</option></select></div>
+            <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Send to</label>
+              <select id="mcAudienceSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px">
+                <option value="subscribers">All subscribers</option>
+                <option value="baskets">People with an unfinished basket (left their email, not staff, not unsubscribed)</option>
+              </select></div>
             <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Subject line</label>
               <input type="text" id="mcSubjectInput" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;margin-bottom:12px" maxlength="80" placeholder="e.g. This weekend only: 20% off site-wide"></div>
             <div><label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px">Headline</label>
@@ -2958,6 +2963,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     return {
       action,
       discount_code_id: document.getElementById('mcCodeSelect').value || null,
+      audience: document.getElementById('mcAudienceSelect')?.value || 'subscribers',
       subject: document.getElementById('mcSubjectInput').value,
       headline: document.getElementById('mcHeadlineInput').value,
       body_message: document.getElementById('mcMessageInput').value,

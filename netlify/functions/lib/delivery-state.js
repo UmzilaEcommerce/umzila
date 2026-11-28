@@ -145,8 +145,9 @@ async function transitionDelivery(supabase, deliveryId, toStatus, actor, options
   // off mid-send; matches this codebase's existing dispatchDelivery() call
   // in advance-delivery-on-fulfillment.js, which is awaited but wrapped so
   // its own failure never fails the caller.
+  // options.silent: staff-delivery-step.js's in-between steps (only the step staff landed on emails).
   try {
-    await notify(supabase, deliveryId, toStatus);
+    if (!options.silent) await notify(supabase, deliveryId, toStatus);
   } catch (notifyError) {
     console.warn('transitionDelivery: notify() threw (transition itself still succeeded):', notifyError.message);
   }

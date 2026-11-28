@@ -6,7 +6,8 @@
 //        → a small page that shows the stars and saves the rating from the
 //          browser (POST), so link-scanning mail filters that "open" links
 //          can never record a rating. ≤3 stars asks "what went wrong?";
-//          4–5 offers an optional comment.
+//          4 asks "what would have made it 5 stars?" (tap-to-add ideas);
+//          5 offers an optional comment.
 //   POST { d, t, r, comment? } → saves into delivery_feedback (one row per
 //          delivery: tapping another star or adding a comment updates it).
 // The tracking token is the delivery's private link secret (same as
@@ -49,6 +50,7 @@ body{margin:0;background:#f4f6fb;font-family:system-ui,-apple-system,Segoe UI,Ro
 textarea{width:100%;box-sizing:border-box;min-height:110px;border:1.5px solid #d1d5db;border-radius:12px;padding:12px;font:inherit;font-size:15px;resize:vertical}
 .go{width:100%;margin-top:10px;padding:14px;border:0;border-radius:999px;background:#0a2f66;color:#fff;font-weight:800;font-size:15px;cursor:pointer}.go[disabled]{opacity:.6}
 .msg{font-size:13.5px;margin-top:10px;min-height:18px}.ok{color:#15803d}.err{color:#b91c1c}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 0 10px}.chips button{border:1.5px solid #d1d5db;background:#fff;border-radius:999px;padding:7px 12px;font:inherit;font-size:13.5px;cursor:pointer;color:#1a1a2e}.chips button.on{border-color:#0a2f66;background:#eef3fb;color:#0a2f66;font-weight:700}
 </style></head><body><div class="c">
 <div class="b">Umzila</div>
 <h1>${first ? 'Thanks, ' + esc(first) + '!' : 'Thanks for rating!'}</h1>
@@ -58,6 +60,7 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;border:1.5px solid #d
 <div id="saved" class="msg"></div>
 <div id="more" hidden>
   <p id="ask" style="margin:8px 0 10px;font-weight:600;color:#1a1a2e"></p>
+  <div class="chips" id="chips" hidden></div>
   <textarea id="cm" maxlength="${MAX_COMMENT}" placeholder=""></textarea>
   <button class="go" id="send" type="button">Send</button>
   <div id="cmMsg" class="msg"></div>
@@ -76,7 +79,19 @@ textarea{width:100%;box-sizing:border-box;min-height:110px;border:1.5px solid #d
       s.className='msg ok'; s.textContent='Your '+R+'-star rating is saved.';
       var more=document.getElementById('more'); more.hidden=false;
       document.getElementById('ask').textContent = R<=3 ? 'Sorry it wasn\\u2019t great. What went wrong?' : 'Anything you\\u2019d like to add? (optional)';
-      document.getElementById('cm').placeholder = R<=3 ? 'Tell us what happened — late, cold, missing items, the rider…' : 'What did you enjoy?';
+      document.getElementById('cm').placeholder = R<=3 ? 'Tell us what happened — late, cold, missing items, the rider…' : R===4 ? 'Tap an idea above or type your own…' : 'What did you enjoy?';
+      if(R===4) document.getElementById('ask').textContent = 'Thanks! What would have made it 5 stars?';
+      var ch=document.getElementById('chips');
+      ch.hidden = R!==4;
+      if(R===4 && !ch.children.length){
+        ['Faster delivery','Hotter food','Bigger portions','More updates on my order','Easier to find my place','Lower price'].forEach(function(t){
+          var b=document.createElement('button'); b.type='button'; b.textContent=t;
+          b.onclick=function(){ var cm=document.getElementById('cm'); b.classList.toggle('on');
+            var parts=cm.value.split(';').map(function(x){return x.trim();}).filter(function(x){return x && x!==t;});
+            if(b.classList.contains('on')) parts.push(t); cm.value=parts.join('; '); };
+          ch.appendChild(b);
+        });
+      }
     }).catch(function(e){ s.className='msg err'; s.textContent=e.message==='not_found'?'This rating link isn\\u2019t valid.':'Couldn\\u2019t save — please tap a star again.'; });
   }
   stars.forEach(function(b){ b.addEventListener('click', function(){ R=+b.dataset.r; paint(); save(); }); });

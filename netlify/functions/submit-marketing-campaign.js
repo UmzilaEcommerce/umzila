@@ -186,7 +186,8 @@ exports.handler = async function (event) {
     discount_code_id,
     subject, headline, body_message: body_message,
     cta_text, cta_path,
-    audience: 'subscribers',
+    // Admins may send to people with an unfinished basket (campaign_basket_recipients()); sellers always 'subscribers'.
+    audience: isAdmin && body.audience === 'baskets' ? 'baskets' : 'subscribers',
     ...rich,
     scheduled_for,
     status: scheduled_for ? 'scheduled' : isAdmin ? 'approved' : 'pending'

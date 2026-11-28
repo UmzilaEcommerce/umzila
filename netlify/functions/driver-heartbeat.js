@@ -129,13 +129,13 @@ exports.handler = async function (event) {
 
   // "Almost there" email (2026-11-27): once the rider is within the admin's distance of the
   // customer they're heading to (near_drop_deliveries reads site_settings 'delivery_emails'),
-  // send it now instead of at the door. notify() logs it as ARRIVING, so the "I've arrived"
-  // tap doesn't send it again. Best-effort: never fails the heartbeat.
+  // send it (notification_log NEARBY, once). The "I've arrived" tap then sends "your rider is
+  // outside" (ARRIVING). Best-effort: never fails the heartbeat.
   if (isOnline && hasLocation && driverRow) {
     try {
       const { data: near, error: nearErr } = await admin.rpc('near_drop_deliveries', { p_driver: driverRow.id, p_lat: lat, p_lon: lon });
       if (nearErr) console.warn('driver-heartbeat: near_drop_deliveries failed', nearErr.message);
-      for (const id of near || []) await notify(admin, id, 'ARRIVING', { near: true });
+      for (const id of near || []) await notify(admin, id, 'NEARBY');
     } catch (e) {
       console.warn('driver-heartbeat: almost-there email failed', e && e.message);
     }

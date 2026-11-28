@@ -27,7 +27,19 @@ const { mailFrom } = require('./mail'); // sender: mail.umzila.store, replies to
 // failure mode (missing RESEND_API_KEY, missing customer email, Resend API
 // error) is caught and logged, never thrown.
 
-const NOTIFIABLE_EVENTS = new Set(['IN_ROUTE', 'ARRIVING', 'DELIVERED', 'FAILED', 'CANCELLED']);
+// The customer's step-by-step updates (2026-11-28 — "never leave them guessing"):
+//   ASSIGNED   "<Rider> is collecting your order from <store>"
+//   PICKED_UP  "<Rider> has your order" (+ PIN, + "1 drop before yours" on a shared trip)
+//   IN_ROUTE   "You're next — heading to you now" — only when it comes 5+ min after the
+//              collected email (shared trip); right after collecting it would just repeat it
+//   NEARBY     not a delivery status: sent from the rider's live GPS (driver-heartbeat.js →
+//              near_drop_deliveries, site_settings 'delivery_emails'.almost_there_km)
+//   ARRIVING   "Your rider is outside" (the "I've arrived" tap)
+//   DELIVERED / FAILED / CANCELLED
+// Staff overrides that jump several steps pass { silent: true } to transitionDelivery for the
+// in-between steps, so only the step they landed on emails.
+const NOTIFIABLE_EVENTS = new Set(['ASSIGNED', 'PICKED_UP', 'IN_ROUTE', 'NEARBY', 'ARRIVING', 'DELIVERED', 'FAILED', 'CANCELLED']);
+const IN_ROUTE_AFTER_PICKUP_MIN = 5;
 
 const UMZILA_WA = '27797662768'; // same support WhatsApp number used elsewhere (profile.html)
 
@@ -80,35 +92,77 @@ function pinBlock(pin) {
 }
 
 // Plan §58/59 tone: fresh/warm, not "Order dispatched" / "Delivery successful".
-// opts.near (2026-11-27): the "almost there" email sent from the rider's live GPS
-// (driver-heartbeat.js → lib/near-drop.js, within site_settings 'delivery_emails'.almost_there_km)
-// instead of when they tap "I've arrived" at the door. Without GPS it still goes at the door.
-function buildEmailContent(eventType, order, delivery, siteBaseUrl, opts = {}) {
-  const orderRef = order.order_number || String(order.id).slice(0, 8).toUpperCase();
+const P = (html) => `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">${html}</p>`;
+const SMALL = (html) => `<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:12px 0 0">${html}</p>`;
+function vehicleLine(ctx) {
+  return ctx.vehicle ? SMALL(`Look out for: <strong>${esc(ctx.vehicle)}</strong>`) : '';
+}
 
+// ctx (loaded by loadContext): rider first name, store names, drops before this one, vehicle.
+function buildEmailContent(eventType, order, delivery, siteBaseUrl, ctx = {}) {
+  const orderRef = order.order_number || String(order.id).slice(0, 8).toUpperCase();
+  const hi = ctx.firstName ? `Hi ${esc(ctx.firstName)}, ` : '';
+  const rider = ctx.riderName ? esc(ctx.riderName) : 'Your rider';
+  const riderLc = ctx.riderName ? esc(ctx.riderName) : 'your rider';
+  const stores = ctx.stores && ctx.stores.length ? esc(ctx.stores.join(' & ')) : 'the store';
+  const track = (label) => trackCta(siteBaseUrl, order.id, label || 'Track your order', delivery.tracking_token);
+
+  if (eventType === 'ASSIGNED') {
+    return {
+      subject: `${ctx.riderName ? ctx.riderName + ' is' : 'A rider is'} collecting your Umzila order`,
+      html: emailShell(siteBaseUrl, 'A rider has your order 🛵',
+        P(`${hi}${rider} has accepted order <strong>#${esc(orderRef)}</strong> and is heading to <strong>${stores}</strong> to collect it.`) +
+        SMALL("We'll email you again the moment it's collected, when the rider is close, and when they're at your door."),
+        track('Follow your order'))
+    };
+  }
+  if (eventType === 'PICKED_UP') {
+    const ahead = ctx.dropsAhead || 0;
+    return {
+      subject: ahead ? `${ctx.riderName || 'Your rider'} has collected your order` : `${ctx.riderName || 'Your rider'} has your order and is on the way 🛵`,
+      html: emailShell(siteBaseUrl, ahead ? 'Collected ✓' : "It's on the way! 🛵",
+        P(`${hi}${rider} has collected order <strong>#${esc(orderRef)}</strong> from ${stores}.`) +
+        P(ahead
+          ? `They have <strong>${ahead} other drop${ahead > 1 ? 's' : ''}</strong> nearby first — we'll email you when they're heading to you.`
+          : "They're heading straight to you now.") +
+        pinBlock(delivery.delivery_pin) +
+        SMALL('Give this PIN to the rider when they arrive — it confirms the delivery.'),
+        track('Track your order'))
+    };
+  }
   if (eventType === 'IN_ROUTE') {
     return {
-      subject: 'Your Umzila order is on the way',
-      html: emailShell(siteBaseUrl, "You're on your way! 🛵",
-        `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your order <strong>#${esc(orderRef)}</strong> has been collected and is now on its way to you.</p>${pinBlock(delivery.delivery_pin)}<p style="color:#555;font-size:13px;line-height:1.6">When your driver arrives, please provide the PIN above so they can confirm the delivery.</p>`,
-        trackCta(siteBaseUrl, order.id, 'Track your order', delivery.tracking_token))
+      subject: "You're next — your Umzila rider is heading to you",
+      html: emailShell(siteBaseUrl, "You're next! 🛵",
+        P(`${hi}${rider} is now heading to you with order <strong>#${esc(orderRef)}</strong>.`) + pinBlock(delivery.delivery_pin),
+        track('Watch them on the map'))
+    };
+  }
+  if (eventType === 'NEARBY') {
+    return {
+      subject: `${ctx.riderName || 'Your rider'} is a few minutes away 🛵`,
+      html: emailShell(siteBaseUrl, 'Almost there — get ready 👋',
+        P(`${hi}${riderLc} is a few minutes away with order <strong>#${esc(orderRef)}</strong>. Please head to the gate or door and have your PIN ready.`) +
+        pinBlock(delivery.delivery_pin) + vehicleLine(ctx),
+        track('See where they are'))
     };
   }
   if (eventType === 'ARRIVING') {
     return {
-      subject: opts.near ? 'Your rider is a few minutes away 🛵' : 'Your rider is almost there!',
-      html: emailShell(siteBaseUrl, opts.near ? 'Almost there — get ready 👋' : "You're up next 👋",
-        (opts.near
-          ? `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is a few minutes away with order <strong>#${esc(orderRef)}</strong>. Please head to the gate or door and have your PIN ready.</p>`
-          : `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Your Umzila rider is arriving now with order <strong>#${esc(orderRef)}</strong>.</p>`) + pinBlock(delivery.delivery_pin),
-        trackCta(siteBaseUrl, order.id, 'Track your order', delivery.tracking_token))
+      subject: `${ctx.riderName || 'Your rider'} is outside 📍`,
+      html: emailShell(siteBaseUrl, 'Your rider is here 📍',
+        P(`${hi}${riderLc} has arrived with order <strong>#${esc(orderRef)}</strong>. Please meet them at the gate or door and give them your PIN.`) +
+        pinBlock(delivery.delivery_pin) + vehicleLine(ctx) +
+        SMALL(`Can't find them? <a href="https://wa.me/${UMZILA_WA}?text=${encodeURIComponent('Hi Umzila! My rider for order #' + orderRef + ' is here but we can’t find each other.')}" style="color:#0a2f66;font-weight:700">WhatsApp us</a> and we'll connect you.`),
+        '')
     };
   }
   if (eventType === 'DELIVERED') {
     return {
       subject: 'Delivered! Your Umzila order has arrived',
       html: emailShell(siteBaseUrl, "You're all set ✓",
-        `<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 8px">Order <strong>#${esc(orderRef)}</strong> has been delivered. Thanks for shopping with Umzila!</p>`,
+        P(`${hi}order <strong>#${esc(orderRef)}</strong> has been delivered. Enjoy, and thanks for ordering with Umzila!`) +
+        SMALL("We'll send a quick 1-tap rating in a few minutes — it really helps us get better."),
         '')
     };
   }
@@ -131,11 +185,51 @@ function buildEmailContent(eventType, order, delivery, siteBaseUrl, opts = {}) {
   return null;
 }
 
+// Rider first name (profiles via drivers), the stores on the order (house drinks seller left
+// out), how many other drops come before this one on the trip, and — only from "almost there"
+// on, like get_delivery_vehicle — the rider's vehicle. Every part is optional.
+async function loadContext(supabase, delivery, order, eventType) {
+  const ctx = { firstName: null, riderName: null, stores: [], dropsAhead: 0, vehicle: null };
+  try {
+    ctx.firstName = (String(order.customer_name || '').trim().split(/\s+/)[0] || '').replace(/^./, c => c.toUpperCase()) || null;
+    const sellerIds = [...new Set((Array.isArray(order.items) ? order.items : []).map(i => i && i.seller_id).filter(Boolean))];
+    if (sellerIds.length) {
+      const { data: ss } = await supabase.from('sellers').select('shop_name, is_house').in('id', sellerIds);
+      ctx.stores = (ss || []).filter(x => !x.is_house && x.shop_name).map(x => x.shop_name);
+    }
+    let driverId = null;
+    if (delivery.route_id) {
+      const [{ data: route }, { data: stops }] = await Promise.all([
+        supabase.from('routes').select('driver_id').eq('id', delivery.route_id).maybeSingle(),
+        supabase.from('route_stops').select('delivery_id, stop_type, status, seq_order').eq('route_id', delivery.route_id)
+      ]);
+      const mine = (stops || []).find(x => x.stop_type === 'drop' && x.delivery_id === delivery.id);
+      if (mine) ctx.dropsAhead = (stops || []).filter(x => x.stop_type === 'drop' && x.delivery_id !== delivery.id && x.status !== 'completed' && x.seq_order < mine.seq_order).length;
+      driverId = route && route.driver_id;
+    }
+    if (!driverId) { // ASSIGNED fires before the trip is saved: the accepted offer says who
+      const { data: off } = await supabase.from('driver_offers').select('driver_id').eq('delivery_id', delivery.id)
+        .eq('status', 'accepted').order('responded_at', { ascending: false }).limit(1).maybeSingle();
+      driverId = off && off.driver_id;
+    }
+    if (driverId) {
+      const { data: dr } = await supabase.from('drivers').select('user_id, vehicle_description').eq('id', driverId).maybeSingle();
+      if (dr && dr.user_id) {
+        const { data: pr } = await supabase.from('profiles').select('first_name').eq('user_id', dr.user_id).maybeSingle();
+        const n = pr && String(pr.first_name || '').trim();
+        if (n) ctx.riderName = n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+      }
+      if (dr && ['NEARBY', 'ARRIVING'].includes(eventType)) ctx.vehicle = String(dr.vehicle_description || '').trim() || null;
+    }
+  } catch (e) { console.warn('notify: context load failed (email still goes)', e.message); }
+  return ctx;
+}
+
 // notify(supabase, deliveryId, eventType, actor)
 // `supabase` must be a service-role client (notification_log has no client
 // write policy). Never throws -- returns { skipped: true, reason } or
 // { skipped: false, status: 'sent'|'failed' } for callers that want to log it.
-async function notify(supabase, deliveryId, eventType, opts = {}) {
+async function notify(supabase, deliveryId, eventType) {
   if (!NOTIFIABLE_EVENTS.has(eventType)) return { skipped: true, reason: 'not_notifiable' };
 
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
@@ -145,14 +239,14 @@ async function notify(supabase, deliveryId, eventType, opts = {}) {
   try {
     const { data: delivery, error: deliveryError } = await supabase
       .from('deliveries')
-      .select('id, order_id, delivery_pin, customer_id, tracking_token')
+      .select('id, order_id, delivery_pin, customer_id, tracking_token, route_id')
       .eq('id', deliveryId)
       .maybeSingle();
     if (deliveryError || !delivery) return { skipped: true, reason: 'delivery_not_found' };
 
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .select('id, order_number, customer_email')
+      .select('id, order_number, customer_email, customer_name, items')
       .eq('id', delivery.order_id)
       .maybeSingle();
     if (orderError || !order || !order.customer_email) return { skipped: true, reason: 'no_customer_email' };
@@ -168,7 +262,16 @@ async function notify(supabase, deliveryId, eventType, opts = {}) {
       .maybeSingle();
     if (existing) return { skipped: true, reason: 'already_sent' };
 
-    const content = buildEmailContent(eventType, order, delivery, SITE_BASE_URL, opts);
+    // "You're next" only makes sense on a shared trip: right after the collected email it would
+    // just say the same thing again.
+    if (eventType === 'IN_ROUTE') {
+      const { data: pu } = await supabase.from('notification_log').select('created_at')
+        .eq('delivery_id', deliveryId).eq('event_type', 'PICKED_UP').eq('channel', 'email').maybeSingle();
+      if (pu && Date.now() - new Date(pu.created_at).getTime() < IN_ROUTE_AFTER_PICKUP_MIN * 60000) return { skipped: true, reason: 'just_collected' };
+    }
+
+    const ctx = await loadContext(supabase, delivery, order, eventType);
+    const content = buildEmailContent(eventType, order, delivery, SITE_BASE_URL, ctx);
     if (!content) return { skipped: true, reason: 'no_template' };
 
     let sendStatus = 'sent';
@@ -213,4 +316,4 @@ async function notify(supabase, deliveryId, eventType, opts = {}) {
   }
 }
 
-module.exports = { notify, NOTIFIABLE_EVENTS, emailShell, esc };
+module.exports = { notify, NOTIFIABLE_EVENTS, emailShell, esc, buildEmailContent };

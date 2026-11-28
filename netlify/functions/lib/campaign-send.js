@@ -28,11 +28,18 @@ function slotsFor(campaign, siteUrl, unsubscribeUrl) {
 
 // opts.recipients: send to this list instead of every subscriber (the daily lunch reminder,
 // lib/visitor-nudge.js) — unsubscribed people are still always left out.
+// campaign.audience 'baskets': everyone with an unfinished basket who left an email
+// (campaign_basket_recipients(), admin → Marketing → Platform Campaign → Send to).
 async function sendCampaign(admin, campaign, siteUrl, approverId, opts = {}) {
   const RESEND_KEY = process.env.RESEND_API_KEY || '';
   if (!RESEND_KEY) return { ok: false, status: 500, error: 'Email service not configured' };
 
   let list;
+  if (!Array.isArray(opts.recipients) && campaign.audience === 'baskets') {
+    const { data: rows, error: bErr } = await admin.rpc('campaign_basket_recipients');
+    if (bErr) return { ok: false, status: 500, error: bErr.message };
+    opts = Object.assign({}, opts, { recipients: (rows || []).map(r => r.email) });
+  }
   if (Array.isArray(opts.recipients)) {
     const { data: unsub, error: uErr } = await admin.from('subscribers').select('email').eq('unsubscribed', true);
     if (uErr) return { ok: false, status: 500, error: uErr.message };
@@ -46,7 +53,7 @@ async function sendCampaign(admin, campaign, siteUrl, approverId, opts = {}) {
   }
   const seen = new Set();
   const recipients = list.filter(e => e && e.includes('@') && !seen.has(e) && seen.add(e));
-  if (!recipients.length) return { ok: false, status: 400, error: 'No subscribers to send to.' };
+  if (!recipients.length) return { ok: false, status: 400, error: campaign.audience === 'baskets' ? 'Nobody with a basket to send to.' : 'No subscribers to send to.' };
 
   for (const batch of chunk(recipients, 100)) {
     const payload = batch.map(email => {

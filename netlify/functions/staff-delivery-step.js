@@ -64,7 +64,7 @@ exports.handler = async (event) => {
   let status = from === 'DRIVER_AT_PICKUP' && d.status === 'PARTIALLY_PICKED_UP' ? 'PARTIALLY_PICKED_UP' : from;
   for (let i = i0 + 1; i <= i1; i++) {
     const next = PATH[i];
-    const r = await transitionDelivery(sb, d.id, next, actor, { eventType: EVENT[next], metadata: { staff_override: true, step: b.step } });
+    const r = await transitionDelivery(sb, d.id, next, actor, { eventType: EVENT[next], metadata: { staff_override: true, step: b.step }, silent: i < i1 });
     if (!r.ok) return reply(r.reason === 'conflict' ? 409 : 500, { error: `Couldn't move it to ${next.replace(/_/g, ' ').toLowerCase()} (${r.reason}). Refresh and try again.`, reached: status });
     status = next;
     // keep this order's stops in step with the rider app

@@ -4,6 +4,19 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-28 — Step-by-step delivery emails, 4★ "what would make it 5?", basket audience for campaigns
+
+**Asked for:** customers should never be left guessing — an email when a rider has their order, when the rider is almost there, when the rider is outside, and when it's delivered; the rating page should ask 4-star raters what was missing (Nomvuzo rated 4★ with no comment); and a Black Friday email to everyone with an unfinished basket.
+
+**What changed:**
+- **Delivery emails** (`lib/notify.js`, still the one place they're built and sent, deduped per delivery+event in notification_log): **ASSIGNED** "<Rider> is collecting your order from <store>" (rider name from the accepted driver_offers row, since the trip isn't saved yet at that moment) → **PICKED_UP** "<Rider> has your order" + PIN (on a shared trip: "they have N other drops nearby first") → **IN_ROUTE** "You're next" only when it comes 5+ min after the collected email (a shared trip; otherwise it would repeat it) → **NEARBY** "a few minutes away" from the rider's GPS (new notification event, was logged as ARRIVING in yesterday's build; `near_drop_deliveries` now waits until the latest collected/you're-next email is 2+ min old and skips if NEARBY or ARRIVING already went) → **ARRIVING** "<Rider> is outside 📍" + PIN + vehicle + WhatsApp-us link (the "I've arrived" tap) → **DELIVERED** (mentions the rating email). Emails greet the customer by first name. `transitionDelivery(..., { silent: true })` skips the email; `staff-delivery-step.js` uses it for every in-between step, so a staff override only emails the step it lands on (yesterday a staff push fired the whole chain in 4 minutes).
+- **Rating page** (`rate-delivery.js`): 4★ now asks "Thanks! What would have made it 5 stars?" with tap-to-add ideas (Faster delivery, Hotter food, Bigger portions, More updates on my order, Easier to find my place, Lower price) that fill the comment box.
+- **Campaign audience "People with an unfinished basket"** (admin.html → Marketing → Platform Campaign → Send to; admins only — seller campaigns are always subscribers): `marketing_campaigns.audience = 'baskets'` → `lib/campaign-send.js` asks `campaign_basket_recipients()` (service role only): carts with items whose email is the guest email on the row, the account's confirmed email, or the email typed on that browser; minus staff/riders/store owners, unsubscribed, and anyone who paid since the basket was last touched (19 people on 28 Nov). Marketing stream + unsubscribe link as always.
+
+**Files:** `netlify/functions/lib/notify.js`, `lib/delivery-state.js`, `staff-delivery-step.js`, `driver-heartbeat.js`, `rate-delivery.js`, `lib/campaign-send.js`, `submit-marketing-campaign.js`, `admin.html`, `docs/plans/sql/34_delivery_update_emails.sql`, `docs/plans/sql/35_campaign_basket_audience.sql` (both applied).
+
+---
+
 ## 2026-11-27 — Lunch reminder email to morning visitors + "almost there" email from the rider's GPS
 
 **Asked for (after reviewing Nomvuzo's order UMZILA-…6q578ozit):** (1) a 13:00 email to everyone who visited in the morning but didn't order, so they can still make the 14:00 run (she put Plata for 2 in her basket at 08:37, left, and only paid at 14:01 — 16 min after the 14:00 cut-off); (2) the "Your rider is almost there!" email reached her when the rider was already at her door (it was sent on the "I've arrived" tap).
