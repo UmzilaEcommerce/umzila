@@ -4,6 +4,23 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-28 (night) — New rider pay split (external riders)
+
+**Founder rule:** an external rider gets **90 % of the delivery fee the customer paid**, plus **R7 of a priority fee**. Umzila keeps 10 % of delivery, the food mark-up, R8 of priority and the house drinks margin. On free delivery the rider still gets 90 % of the normal fee, and Umzila pays it. Staff riders (External riders off) keep the old band (R34 + R0.40/km after 3 km, +R3 per extra store, max R45, R39 unknown).
+
+**One rule everywhere:** `rider_pay_for_delivery(delivery)` (`docs/plans/sql/38_rider_pay_split.sql`) decides by the order's paid time (`fin__rider_cost_at`). It is used by:
+- `compute_driver_payout_on_route_completion` (what is owed);
+- `lib/payout-formula.js payoutForDelivery` (the amount on every offer, via `lib/dispatch.js` and `lib/batch-dispatch.js`);
+- `fin__order_lines` (the Finances estimate while a trip is open).
+
+/rider and admin → Riders read those amounts. Finished trips keep what they were paid. The 90 % and R7 are editable in admin → Finances → Assumptions (`finance.rider_delivery_share_percent` / `rider_priority_share`).
+
+**Verified (rolled back):** R34 → R30.60; R34 + R15 priority → R37.60; R38.86 → R34.97; free delivery (band R37.36) → R33.62. With the switch off, every order keeps the band.
+
+**Files:** `docs/plans/sql/38_rider_pay_split.sql` (applied), `netlify/functions/lib/payout-formula.js`, `lib/dispatch.js`, `lib/batch-dispatch.js`, `finances-admin.js`.
+
+---
+
 ## 2026-11-28 (evening) — 12 % default mark-up, free delivery switched off, /rider trimmed
 
 - Finances default mark-up (products without a store price) 9 % → **12 %** (site_settings finance.default_markup_percent; finances-admin.js fallback). November had no estimated store lines, so its figures are unchanged.

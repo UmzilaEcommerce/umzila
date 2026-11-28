@@ -33,6 +33,8 @@
   };
   var DEFAULTS = {
     default_markup_percent: 12,
+    rider_delivery_share_percent: 90,
+    rider_priority_share: 7,
     count_rider_pay_as_cost: false,
     tips_go_to: 'umzila',
     seller_codes_funded_by: 'seller',
@@ -522,6 +524,8 @@
     h += msg('assump') + '<div class="fn-grid">' +
       '<div class="fn-field"><label for="fnMarkup">Default mark-up % (products without a store price)</label><input type="number" inputmode="decimal" id="fnMarkup" min="0" max="100" step="0.1" value="' + esc(st.default_markup_percent) + '"><div class="fn-help">Store owed = price ÷ (1 + mark-up). 9 % → R137 plate owes the store ≈ R125.69. Lines using this are marked ≈.</div></div>' +
       '<div class="fn-field"><label class="fn-check"><input type="checkbox" id="fnRiderCost"' + (st.count_rider_pay_as_cost ? ' checked' : '') + '> External riders — take rider pay off profit</label><div class="fn-help">On: every order paid <b>from the moment you save</b> has its rider pay taken off Umzila’s profit (riders paid per delivery). Off: from then on it isn’t (staff riders — record wages/fuel as expenses). Earlier orders never change.' + riderPeriods(st.rider_pay_cost_periods) + '</div></div>' +
+      '<div class="fn-field"><label for="fnRiderShare">External riders get this % of the delivery fee</label><input type="number" inputmode="decimal" id="fnRiderShare" min="50" max="100" step="0.5" value="' + esc(st.rider_delivery_share_percent) + '"><div class="fn-help">Umzila keeps the rest. Free delivery: the rider still gets this % of the normal fee (Umzila pays it).</div></div>' +
+      '<div class="fn-field"><label for="fnRiderPrio">External riders get this much of a priority fee (R)</label><input type="number" inputmode="decimal" id="fnRiderPrio" min="0" max="100" step="0.5" value="' + esc(st.rider_priority_share) + '"><div class="fn-help">Umzila keeps the rest of the priority fee.</div></div>' +
       '<div class="fn-field"><label for="fnSellerCodes">Store promo codes are paid by</label><select id="fnSellerCodes"><option value="seller"' + (st.seller_codes_funded_by !== 'umzila' ? ' selected' : '') + '>The store (comes off what it is owed)</option><option value="umzila"' + (st.seller_codes_funded_by === 'umzila' ? ' selected' : '') + '>Umzila</option></select></div>' +
       '<div class="fn-field"><label for="fnManualDisc">Discounts typed in by hand on logistics orders are paid by</label><select id="fnManualDisc"><option value="umzila"' + (st.manual_discount_funded_by !== 'seller' ? ' selected' : '') + '>Umzila</option><option value="seller"' + (st.manual_discount_funded_by === 'seller' ? ' selected' : '') + '>The store</option></select></div>' +
       '<div class="fn-field"><label for="fnTips">Tips go to</label><select id="fnTips"><option value="umzila"' + (st.tips_go_to !== 'rider' ? ' selected' : '') + '>Umzila (riders are staff)</option><option value="rider"' + (st.tips_go_to === 'rider' ? ' selected' : '') + '>The rider (taken off Umzila’s figures)</option></select></div>' +
@@ -748,8 +752,11 @@
   async function saveAssump() {
     var mk = $('fnMarkup').value.trim(); if (!/^\d+(\.\d+)?$/.test(mk)) { setMsg('assump', 'Enter the mark-up as a number, e.g. 9.', false); return render(); }
     var rider = $('fnRiderCost').checked, sc = $('fnSellerCodes').value, md = $('fnManualDisc').value, tp = $('fnTips').value;
+    var share = Number($('fnRiderShare').value), prio = Number($('fnRiderPrio').value);
+    if (!(share >= 50 && share <= 100)) { setMsg('assump', 'The rider’s share of the delivery fee must be 50–100 %.', false); return render(); }
+    if (!(prio >= 0 && prio <= 100)) { setMsg('assump', 'The rider’s share of priority must be R0–R100.', false); return render(); }
     var own = Array.prototype.map.call(document.querySelectorAll('#fnAssump [data-own]:checked'), function (i) { return i.dataset.own; });
-    var res = await saveWith(function (v) { v.own_store_ids = own; v.default_markup_percent = Number(mk); v.count_rider_pay_as_cost = rider; v.seller_codes_funded_by = sc; v.manual_discount_funded_by = md; v.tips_go_to = tp; });
+    var res = await saveWith(function (v) { v.own_store_ids = own; v.default_markup_percent = Number(mk); v.count_rider_pay_as_cost = rider; v.rider_delivery_share_percent = share; v.rider_priority_share = prio; v.seller_codes_funded_by = sc; v.manual_discount_funded_by = md; v.tips_go_to = tp; });
     setMsg('assump', res.ok ? 'Saved. Figures updated.' : res.error, res.ok); S.openAssump = true;
     if (res.ok) { await Promise.all([reloadMoney(), loadPrices()]); render(); } else render();
   }

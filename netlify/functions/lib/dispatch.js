@@ -11,7 +11,7 @@
 // transitionDelivery() (./delivery-state.js) — this module never writes
 // deliveries.status itself.
 const { transitionDelivery } = require('./delivery-state');
-const { estimatePayout } = require('./payout-formula');
+const { payoutForDelivery } = require('./payout-formula');
 
 // Matches track.html/§B.1's live-tracking staleness rule exactly (a driver
 // whose last heartbeat is older than this is treated as not really
@@ -227,7 +227,7 @@ async function dispatchDelivery(supabase, deliveryId) {
   // Pre-acceptance estimate — a single-delivery new route has no "extra"
   // drops (this is the only drop), but Stage 4 bundling can mean extra
   // pickups beyond the first. Real formula, see lib/payout-formula.js.
-  const payoutAmount = estimatePayout({
+  const payoutAmount = await payoutForDelivery(supabase, deliveryId, {
     distanceKm: quote.distance_km,
     durationMin: quote.duration_min,
     extraPickups: pickupSellerIds.length - 1

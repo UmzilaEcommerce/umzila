@@ -27,7 +27,7 @@
 //
 // Every delivery status change goes through transitionDelivery().
 const { transitionDelivery } = require('./delivery-state');
-const { estimatePayout } = require('./payout-formula');
+const { payoutForDelivery } = require('./payout-formula');
 const { planTrip, MAX_DELIVERIES_PER_TRIP } = require('./route-insertion');
 const { dispatchDelivery, getRunInfo, isHeldForRun } = require('./dispatch');
 
@@ -80,7 +80,7 @@ async function evaluateBatchCandidates(supabase, deliveryId, opts = {}) {
   // Prefer the least extra time; an "add to the end" plan has no estimate — rank it last.
 
   // Full delivery price for the added order (founder 2026-10-05).
-  const payoutAmount = estimatePayout({ distanceKm: point.road_km != null ? Number(point.road_km) : NaN });
+  const payoutAmount = await payoutForDelivery(supabase, deliveryId, { distanceKm: point.road_km != null ? Number(point.road_km) : NaN });
   const expiresAt = new Date(Date.now() + OFFER_TTL_MINUTES * 60 * 1000).toISOString();
   const { data: offer, error: offerInsertError } = await supabase.from('driver_offers').insert({
     delivery_id: deliveryId,

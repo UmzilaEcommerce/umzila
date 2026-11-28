@@ -22,4 +22,16 @@ function estimatePayout({ distanceKm, extraDrops = 0, extraPickups = 0 }) {
   return Math.round((perDelivery + DELIVERY_FEE_MIN * Math.max(extraDrops, 0)) * 100) / 100;
 }
 
-module.exports = { estimatePayout, PER_EXTRA_STORE };
+// The amount shown on an offer (2026-11-28): the database's one rule, rider_pay_for_delivery()
+// (docs/plans/sql/38_rider_pay_split.sql) — with Finances → "External riders" on, 90 % of the
+// delivery fee the customer paid (+R7 priority; free delivery = the band, Umzila covers it), else
+// the band above. Falls back to the band estimate only if the database call fails.
+async function payoutForDelivery(supabase, deliveryId, fallbackArgs) {
+  try {
+    const { data, error } = await supabase.rpc('rider_pay_for_delivery', { p_delivery: deliveryId });
+    if (!error && data != null && Number.isFinite(Number(data))) return Math.round(Number(data) * 100) / 100;
+  } catch (e) { /* fall back */ }
+  return estimatePayout(fallbackArgs || {});
+}
+
+module.exports = { estimatePayout, payoutForDelivery, PER_EXTRA_STORE };

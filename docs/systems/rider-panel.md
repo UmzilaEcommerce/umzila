@@ -40,6 +40,13 @@ Every change still goes through the existing functions: `driver-heartbeat`, `res
 
 ## Rider pay
 
+**Since 2026-11-28 the amount per delivery is `rider_pay_for_delivery(delivery_id)`, the one rule.**
+- If the order was paid while External riders was on: 90 % of the delivery fee the customer paid (shipping − priority) + R7 if priority. On free delivery, 90 % of the band (Umzila pays it).
+- Otherwise: the band below.
+- The two numbers live in finance.rider_delivery_share_percent / rider_priority_share (admin → Finances → Assumptions).
+- The payout trigger, the offer amount (payout-formula.js payoutForDelivery) and the Finances estimate all call it. Change the rule only there.
+
+
 - **Where the amount comes from:** each finished trip writes one `driver_payouts` row via the `compute_driver_payout_on_route_completion` trigger (unchanged). `calculation_basis.deliveries[]` holds the pay per delivery.
 - **The rule:** R34 for the first 3 road-km, +R0.40/km, +R3 per extra store, max R45, R39 if the distance is unknown. Every delivery on a trip is paid in full, including free-delivery orders.
 - **Change together:** the rule lives in the trigger, `lib/payout-formula.js`, `lib/delivery-price.js` and the `rates` object in `get_rider_home()`.
