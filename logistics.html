@@ -2377,32 +2377,38 @@ document.addEventListener('sb-ready', function(e){
       // isn't listed again (the carts row lingers after Pay is pressed).
       const unpaidEmails=new Set(unpaid.map(o=>(o.customer_email||'').toLowerCase()).filter(Boolean));
       const unpaidUids=new Set(unpaid.map(o=>o.user_id).filter(Boolean));
+      // Baskets with contact details = ops_basket_leads() (2026-11-28): the details come from the
+      // permanent per-browser record too, so someone who typed them and then emptied the basket
+      // (which deletes the guest carts row) stays listed until they pay. Staff are left out.
       const known=[],anon=[];
+      let leads=[];
+      { const {data:ld,error:le}=await sb.rpc('ops_basket_leads',{p_days:30}); if(le) console.warn('ops_basket_leads',le.message); leads=ld||[]; }
+      const leadAnon=new Set(leads.map(l=>l.anon_id).filter(Boolean));
+      leads.forEach(l=>{
+        const em=String(l.email||'').toLowerCase();
+        if(em&&unpaidEmails.has(em)) return;
+        const items=Array.isArray(l.items)?l.items:[];
+        const total=items.reduce((s,i)=>s+(parseFloat(i.price||0)*qtyOf(i)),0);
+        const count=items.reduce((s,i)=>s+qtyOf(i),0);
+        const tags=(l.has_account?tag('Account','#dbeafe','#1e40af'):tag('Guest','#fef3c7','#92400e'))
+          +(l.basket_live?'':tag('Basket emptied','#fee2e2','#991b1b'))+(l.unsubscribed?tag('Unsubscribed','#f3f4f6','#4b5563'):'');
+        known.push(card(esc(l.name||(l.has_account?'Signed-in buyer':'Guest'))+tags,
+          contactLine(l.email,l.phone),(l.basket_live?'Last updated ':'Added items ')+fmtDate(l.last_activity)+(l.basket_live?'':' · what they had added'),
+          items,l.basket_live?total:0,count,l.unsubscribed?'':nudge(l.email,'',items)));
+      });
       carts.forEach(c=>{
-        const p=profMap[c.user_id]||{};
-        const em=String((c.user_id?p.email:c.guest_email)||'').toLowerCase();
-        if((c.user_id&&unpaidUids.has(c.user_id))||(em&&unpaidEmails.has(em))) return;
-        if(em&&paidAfter[em]&&paidAfter[em]>(c.updated_at||'')) return;
+        if(c.user_id||c.guest_email||c.guest_phone||(c.anonymous_id&&leadAnon.has(c.anonymous_id))) return;
         const items=c.items;
         const total=items.reduce((s,i)=>s+(parseFloat(i.price||0)*qtyOf(i)),0);
         const count=items.reduce((s,i)=>s+qtyOf(i),0);
-        if(c.user_id){
-          const email=p.email||'';
-          known.push(card(esc([p.first_name,p.last_name].filter(Boolean).join(' ')||'Signed-in buyer')+tag('Account','#dbeafe','#1e40af'),
-            contactLine(email,p.phone),'Last updated '+fmtDate(c.updated_at),items,total,count,nudge(email,c.user_id,items)));
-        } else if(c.guest_email||c.guest_phone){
-          known.push(card(esc(c.guest_name||'Guest')+tag('Guest','#fef3c7','#92400e'),
-            contactLine(c.guest_email,c.guest_phone),'Last updated '+fmtDate(c.updated_at),items,total,count,nudge(c.guest_email,'',items)));
-        } else {
-          anon.push(card('Anonymous visitor'+tag('No details','#f3f4f6','#4b5563'),'',
-            'Last updated '+fmtDate(c.updated_at),items,total,count,''));
-        }
+        anon.push(card('Anonymous visitor'+tag('No details','#f3f4f6','#4b5563'),'',
+          'Last updated '+fmtDate(c.updated_at),items,total,count,''));
       });
 
       _basketsLoaded=true;
       el.innerHTML=
         section('💳 Unfinished payments ('+unpaid.length+')','Pressed Pay in the last 14 days but never paid (hidden once they pay).',unpaidHtml||'<div class="orders-empty">None 🎉</div>')+
-        section('🛒 Baskets with contact details ('+known.length+')','Signed-in buyers, and guests who typed their details at checkout — changed in the last 30 days. People already under Unfinished payments, or who have since paid, aren\'t repeated.',known.join('')||'<div class="orders-empty">None right now</div>')+
+        section('🛒 Baskets with contact details ('+known.length+')','Everyone who left their details and added something in the last 30 days — kept even if they emptied the basket, until they pay. Staff aren\'t listed.',known.join('')||'<div class="orders-empty">None right now</div>')+
         section('👀 Anonymous baskets ('+anon.length+')','Guests who added items but haven\'t given details yet — what people are picking (last 30 days).',anon.join('')||'<div class="orders-empty">None right now</div>');
 
       el.querySelectorAll('button[data-email]').forEach(btn=>{

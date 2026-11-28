@@ -211,7 +211,7 @@ function adminBusy({ run, paidCount, busyAt, siteUrl }) {
 function customerRunningLate({ firstName, orderNumber, run, minutes, siteUrl }) {
   const m = Number(minutes) || 0;
   const body =
-    p(`${firstName ? 'Hi ' + esc(firstName) + ', ' : 'Hi, '}a quick update on order <strong>${esc(orderNumber || '')}</strong>: the dispatch of your order is running about <strong>${m} minute${m === 1 ? '' : 's'}</strong> late (it was due to leave by ${esc(hhmm(run && run.window_start))}).`) +
+    p(`${firstName ? 'Hi ' + esc(firstName) + ', ' : 'Hi, '}a quick update on order <strong>${esc(orderNumber || '')}</strong>: it is leaving the store about <strong>${m} minute${m === 1 ? '' : 's'}</strong> later than planned (it was due to leave by ${esc(hhmm(run && run.window_start))}).`) +
     p(`We are sorry for the wait &mdash; we will get your order on the road as soon as we can.`);
   return {
     subject: `Running about ${m} min late — ${orderNumber || ''}`.trim(),

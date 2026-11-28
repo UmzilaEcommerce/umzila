@@ -1718,7 +1718,7 @@
         <li class="co-step hidden" id="stepTime" data-step="time" aria-labelledby="stepTimeTitle">
           <div class="step-head">
             <span class="step-num" aria-hidden="true">3</span>
-            <h2 class="step-title" id="stepTimeTitle">When should it leave?</h2><button type="button" class="qtip" aria-label="How delivery times work" aria-expanded="false" data-qtip="time">?</button><span class="qtip-pop" id="qtip-time" role="tooltip" hidden><b>How delivery times work</b><br>We deliver in rounds. Pick a time, and your food is made fresh and leaves the store with a rider by then.<br><br>Each time has an <b>order-by</b> time. Pay before it to make that round. If you miss it, pick the next one.<br><br>Delivery after it leaves depends on how far you are.</span>
+            <h2 class="step-title" id="stepTimeTitle">When should it leave?</h2><button type="button" class="qtip" aria-label="How delivery times work" aria-expanded="false" data-qtip="time">?</button><span class="qtip-pop" id="qtip-time" role="tooltip" hidden><b>How delivery times work</b><br>Pick a time, and your food is made fresh and leaves the store by then.<br><br>Each time has an <b>order-by</b> time. Order before it to get that time, or pick a later one.<br><br>How long the ride takes depends on how far you are.</span>
             <span class="sr-only step-state"></span>
           </div>
           <div class="step-body" id="etaHostTime"></div>
@@ -5108,7 +5108,7 @@ async function validateCheckout() {
       }
       const open = tsOpenRuns();
       const now = tsNow();
-      let h = '<p class="ts-title">Choose your delivery time</p><p class="ts-intro">We deliver in rounds. Pick when your order should leave the store, and pay before its cut-off.</p>';
+      let h = '<p class="ts-title">Choose your delivery time</p><p class="ts-intro">Pick when your order should leave the store.</p>';
       if (TS.notice) h += '<div class="ts-note bad" role="alert">' + escapeHtmlLite(TS.notice) + '</div>';
       if (!open.length) {
         const blocked = TS.runs.find(r => r.state === 'store_closed' && r.blocking_store);
@@ -5147,7 +5147,7 @@ async function validateCheckout() {
             (i === 0 ? '<span class="ts-tag">Soonest</span>' : '') + '</button>';
         });
         h += '</div>';
-        if (TS.selRun) h += '<div class="ts-done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Your order leaves the store <b>' + escapeHtmlLite(tsDayWord(TS.selRun).toLowerCase()) + ' by ' + tsT(TS.selRun.window_start) + '</b>. Pay by <b>' + tsT(TS.selRun.cutoff_at) + '</b> to make this round.</span></div>';
+        if (TS.selRun) h += '<div class="ts-done"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>Your order leaves the store <b>' + escapeHtmlLite(tsDayWord(TS.selRun).toLowerCase()) + ' by ' + tsT(TS.selRun.window_start) + '</b>. Order by <b>' + tsT(TS.selRun.cutoff_at) + '</b> to get this time.</span></div>';
       }
       const fresh = !el.classList.contains('ts-picker') || el._tsHtml !== h;
       el.className = 'ts-picker';
@@ -5186,8 +5186,8 @@ async function validateCheckout() {
       // Timeslots on: priority = delivered first on your run (same fee as today).
       const pSmall = card.querySelector('.prio-text small'), pTip = card.querySelector('.prio-tip');
       if (pSmall && !pSmall.dataset.orig) { pSmall.dataset.orig = pSmall.textContent; if (pTip) pTip.dataset.orig = pTip.innerHTML; }
-      if (pSmall) pSmall.textContent = tsActive() ? 'You get yours first in your delivery round.' : pSmall.dataset.orig;
-      if (pTip && pTip.dataset.orig) pTip.innerHTML = tsActive() ? 'Everyone in a round leaves the store at the same time on one trip. Priority makes you the rider\u2019s <b>first drop-off</b> on it. It does <b>not</b> change the time your round leaves. To get it sooner, pick an earlier time above.' : pTip.dataset.orig;
+      if (pSmall) pSmall.textContent = tsActive() ? 'Yours is delivered first.' : pSmall.dataset.orig;
+      if (pTip && pTip.dataset.orig) pTip.innerHTML = tsActive() ? 'Your order is delivered <b>first</b>. It does not change when it leaves the store \u2014 for sooner, pick an earlier time above.' : pTip.dataset.orig;
       document.getElementById('priorityToggle').checked = !!state.priorityDelivery;
       card.classList.toggle('on', !!state.priorityDelivery);
     }
@@ -7123,13 +7123,21 @@ function postPayFastForm(actionUrl, params) {
       // Guest basket contact (presence.js save_guest_cart): once a guest types
       // their details, their saved basket carries them so Umzila can follow
       // up if the order isn't finished. Ignored server-side when signed in.
+      // Saved as they type (short pause), not only when they leave a box, and a phone number
+      // counts even before the email is finished — so details are kept the moment they exist.
+      let guestContactTimer = null;
+      const saveGuestContact = () => {
+        if (state.user || !window.umzilaGuestContact) return;
+        const v = x => (document.getElementById(x)?.value || '').trim();
+        const email = isValidEmail(v('customerEmail')) ? v('customerEmail').toLowerCase() : ''; // never save a typo'd email
+        const phone = cleanPhone(v('phoneNumber'));
+        if (!email && String(phone || '').replace(/\D/g, '').length < 9) return;
+        umzilaGuestContact({ email, name: [v('firstName'), v('lastName')].filter(Boolean).join(' '), phone: String(phone || '').replace(/\D/g, '').length >= 9 ? phone : '' });
+      };
       ['customerEmail', 'firstName', 'lastName', 'phoneNumber'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', () => {
-          if (state.user || !window.umzilaGuestContact) return;
-          const v = x => (document.getElementById(x)?.value || '').trim();
-          if (!isValidEmail(v('customerEmail'))) return; // never save a typo'd email
-          umzilaGuestContact({ email: v('customerEmail').toLowerCase(), name: [v('firstName'), v('lastName')].filter(Boolean).join(' '), phone: cleanPhone(v('phoneNumber')) });
-        });
+        const el = document.getElementById(id);
+        el?.addEventListener('change', saveGuestContact);
+        el?.addEventListener('input', () => { clearTimeout(guestContactTimer); guestContactTimer = setTimeout(saveGuestContact, 1200); });
       });
 
       // Live address autocomplete (free, no key — OpenStreetMap Photon)

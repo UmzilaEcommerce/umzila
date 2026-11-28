@@ -102,67 +102,64 @@ function vehicleLine(ctx) {
 function buildEmailContent(eventType, order, delivery, siteBaseUrl, ctx = {}) {
   const orderRef = order.order_number || String(order.id).slice(0, 8).toUpperCase();
   const hi = ctx.firstName ? `Hi ${esc(ctx.firstName)}, ` : '';
+  const who = ctx.riderName ? esc(ctx.riderName) : (hi ? 'your rider' : 'Your rider');
   const rider = ctx.riderName ? esc(ctx.riderName) : 'Your rider';
   const riderLc = ctx.riderName ? esc(ctx.riderName) : 'your rider';
   const stores = ctx.stores && ctx.stores.length ? esc(ctx.stores.join(' & ')) : 'the store';
   const track = (label) => trackCta(siteBaseUrl, order.id, label || 'Track your order', delivery.tracking_token);
 
+  // Short and plain: what's happening now, the PIN when it's needed, nothing else.
+  const ref = SMALL(`Order ${esc(orderRef)}`);
   if (eventType === 'ASSIGNED') {
     return {
-      subject: `${ctx.riderName ? ctx.riderName + ' is' : 'A rider is'} collecting your Umzila order`,
-      html: emailShell(siteBaseUrl, 'A rider has your order 🛵',
-        P(`${hi}${rider} has accepted order <strong>#${esc(orderRef)}</strong> and is heading to <strong>${stores}</strong> to collect it.`) +
-        SMALL("We'll email you again the moment it's collected, when the rider is close, and when they're at your door."),
-        track('Follow your order'))
+      subject: 'Your order is being collected',
+      html: emailShell(siteBaseUrl, 'Your order is being collected',
+        P(`${hi}${who} is picking up your order from ${stores}.`) + ref,
+        track('Track your order'))
     };
   }
   if (eventType === 'PICKED_UP') {
     const ahead = ctx.dropsAhead || 0;
     return {
-      subject: ahead ? `${ctx.riderName || 'Your rider'} has collected your order` : `${ctx.riderName || 'Your rider'} has your order and is on the way 🛵`,
-      html: emailShell(siteBaseUrl, ahead ? 'Collected ✓' : "It's on the way! 🛵",
-        P(`${hi}${rider} has collected order <strong>#${esc(orderRef)}</strong> from ${stores}.`) +
-        P(ahead
-          ? `They have <strong>${ahead} other drop${ahead > 1 ? 's' : ''}</strong> nearby first — we'll email you when they're heading to you.`
-          : "They're heading straight to you now.") +
-        pinBlock(delivery.delivery_pin) +
-        SMALL('Give this PIN to the rider when they arrive — it confirms the delivery.'),
+      subject: 'Your order is on its way 🛵',
+      html: emailShell(siteBaseUrl, 'Your order is on its way 🛵',
+        P(`${hi}${who} has your order${ahead ? ` and has ${ahead === 1 ? 'one delivery' : ahead + ' deliveries'} to make before yours` : ' and is heading to you'}.`) +
+        pinBlock(delivery.delivery_pin) + SMALL('Give this PIN to the rider when they arrive.') + ref,
         track('Track your order'))
     };
   }
   if (eventType === 'IN_ROUTE') {
     return {
-      subject: "You're next — your Umzila rider is heading to you",
-      html: emailShell(siteBaseUrl, "You're next! 🛵",
-        P(`${hi}${rider} is now heading to you with order <strong>#${esc(orderRef)}</strong>.`) + pinBlock(delivery.delivery_pin),
-        track('Watch them on the map'))
+      subject: "You're next 🛵",
+      html: emailShell(siteBaseUrl, "You're next 🛵",
+        P(`${hi}${who} is on the way to you now.`) + pinBlock(delivery.delivery_pin) + ref,
+        track('Track your order'))
     };
   }
   if (eventType === 'NEARBY') {
     return {
-      subject: `${ctx.riderName || 'Your rider'} is a few minutes away 🛵`,
-      html: emailShell(siteBaseUrl, 'Almost there — get ready 👋',
-        P(`${hi}${riderLc} is a few minutes away with order <strong>#${esc(orderRef)}</strong>. Please head to the gate or door and have your PIN ready.`) +
-        pinBlock(delivery.delivery_pin) + vehicleLine(ctx),
-        track('See where they are'))
+      subject: 'Your order is a few minutes away',
+      html: emailShell(siteBaseUrl, 'A few minutes away',
+        P(`${hi}${who} is a few minutes away. Please have your PIN ready.`) +
+        pinBlock(delivery.delivery_pin) + vehicleLine(ctx) + ref,
+        track('Track your order'))
     };
   }
   if (eventType === 'ARRIVING') {
     return {
-      subject: `${ctx.riderName || 'Your rider'} is outside 📍`,
-      html: emailShell(siteBaseUrl, 'Your rider is here 📍',
-        P(`${hi}${riderLc} has arrived with order <strong>#${esc(orderRef)}</strong>. Please meet them at the gate or door and give them your PIN.`) +
+      subject: 'Your rider is outside 📍',
+      html: emailShell(siteBaseUrl, 'Your rider is outside 📍',
+        P(`${hi}${who} has arrived with your order.`) +
         pinBlock(delivery.delivery_pin) + vehicleLine(ctx) +
-        SMALL(`Can't find them? <a href="https://wa.me/${UMZILA_WA}?text=${encodeURIComponent('Hi Umzila! My rider for order #' + orderRef + ' is here but we can’t find each other.')}" style="color:#0a2f66;font-weight:700">WhatsApp us</a> and we'll connect you.`),
+        SMALL(`Can't find each other? <a href="https://wa.me/${UMZILA_WA}?text=${encodeURIComponent('Hi Umzila! My rider for order ' + orderRef + ' is here but we can’t find each other.')}" style="color:#0a2f66;font-weight:700">WhatsApp us</a>.`) + ref,
         '')
     };
   }
   if (eventType === 'DELIVERED') {
     return {
-      subject: 'Delivered! Your Umzila order has arrived',
-      html: emailShell(siteBaseUrl, "You're all set ✓",
-        P(`${hi}order <strong>#${esc(orderRef)}</strong> has been delivered. Enjoy, and thanks for ordering with Umzila!`) +
-        SMALL("We'll send a quick 1-tap rating in a few minutes — it really helps us get better."),
+      subject: 'Delivered — enjoy! ✓',
+      html: emailShell(siteBaseUrl, 'Delivered ✓',
+        P(`${hi}your order has been delivered. Enjoy, and thank you for ordering with Umzila!`) + ref,
         '')
     };
   }

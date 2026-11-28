@@ -4,6 +4,22 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-28 (later) — Plain customer wording, contact details never lost from Baskets
+
+**Reported:** the delivery emails said too much and used our own words; customers don't know what a "run", "round", "drop" or "cut-off" is. And people showed up under Baskets with contact details, then disappeared.
+
+**Root cause (Baskets):** the Baskets list read only `carts` rows. A guest row is deleted when the basket is emptied, when they sign in (clear_guest_cart) and by the nightly clean-up, and the name/email typed on it went with it. (The 5 people who had vanished over the last 30 days had all paid, which is correct, but the gap was real.) Checkout also only saved details when a box lost focus and only with a valid email.
+
+**What changed:**
+- Delivery emails (`lib/notify.js`) cut to one or two plain lines each: "Your order is being collected" / "Your order is on its way 🛵" (+ PIN; "has one delivery to make before yours" on a shared trip) / "You're next 🛵" / "Your order is a few minutes away" / "Your rider is outside 📍" / "Delivered — enjoy! ✓", with the order number in small print.
+- Checkout delivery-time text: no "rounds" or "cut-off" ("Pick when your order should leave the store", "Order by 13:45 to get this time", priority = "Yours is delivered first"). The customer "running late" email no longer says "dispatch".
+- **Basket leads** (`docs/plans/sql/36_basket_leads.sql`): `basket_leads__list(days)` = live baskets with details + browsers whose details are in `site_browsers` (permanent, written as typed) and that added to a basket (`user_events` add_to_cart), even after the basket was emptied; staff left out; gone once they pay (email or phone). logistics.html → Baskets → "Baskets with contact details" reads `ops_basket_leads()` (staff) and tags "Basket emptied" (shows what they had added) / "Unsubscribed"; `campaign_basket_recipients()` (campaign audience "baskets") now uses the same list (last 30 days, not unsubscribed).
+- Checkout saves the guest's details as they type (1.2 s pause) and keeps a phone number even before the email is done.
+
+**Files:** `netlify/functions/lib/notify.js`, `lib/timeslot-mail.js`, `checkout.html`, `logistics.html`, `docs/plans/sql/36_basket_leads.sql` (applied), `CLAUDE.md`.
+
+---
+
 ## 2026-11-28 — Step-by-step delivery emails, 4★ "what would make it 5?", basket audience for campaigns
 
 **Asked for:** customers should never be left guessing — an email when a rider has their order, when the rider is almost there, when the rider is outside, and when it's delivered; the rating page should ask 4-star raters what was missing (Nomvuzo rated 4★ with no comment); and a Black Friday email to everyone with an unfinished basket.
