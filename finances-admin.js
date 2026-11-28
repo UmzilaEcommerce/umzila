@@ -32,7 +32,7 @@
     unknown: { name: 'PayFast (method unknown)', pct: 3.2, fixed: 2, vat: true, min: 0 }
   };
   var DEFAULTS = {
-    default_markup_percent: 9,
+    default_markup_percent: 12,
     count_rider_pay_as_cost: false,
     tips_go_to: 'umzila',
     seller_codes_funded_by: 'seller',

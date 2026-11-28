@@ -14,8 +14,9 @@ _Built 2026-11-28. Read this before touching `rider.html`, `riders-admin.js`, dr
    - the average per delivery and road km;
    - a 14-day chart;
    - recent deliveries (store, area, km, pay, paid or to-be-paid);
-   - payments received (date + reference);
-   - the pay rates with an example.
+   - payments received (date + reference).
+
+   Founder (2026-11-28): show riders amounts only. There is no pay-rule explainer, no tips card and no long help text; get_rider_home() still returns a rates object, but the page doesn't show it.
 
 An **Account** tab covers name, phone, vehicle (editable; customers see it from "almost there"), tips, help on WhatsApp, and sign out.
 

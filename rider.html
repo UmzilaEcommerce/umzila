@@ -221,16 +221,15 @@ input.in:focus{border-color:var(--accent)}
   <h1>Become an Umzila rider</h1>
   <p>Deliver food from local stores to customers nearby. You choose when you're online.</p>
   <div class="perks">
-    <div>💰 <span><b>R34–R45 per delivery</b>, paid for every order you drop off.</span></div>
-    <div>🕒 <span><b>Go online when it suits you</b> — offers come straight to this page.</span></div>
-    <div>📊 <span><b>See every rand</b> you've earned and been paid.</span></div>
+    <div>🕒 <span><b>Go online when it suits you.</b></span></div>
+    <div>💰 <span><b>See what each delivery pays</b> before you accept.</span></div>
   </div>
   <form id="applyForm" novalidate>
     <label class="f" for="apName">First name</label>
     <input class="in" id="apName" type="text" autocomplete="given-name" maxlength="60" required>
     <label class="f" for="apPhone">Phone (WhatsApp)</label>
     <input class="in" id="apPhone" type="tel" autocomplete="tel" required>
-    <label class="f" for="apVehicle">Your vehicle (customers see this when you arrive)</label>
+    <label class="f" for="apVehicle">Your vehicle</label>
     <input class="in" id="apVehicle" type="text" maxlength="80" placeholder="e.g. Red Honda scooter" required>
     <div class="err" id="applyErr"></div>
     <button class="btn primary big" id="applyBtn" type="submit">Apply to ride</button>
@@ -242,7 +241,7 @@ input.in:focus{border-color:var(--accent)}
 <section id="scrWait" class="auth hidden">
   <div class="logo" id="waitIco">⏳</div>
   <h1 id="waitTitle">Thanks — you're on the list</h1>
-  <p id="waitText">Umzila will check your details and switch your rider account on. This page updates by itself once you're approved.</p>
+  <p id="waitText">We’ll let you know once you’re approved.</p>
   <a class="btn big" id="waitWa" href="https://wa.me/27797662768?text=Hi%20Umzila%2C%20I%20applied%20to%20ride" target="_blank" rel="noopener" style="margin-top:8px">💬 WhatsApp Umzila</a>
   <div class="switch"><a href="#" data-signout>Sign out</a></div>
 </section>
@@ -304,10 +303,6 @@ input.in:focus{border-color:var(--accent)}
         <div class="k">Payments to you</div>
         <div class="list" id="payouts"></div>
       </div>
-      <div class="card rates">
-        <div class="k">How you're paid</div>
-        <div id="rates"></div>
-      </div>
     </section>
 
     <!-- Account -->
@@ -316,19 +311,10 @@ input.in:focus{border-color:var(--accent)}
         <div class="k">Your rider profile</div>
         <h2 id="acName">—</h2>
         <div class="muted small" id="acMeta"></div>
-        <label class="f" for="acVehicle">Your vehicle (shown to customers when you're close)</label>
+        <label class="f" for="acVehicle">Your vehicle</label>
         <input class="in" id="acVehicle" type="text" maxlength="80" placeholder="e.g. Red Honda scooter">
         <div class="err" id="acMsg"></div>
         <button class="btn" id="acSave" style="width:100%">Save vehicle</button>
-      </div>
-      <div class="card">
-        <div class="k">Tips for smooth deliveries</div>
-        <div class="small muted" style="line-height:1.6">
-          • Keep this page open and your location on while you're online.<br>
-          • Tap <b>I'm at the store</b> when you arrive, tick each item as you collect it.<br>
-          • Tap <b>Start trip</b> when you leave — the customer is told you're on the way.<br>
-          • At the door, tap <b>I've arrived</b> and ask for the customer's 4-digit PIN.
-        </div>
       </div>
       <div class="row">
         <a class="btn" href="https://wa.me/27797662768?text=Hi%20Umzila%2C%20rider%20here" target="_blank" rel="noopener">💬 Help</a>
@@ -399,7 +385,7 @@ input.in:focus{border-color:var(--accent)}
       const paused = HOME.status === 'suspended';
       $('waitIco').textContent = paused ? '⏸️' : '⏳';
       $('waitTitle').textContent = paused ? 'Your rider account is paused' : 'Thanks — you’re on the list';
-      $('waitText').textContent = paused ? 'You can’t take deliveries right now. Message Umzila if you think this is a mistake.' : 'Umzila will check your details and switch your rider account on. This page updates by itself once you’re approved.';
+      $('waitText').textContent = paused ? 'You can’t take deliveries right now. Message Umzila if you think this is a mistake.' : 'We’ll let you know once you’re approved.';
       clearTimeout(homeTimer); homeTimer = setTimeout(route, 30000);
       return;
     }
@@ -497,7 +483,7 @@ input.in:focus{border-color:var(--accent)}
     $('eAvg').textContent = R(t.all_n ? t.all / t.all_n : 0);
     $('eKm').textContent = (Number(t.km_month) || 0).toFixed(1) + ' km';
     const ip = $('inProg');
-    if(Number(t.in_progress) > 0){ ip.style.display = ''; ip.innerHTML = `<div class="k">On your current trip</div><div style="font-size:22px;font-weight:900">${R(t.in_progress)}</div><div class="muted small">Added to your earnings when the trip is finished.</div>`; }
+    if(Number(t.in_progress) > 0){ ip.style.display = ''; ip.innerHTML = `<div class="k">On your current trip</div><div style="font-size:22px;font-weight:900">${R(t.in_progress)}</div>`; }
     else ip.style.display = 'none';
     const days = HOME.days || [], max = Math.max(1, ...days.map(d => Number(d.pay) || 0));
     const today = days.length ? days[days.length - 1].day : '';
@@ -511,16 +497,7 @@ input.in:focus{border-color:var(--accent)}
       : '<div class="muted small">Your finished deliveries will show here.</div>';
     const pays = HOME.payouts || [];
     $('payouts').innerHTML = pays.length ? pays.map(p => `<div class="li"><div><b>${R(p.amount)}</b><div class="muted small">${esc(dayLbl(p.paid_at))}${p.reference ? ' · ' + esc(p.reference) : ''}</div></div><span class="tag paid">${p.n} ${p.n === 1 ? 'trip' : 'trips'}</span></div>`).join('')
-      : '<div class="muted small">No payments yet. Money you’re owed shows under “To be paid to you”.</div>';
-    const r = HOME.rates || {};
-    const ex = km => Math.min(r.max, Math.max(r.base, r.base + Math.max(0, km - r.included_km) * r.per_km));
-    $('rates').innerHTML = `
-      <div class="r"><span>First ${r.included_km} km by road</span><b>${R(r.base)}</b></div>
-      <div class="r"><span>Every extra km</span><b>+${R(r.per_km)}</b></div>
-      <div class="r"><span>Each extra store on one order</span><b>+${R(r.per_extra_store)}</b></div>
-      <div class="r"><span>Most per delivery</span><b>${R(r.max)}</b></div>
-      <div class="r"><span>Distance unknown</span><b>${R(r.unknown_distance)}</b></div>
-      <div class="muted small" style="margin-top:10px;line-height:1.5">Every delivery on a trip is paid in full — two orders on one trip pay twice. Free-delivery orders pay you the same. Example: a 10 km delivery pays ${R(ex(10))}.</div>`;
+      : '<div class="muted small">No payments yet.</div>';
     $('acName').textContent = rd.first_name || 'Rider';
     $('acMeta').textContent = [rd.phone, rd.since ? 'Rider since ' + new Intl.DateTimeFormat('en-ZA', { month:'long', year:'numeric' }).format(new Date(rd.since)) : ''].filter(Boolean).join(' · ');
     if(document.activeElement !== $('acVehicle')) $('acVehicle').value = rd.vehicle || '';

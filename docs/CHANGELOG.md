@@ -4,6 +4,14 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-28 (evening) — 12 % default mark-up, free delivery switched off, /rider trimmed
+
+- Finances default mark-up (products without a store price) 9 % → **12 %** (site_settings finance.default_markup_percent; finances-admin.js fallback). November had no estimated store lines, so its figures are unchanged.
+- Free delivery: the order-amount threshold was already off. The one product with free delivery (Lumina "Kellog's Noodles 5 pack") is switched off. Rule from the founder: only an admin may give one specific customer free delivery (not built yet).
+- /rider: removed the pay-rule card, the tips card and the long help texts. Riders see amounts only.
+
+---
+
 ## 2026-11-28 — Rider app at /rider, admin → Riders, "External riders" by period
 
 **Asked for:** a /rider page with everything a rider needs (accept and deliver orders, exact pay rates, earnings, payouts, analytics) without exposing admin data; admin should see exactly what each rider is owed; and an "external riders" switch that takes rider pay off profit only for orders in the period it was on, never re-writing earlier orders.
