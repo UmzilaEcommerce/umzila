@@ -541,6 +541,7 @@ const supabaseClient = supabase.createClient(
           <li data-section="deliveries"><span class="menu-icon">📮</span><span class="menu-label">Deliveries</span></li>
           <li data-section="service-areas"><span class="menu-icon">🗺️</span><span class="menu-label">Service Areas</span></li>
           <li data-section="delivery-times"><span class="menu-icon">🕒</span><span class="menu-label">Delivery Times</span></li>
+          <li data-section="riders"><span class="menu-icon">🧑‍✈️</span><span class="menu-label">Riders</span></li>
           <li data-section="delivery-pricing"><span class="menu-icon">💰</span><span class="menu-label">Delivery Pricing</span></li>
           <li data-section="payments"><span class="menu-icon">💳</span><span class="menu-label">Payments</span></li>
           <li data-section="finances"><span class="menu-icon">💰</span><span class="menu-label">Finances</span></li>
@@ -1270,6 +1271,15 @@ const supabaseClient = supabase.createClient(
           <h2>💳 Payments</h2>
         </div>
         <div id="paymentsMount"><p style="color:#6b7280">Loading…</p></div>
+      </section>
+
+      <!-- Riders (2026-11-28): applications from /rider, pause/resume, owed + mark paid. All logic in /riders-admin.js. -->
+      <section id="section-riders" style="display:none">
+        <div class="section-top">
+          <h2>🧑‍✈️ Riders</h2>
+          <button class="small-btn" onclick="window.loadRidersAdmin?.()">↻ Refresh</button>
+        </div>
+        <div id="ridersMount"><p style="color:#6b7280">Loading…</p></div>
       </section>
 
       <section id="section-delivery-times" style="display:none">
@@ -2499,6 +2509,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
     'delivery-pricing': document.getElementById('section-delivery-pricing'),
     'delivery-analytics': document.getElementById('section-delivery-analytics'),
     'delivery-times': document.getElementById('section-delivery-times'),
+    'riders': document.getElementById('section-riders'),
     'payments': document.getElementById('section-payments'),
     'finances': document.getElementById('section-finances'),
     'spin': document.getElementById('section-spin'),
@@ -3336,6 +3347,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
   document.querySelector('[data-section="deliveries"]')?.addEventListener('click', () => window.loadDeliveriesAdmin?.());
   document.querySelector('[data-section="delivery-pricing"]')?.addEventListener('click', () => { window.loadDeliveryPricing?.(); window.loadAlmostThereAdmin?.(); });
   document.querySelector('[data-section="delivery-times"]')?.addEventListener('click', () => window.loadTimeslotsAdmin?.());
+  document.querySelector('[data-section="riders"]')?.addEventListener('click', () => window.loadRidersAdmin?.());
   document.querySelector('[data-section="payments"]')?.addEventListener('click', () => window.loadPaymentsAdmin?.());
   document.querySelector('[data-section="dashboard"]')?.addEventListener('click', () => window.loadPaymentsBadge?.());
   document.querySelector('[data-section="finances"]')?.addEventListener('click', () => window.loadFinancesAdmin?.());
@@ -6700,6 +6712,7 @@ async function tryUploadImageToBucket(dataUrl, filenameHint = 'img') {
 })();
 </script>
 <script src="/timeslots-admin.js"></script>
+<script src="/riders-admin.js"></script>
 <script src="/payments-admin.js"></script>
 <script src="/finances-admin.js"></script>
 </body>

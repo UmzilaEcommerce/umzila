@@ -237,6 +237,13 @@
   // ---------- P&L (from fin_summary totals; the browser does not sum orders) ----------
   // Server: umzila_gross_profit = gross − owed_to_stores − payfast_fees − house_cogs − refunds − rider_cost − tips_to_rider
   //         net_profit = umzila_gross_profit + other_income − expenses
+  // "External riders" periods (site_settings finance.rider_pay_cost_periods, kept by the server
+  // when the switch is flipped — docs/systems/rider-panel.md).
+  function riderPeriods(list) {
+    list = Array.isArray(list) ? list : [];
+    if (!list.length) return '';
+    return '<br><b>Periods so far:</b> ' + list.map(function (p) { return esc(fmtWhen(p.from)) + ' → ' + (p.to ? esc(fmtWhen(p.to)) : 'now'); }).join('; ');
+  }
   function T() { return o(S.summary && S.summary.totals); }
   function plRows() {
     var t = T(), s = S.summary || {};
@@ -251,8 +258,10 @@
       { key: 'gross', label: 'Order value (cash in)', amount: num(t.gross), sign: 1, note: 'What customers paid: goods, delivery, priority and tips (' + num(s.orders) + ' orders).' },
       { key: 'payouts', label: 'Owed to stores', amount: num(t.owed_to_stores), sign: -1, est: owedEst > 0, note: owedEst > 0 ? money(owedEst) + ' estimated with the default mark-up (no store price set)' : 'Store price per product' }
     ];
-    if (counted) rows.push({ key: 'rider', label: 'Rider pay', amount: num(t.rider_cost), sign: -1 });
-    else rows.push({ key: 'rider', label: 'Rider pay — not counted (riders are staff)', amount: num(t.rider_pay), info: true, note: 'Record wages and fuel under Expenses. Switch “Count rider pay as a cost” on in Assumptions when riders become contractors.' });
+    if (counted) {
+      rows.push({ key: 'rider', label: 'Rider pay (external riders)', amount: num(t.rider_cost), sign: -1, note: 'Only orders paid while “External riders” was on.' });
+      if (num(t.rider_pay) - num(t.rider_cost) > 0.005) rows.push({ key: 'rider_staff', label: 'Rider pay — not counted (staff riders)', amount: num(t.rider_pay) - num(t.rider_cost), info: true, note: 'Orders paid while “External riders” was off.' });
+    } else rows.push({ key: 'rider', label: 'Rider pay — not counted (riders are staff)', amount: num(t.rider_pay), info: true, note: 'Record wages and fuel under Expenses. Switch “External riders” on in Assumptions when riders are paid per delivery.' });
     if (num(t.tips_to_rider)) rows.push({ key: 'tips', label: 'Tips passed to riders', amount: num(t.tips_to_rider), sign: -1 });
     rows.push(
       { key: 'fees', label: 'PayFast fees', amount: num(t.payfast_fees), sign: -1, est: feesEst > 0, note: feesEst > 0 ? money(feesEst) + ' of this is estimated from the fee rates' : 'as reported by PayFast' },
@@ -512,7 +521,7 @@
     if (S.settingsErr) h += '<div class="fn-warn">Couldn’t load the finance settings: ' + esc(S.settingsErr) + '</div>';
     h += msg('assump') + '<div class="fn-grid">' +
       '<div class="fn-field"><label for="fnMarkup">Default mark-up % (products without a store price)</label><input type="number" inputmode="decimal" id="fnMarkup" min="0" max="100" step="0.1" value="' + esc(st.default_markup_percent) + '"><div class="fn-help">Store owed = price ÷ (1 + mark-up). 9 % → R137 plate owes the store ≈ R125.69. Lines using this are marked ≈.</div></div>' +
-      '<div class="fn-field"><label class="fn-check"><input type="checkbox" id="fnRiderCost"' + (st.count_rider_pay_as_cost ? ' checked' : '') + '> Count rider pay as a cost</label><div class="fn-help">Off while riders are Umzila staff (record wages/fuel as expenses). Switch on when riders become contractors paid per delivery.</div></div>' +
+      '<div class="fn-field"><label class="fn-check"><input type="checkbox" id="fnRiderCost"' + (st.count_rider_pay_as_cost ? ' checked' : '') + '> External riders — take rider pay off profit</label><div class="fn-help">On: every order paid <b>from the moment you save</b> has its rider pay taken off Umzila’s profit (riders paid per delivery). Off: from then on it isn’t (staff riders — record wages/fuel as expenses). Earlier orders never change.' + riderPeriods(st.rider_pay_cost_periods) + '</div></div>' +
       '<div class="fn-field"><label for="fnSellerCodes">Store promo codes are paid by</label><select id="fnSellerCodes"><option value="seller"' + (st.seller_codes_funded_by !== 'umzila' ? ' selected' : '') + '>The store (comes off what it is owed)</option><option value="umzila"' + (st.seller_codes_funded_by === 'umzila' ? ' selected' : '') + '>Umzila</option></select></div>' +
       '<div class="fn-field"><label for="fnManualDisc">Discounts typed in by hand on logistics orders are paid by</label><select id="fnManualDisc"><option value="umzila"' + (st.manual_discount_funded_by !== 'seller' ? ' selected' : '') + '>Umzila</option><option value="seller"' + (st.manual_discount_funded_by === 'seller' ? ' selected' : '') + '>The store</option></select></div>' +
       '<div class="fn-field"><label for="fnTips">Tips go to</label><select id="fnTips"><option value="umzila"' + (st.tips_go_to !== 'rider' ? ' selected' : '') + '>Umzila (riders are staff)</option><option value="rider"' + (st.tips_go_to === 'rider' ? ' selected' : '') + '>The rider (taken off Umzila’s figures)</option></select></div>' +

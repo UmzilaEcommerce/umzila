@@ -4,6 +4,31 @@ Dated log of drastic/significant changes — bug fixes touching core flows (chec
 
 ---
 
+## 2026-11-28 — Rider app at /rider, admin → Riders, "External riders" by period
+
+**Asked for:** a /rider page with everything a rider needs (accept and deliver orders, exact pay rates, earnings, payouts, analytics) without exposing admin data; admin should see exactly what each rider is owed; and an "external riders" switch that takes rider pay off profit only for orders in the period it was on, never re-writing earlier orders.
+
+**Root causes found on the way:** (1) riders could only work from logistics.html, which needs a staff role that also opens every order and customer; (2) `driver-heartbeat.js` made ANY signed-in account an eligible rider on its first heartbeat, which with a public page would have exposed customer details; (3) `count_rider_pay_as_cost` was one global switch, so flipping it changed the profit of every past order.
+
+**What changed:**
+- **`rider.html` (/rider):** sign in or create an account, apply, wait for approval, then a three-tab app.
+  - Deliver: online switch, GPS status, screen wake-lock, offers with buzz and countdown, and the full trip flow.
+  - Earnings: today/week/month/all, owed vs paid, average, km, 14-day chart, recent deliveries, payments, pay rates.
+  - Account: vehicle, tips, help.
+  - It reads only `get_driver_board()` and the new `get_rider_home()`.
+- **Rider sign-up:** `rider_apply()` (pending) and `rider_set_vehicle()`. The heartbeat only self-registers staff, and only `eligible` riders can go online; `respond-to-driver-offer` refuses accepts from non-eligible riders.
+- **admin → 🧑‍✈️ Riders (`riders-admin.js`):**
+  - owed now, rider pay this month, applications waiting;
+  - per rider: status, online, contact, vehicle, owed (trips), this month, paid so far, last paid;
+  - Approve / Pause / Resume, Add by email, and "Mark R… paid" with a reference (`admin_riders`, `admin_rider_set_status`, `admin_rider_add`, `admin_rider_pay`; `driver_payouts.paid_reference/paid_by` added).
+- **Finances → Assumptions → "External riders — take rider pay off profit":** the server keeps `rider_pay_cost_periods`, and each order's rider pay is a cost only if it was paid inside a period (`fin__rider_cost_at`). The P&L splits counted (external) and not counted (staff) rider pay for mixed ranges. November's net profit was unchanged after the change (R561.95).
+- `rider`/`riders` added to `seller_slug_reserved()`; `netlify.toml` maps /rider → rider.html.
+- **Black Friday basket campaign sent** 28 Nov 11:20 SAST to 12 people (audience "baskets").
+
+**Files:** `rider.html` (new), `riders-admin.js` (new), `admin.html`, `finances-admin.js`, `netlify/functions/driver-heartbeat.js`, `respond-to-driver-offer.js`, `netlify.toml`, `docs/plans/sql/37_rider_panel.sql` (applied). System doc: [docs/systems/rider-panel.md](systems/rider-panel.md).
+
+---
+
 ## 2026-11-28 (later) — Plain customer wording, contact details never lost from Baskets
 
 **Reported:** the delivery emails said too much and used our own words; customers don't know what a "run", "round", "drop" or "cut-off" is. And people showed up under Baskets with contact details, then disappeared.

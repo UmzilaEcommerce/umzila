@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<meta name="robots" content="noindex">
+<title>Umzila Rider</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<!--
+  rider.html — the rider app (umzila.store/rider), 2026-11-28. See docs/systems/rider-panel.md.
+  Riders only: sign in → apply (rider_apply, pending) → an admin approves (admin → Riders).
+  Reads ONLY: get_driver_board() (offers + the rider's own trip; customer contact only on the
+  active trip) and get_rider_home() (own earnings/payouts). Every change goes through the same
+  Netlify functions as before: driver-heartbeat, respond-to-driver-offer, advance-route,
+  confirm-delivery-pin. Nothing here can see other riders, orders, money or admin data.
+-->
+<style>
+:root{
+  --bg:#0b0d12;--bg2:#11141b;--card:#161a23;--card2:#1c212c;--line:#262c39;--text:#f4f6fb;--muted:#8b93a7;--dim:#5c6478;
+  --accent:#22c55e;--accent2:#16a34a;--warn:#f59e0b;--bad:#ef4444;--blue:#3b82f6;--gold:#facc15;
+  --r:18px;--safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+body{min-height:100dvh}
+a{color:inherit}
+button{font:inherit;color:inherit}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px calc(96px + var(--safe-b))}
+.muted{color:var(--muted)}.small{font-size:13px}.dim{color:var(--dim)}
+.hidden{display:none!important}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:rgba(11,13,18,.86);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.top-in{max-width:560px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:-.01em;font-size:18px}
+.brand i{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,#22c55e,#0ea5e9);display:grid;place-items:center;font-style:normal;font-size:18px}
+.brand small{display:block;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.top .grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:700;background:var(--card);border:1px solid var(--line);color:var(--muted)}
+.pill.on{color:#bbf7d0;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}
+.pill .d{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.pill.on .d{background:var(--accent);box-shadow:0 0 0 4px rgba(34,197,94,.18)}
+
+/* cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.k{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+h1{font-size:26px;line-height:1.15;margin:4px 0 6px;letter-spacing:-.02em}
+h2{font-size:18px;margin:0 0 4px;letter-spacing:-.01em}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:13px 16px;font-weight:800;font-size:15px;cursor:pointer;text-decoration:none;background:var(--card2);color:var(--text);border:1px solid var(--line)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#052e12}
+.btn.primary:active{background:var(--accent2)}
+.btn.ghost{background:transparent}
+.btn.big{width:100%;padding:17px;font-size:17px;border-radius:16px}
+.btn[disabled]{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row .btn{flex:1}
+
+/* forms */
+label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin:12px 0 6px}
+input.in{width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--text);font:inherit;font-size:16px;outline:none}
+input.in:focus{border-color:var(--accent)}
+.err{color:#fca5a5;font-size:13px;margin-top:8px;min-height:18px}
+.ok{color:#86efac}
+
+/* online switch card */
+.status{display:flex;align-items:center;gap:14px;padding:18px;border-radius:22px;background:linear-gradient(160deg,#161a23,#11141b);border:1px solid var(--line);margin-bottom:12px}
+.status.on{background:linear-gradient(160deg,rgba(34,197,94,.20),rgba(22,163,74,.06));border-color:rgba(34,197,94,.35)}
+.status .t{font-weight:900;font-size:19px}
+.status .s{font-size:13px;color:var(--muted);margin-top:2px}
+.sw{margin-left:auto;width:64px;height:36px;border-radius:999px;background:#2a3140;border:0;position:relative;cursor:pointer;flex:none;transition:background .2s}
+.sw:after{content:"";position:absolute;top:4px;left:4px;width:28px;height:28px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.sw[aria-checked="true"]{background:var(--accent)}
+.sw[aria-checked="true"]:after{transform:translateX(28px)}
+.gps{font-size:12.5px;padding:9px 12px;border-radius:12px;margin:-2px 0 12px;background:rgba(34,197,94,.08);color:#bbf7d0;border:1px solid rgba(34,197,94,.2)}
+.gps.warn{background:rgba(245,158,11,.1);color:#fde68a;border-color:rgba(245,158,11,.3)}
+.gps.bad{background:rgba(239,68,68,.1);color:#fecaca;border-color:rgba(239,68,68,.3)}
+
+/* quick stats on deliver tab */
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.mini div{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px}
+.mini b{display:block;font-size:18px;font-weight:900}
+.mini span{font-size:11.5px;color:var(--muted)}
+
+/* empty */
+.empty{text-align:center;padding:34px 16px;color:var(--muted);line-height:1.5}
+.empty .ico{font-size:40px;margin-bottom:8px}
+.pulse{animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35;transform:scale(.94)}}
+
+/* offers */
+.offer{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;margin-bottom:12px;position:relative;overflow:hidden}
+.offer:before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,var(--accent),#0ea5e9)}
+.offer.batch:before{background:linear-gradient(90deg,var(--gold),var(--warn))}
+.offer-top{display:flex;justify-content:space-between;align-items:flex-start}
+.pay{font-size:34px;font-weight:900;letter-spacing:-.02em}
+.timer{font-variant-numeric:tabular-nums;font-weight:800;padding:6px 10px;border-radius:999px;background:var(--card2);font-size:14px}
+.timer.urgent{background:rgba(239,68,68,.18);color:#fecaca}
+.legs{margin:12px 0;display:grid;gap:10px}
+.leg{display:flex;gap:10px}
+.leg i{width:12px;height:12px;border-radius:50%;margin-top:5px;flex:none;border:3px solid var(--accent)}
+.leg i.b{border-color:#0ea5e9}
+.leg .lk{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.leg .lv{font-weight:700}
+.leg .ls{font-size:13px;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chips span{font-size:12px;font-weight:700;padding:5px 9px;border-radius:999px;background:var(--card2);color:#cbd5e1}
+.fit{font-size:13px;color:#fde68a;margin-top:6px}
+
+/* job */
+.trip-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.bar{height:6px;border-radius:999px;background:var(--card2);overflow:hidden;margin-bottom:14px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#0ea5e9);border-radius:999px}
+.person{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:12px}
+.person.store{border-left:4px solid var(--accent)}
+.person.cust{border-left:4px solid #0ea5e9}
+.person .name{font-size:20px;font-weight:900;margin:2px 0}
+.addr{font-size:14.5px;line-height:1.45;margin:8px 0}
+.instr{font-size:14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fde68a;border-radius:12px;padding:9px 11px;margin:8px 0}
+.contact{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.contact .btn{padding:11px 6px;font-size:13.5px}
+.contact .btn.nav{background:#0ea5e9;border-color:#0ea5e9;color:#04263a}
+.hint{font-size:13.5px;background:var(--card2);border-radius:12px;padding:10px 12px;margin-bottom:12px;color:#cbd5e1}
+.items{display:grid;gap:6px;margin-top:8px}
+.item{display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--line);font-size:14.5px}
+.item.check{cursor:pointer}
+.item.check.on{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.08)}
+.item input{width:20px;height:20px;accent-color:var(--accent)}
+.qty{font-weight:900;color:var(--accent);min-width:28px}
+.prio{font-size:11px;font-weight:800;padding:3px 7px;border-radius:999px;background:rgba(250,204,21,.15);color:var(--gold)}
+.pin input{letter-spacing:12px;text-align:center;font-size:30px;font-weight:900;padding:16px}
+.upnext{margin-top:6px}
+.upnext .r{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.upnext .r span{width:24px;height:24px;border-radius:50%;background:var(--card2);display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+.actionbar{position:fixed;left:0;right:0;bottom:calc(66px + var(--safe-b));padding:10px 16px;background:linear-gradient(180deg,rgba(11,13,18,0),var(--bg) 35%);z-index:15}
+.actionbar>div{max-width:528px;margin:0 auto}
+.done{text-align:center;padding:40px 16px}
+.done .c{width:84px;height:84px;border-radius:50%;background:rgba(34,197,94,.15);color:var(--accent);display:grid;place-items:center;font-size:44px;margin:0 auto 12px}
+
+/* earnings */
+.hero{border-radius:24px;padding:20px;background:radial-gradient(120% 140% at 100% 0%,rgba(14,165,233,.28),transparent 55%),radial-gradient(120% 120% at 0% 100%,rgba(34,197,94,.25),transparent 55%),var(--card);border:1px solid var(--line);margin-bottom:12px}
+.hero .big{font-size:44px;font-weight:900;letter-spacing:-.03em;line-height:1}
+.seg{display:inline-flex;background:var(--bg2);border:1px solid var(--line);border-radius:999px;padding:4px;margin-bottom:14px}
+.seg button{border:0;background:none;padding:7px 14px;border-radius:999px;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--card2);color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.stat b{display:block;font-size:22px;font-weight:900;letter-spacing:-.01em}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.owed{border-color:rgba(250,204,21,.35);background:linear-gradient(160deg,rgba(250,204,21,.10),var(--card))}
+.chart{display:flex;align-items:flex-end;gap:5px;height:130px;padding-top:10px}
+.chart .c{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:6px}
+.chart .c i{display:block;width:100%;border-radius:7px 7px 3px 3px;background:linear-gradient(180deg,#22c55e,#0ea5e9);min-height:3px}
+.chart .c.zero i{background:var(--card2)}
+.chart .c.today i{box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+.chart .c em{font-style:normal;font-size:10px;color:var(--dim)}
+.list .li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.list .li:first-child{border-top:0}
+.list .li b{font-weight:800}
+.tag{font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px}
+.tag.paid{background:rgba(34,197,94,.14);color:#86efac}
+.tag.owed{background:rgba(250,204,21,.14);color:var(--gold)}
+.rates .r{display:flex;justify-content:space-between;padding:9px 0;border-top:1px solid var(--line);font-size:14.5px}
+.rates .r:first-of-type{border-top:0}
+
+/* bottom tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(17,20,27,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:var(--safe-b)}
+.tabs-in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tab{border:0;background:none;padding:10px 0 9px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11.5px;font-weight:700;color:var(--dim);cursor:pointer;position:relative}
+.tab svg{width:23px;height:23px}
+.tab.on{color:var(--text)}
+.tab.on svg{color:var(--accent)}
+.tab .badge{position:absolute;top:6px;left:calc(50% + 6px);min-width:18px;height:18px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+
+/* toast */
+#toasts{position:fixed;top:12px;left:0;right:0;z-index:100;display:grid;justify-items:center;gap:8px;pointer-events:none;padding:0 16px}
+.toast{pointer-events:auto;max-width:520px;width:100%;padding:12px 14px;border-radius:14px;background:#1f2937;border:1px solid var(--line);font-size:14px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.45);animation:tin .2s ease}
+.toast.success{border-color:rgba(34,197,94,.5)}.toast.error{border-color:rgba(239,68,68,.5)}.toast.warn{border-color:rgba(245,158,11,.5)}
+@keyframes tin{from{transform:translateY(-8px);opacity:0}}
+
+/* auth */
+.auth{max-width:440px;margin:0 auto;padding:40px 16px}
+.auth .logo{width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#22c55e,#0ea5e9);display:grid;place-items:center;font-size:32px;margin-bottom:18px}
+.auth p{color:var(--muted);line-height:1.5}
+.switch{margin-top:16px;text-align:center;font-size:14px;color:var(--muted)}
+.switch a{color:var(--text);font-weight:700}
+.perks{display:grid;gap:10px;margin:18px 0}
+.perks div{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;color:#cbd5e1}
+.perks div b{color:var(--text)}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
+<script src="/input-guard.js"></script>
+<script src="/auth-mail.js"></script>
+</head>
+<body>
+<div id="toasts"></div>
+
+<!-- ── Signed out ── -->
+<section id="scrAuth" class="auth hidden">
+  <div class="logo">🛵</div>
+  <h1 id="authTitle">Ride with Umzila</h1>
+  <p id="authSub">Sign in to see delivery offers, your trips and what you've earned.</p>
+  <form id="authForm" autocomplete="on" novalidate>
+    <label class="f" for="aEmail">Email</label>
+    <input class="in" id="aEmail" type="email" autocomplete="email" required>
+    <label class="f" for="aPass">Password</label>
+    <input class="in" id="aPass" type="password" autocomplete="current-password" minlength="6" required>
+    <div class="err" id="authErr"></div>
+    <button class="btn primary big" id="authBtn" type="submit">Sign in</button>
+  </form>
+  <div class="switch"><span id="authSwitchText">New rider?</span> <a href="#" id="authSwitch">Create an account</a></div>
+  <div class="switch"><a href="/reset-password.html">Forgot your password?</a></div>
+</section>
+
+<!-- ── Signed in, not a rider yet: apply ── -->
+<section id="scrApply" class="auth hidden">
+  <div class="logo">📝</div>
+  <h1>Become an Umzila rider</h1>
+  <p>Deliver food from local stores to customers nearby. You choose when you're online.</p>
+  <div class="perks">
+    <div>💰 <span><b>R34–R45 per delivery</b>, paid for every order you drop off.</span></div>
+    <div>🕒 <span><b>Go online when it suits you</b> — offers come straight to this page.</span></div>
+    <div>📊 <span><b>See every rand</b> you've earned and been paid.</span></div>
+  </div>
+  <form id="applyForm" novalidate>
+    <label class="f" for="apName">First name</label>
+    <input class="in" id="apName" type="text" autocomplete="given-name" maxlength="60" required>
+    <label class="f" for="apPhone">Phone (WhatsApp)</label>
+    <input class="in" id="apPhone" type="tel" autocomplete="tel" required>
+    <label class="f" for="apVehicle">Your vehicle (customers see this when you arrive)</label>
+    <input class="in" id="apVehicle" type="text" maxlength="80" placeholder="e.g. Red Honda scooter" required>
+    <div class="err" id="applyErr"></div>
+    <button class="btn primary big" id="applyBtn" type="submit">Apply to ride</button>
+  </form>
+  <div class="switch"><a href="#" data-signout>Sign out</a></div>
+</section>
+
+<!-- ── Applied / paused ── -->
+<section id="scrWait" class="auth hidden">
+  <div class="logo" id="waitIco">⏳</div>
+  <h1 id="waitTitle">Thanks — you're on the list</h1>
+  <p id="waitText">Umzila will check your details and switch your rider account on. This page updates by itself once you're approved.</p>
+  <a class="btn big" id="waitWa" href="https://wa.me/27797662768?text=Hi%20Umzila%2C%20I%20applied%20to%20ride" target="_blank" rel="noopener" style="margin-top:8px">💬 WhatsApp Umzila</a>
+  <div class="switch"><a href="#" data-signout>Sign out</a></div>
+</section>
+
+<!-- ── The app ── -->
+<div id="app" class="hidden">
+  <header class="top"><div class="top-in">
+    <div class="brand"><i>🛵</i><div>Umzila<small>Rider</small></div></div>
+    <div class="grow"></div>
+    <span class="pill" id="onlinePill"><span class="d"></span><span id="onlinePillText">Offline</span></span>
+  </div></header>
+
+  <main class="wrap">
+    <!-- Deliver -->
+    <section id="tabDeliver">
+      <div class="status" id="statusCard">
+        <div><div class="t" id="statusT">You're offline</div><div class="s" id="statusS">Go online to get delivery offers.</div></div>
+        <button class="sw" id="onlineSw" role="switch" aria-checked="false" aria-label="Go online"></button>
+      </div>
+      <div class="gps hidden" id="gps"></div>
+      <div class="mini" id="miniStats">
+        <div><b id="mToday">R0</b><span>Today</span></div>
+        <div><b id="mTodayN">0</b><span>Deliveries today</span></div>
+        <div><b id="mOwed">R0</b><span>To be paid</span></div>
+      </div>
+      <div id="job"></div>
+      <div id="offersWrap">
+        <div class="k" id="offersLabel">Delivery offers</div>
+        <div id="offers"></div>
+      </div>
+    </section>
+
+    <!-- Earnings -->
+    <section id="tabEarn" class="hidden">
+      <div class="hero">
+        <div class="seg" id="earnSeg">
+          <button data-p="today">Today</button><button data-p="week" class="on">This week</button><button data-p="month">This month</button><button data-p="all">All time</button>
+        </div>
+        <div class="k" id="heroK">Earned this week</div>
+        <div class="big" id="heroAmt">R0.00</div>
+        <div class="muted small" id="heroSub" style="margin-top:6px">0 deliveries</div>
+      </div>
+      <div class="grid2">
+        <div class="stat owed"><b id="eOwed">R0.00</b><span>To be paid to you</span></div>
+        <div class="stat"><b id="ePaid">R0.00</b><span>Paid to you so far</span></div>
+        <div class="stat"><b id="eAvg">R0.00</b><span>Average per delivery</span></div>
+        <div class="stat"><b id="eKm">0 km</b><span>Road km this month</span></div>
+      </div>
+      <div class="card" id="inProg" style="display:none"></div>
+      <div class="card">
+        <div class="k">Last 14 days</div>
+        <div class="chart" id="chart"></div>
+      </div>
+      <div class="card">
+        <div class="k">Recent deliveries</div>
+        <div class="list" id="recent"></div>
+      </div>
+      <div class="card">
+        <div class="k">Payments to you</div>
+        <div class="list" id="payouts"></div>
+      </div>
+      <div class="card rates">
+        <div class="k">How you're paid</div>
+        <div id="rates"></div>
+      </div>
+    </section>
+
+    <!-- Account -->
+    <section id="tabAcct" class="hidden">
+      <div class="card">
+        <div class="k">Your rider profile</div>
+        <h2 id="acName">—</h2>
+        <div class="muted small" id="acMeta"></div>
+        <label class="f" for="acVehicle">Your vehicle (shown to customers when you're close)</label>
+        <input class="in" id="acVehicle" type="text" maxlength="80" placeholder="e.g. Red Honda scooter">
+        <div class="err" id="acMsg"></div>
+        <button class="btn" id="acSave" style="width:100%">Save vehicle</button>
+      </div>
+      <div class="card">
+        <div class="k">Tips for smooth deliveries</div>
+        <div class="small muted" style="line-height:1.6">
+          • Keep this page open and your location on while you're online.<br>
+          • Tap <b>I'm at the store</b> when you arrive, tick each item as you collect it.<br>
+          • Tap <b>Start trip</b> when you leave — the customer is told you're on the way.<br>
+          • At the door, tap <b>I've arrived</b> and ask for the customer's 4-digit PIN.
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn" href="https://wa.me/27797662768?text=Hi%20Umzila%2C%20rider%20here" target="_blank" rel="noopener">💬 Help</a>
+        <button class="btn" data-signout>Sign out</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="actionbar hidden" id="actionbar"><div id="actionInner"></div></div>
+
+  <nav class="tabs"><div class="tabs-in">
+    <button class="tab on" data-tab="Deliver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3"/><circle cx="18.5" cy="17.5" r="3"/><path d="M15 6h3l3 6v5h-2.5M8.5 17.5h7M5.5 14.5 8 9h5l2 5.5"/></svg>Deliver<span class="badge hidden" id="offerBadge">0</span></button>
+    <button class="tab" data-tab="Earn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg>Earnings</button>
+    <button class="tab" data-tab="Acct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</button>
+  </div></nav>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  let sb = null, USER = null, HOME = null, BOARD = null, BOARD_SIG = '', online = false, tab = 'Deliver';
+  let boardTimer = null, hbTimer = null, homeTimer = null, gpsWatch = null, LAST_FIX = null, GPS_ERR = null, offerTick = null, wakeLock = null;
+  let lastOfferIds = new Set(), audioCtx = null, signUpMode = false, earnPeriod = 'week';
+  const localChecked = new Set();
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const R = n => 'R' + (Number(n) || 0).toFixed(2);
+  const R0 = n => 'R' + Math.round(Number(n) || 0);
+  const hhmm = iso => iso ? new Intl.DateTimeFormat('en-GB', { timeZone:'Africa/Johannesburg', hour:'2-digit', minute:'2-digit', hour12:false }).format(new Date(iso)) : '';
+  const dayLbl = iso => new Intl.DateTimeFormat('en-ZA', { timeZone:'Africa/Johannesburg', weekday:'short', day:'numeric', month:'short' }).format(new Date(iso));
+  const firstName = n => String(n || 'the customer').split(' ')[0];
+  function toast(msg, kind){ const t = document.createElement('div'); t.className = 'toast ' + (kind || ''); t.textContent = msg; $('toasts').appendChild(t); setTimeout(() => t.remove(), 3800); }
+  async function token(){ const { data:{ session } } = await sb.auth.getSession(); return session?.access_token || ''; }
+  async function post(fn, body){
+    try{
+      const res = await fetch('/.netlify/functions/' + fn, { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer ' + await token() }, body: JSON.stringify(body || {}) });
+      const j = await res.json().catch(() => ({}));
+      return res.ok ? { ok:true, data:j } : { ok:false, error:j.error || 'Something went wrong', code:j.code };
+    } catch(e){ return { ok:false, error:'Check your connection and try again.' }; }
+  }
+  const show = id => ['scrAuth','scrApply','scrWait','app'].forEach(s => $(s).classList.toggle('hidden', s !== id));
+
+  // ── Boot ──
+  (async function init(){
+    try{
+      const r = await fetch('/.netlify/functions/get-client-config'); const c = await r.json();
+      sb = supabase.createClient(c.supabaseUrl || c.SUPABASE_URL || c.url, c.supabaseAnonKey || c.SUPABASE_ANON_KEY || c.anonKey, { auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true } });
+    } catch(e){ document.body.innerHTML = '<div class="auth"><h1>Can’t connect</h1><p>Check your internet and reload.</p></div>'; return; }
+    sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' || ev === 'SIGNED_OUT') route(); });
+    route();
+  })();
+
+  async function route(){
+    const { data:{ session } } = await sb.auth.getSession();
+    USER = session?.user || null;
+    if(!USER){ stopAll(); show('scrAuth'); return; }
+    const { data, error } = await sb.rpc('get_rider_home');
+    if(error){ toast('Could not load your rider account — retrying…', 'error'); setTimeout(route, 5000); return; }
+    HOME = data || {};
+    if(HOME.status === 'not_rider'){
+      stopAll(); show('scrApply');
+      if(HOME.profile?.first_name) $('apName').value = HOME.profile.first_name;
+      if(HOME.profile?.phone) $('apPhone').value = HOME.profile.phone;
+      return;
+    }
+    if(HOME.status === 'pending' || HOME.status === 'suspended'){
+      stopAll(); show('scrWait');
+      const paused = HOME.status === 'suspended';
+      $('waitIco').textContent = paused ? '⏸️' : '⏳';
+      $('waitTitle').textContent = paused ? 'Your rider account is paused' : 'Thanks — you’re on the list';
+      $('waitText').textContent = paused ? 'You can’t take deliveries right now. Message Umzila if you think this is a mistake.' : 'Umzila will check your details and switch your rider account on. This page updates by itself once you’re approved.';
+      clearTimeout(homeTimer); homeTimer = setTimeout(route, 30000);
+      return;
+    }
+    show('app');
+    renderHome();
+    await resumeOnline();
+    clearInterval(homeTimer); homeTimer = setInterval(refreshHome, 60000);
+  }
+
+  // ── Auth ──
+  function setAuthMode(up){
+    signUpMode = up;
+    $('authTitle').textContent = up ? 'Create your rider account' : 'Ride with Umzila';
+    $('authSub').textContent = up ? 'Use an email you check — we’ll send you a link to confirm it.' : 'Sign in to see delivery offers, your trips and what you’ve earned.';
+    $('authBtn').textContent = up ? 'Create account' : 'Sign in';
+    $('authSwitchText').textContent = up ? 'Already a rider?' : 'New rider?';
+    $('authSwitch').textContent = up ? 'Sign in' : 'Create an account';
+    $('aPass').autocomplete = up ? 'new-password' : 'current-password';
+    $('authErr').textContent = '';
+  }
+  $('authSwitch').addEventListener('click', e => { e.preventDefault(); setAuthMode(!signUpMode); });
+  $('authForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('authErr'), btn = $('authBtn');
+    const email = window.UmzilaInput ? UmzilaInput.ok($('aEmail'), { required:true }) : $('aEmail').value.trim();
+    const pass = $('aPass').value;
+    if(!email){ err.textContent = 'Enter your email.'; return; }
+    if(pass.length < 6){ err.textContent = 'Your password needs at least 6 characters.'; return; }
+    err.textContent = ''; btn.disabled = true; btn.textContent = signUpMode ? 'Creating…' : 'Signing in…';
+    const redirect = location.origin + '/rider';
+    const resend = () => sb.auth.resend({ type:'signup', email, options:{ emailRedirectTo: redirect } });
+    try{
+      if(signUpMode){
+        let anon = null; try { anon = localStorage.getItem('ss_anon_id'); } catch(_){}
+        const { data, error } = await sb.auth.signUp({ email, password: pass, options:{ emailRedirectTo: redirect, data: anon ? { anon_id: anon } : {} } });
+        if(error) throw error;
+        if(!data.session && window.UmzilaAuthMail){ UmzilaAuthMail.markSent && UmzilaAuthMail.markSent(email); UmzilaAuthMail.show(err, email, { client: sb, context:'to start riding', resend, onSignedIn: () => route() }); }
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+        if(error){
+          if(/not confirmed/i.test(error.message) || error.code === 'email_not_confirmed'){
+            if(window.UmzilaAuthMail){
+              if(UmzilaAuthMail.shouldResend(email)){ const r = await resend(); if(!r.error) UmzilaAuthMail.markSent(email); }
+              UmzilaAuthMail.show(err, email, { client: sb, context:'to start riding', resend, onSignedIn: () => route() });
+            } else err.textContent = 'Confirm your email first — check your inbox.';
+          } else err.textContent = /invalid/i.test(error.message) ? 'Wrong email or password.' : error.message;
+        }
+      }
+    } catch(ex){ err.textContent = ex.message || 'Could not continue.'; }
+    btn.disabled = false; btn.textContent = signUpMode ? 'Create account' : 'Sign in';
+  });
+  document.querySelectorAll('[data-signout]').forEach(b => b.addEventListener('click', async e => {
+    e.preventDefault();
+    if(online){ try{ await sendHeartbeat(false); } catch(_){} }
+    await sb.auth.signOut(); location.reload();
+  }));
+
+  // ── Apply ──
+  $('applyForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('applyErr'), btn = $('applyBtn');
+    const name = $('apName').value.trim(), vehicle = $('apVehicle').value.trim();
+    const phone = window.UmzilaInput ? UmzilaInput.ok($('apPhone'), { required:true }) : $('apPhone').value.trim();
+    if(!name || !phone || !vehicle){ err.textContent = 'Fill in your name, phone and vehicle.'; return; }
+    btn.disabled = true; btn.textContent = 'Sending…'; err.textContent = '';
+    const { error } = await sb.rpc('rider_apply', { p_first_name: name, p_phone: phone, p_vehicle: vehicle });
+    btn.disabled = false; btn.textContent = 'Apply to ride';
+    if(error){ err.textContent = 'Could not send your application — try again.'; return; }
+    route();
+  });
+
+  // ── Tabs ──
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  function setTab(t){
+    tab = t;
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    ['Deliver','Earn','Acct'].forEach(x => $('tab' + x).classList.toggle('hidden', x !== t));
+    $('actionbar').classList.toggle('hidden', t !== 'Deliver' || !$('actionInner').innerHTML);
+    if(t === 'Earn') refreshHome();
+    window.scrollTo({ top:0 });
+  }
+
+  // ── Earnings ──
+  async function refreshHome(){ const { data } = await sb.rpc('get_rider_home'); if(data && data.totals){ HOME = data; renderHome(); } }
+  $('earnSeg').addEventListener('click', e => { const b = e.target.closest('button'); if(!b) return; earnPeriod = b.dataset.p; renderHome(); });
+  function renderHome(){
+    const t = HOME.totals || {}, rd = HOME.rider || {};
+    $('mToday').textContent = R0(t.today); $('mTodayN').textContent = t.today_n || 0; $('mOwed').textContent = R0(t.owed);
+    document.querySelectorAll('#earnSeg button').forEach(b => b.classList.toggle('on', b.dataset.p === earnPeriod));
+    const lbl = { today:'Earned today', week:'Earned this week', month:'Earned this month', all:'Earned all time' }[earnPeriod];
+    const amt = t[earnPeriod] || 0, n = t[earnPeriod + '_n'] || 0;
+    $('heroK').textContent = lbl; $('heroAmt').textContent = R(amt);
+    $('heroSub').textContent = n + (n === 1 ? ' delivery' : ' deliveries');
+    $('eOwed').textContent = R(t.owed); $('ePaid').textContent = R(t.paid);
+    $('eAvg').textContent = R(t.all_n ? t.all / t.all_n : 0);
+    $('eKm').textContent = (Number(t.km_month) || 0).toFixed(1) + ' km';
+    const ip = $('inProg');
+    if(Number(t.in_progress) > 0){ ip.style.display = ''; ip.innerHTML = `<div class="k">On your current trip</div><div style="font-size:22px;font-weight:900">${R(t.in_progress)}</div><div class="muted small">Added to your earnings when the trip is finished.</div>`; }
+    else ip.style.display = 'none';
+    const days = HOME.days || [], max = Math.max(1, ...days.map(d => Number(d.pay) || 0));
+    const today = days.length ? days[days.length - 1].day : '';
+    $('chart').innerHTML = days.map(d => {
+      const p = Number(d.pay) || 0, h = Math.max(3, Math.round(p / max * 100));
+      const wd = new Intl.DateTimeFormat('en-ZA', { weekday:'narrow', timeZone:'UTC' }).format(new Date(d.day + 'T12:00:00Z'));
+      return `<div class="c ${p ? '' : 'zero'} ${d.day === today ? 'today' : ''}" title="${esc(d.day)}: ${R(p)} · ${d.n} deliveries"><i style="height:${h}%"></i><em>${wd}</em></div>`;
+    }).join('');
+    const rec = HOME.recent || [];
+    $('recent').innerHTML = rec.length ? rec.map(x => `<div class="li"><div><b>${esc(x.stores || 'Delivery')}</b><div class="muted small">${esc(dayLbl(x.at))} · ${hhmm(x.at)}${x.area ? ' · ' + esc(x.area) : ''}${x.km != null ? ' · ' + Number(x.km).toFixed(1) + ' km' : ''}</div></div><div style="text-align:right"><b>${R(x.pay)}</b><div><span class="tag ${x.status === 'paid' ? 'paid' : 'owed'}">${x.status === 'paid' ? 'Paid' : 'To be paid'}</span></div></div></div>`).join('')
+      : '<div class="muted small">Your finished deliveries will show here.</div>';
+    const pays = HOME.payouts || [];
+    $('payouts').innerHTML = pays.length ? pays.map(p => `<div class="li"><div><b>${R(p.amount)}</b><div class="muted small">${esc(dayLbl(p.paid_at))}${p.reference ? ' · ' + esc(p.reference) : ''}</div></div><span class="tag paid">${p.n} ${p.n === 1 ? 'trip' : 'trips'}</span></div>`).join('')
+      : '<div class="muted small">No payments yet. Money you’re owed shows under “To be paid to you”.</div>';
+    const r = HOME.rates || {};
+    const ex = km => Math.min(r.max, Math.max(r.base, r.base + Math.max(0, km - r.included_km) * r.per_km));
+    $('rates').innerHTML = `
+      <div class="r"><span>First ${r.included_km} km by road</span><b>${R(r.base)}</b></div>
+      <div class="r"><span>Every extra km</span><b>+${R(r.per_km)}</b></div>
+      <div class="r"><span>Each extra store on one order</span><b>+${R(r.per_extra_store)}</b></div>
+      <div class="r"><span>Most per delivery</span><b>${R(r.max)}</b></div>
+      <div class="r"><span>Distance unknown</span><b>${R(r.unknown_distance)}</b></div>
+      <div class="muted small" style="margin-top:10px;line-height:1.5">Every delivery on a trip is paid in full — two orders on one trip pay twice. Free-delivery orders pay you the same. Example: a 10 km delivery pays ${R(ex(10))}.</div>`;
+    $('acName').textContent = rd.first_name || 'Rider';
+    $('acMeta').textContent = [rd.phone, rd.since ? 'Rider since ' + new Intl.DateTimeFormat('en-ZA', { month:'long', year:'numeric' }).format(new Date(rd.since)) : ''].filter(Boolean).join(' · ');
+    if(document.activeElement !== $('acVehicle')) $('acVehicle').value = rd.vehicle || '';
+  }
+  $('acSave').addEventListener('click', async () => {
+    const v = $('acVehicle').value.trim();
+    if(!v){ $('acMsg').textContent = 'Describe your vehicle, e.g. “Red Honda scooter”.'; return; }
+    const { error } = await sb.rpc('rider_set_vehicle', { p_vehicle: v });
+    $('acMsg').className = 'err' + (error ? '' : ' ok');
+    $('acMsg').textContent = error ? 'Could not save — try again.' : 'Saved.';
+  });
+
+  // ── GPS + heartbeat ──
+  function startGps(){
+    if(gpsWatch != null || !navigator.geolocation) return;
+    gpsWatch = navigator.geolocation.watchPosition(p => { GPS_ERR = null; LAST_FIX = { lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy, heading:p.coords.heading, speed:p.coords.speed, at:Date.now() }; gpsBadge(); },
+      e => { GPS_ERR = e.code; gpsBadge(); }, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
+  }
+  function stopGps(){ if(gpsWatch != null) navigator.geolocation.clearWatch(gpsWatch); gpsWatch = null; $('gps').classList.add('hidden'); }
+  function gpsBadge(){
+    const el = $('gps');
+    if(!online){ el.classList.add('hidden'); return; }
+    let cls = '', txt;
+    if(GPS_ERR === 1){ cls = 'bad'; txt = 'Location is blocked — customers can’t see you coming. Allow location for this site in your settings.'; }
+    else if(GPS_ERR){ cls = 'warn'; txt = 'Can’t get your location — move to open sky or check location is on.'; }
+    else if(!LAST_FIX){ cls = 'warn'; txt = 'Finding your location…'; }
+    else if(LAST_FIX.acc > 100){ cls = 'warn'; txt = `GPS is weak (±${Math.round(LAST_FIX.acc)} m).`; }
+    else txt = `📍 GPS good · ±${Math.round(LAST_FIX.acc)} m`;
+    el.className = 'gps ' + cls; el.textContent = txt;
+  }
+  function geo(){
+    if(LAST_FIX && Date.now() - LAST_FIX.at < 60000) return Promise.resolve(LAST_FIX);
+    return new Promise(res => { if(!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(p => res({ lat:p.coords.latitude, lon:p.coords.longitude, heading:p.coords.heading, speed:p.coords.speed }), () => res(null), { enableHighAccuracy:true, timeout:8000, maximumAge:15000 }); });
+  }
+  async function sendHeartbeat(isOnline){
+    const g = isOnline ? await geo() : null;
+    const body = { isOnline };
+    if(g){ body.lat = g.lat; body.lon = g.lon; if(Number.isFinite(g.heading)) body.heading = g.heading; if(Number.isFinite(g.speed)) body.speed = g.speed; }
+    const r = await post('driver-heartbeat', body);
+    if(!r.ok){ const e = new Error(r.error); e.code = r.code; throw e; }
+    return r.data;
+  }
+  const onDropLeg = () => (BOARD?.route?.stops || []).some(s => s.type === 'drop' && (s.status === 'active' || s.status === 'arriving'));
+  function scheduleHb(){
+    clearTimeout(hbTimer);
+    if(!online) return;
+    hbTimer = setTimeout(async () => {
+      try{ await sendHeartbeat(true); } catch(e){ if(e.code === 'RIDER_SUSPENDED' || e.code === 'RIDER_PENDING'){ online = false; route(); return; } }
+      scheduleHb();
+    }, onDropLeg() ? 12000 : 30000);
+  }
+  function startLoops(){ scheduleHb(); clearInterval(boardTimer); boardTimer = setInterval(() => refreshBoard(), 8000); }
+  function stopAll(){ clearTimeout(hbTimer); clearInterval(boardTimer); clearInterval(homeTimer); clearTimeout(homeTimer); stopGps(); releaseWake(); }
+  async function keepAwake(){ try{ if('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch(_){} }
+  function releaseWake(){ try{ wakeLock && wakeLock.release(); } catch(_){} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => { if(!document.hidden && USER && !$('app').classList.contains('hidden')){ refreshBoard(true); if(online) keepAwake(); } });
+
+  function statusUI(){
+    $('onlineSw').setAttribute('aria-checked', online ? 'true' : 'false');
+    $('statusCard').classList.toggle('on', online);
+    $('statusT').textContent = online ? 'You’re online' : 'You’re offline';
+    $('statusS').textContent = online ? (BOARD?.route ? 'On a trip — orders on your way may be offered to add.' : 'Waiting for offers — keep this page open.') : 'Go online to get delivery offers.';
+    $('onlinePill').classList.toggle('on', online);
+    $('onlinePillText').textContent = online ? (BOARD?.route ? 'On a trip' : 'Online') : 'Offline';
+    gpsBadge();
+  }
+  $('onlineSw').addEventListener('click', () => setOnline(!online));
+  async function setOnline(next){
+    const sw = $('onlineSw'); sw.disabled = true;
+    try{
+      if(next){ startGps(); primeSound(); }
+      await sendHeartbeat(next);
+      online = next;
+      if(next){ startLoops(); keepAwake(); toast('You’re online — offers will buzz this phone', 'success'); }
+      else { clearTimeout(hbTimer); clearInterval(boardTimer); stopGps(); releaseWake(); }
+      statusUI(); await refreshBoard(true);
+    } catch(e){ if(next) stopGps(); toast(e.message || 'Could not change your status', 'error'); if(e.code === 'RIDER_SUSPENDED' || e.code === 'RIDER_PENDING') route(); }
+    sw.disabled = false;
+  }
+  async function resumeOnline(){
+    await refreshBoard(true);
+    lastOfferIds = new Set((BOARD?.offers || []).map(o => o.id));
+    if(BOARD?.driver?.is_online){ online = true; startGps(); startLoops(); keepAwake(); sendHeartbeat(true).catch(() => {}); }
+    else if(BOARD?.route){ clearInterval(boardTimer); boardTimer = setInterval(() => refreshBoard(), 8000); }
+    statusUI();
+  }
+
+  // ── Alerts ──
+  function primeSound(){ try{ audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume && audioCtx.resume(); } catch(_){} }
+  function buzz(){
+    try{ navigator.vibrate && navigator.vibrate([250,120,250,120,250]); } catch(_){}
+    try{ if(!audioCtx) return; [0, .25, .5].forEach(t => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = 880; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(.0001, audioCtx.currentTime + t); g.gain.exponentialRampToValueAtTime(.35, audioCtx.currentTime + t + .02); g.gain.exponentialRampToValueAtTime(.0001, audioCtx.currentTime + t + .2); o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + .22); }); } catch(_){}
+  }
+
+  // ── Board (offers + trip) ──
+  let loading = null;
+  async function refreshBoard(force){
+    if(loading) return loading;
+    loading = (async () => {
+      try{
+        const { data, error } = await sb.rpc('get_driver_board');
+        if(error) throw error;
+        const hadRoute = !!BOARD?.route;
+        BOARD = data || { offers:[], route:null };
+        const offers = BOARD.offers || [];
+        if(offers.some(o => !lastOfferIds.has(o.id)) && online){ buzz(); if(tab !== 'Deliver') toast('New delivery offer', 'success'); }
+        lastOfferIds = new Set(offers.map(o => o.id));
+        const b = $('offerBadge'); b.classList.toggle('hidden', !offers.length); b.textContent = offers.length;
+        if(hadRoute && !BOARD.route) refreshHome();
+        const sig = JSON.stringify(BOARD);
+        if(force || sig !== BOARD_SIG){ BOARD_SIG = sig; renderBoard(); }
+        statusUI();
+      } catch(e){ if(!BOARD) $('offers').innerHTML = '<div class="empty">Couldn’t load deliveries — check your connection. Retrying…</div>'; }
+      finally { loading = null; }
+    })();
+    return loading;
+  }
+  function setAction(html){ $('actionInner').innerHTML = html || ''; $('actionbar').classList.toggle('hidden', !html || tab !== 'Deliver'); }
+  function renderBoard(){
+    const offers = BOARD?.offers || [];
+    $('miniStats').classList.toggle('hidden', !!BOARD?.route);
+    if(BOARD?.route){ renderJob(BOARD.route); $('offersWrap').classList.toggle('hidden', !offers.length); if(offers.length) renderOffers(offers, true); }
+    else { $('job').innerHTML = ''; setAction(''); $('offersWrap').classList.remove('hidden'); renderOffers(offers, false); }
+  }
+
+  function renderOffers(offers, onTrip){
+    const el = $('offers');
+    $('offersLabel').textContent = onTrip ? 'Add to your trip?' : 'Delivery offers';
+    clearInterval(offerTick);
+    if(!online){ el.innerHTML = `<div class="empty"><div class="ico">🛵</div>You’re offline.<br>Switch on above to start getting offers.</div>`; return; }
+    if(!offers.length){ el.innerHTML = `<div class="empty"><div class="ico pulse">📡</div>No offers right now.<br>We’ll buzz this phone the moment one comes in.</div>`; return; }
+    el.innerHTML = offers.map(o => {
+      const batch = o.offer_type === 'batch_addition';
+      const stores = (o.stores || []).join(' + ') || 'Umzila store';
+      const items = o.item_count ? o.item_count + (o.item_count == 1 ? ' item' : ' items') : null;
+      const chips = batch
+        ? [o.extra_km != null ? '+' + Number(o.extra_km).toFixed(1) + ' km' : null, o.extra_min != null ? '+' + Math.round(o.extra_min) + ' min' : null, items, o.priority ? '⚡ Priority' : null]
+        : [o.distance_km != null ? Number(o.distance_km).toFixed(1) + ' km' : null, o.duration_min != null ? Math.round(o.duration_min) + ' min drive' : null, items, o.priority ? '⚡ Priority' : null];
+      return `<div class="offer ${batch ? 'batch' : ''}">
+        <div class="offer-top"><div><div class="k" style="margin:0">${batch ? 'Add to your trip' : 'New delivery'}</div><div class="pay">${batch ? '+' : ''}${R(o.payout)}</div></div><div class="timer" data-exp="${esc(o.expires_at)}">—</div></div>
+        ${batch ? `<div class="fit">On your way${o.after ? ` · drop-off after <b>${esc(o.after)}</b>` : ' · first drop-off'}</div>` : ''}
+        <div class="legs">
+          <div class="leg"><i></i><div><div class="lk">Pick up</div><div class="lv">${esc(stores)}</div>${o.store_area ? `<div class="ls">${esc(o.store_area)}</div>` : ''}${o.collect_by ? `<div class="ls"><b style="color:var(--text)">Be at the store by ${esc(hhmm(o.collect_by))}</b></div>` : ''}</div></div>
+          <div class="leg"><i class="b"></i><div><div class="lk">Drop off</div><div class="lv">${esc(o.drop_area || 'Customer address')}</div></div></div>
+        </div>
+        <div class="chips">${chips.filter(Boolean).map(c => `<span>${c}</span>`).join('')}</div>
+        <div class="row"><button class="btn ghost" data-respond="decline" data-id="${esc(o.id)}">${batch ? 'No thanks' : 'Decline'}</button><button class="btn primary" data-respond="accept" data-id="${esc(o.id)}">${batch ? 'Add to trip' : 'Accept'}</button></div>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('[data-respond]').forEach(b => b.addEventListener('click', () => respond(b.dataset.id, b.dataset.respond)));
+    const tick = () => el.querySelectorAll('.timer').forEach(t => {
+      const left = Math.max(0, Math.round((new Date(t.dataset.exp).getTime() - Date.now()) / 1000));
+      t.textContent = left ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : 'Expired';
+      t.classList.toggle('urgent', left <= 30);
+      if(!left) t.closest('.offer').querySelectorAll('button').forEach(b => b.disabled = true);
+    });
+    tick(); offerTick = setInterval(tick, 1000);
+  }
+  async function respond(offerId, response){
+    document.querySelectorAll(`[data-id="${CSS.escape(offerId)}"]`).forEach(b => b.disabled = true);
+    const batch = (BOARD?.offers || []).find(o => o.id === offerId)?.offer_type === 'batch_addition';
+    const r = await post('respond-to-driver-offer', { offerId, response });
+    if(!r.ok) toast(r.error, 'error');
+    else toast(response === 'accept' ? (batch ? 'Added to your trip' : 'Accepted — head to the store') : 'Offer declined', response === 'accept' ? 'success' : '');
+    await refreshBoard(true);
+  }
+
+  // ── Trip ──
+  const telLink = p => { const d = String(p || '').replace(/[^\d+]/g, ''); return d ? 'tel:' + d : null; };
+  const waLink = p => { let d = String(p || '').replace(/\D/g, ''); if(!d) return null; if(d.startsWith('0')) d = '27' + d.slice(1); return 'https://wa.me/' + d; };
+  const navLink = (s, text) => s && Number.isFinite(s.lat) && Number.isFinite(s.lon) ? `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${s.lat},${s.lon}` : (text ? 'https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=' + encodeURIComponent(text) : null);
+  function person(kind, title, sub, lines, phone, nav){
+    const tel = telLink(phone), wa = waLink(phone);
+    return `<div class="person ${kind}"><div class="k" style="margin:0">${kind === 'store' ? 'Pick up from' : 'Deliver to'}</div><div class="name">${esc(title)}</div>${sub ? `<div class="muted small">${sub}</div>` : ''}${lines.join('')}
+      <div class="contact">${nav ? `<a class="btn nav" href="${nav}" target="_blank" rel="noopener">🧭 Navigate</a>` : '<span></span>'}${tel ? `<a class="btn" href="${tel}">📞 Call</a>` : '<span></span>'}${wa ? `<a class="btn" href="${wa}" target="_blank" rel="noopener">💬 Chat</a>` : '<span></span>'}</div>
+      ${!phone ? '<div class="muted small" style="margin-top:8px">No phone number on file.</div>' : ''}</div>`;
+  }
+  function itemsList(items, checkable, stopId){
+    if(!items || !items.length) return '<div class="muted small">No items listed — check with the store before leaving.</div>';
+    return `<div class="items">${items.map(it => {
+      const label = `${esc(it.name || 'Item')}${it.size && it.size !== 'One Size' ? ` <span class="muted">(${esc(it.size)})</span>` : ''}`, q = `<span class="qty">×${Number(it.qty || 1)}</span>`;
+      if(!checkable) return `<div class="item">${q}<div>${label}</div></div>`;
+      const on = it.collected || localChecked.has(it.id);
+      return `<label class="item check ${on ? 'on' : ''}"><input type="checkbox" class="pcb" data-stop="${esc(stopId)}" data-item="${esc(it.id)}" ${on ? 'checked' : ''} ${it.collected ? 'disabled' : ''}>${q}<div>${label}</div></label>`;
+    }).join('')}</div>`;
+  }
+  function renderJob(route){
+    const el = $('job');
+    const stops = (route.stops || []).slice().sort((a, b) => a.seq - b.seq), open = stops.filter(s => s.status !== 'completed'), cur = open[0];
+    if(!cur){ el.innerHTML = '<div class="done"><div class="c">✓</div><h2>Finishing up…</h2></div>'; setAction(''); return; }
+    const group = [];
+    if(cur.type === 'pickup'){ for(const s of open){ if(s.type !== 'pickup' || s.seller_id !== cur.seller_id) break; group.push(s); } } else group.push(cur);
+    const orders = route.orders || new Set(stops.map(s => s.delivery_id)).size, done = stops.length - open.length;
+    let body = '', action = '';
+    if(cur.type === 'pickup'){
+      const s = cur.store || {}, active = group.some(g => g.status === 'active');
+      body = person('store', s.name || 'Store', group.length > 1 ? `${group.length} orders to collect here` : `For <b>${esc(cur.for_customer || 'customer')}</b>`, [s.address ? `<div class="addr">${esc(s.address)}</div>` : ''], s.phone, navLink(cur, s.address));
+      const by = group.map(g => g.collect_by).filter(Boolean).sort()[0];
+      if(by) body += `<div class="hint">⏰ <b>Be at the store by ${esc(hhmm(by))}.</b> The food is being made for then.</div>`;
+      if(group.length > 1) body += `<div class="hint">Keep each order in its own bag, with the customer’s name on it.</div>`;
+      body += group.map(g => `<div class="card"><div style="font-weight:800">Bag for ${esc(g.for_customer || 'customer')} ${g.priority ? '<span class="prio">⚡ Priority</span>' : ''} <span class="muted small">#…${esc(String(g.order_ref || '').toUpperCase())}</span></div>${itemsList(g.items, active, g.id)}
+        ${(g.house_items || []).length ? `<div class="instr" style="margin-top:10px">🥤 <b>Also bring from Umzila stock:</b> ${g.house_items.map(h => `${esc(String(h.qty || 1))}× ${esc(h.name)}`).join(', ')}</div>` : ''}</div>`).join('');
+      if(!active) action = `<button class="btn primary big" data-act="start_route" data-stop="${esc(cur.id)}">I’m at the store</button>`;
+      else { const all = group.flatMap(g => g.items || []), n = all.filter(it => it.collected || localChecked.has(it.id)).length;
+        action = `<button class="btn primary big" id="collectBtn" ${all.length && !n ? 'disabled' : ''}>Collected ${all.length ? `(${n}/${all.length})` : ''} — continue</button>`; }
+    } else {
+      const c = cur.customer || {};
+      body = person('cust', c.name || 'Customer', cur.priority ? '⚡ Priority order — deliver first' : null, [
+        c.address ? `<div class="addr">${esc(c.address)}${c.area ? `<br><span class="muted">${esc(c.area)}${c.postal_code ? ' ' + esc(c.postal_code) : ''}</span>` : ''}</div>` : '',
+        c.instructions ? `<div class="instr">📝 ${esc(c.instructions)}</div>` : '',
+        c.order_ref ? `<div class="muted small">Order #…${esc(String(c.order_ref).toUpperCase())}</div>` : ''], c.phone, navLink(cur, [c.address, c.area].filter(Boolean).join(', ')));
+      if(cur.status === 'arriving'){
+        body += `<div class="card pin"><div class="k">Ask ${esc(firstName(c.name))} for their 4-digit PIN</div>${c.pin_locked ? '<div class="instr">Too many wrong PINs — WhatsApp Umzila.</div>' : ''}
+          <input class="in" id="pinIn" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" placeholder="••••"><div class="err" id="pinErr"></div>
+          <div class="k" style="margin-top:12px">Hand over</div>${itemsList(cur.items, false)}</div>`;
+        action = `<button class="btn primary big" id="pinBtn">Confirm delivery</button>`;
+      } else {
+        body += `<div class="card"><div class="k">Hand over</div>${itemsList(cur.items, false)}</div>`;
+        action = cur.status === 'active' ? `<button class="btn primary big" data-act="arrive_at_drop" data-stop="${esc(cur.id)}">I’ve arrived</button>`
+          : `<button class="btn primary big" data-act="start_delivery" data-stop="${esc(cur.id)}">Start trip to ${esc(firstName(c.name))}</button>`;
+      }
+    }
+    const later = open.slice(group.length);
+    const next = later.length ? `<div class="card upnext"><div class="k">After this</div>${later.map((s, i) => `<div class="r"><span>${done + group.length + i + 1}</span><div>${s.type === 'pickup' ? `🏪 Collect at <b>${esc(s.store?.name || 'store')}</b> — for ${esc(s.for_customer || 'customer')}` : `🏠 Deliver to <b>${esc(s.customer?.name || s.for_customer || 'customer')}</b>${s.customer?.area ? ' · ' + esc(s.customer.area) : ''}`}${s.priority ? ' <span class="prio">⚡</span>' : ''}</div></div>`).join('')}</div>` : '';
+    el.innerHTML = `<div class="trip-h"><h2>${orders > 1 ? `Trip · ${orders} orders` : 'Your delivery'}</h2><span class="muted small">Stop ${done + 1} of ${stops.length}</span></div><div class="bar"><i style="width:${Math.round(done / stops.length * 100)}%"></i></div>${body}${next}`;
+    setAction(action);
+    document.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => advance(b.dataset.act, { stopId: b.dataset.stop })));
+    el.querySelectorAll('.pcb').forEach(cb => cb.addEventListener('change', () => {
+      cb.checked ? localChecked.add(cb.dataset.item) : localChecked.delete(cb.dataset.item);
+      cb.closest('.item').classList.toggle('on', cb.checked);
+      const all = el.querySelectorAll('.pcb'), n = [...all].filter(x => x.checked).length, btn = $('collectBtn');
+      if(btn){ btn.disabled = all.length && !n; btn.textContent = `Collected (${n}/${all.length}) — continue`; }
+    }));
+    $('collectBtn')?.addEventListener('click', () => collect(group));
+    const pin = $('pinIn'); pin?.addEventListener('input', () => { pin.value = pin.value.replace(/\D/g, '').slice(0, 4); });
+    $('pinBtn')?.addEventListener('click', () => confirmPin(cur.delivery_id, later));
+  }
+  async function advance(action, extra){
+    const btn = $('actionInner').querySelector('button'), label = btn?.textContent;
+    if(btn){ btn.disabled = true; btn.textContent = 'Updating…'; }
+    const r = await post('advance-route', Object.assign({ routeId: BOARD.route.id, action }, extra || {}));
+    if(!r.ok){ toast(r.error, r.code === 'TRIP_CHANGED' ? 'warn' : 'error'); if(btn){ btn.disabled = false; btn.textContent = label; } }
+    else if(action === 'start_delivery'){ toast('The customer can now see you on the map', 'success'); if(online) sendHeartbeat(true).catch(() => {}); }
+    await refreshBoard(true); scheduleHb();
+  }
+  async function collect(group){
+    const btn = $('collectBtn'); if(btn){ btn.disabled = true; btn.textContent = 'Updating…'; }
+    let partial = false;
+    for(const g of group){
+      const ids = [...document.querySelectorAll(`.pcb[data-stop="${CSS.escape(g.id)}"]:checked`)].map(cb => cb.dataset.item);
+      const r = await post('advance-route', { routeId: BOARD.route.id, action:'complete_pickup', stopId: g.id, collectedOrderItemIds: ids });
+      if(!r.ok){ toast(r.error, 'error'); break; }
+      if(r.data.allCollected === false) partial = true;
+    }
+    localChecked.clear();
+    toast(partial ? 'Some items still need collecting' : 'Collected ✓', partial ? 'warn' : 'success');
+    await refreshBoard(true); scheduleHb();
+  }
+  async function confirmPin(deliveryId, later){
+    const inp = $('pinIn'), msg = $('pinErr'), btn = $('pinBtn'), pin = (inp?.value || '').trim();
+    if(!/^\d{4}$/.test(pin)){ msg.textContent = 'Enter the 4-digit PIN.'; return; }
+    msg.textContent = ''; btn.disabled = true; btn.textContent = 'Checking…';
+    const r = await post('confirm-delivery-pin', { deliveryId, pin });
+    if(!r.ok){ msg.textContent = r.error || 'Wrong PIN — try again.'; btn.disabled = false; btn.textContent = 'Confirm delivery'; inp.value = ''; inp.focus(); return; }
+    localChecked.clear();
+    const more = (later || []).length > 0 && !r.data.routeCompleted;
+    $('job').innerHTML = `<div class="done"><div class="c">✓</div><h2>Delivered</h2><div class="muted">${more ? 'Next stop coming up…' : 'Nice work. Looking for your next delivery…'}</div></div>`;
+    setAction('');
+    try{ navigator.vibrate && navigator.vibrate(120); } catch(_){}
+    setTimeout(() => { refreshBoard(true); refreshHome(); }, more ? 900 : 1500);
+  }
+})();
+</script>
+</body>
+</html>

@@ -174,7 +174,7 @@ exports.handler = async function (event) {
   // for "is this offer theirs", never a client-supplied id.
   const { data: callerDriver, error: driverLookupError } = await admin
     .from('drivers')
-    .select('id')
+    .select('id, eligibility_status')
     .eq('user_id', user.id)
     .maybeSingle();
   if (driverLookupError) {
@@ -183,6 +183,10 @@ exports.handler = async function (event) {
   }
   if (!callerDriver) {
     return { statusCode: 403, headers, body: JSON.stringify({ error: 'No driver record for this account' }) };
+  }
+  // Paused / not-yet-approved riders can't take new work (admin → Riders).
+  if (callerDriver.eligibility_status !== 'eligible' && body.response === 'accept') {
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Your rider account is not active right now — contact Umzila.' }) };
   }
 
   const { data: offer, error: offerError } = await admin

@@ -76,12 +76,28 @@ exports.handler = async function (event) {
 
   const { data: existing, error: lookupError } = await admin
     .from('drivers')
-    .select('id')
+    .select('id, eligibility_status')
     .eq('user_id', user.id)
     .maybeSingle();
   if (lookupError) {
     console.error('driver-heartbeat: lookup failed', lookupError.message);
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Failed to look up driver record' }) };
+  }
+
+  // Riders (2026-11-28, /rider): a rider row is created by applying on /rider (pending) or by an
+  // admin (admin → Riders) — never by a heartbeat from an ordinary account, or anyone could make
+  // themselves an eligible rider and see customer addresses. Staff (logistics/admin) still
+  // self-register as before. Only approved riders can go online; going offline always works.
+  if (!existing) {
+    const [{ data: adm }, { data: roles }] = await Promise.all([
+      admin.from('admins').select('user_id').eq('user_id', user.id).maybeSingle(),
+      admin.from('user_roles').select('role').eq('user_id', user.id).eq('is_active', true)
+    ]);
+    const staff = !!adm || (roles || []).some(r => ['logistics', 'admin'].includes(String(r.role || '').toLowerCase()));
+    if (!staff) return { statusCode: 403, headers, body: JSON.stringify({ error: 'Apply as a rider first.', code: 'NOT_RIDER' }) };
+  } else if (isOnline && existing.eligibility_status !== 'eligible') {
+    const pending = existing.eligibility_status === 'pending';
+    return { statusCode: 403, headers, body: JSON.stringify({ error: pending ? 'Your rider account is waiting for approval.' : 'Your rider account is paused — contact Umzila.', code: pending ? 'RIDER_PENDING' : 'RIDER_SUSPENDED' }) };
   }
 
   let driverRow;

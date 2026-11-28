@@ -64,6 +64,13 @@
   to = "/spin.html"
   status = 200
 
+# Rider app (umzila.store/rider → rider.html). Must come before /:slug.
+# ('rider' is in seller_slug_reserved().)
+[[redirects]]
+  from = "/rider"
+  to = "/rider.html"
+  status = 200
+
 # Clean store URLs: umzila.store/<slug> -> shop.html (URL stays clean).
 # Real files (cart.html, style.css, …) are always served first, so this only
 # catches single-segment paths that aren't files; shop.html resolves the
